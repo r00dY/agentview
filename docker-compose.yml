@@ -1,0 +1,24 @@
+services:
+  postgres-db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: agentview
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  postgres-admin:
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5433:80"   # Expose pgAdmin on localhost:5433
+    depends_on:
+      - postgres-db
+
+volumes:
+  pgdata:
