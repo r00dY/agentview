@@ -18,7 +18,7 @@ export function ChangePasswordDialog({
   open,
   onOpenChange,
 }: ChangePasswordDialogProps) {
-  const changePasswordFetcher = useFetcher();
+  const changePasswordFetcher = useFetcher<FormActionData>();
   const actionData = changePasswordFetcher.data as FormActionData | undefined;
 
   useFetcherSuccess(changePasswordFetcher, () => {

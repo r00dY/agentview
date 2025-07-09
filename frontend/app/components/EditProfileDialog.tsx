@@ -30,7 +30,7 @@ export function EditProfileDialog({
     setName(user.name);
   }, [user.name, open]);
 
-  const editFetcher = useFetcher();
+  const editFetcher = useFetcher<FormActionData>();
   const actionData = editFetcher.data as FormActionData | undefined;
 
   useFetcherSuccess(editFetcher, () => {
