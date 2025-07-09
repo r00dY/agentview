@@ -8,7 +8,7 @@ import {
     useNavigate
   } from "react-router";
   
-  import { LogOut, PlusCircle, ShoppingBag, User2, ShoppingBasket, Gauge, ChevronUp, User, Edit, Lock } from "lucide-react"
+  import { LogOut, PlusCircle, ShoppingBag, User2, ShoppingBasket, Gauge, ChevronUp, User, Edit, Lock, Users } from "lucide-react"
   import { Button } from "../components/ui/button"
   import {
     SidebarProvider,
@@ -110,6 +110,22 @@ export default function Layout() {
                       <Link to="/evals">
                         <Gauge className="mr-2 h-4 w-4" />
                         <span>Evaluations</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            <SidebarGroup>
+              <SidebarGroupLabel>Organization</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <Link to="/members">
+                        <Users className="mr-2 h-4 w-4" />
+                        <span>Members</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
