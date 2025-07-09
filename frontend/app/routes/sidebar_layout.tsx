@@ -32,6 +32,7 @@ import { Label } from "~/components/ui/label";
 import { Input } from "~/components/ui/input";
 import React from "react";
 import { EditProfileDialog } from "~/components/EditProfileDialog";
+import { ChangePasswordDialog } from "~/components/ChangePasswordDialog";
 
 
 
@@ -150,7 +151,7 @@ export default function Layout() {
                     <Edit className="mr-2 h-4 w-4" />
                     Edit Account
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => alert('dupa')}>
+                  <DropdownMenuItem onClick={() => { setChangePasswordOpen(true) }}>
                     <Lock className="mr-2 h-4 w-4" />
                     Change Password
                   </DropdownMenuItem>
@@ -173,55 +174,11 @@ export default function Layout() {
                 user={user}
               />
 
-                {/* <Dialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline">
-                      <Lock className="mr-2 h-4 w-4" />
-                      Change Password
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Change Password</DialogTitle>
-                      <DialogDescription>Enter your current password and choose a new one.</DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="current-password">Current Password</Label>
-                        <Input
-                          id="current-password"
-                          type="password"
-                          value={passwordForm.currentPassword}
-                          onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="new-password">New Password</Label>
-                        <Input
-                          id="new-password"
-                          type="password"
-                          value={passwordForm.newPassword}
-                          onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="confirm-password">Confirm New Password</Label>
-                        <Input
-                          id="confirm-password"
-                          type="password"
-                          value={passwordForm.confirmPassword}
-                          onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setChangePasswordOpen(false)}>
-                        Cancel
-                      </Button>
-                      <Button onClick={handleChangePassword}>Change Password</Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog> */}
+              <ChangePasswordDialog
+                open={changePasswordOpen}
+                onOpenChange={setChangePasswordOpen}
+              />
+
 
             </SidebarMenuItem>
           </SidebarMenu>
