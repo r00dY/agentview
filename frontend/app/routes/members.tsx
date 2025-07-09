@@ -15,21 +15,17 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
-import { MoreHorizontal } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { MoreHorizontal, Plus, AlertCircleIcon } from "lucide-react";
 import React from "react";
+import { APIError } from "better-auth/api";
+import type { FormActionData } from "~/lib/FormActionData";
+import { useFetcherSuccess } from "~/lib/useFetcherSuccess";
 
 enum Role {
   OWNER = "owner",
   ADMIN = "admin",
   MEMBER = "member"
-}
-
-interface Member {
-  id: string;
-  email: string;
-  name: string;
-  role: string;
-  status: "active" | "pending";
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -54,24 +50,103 @@ export async function loader({ request }: Route.LoaderArgs) {
   const members = fullOrganisation.members;
   const invitations = fullOrganisation.invitations;
 
-  const rows: Member[] = [
-    ...members.map((m: any) => ({
-      id: m.id,
-      email: m.user.email,
-      name: m.user.name,
-      role: m.role,
-      status: "active" as const,
-    })),
-    ...invitations.map((i: any) => ({
-      id: i.id,
-      email: i.email,
-      name: "-",
-      role: i.role,
-      status: i.status === "pending" ? ("pending" as const) : ("active" as const),
-    })),
-  ];
+  console.log("MEMBERS:");
+  console.log(members);
 
-  return { rows };
+  // console.log("INVITATIONS:");
+  // console.log(invitations);
+
+  // const rows: Member[] = [
+  //   ...members.map((m: any) => ({
+  //     id: m.id,
+  //     email: m.user.email,
+  //     name: m.user.name,
+  //     role: m.role,
+  //     status: "active" as const,
+  //   })),
+  //   ...invitations.map((i: any) => ({
+  //     id: i.id,
+  //     email: i.email,
+  //     name: "-",
+  //     role: i.role,
+  //     status: i.status === "pending" ? ("pending" as const) : ("active" as const),
+  //   })),
+  // ];
+
+  return { members, invitations };
+}
+
+function InviteMemberDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const fetcher = useFetcher<FormActionData>();
+  const actionData = fetcher.data as FormActionData | undefined;
+
+  useFetcherSuccess(fetcher, () => {
+    onOpenChange(false);
+  });
+  
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Invite Member</DialogTitle>
+        </DialogHeader>
+        <fetcher.Form method="post" className="space-y-4">
+          <input type="hidden" name="_action" value="inviteMember" />
+          
+          {/* General error alert */}
+          {actionData?.status === "error" && actionData.error && fetcher.state === 'idle' && (
+            <Alert variant="destructive">
+              <AlertCircleIcon />
+              <AlertTitle>Invitation failed.</AlertTitle>
+              <AlertDescription>{actionData.error}</AlertDescription>
+            </Alert>
+          )}
+          
+          <div className="space-y-2">
+            <Label htmlFor="inviteMemberEmail">Email</Label>
+            <Input
+              id="inviteMemberEmail"
+              name="email"
+              type="email"
+              placeholder="john@doe.com"
+              required
+            />
+            {actionData?.status === "error" && actionData?.fieldErrors?.email && fetcher.state === 'idle' && (
+              <p id="email-error" className="text-sm text-destructive">
+                {actionData.fieldErrors.email}
+              </p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="inviteMemberRole">Role</Label>
+            <Select defaultValue={Role.MEMBER} name="role">
+              <SelectTrigger>
+                <SelectValue placeholder="Select a role" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={Role.MEMBER}>Member</SelectItem>
+                <SelectItem value={Role.ADMIN}>Admin</SelectItem>
+                <SelectItem value={Role.OWNER}>Owner</SelectItem>
+              </SelectContent>
+            </Select>
+            {actionData?.status === "error" && actionData?.fieldErrors?.role && fetcher.state === 'idle' && (
+              <p id="role-error" className="text-sm text-destructive">
+                {actionData.fieldErrors.role}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={fetcher.state !== "idle"}>
+              Send Invitation
+            </Button>
+          </DialogFooter>
+        </fetcher.Form>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -81,8 +156,47 @@ export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
   const _action = formData.get("_action");
 
+  const fullOrganisation = await auth.api.getFullOrganization({ headers: request.headers, query: { organizationSlug: "default" } });
+
+  if (!fullOrganisation) {
+    throw new Error("Organization not found");
+  }
+
+
   try {
     switch (_action) {
+      case "inviteMember": {
+        const email = formData.get("email") as string;
+        const role = formData.get("role") as Role;
+
+        console.log(email, role);
+
+        try {
+          await auth.api.createInvitation({
+            headers: request.headers,
+            body: { email, role, organizationId: fullOrganisation.id },
+          });
+
+          console.log("Invitation created");
+        }
+        catch (error) {
+          if (error instanceof APIError) {
+            return {
+              status: "error",
+              error: error.message,
+            }
+          }
+          return {
+            status: "error",
+            error: "Unexpected error",
+          }
+        }
+
+        return {
+          status: "success",
+        }
+      }
+
       case "updateRole": {
         const memberId = formData.get("memberId") as string;
         const role = formData.get("role") as string;
@@ -164,37 +278,44 @@ function EditRoleDialog({ open, onOpenChange, member }: { open: boolean; onOpenC
 }
 
 export default function MembersPage() {
-  const { rows } = useLoaderData<typeof loader>();
+  const { members, invitations } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
 
   const [dialogOpen, setDialogOpen] = React.useState(false);
-  const [selectedMember, setSelectedMember] = React.useState<Member | null>(null);
+  const [selectedMember, setSelectedMember] = React.useState<typeof members[number] | null>(null);
+  const [inviteDialogOpen, setInviteDialogOpen] = React.useState(false);
 
-  function openEdit(m: Member) {
+  function openEdit(m: typeof members[number]) {
     setSelectedMember(m);
     setDialogOpen(true);
   }
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-semibold mb-6">Organization Members</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-semibold">Organization Members</h1>
+        <Button onClick={() => setInviteDialogOpen(true)}>
+          <Plus className="w-4 h-4 mr-2" />
+          Invite Member
+        </Button>
+      </div>
       <Table>
         <TableHeader>
           <TableRow>
             <TableHead>Email</TableHead>
             <TableHead>Name</TableHead>
             <TableHead>Role</TableHead>
-            <TableHead>Status</TableHead>
+            {/* <TableHead>Status</TableHead> */}
             <TableHead></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((row: Member) => (
+          {members.map((row) => (
             <TableRow key={row.id}>
-              <TableCell>{row.email}</TableCell>
-              <TableCell>{row.name}</TableCell>
+              <TableCell>{row.user.email}</TableCell>
+              <TableCell>{row.user.name}</TableCell>
               <TableCell>{row.role}</TableCell>
-              <TableCell className="capitalize">{row.status}</TableCell>
+              {/* <TableCell className="capitalize">{row.status ?? "active"}</TableCell> */}
               <TableCell>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -203,12 +324,10 @@ export default function MembersPage() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    {row.status === "active" && (
                       <DropdownMenuItem onClick={() => openEdit(row)}>
                         Edit Role
                       </DropdownMenuItem>
-                    )}
-                    {row.status === "active" && (
+
                       <fetcher.Form method="post">
                         <input type="hidden" name="_action" value="removeMember" />
                         <input type="hidden" name="memberId" value={row.id} />
@@ -216,7 +335,7 @@ export default function MembersPage() {
                           <button type="submit" className="w-full text-left">Remove User</button>
                         </DropdownMenuItem>
                       </fetcher.Form>
-                    )}
+{/*                       
                     {row.status === "pending" && (
                       <fetcher.Form method="post">
                         <input type="hidden" name="_action" value="cancelInvite" />
@@ -225,7 +344,7 @@ export default function MembersPage() {
                           <button type="submit" className="w-full text-left">Cancel Invite</button>
                         </DropdownMenuItem>
                       </fetcher.Form>
-                    )}
+                    )} */}
                     {/* Resend invitation could be added here */}
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -235,6 +354,7 @@ export default function MembersPage() {
         </TableBody>
       </Table>
       <EditRoleDialog open={dialogOpen} onOpenChange={setDialogOpen} member={selectedMember} />
+      <InviteMemberDialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen} />
     </div>
   );
 }
