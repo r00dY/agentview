@@ -3,12 +3,9 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import type { Route } from "./+types/login";
 import { auth } from "../../lib/auth";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
 
-export const clientLoader = async () => {
-//   if (getAuth()) {
-//     return redirect('/')
-//   }
-}
 
 export async function action({
   request,
@@ -18,8 +15,6 @@ export async function action({
   const email = formData.get('email') as string || '';
   const password = formData.get('password') as string || '';
 
-  console.log("------ server ------")
-
   const response = await auth.api.signInEmail({
     body: {
       email,
@@ -28,25 +23,11 @@ export async function action({
     asResponse: true
   })
 
-  console.log(response)
-
   return response
-
-//   try {
-//     const token = await login(email, password);
-//     setAuth(token, email);
-//     return redirect('/')
-
-//   } catch (error) {
-//     return { error: (error as Error).message }
-//   }
 }
 
 export default function LoginPage() {
   const actionData = useActionData<typeof action>()
-
-  console.log("------ client rerender ------")
-  console.log(actionData)
 
   return <div className="container mx-auto p-4 max-w-md mt-16">
       <Card>
@@ -55,11 +36,11 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent>
           <Form className="flex flex-col gap-4" method="post">
-            <div>
-              <label htmlFor="email" className="text-sm font-medium">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="email" className="text-sm font-medium">
                 Email
-              </label>
-              <input
+              </Label>
+              <Input
                 id="email"
                 type="email"
                 name="email"
@@ -68,11 +49,11 @@ export default function LoginPage() {
                 required
               />
             </div>
-            <div>
-              <label htmlFor="password" className="text-sm font-medium">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="password" className="text-sm font-medium">
                 Password
-              </label>
-              <input
+              </Label>
+              <Input
                 id="password"
                 type="password"
                 name="password"

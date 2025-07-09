@@ -2,6 +2,7 @@ import {
     Link,
     Outlet,
     redirect,
+    useLoaderData,
     useNavigate
   } from "react-router";
   
@@ -37,12 +38,16 @@ export async function loader({request}: Route.LoaderArgs) {
   }
 
   console.log("[home] logged in")
-  return null;
+  return session;
 }
 
 
 
 export default function Layout() {
+  const session = useLoaderData<typeof loader>()
+
+  console.log(session)
+
   const navigate = useNavigate()
   // const email = getAuthForce().email
 
