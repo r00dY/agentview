@@ -4,9 +4,10 @@ export default [
     layout("routes/sidebar_layout.tsx", [
         index("routes/home.tsx"),
         route("user", "routes/user.tsx"),
+        route("members", "routes/members.tsx"),
     ]),
     route("login", "routes/login.tsx"),
     route("logout", "routes/logout.tsx"),
     route("change-password", "routes/change-password.tsx"),
-    
+
 ] satisfies RouteConfig;
