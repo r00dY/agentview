@@ -1,5 +1,5 @@
 import { usersTable } from '../db/schema';
-import { db } from './db';
+import { db } from './db.server';
   
 async function main() {
   const user: typeof usersTable.$inferInsert = {

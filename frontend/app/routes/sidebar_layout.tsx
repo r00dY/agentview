@@ -1,12 +1,14 @@
 import {
+  Form,
     Link,
     Outlet,
     redirect,
+    useFetcher,
     useLoaderData,
     useNavigate
   } from "react-router";
   
-  import { LogOut, PlusCircle, ShoppingBag, User2, ShoppingBasket, Gauge } from "lucide-react"
+  import { LogOut, PlusCircle, ShoppingBag, User2, ShoppingBasket, Gauge, ChevronUp, User, Edit, Lock } from "lucide-react"
   import { Button } from "../components/ui/button"
   import {
     SidebarProvider,
@@ -23,7 +25,13 @@ import {
     SidebarGroupContent,
   } from "../components/ui/sidebar"
 import type { Route } from "./+types/sidebar_layout";
-import { auth } from "../../lib/auth";
+import { auth } from "../../lib/auth.server";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
+import { Label } from "~/components/ui/label";
+import { Input } from "~/components/ui/input";
+import React from "react";
+import { EditProfileDialog } from "~/components/EditProfileDialog";
 
 
 
@@ -33,25 +41,20 @@ export async function loader({request}: Route.LoaderArgs) {
   });
 
   if (!session) {
-    console.log("[home] not logged in, redirecting to login")
     return redirect('/login');
   }
 
-  console.log("[home] logged in")
-  return session;
+  return {
+    user: session.user
+  };
 }
 
-
-
 export default function Layout() {
-  const session = useLoaderData<typeof loader>()
+  const { user } = useLoaderData<typeof loader>()
+  const logoutFetcher = useFetcher()
 
-  console.log(session)
-
-  const navigate = useNavigate()
-  // const email = getAuthForce().email
-
-  // return <div><Outlet /></div>
+  const [editProfileOpen, setEditProfileOpen] = React.useState(false)
+  const [changePasswordOpen, setChangePasswordOpen] = React.useState(false)
 
   return (
     <SidebarProvider>
@@ -80,7 +83,7 @@ export default function Layout() {
                     <SidebarMenuButton asChild>
                       <Link to="/users">
                         <ShoppingBasket className="mr-2 h-4 w-4" />
-                        <span>Sessions</span>
+                        <span>Conversations</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -115,19 +118,115 @@ export default function Layout() {
 
           </SidebarContent>
 
-          <SidebarFooter className="border-t p-3">
+          {/* <SidebarFooter className="border-t p-3">
             <div className="flex items-center gap-3">
-              {/* <Avatar>
-                    <AvatarImage alt="User" />
-                    <AvatarFallback>U</AvatarFallback>
-                  </Avatar> */}
               <div className="flex flex-col">
                 <div className="text-sm font-medium">User</div>
-                {/* <div className="text-sm mb-2 text-muted-foreground">{email}</div>
-                <Button variant={"outline"} size="tiny" onClick={() => navigate('/logout')}>Log out <LogOut className="h-4 w-4" /></Button> */}
+                <div className="text-sm mb-2 text-muted-foreground">{user.email}</div>
+
+                <logoutFetcher.Form method="post" action="/logout">
+                  <Button variant={"outline"} type="submit">Log out <LogOut className="h-4 w-4" /></Button>
+                </logoutFetcher.Form>
               </div>
             </div>
-          </SidebarFooter>
+          </SidebarFooter> */}
+
+      <SidebarFooter className="border-t p-3">
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <SidebarMenuButton>
+                    <User />
+                    <div className="flex flex-col items-start text-left">
+                      <span className="text-sm font-medium truncate">{user.name}</span>
+                      <span className="text-xs text-muted-foreground truncate">{user.email}</span>
+                    </div>
+                    <ChevronUp className="ml-auto" />
+                  </SidebarMenuButton>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent side="top" className="w-[--radix-popper-anchor-width]">
+                  <DropdownMenuItem onClick={() => { setEditProfileOpen(true) }}>
+                    <Edit className="mr-2 h-4 w-4" />
+                    Edit Account
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => alert('dupa')}>
+                    <Lock className="mr-2 h-4 w-4" />
+                    Change Password
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => {
+                    logoutFetcher.submit(null, {
+                      method: 'post',
+                      action: '/logout'
+                    })
+                  }}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Log out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+
+              <EditProfileDialog
+                open={editProfileOpen}
+                onOpenChange={setEditProfileOpen}
+                user={user}
+              />
+
+                {/* <Dialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline">
+                      <Lock className="mr-2 h-4 w-4" />
+                      Change Password
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Change Password</DialogTitle>
+                      <DialogDescription>Enter your current password and choose a new one.</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="current-password">Current Password</Label>
+                        <Input
+                          id="current-password"
+                          type="password"
+                          value={passwordForm.currentPassword}
+                          onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="new-password">New Password</Label>
+                        <Input
+                          id="new-password"
+                          type="password"
+                          value={passwordForm.newPassword}
+                          onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="confirm-password">Confirm New Password</Label>
+                        <Input
+                          id="confirm-password"
+                          type="password"
+                          value={passwordForm.confirmPassword}
+                          onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setChangePasswordOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button onClick={handleChangePassword}>Change Password</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog> */}
+
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
+        
         </Sidebar>
 
         <SidebarInset>
