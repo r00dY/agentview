@@ -5,7 +5,7 @@ import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import type { Route } from "./+types/signup";
 import { auth } from "../../lib/auth.server";
 import { db } from "../../lib/db.server";
-import { invitation as invitationTable } from "../../db/auth-schema";
+import { invitations as invitationTable } from "../../db/schema";
 import { eq, and, gt } from "drizzle-orm";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -28,13 +28,12 @@ async function getValidInvitation(invitationId: string) {
     throw new Error("Invitation not found.");
   }
 
-  if (invitationRow.expiresAt && new Date(invitationRow.expiresAt) < new Date()) {
+  if (invitationRow.expires_at && new Date(invitationRow.expires_at) < new Date()) {
     throw new Error("Invitation has expired.");
   } 
 
   return invitationRow;
 }
-
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await auth.api.getSession({
@@ -111,15 +110,15 @@ export async function action({
       },
     });
 
-    const requestHeaders = new Headers()
-    requestHeaders.append('cookie', headers.get('set-cookie')!)
+    // const requestHeaders = new Headers()
+    // requestHeaders.append('cookie', headers.get('set-cookie')!)
 
-    await auth.api.acceptInvitation({
-      headers: requestHeaders,
-      body: {
-        invitationId,
-      },
-    });
+    // await auth.api.acceptInvitation({
+    //   headers: requestHeaders,
+    //   body: {
+    //     invitationId,
+    //   },
+    // });
 
     return redirect('/', { headers });
 
