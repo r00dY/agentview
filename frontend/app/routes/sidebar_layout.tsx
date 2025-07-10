@@ -117,7 +117,7 @@ export default function Layout() {
               </SidebarGroupContent>
             </SidebarGroup>
 
-            <SidebarGroup>
+            { user.role === "admin" && <SidebarGroup>
               <SidebarGroupLabel>Organization</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
@@ -131,7 +131,7 @@ export default function Layout() {
                   </SidebarMenuItem>
                 </SidebarMenu>
               </SidebarGroupContent>
-            </SidebarGroup>
+            </SidebarGroup>}
 
           </SidebarContent>
 

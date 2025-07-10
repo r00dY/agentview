@@ -65,7 +65,7 @@ export default function MembersEdit() {
         <DialogHeader>
           <DialogTitle>Edit Member</DialogTitle>
         </DialogHeader>
-          <fetcher.Form method="post" className="space-y-4 my-3">
+          <fetcher.Form method="post" className="space-y-4">
             <input type="hidden" name="_action" value="updateRole" />
             <input type="hidden" name="userId" value={user.id} />
             
