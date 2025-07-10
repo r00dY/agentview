@@ -24,6 +24,7 @@ import { useFetcherSuccess } from "~/lib/useFetcherSuccess";
 import { invitations as invitationsTable } from "../../db/schema";
 import { db } from "../../lib/db.server";
 import { eq } from "drizzle-orm";
+import { getPendingInvitations } from "../../lib/invitations";
 
 enum Role {
   ADMIN = "admin",
@@ -38,7 +39,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     },
   });
 
-  const invitations = await db.select().from(invitationsTable);
+  const invitations = await getPendingInvitations()
 
   return { users: users.users, invitations };
 }
@@ -274,6 +275,10 @@ export async function action({ request }: Route.ActionArgs) {
 
 function EditRoleDialog({ open, onOpenChange, user }: { open: boolean; onOpenChange: (v: boolean) => void; user: any }) {
   const fetcher = useFetcher();
+
+  useFetcherSuccess(fetcher, () => {
+    onOpenChange(false);
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
