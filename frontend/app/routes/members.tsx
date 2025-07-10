@@ -10,17 +10,8 @@ import {
   TableCell,
 } from "~/components/ui/table";
 import { Button } from "~/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
-import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
-import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
-import { MoreHorizontal, Plus, AlertCircleIcon, Trash2 } from "lucide-react";
-import React from "react";
+import { Plus, Trash2 } from "lucide-react";
 import { APIError } from "better-auth/api";
-import type { FormActionData } from "~/lib/FormActionData";
-import { useFetcherSuccess } from "~/lib/useFetcherSuccess";
 import { cancelInvitation, createInvitation, getPendingInvitations } from "../../lib/invitations";
 
 enum Role {
@@ -104,29 +95,7 @@ export async function action({ request }: Route.ActionArgs) {
           }
       }
 
-      case "removeUser": {
-        const userId = formData.get("userId") as string;
 
-          try {
-            await auth.api.removeUser({
-              headers: request.headers,
-              body: { userId },
-            });
-          }
-          catch (error) {
-            if (error instanceof Error) {
-              return {
-                status: "error",
-                error: error.message,
-              }
-            }
-            return {
-              status: "error",
-              error: "Unexpected error",
-            }
-          }
-        break;
-      }
 
       case "cancelInvite": {
         const invitationId = formData.get("invitationId") as string;
@@ -151,123 +120,11 @@ export async function action({ request }: Route.ActionArgs) {
   }
 }
 
-function EditRoleDialog({ open, onOpenChange, user }: { open: boolean; onOpenChange: (v: boolean) => void; user: any }) {
-  const fetcher = useFetcher<FormActionData>();
-  const actionData = fetcher.data as FormActionData | undefined;
 
-  useFetcherSuccess(fetcher, () => {
-    onOpenChange(false);
-  });
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Edit Role</DialogTitle>
-        </DialogHeader>
-        {user && (
-          <fetcher.Form method="post" className="space-y-4">
-            <input type="hidden" name="_action" value="updateRole" />
-            <input type="hidden" name="userId" value={user.id} />
-            
-            {/* General error alert */}
-            {actionData?.status === "error" && actionData.error && fetcher.state === 'idle' && (
-              <Alert variant="destructive">
-                <AlertCircleIcon />
-                <AlertTitle>Role update failed.</AlertTitle>
-                <AlertDescription>{actionData.error}</AlertDescription>
-              </Alert>
-            )}
-            
-            <div className="space-y-2">
-              <Label htmlFor="role">Role</Label>
-              <Select defaultValue={user.role} name="role">
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={Role.ADMIN}>Admin</SelectItem>
-                  <SelectItem value={Role.USER}>User</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={fetcher.state !== "idle"}>Save</Button>
-            </DialogFooter>
-          </fetcher.Form>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function DeleteUserDialog({ open, onOpenChange, user }: { open: boolean; onOpenChange: (v: boolean) => void; user: any }) {
-  const fetcher = useFetcher<FormActionData>();
-  const actionData = fetcher.data as FormActionData | undefined;
-
-  useFetcherSuccess(fetcher, () => {
-    onOpenChange(false);
-  });
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Delete User</DialogTitle>
-        </DialogHeader>
-        {user && (
-          <fetcher.Form method="post" className="space-y-4">
-            <input type="hidden" name="_action" value="removeUser" />
-            <input type="hidden" name="userId" value={user.id} />
-            
-            {/* General error alert */}
-            {actionData?.status === "error" && actionData.error && fetcher.state === 'idle' && (
-              <Alert variant="destructive">
-                <AlertCircleIcon />
-                <AlertTitle>User deletion failed.</AlertTitle>
-                <AlertDescription>{actionData.error}</AlertDescription>
-              </Alert>
-            )}
-            
-            <p className="text-sm text-muted-foreground">
-              Are you sure you want to delete {user.email}? This action cannot be undone.
-            </p>
-            
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" variant="destructive" disabled={fetcher.state !== "idle"}>
-                Delete
-              </Button>
-            </DialogFooter>
-          </fetcher.Form>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 export default function MembersPage() {
   const { users, invitations } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
-
-  const [editDialogOpen, setEditDialogOpen] = React.useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
-  const [selectedUser, setSelectedUser] = React.useState<any | null>(null);
-
-  function openEdit(m: any) {
-    setSelectedUser(m);
-    setEditDialogOpen(true);
-  }
-
-  function openDelete(m: any) {
-    setSelectedUser(m);
-    setDeleteDialogOpen(true);
-  }
 
   return (
     <div className="p-6">
@@ -302,28 +159,18 @@ export default function MembersPage() {
                 <TableCell>{row.name}</TableCell>
                 <TableCell>{row.role}</TableCell>
                 <TableCell>
-                  <Button asChild variant="outline" size="xs">
-                    <Link to={`/members/${row.id}`}>
-                      Edit
-                    </Link>
-                  </Button>
-                  {/* <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon">
-                        <MoreHorizontal className="w-4 h-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuItem asChild>
-                          <Link to={`/members/${row.id}`}>
-                            Edit Role
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => openDelete(row)} variant="destructive">
-                          Remove User
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu> */}
+                  <div className="flex gap-2">
+                    <Button asChild variant="outline" size="xs">
+                      <Link to={`/members/${row.id}/edit`}>
+                        Edit
+                      </Link>
+                    </Button>
+                    <Button asChild variant="outline" size="xs">
+                      <Link to={`/members/${row.id}/delete`}>
+                        Delete
+                      </Link>
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -386,9 +233,6 @@ export default function MembersPage() {
         </div>
       )}
       
-      <EditRoleDialog open={editDialogOpen} onOpenChange={setEditDialogOpen} user={selectedUser!} key={'edit' + selectedUser?.id}/>
-      <DeleteUserDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen} user={selectedUser!} key={'delete' + selectedUser?.id}/>
-
       <Outlet />
     </div>
   );

@@ -6,7 +6,8 @@ export default [
         route("user", "routes/user.tsx"),
         route("members", "routes/members.tsx", [
             route("invite", "routes/membersInvite.tsx"),
-            route(":userId", "routes/membersEdit.tsx"),
+            route(":userId/edit", "routes/membersEdit.tsx"),
+            route(":userId/delete", "routes/membersDelete.tsx"),
         ]),
     ]),
     route("login", "routes/login.tsx"),
