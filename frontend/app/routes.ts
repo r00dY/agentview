@@ -7,6 +7,7 @@ export default [
         route("members", "routes/members.tsx"),
     ]),
     route("login", "routes/login.tsx"),
+    route("signup", "routes/signup.tsx"),
     route("logout", "routes/logout.tsx"),
     route("change-password", "routes/change-password.tsx"),
 
