@@ -41,79 +41,6 @@ export async function loader({ request }: Route.LoaderArgs) {
   return { users: users.users, invitations };
 }
 
-function InviteMemberDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
-  const fetcher = useFetcher<FormActionData>();
-  const actionData = fetcher.data as FormActionData | undefined;
-
-  useFetcherSuccess(fetcher, () => {
-    onOpenChange(false);
-  });
-
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Invite Member</DialogTitle>
-        </DialogHeader>
-        <fetcher.Form method="post" className="space-y-4">
-          <input type="hidden" name="_action" value="inviteMember" />
-          
-          {/* General error alert */}
-          {actionData?.status === "error" && actionData.error && fetcher.state === 'idle' && (
-            <Alert variant="destructive">
-              <AlertCircleIcon />
-              <AlertTitle>Invitation failed.</AlertTitle>
-              <AlertDescription>{actionData.error}</AlertDescription>
-            </Alert>
-          )}
-          
-          <div className="space-y-2">
-            <Label htmlFor="inviteMemberEmail">Email</Label>
-            <Input
-              id="inviteMemberEmail"
-              name="email"
-              type="email"
-              placeholder="john@doe.com"
-              required
-            />
-            {actionData?.status === "error" && actionData?.fieldErrors?.email && fetcher.state === 'idle' && (
-              <p id="email-error" className="text-sm text-destructive">
-                {actionData.fieldErrors.email}
-              </p>
-            )}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="inviteMemberRole">Role</Label>
-            <Select defaultValue={Role.USER} name="role">
-              <SelectTrigger>
-                <SelectValue placeholder="Select a role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={Role.USER}>User</SelectItem>
-                <SelectItem value={Role.ADMIN}>Admin</SelectItem>
-              </SelectContent>
-            </Select>
-            {actionData?.status === "error" && actionData?.fieldErrors?.role && fetcher.state === 'idle' && (
-              <p id="role-error" className="text-sm text-destructive">
-                {actionData.fieldErrors.role}
-              </p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={fetcher.state !== "idle"}>
-              Send Invitation
-            </Button>
-          </DialogFooter>
-        </fetcher.Form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 export async function action({ request }: Route.ActionArgs) {
   const session = await auth.api.getSession({ headers: request.headers });
   if (!session) return redirect("/login");
@@ -331,7 +258,6 @@ export default function MembersPage() {
   const [editDialogOpen, setEditDialogOpen] = React.useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [selectedUser, setSelectedUser] = React.useState<any | null>(null);
-  const [inviteDialogOpen, setInviteDialogOpen] = React.useState(false);
 
   function openEdit(m: any) {
     setSelectedUser(m);
@@ -350,7 +276,7 @@ export default function MembersPage() {
 
         
         <Button asChild>
-          <Link to="invitation-new">
+          <Link to="invite">
             <Plus className="w-4 h-4" />
             Invite Member
           </Link>
@@ -376,21 +302,28 @@ export default function MembersPage() {
                 <TableCell>{row.name}</TableCell>
                 <TableCell>{row.role}</TableCell>
                 <TableCell>
-                  <DropdownMenu>
+                  <Button asChild variant="outline" size="xs">
+                    <Link to={`/members/${row.id}`}>
+                      Edit
+                    </Link>
+                  </Button>
+                  {/* <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon">
                         <MoreHorizontal className="w-4 h-4" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => openEdit(row)}>
-                          Edit Role
+                        <DropdownMenuItem asChild>
+                          <Link to={`/members/${row.id}`}>
+                            Edit Role
+                          </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => openDelete(row)} variant="destructive">
                           Remove User
                         </DropdownMenuItem>
                     </DropdownMenuContent>
-                  </DropdownMenu>
+                  </DropdownMenu> */}
                 </TableCell>
               </TableRow>
             ))}
@@ -455,7 +388,6 @@ export default function MembersPage() {
       
       <EditRoleDialog open={editDialogOpen} onOpenChange={setEditDialogOpen} user={selectedUser!} key={'edit' + selectedUser?.id}/>
       <DeleteUserDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen} user={selectedUser!} key={'delete' + selectedUser?.id}/>
-      <InviteMemberDialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen} key={'invite' + inviteDialogOpen}/>
 
       <Outlet />
     </div>

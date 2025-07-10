@@ -91,7 +91,7 @@ export default function InvitationNew() {
             )}
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline">
+            <Button type="button" variant="outline" onClick={() => navigate(-1)}>
               Cancel
             </Button>
             <Button type="submit" disabled={fetcher.state !== "idle"}>
