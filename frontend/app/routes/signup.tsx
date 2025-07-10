@@ -87,16 +87,6 @@ export async function action({
       },
     });
 
-    // const requestHeaders = new Headers()
-    // requestHeaders.append('cookie', headers.get('set-cookie')!)
-
-    // await auth.api.acceptInvitation({
-    //   headers: requestHeaders,
-    //   body: {
-    //     invitationId,
-    //   },
-    // });
-
     return redirect('/', { headers });
 
   } catch (error) {
@@ -106,35 +96,6 @@ export async function action({
     return { status: "error", error: "An unexpected error occurred." };
   }
 
-
-
-  // try {
-  //   // Sign up the user
-  //   const { headers } = await auth.api.signUpEmail({
-  //     returnHeaders: true,
-  //     body: {
-  //       email,
-  //       password,
-  //       name: name.trim(),
-  //     },
-  //   });
-
-  //   // Accept the invitation
-  //   await auth.api.acceptInvitation({
-  //     headers,
-  //     body: {
-  //       invitationId,
-  //     },
-  //   });
-
-  //   return redirect('/', { headers });
-    
-  // } catch (error) {
-  //   if (error instanceof APIError) {
-  //     return { status: "error", error: error.message };
-  //   }
-  //   return { status: "error", error: 'An unexpected error occurred. Please try again.' };
-  // }
 }
 
 export default function SignupPage() {

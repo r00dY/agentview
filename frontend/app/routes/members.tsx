@@ -17,14 +17,11 @@ import { Label } from "~/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { MoreHorizontal, Plus, AlertCircleIcon, Trash2 } from "lucide-react";
-import React from "react";
+import React, { useEffect } from "react";
 import { APIError } from "better-auth/api";
 import type { FormActionData } from "~/lib/FormActionData";
 import { useFetcherSuccess } from "~/lib/useFetcherSuccess";
-import { invitations as invitationsTable } from "../../db/schema";
-import { db } from "../../lib/db.server";
-import { eq } from "drizzle-orm";
-import { getPendingInvitations } from "../../lib/invitations";
+import { cancelInvitation, createInvitation, getPendingInvitations } from "../../lib/invitations";
 
 enum Role {
   ADMIN = "admin",
@@ -137,72 +134,17 @@ export async function action({ request }: Route.ActionArgs) {
         const email = formData.get("email") as string;
         const role = formData.get("role") as Role;
 
-        // Validate email correctness
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!email || !emailRegex.test(email)) {
-          return {
-            status: "error",
-            fieldErrors: { email: "Please enter a valid email address." }
-          };
-        }
-
-        // Validate role
-        if (role !== "admin" && role !== "user") {
-          return {
-            status: "error",
-            fieldErrors: { role: "Incorrect role." }
-          };
-        }
-
         try {
-          // Check if user already exists
-          const existingUser = await db.query.user.findFirst({
-            where: (u, { eq }) => eq(u.email, email),
-          });
-
-          if (existingUser) {
-            return {
-              status: "error",
-              fieldErrors: { email: "A user with this email already exists." }
-            };
-          }
-
-          // Check if invitation already exists
-          const existingInvitation = await db.query.invitations.findFirst({
-            where: (i, { eq }) => eq(i.email, email),
-          });
-          
-          if (existingInvitation) {
-            return {
-              status: "error",
-              fieldErrors: { email: "An invitation with this email already exists." }
-            };
-          }
-
-          await db.insert(invitationsTable).values({
-            id: crypto.randomUUID(),
-            email,
-            role,
-            invited_by: session.user.id,
-            status: "pending",
-            created_at: new Date(),
-            expires_at: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30), // 30 days
-          });
-
+          await createInvitation(email, role, session.user.id)
           return {
             status: "success"
           }
-        }
-        catch (error) {
-          if (error instanceof APIError) {
+        } catch (error) {
+          if (error instanceof Error) {
             return {
               status: "error",
               error: error.message,
             }
-          }
-          return {
-            status: "error",
-            error: "Unexpected error",
           }
         }
       }
@@ -248,15 +190,9 @@ export async function action({ request }: Route.ActionArgs) {
         const invitationId = formData.get("invitationId") as string;
 
         try {
-          await db.delete(invitationsTable).where(eq(invitationsTable.id, invitationId));
+          await cancelInvitation(invitationId)
         }
         catch (error) {
-          if (error instanceof APIError) {
-            return {
-              status: "error",
-              error: error.message,
-            }
-          }
           return {
             status: "error",
             error: "Unexpected error",
@@ -274,7 +210,8 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 function EditRoleDialog({ open, onOpenChange, user }: { open: boolean; onOpenChange: (v: boolean) => void; user: any }) {
-  const fetcher = useFetcher();
+  const fetcher = useFetcher<FormActionData>();
+  const actionData = fetcher.data as FormActionData | undefined;
 
   useFetcherSuccess(fetcher, () => {
     onOpenChange(false);
@@ -290,6 +227,16 @@ function EditRoleDialog({ open, onOpenChange, user }: { open: boolean; onOpenCha
           <fetcher.Form method="post" className="space-y-4">
             <input type="hidden" name="_action" value="updateRole" />
             <input type="hidden" name="userId" value={user.id} />
+            
+            {/* General error alert */}
+            {actionData?.status === "error" && actionData.error && fetcher.state === 'idle' && (
+              <Alert variant="destructive">
+                <AlertCircleIcon />
+                <AlertTitle>Role update failed.</AlertTitle>
+                <AlertDescription>{actionData.error}</AlertDescription>
+              </Alert>
+            )}
+            
             <div className="space-y-2">
               <Label htmlFor="role">Role</Label>
               <Select defaultValue={user.role} name="role">
