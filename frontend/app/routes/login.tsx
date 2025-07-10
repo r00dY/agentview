@@ -10,6 +10,18 @@ import { AlertCircleIcon } from "lucide-react";
 import { APIError } from "better-auth/api";
 import { type FormActionData, type FormActionDataError } from "~/lib/FormActionData";
 
+
+export async function loader({ request }: Route.LoaderArgs) {
+  const session = await auth.api.getSession({
+    headers: request.headers,
+  });
+  
+  if (session) {
+    return redirect('/');
+  }
+} 
+
+
 export async function action({
   request,
   params
