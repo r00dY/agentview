@@ -277,24 +277,71 @@ function EditRoleDialog({ open, onOpenChange, user }: { open: boolean; onOpenCha
   );
 }
 
+function DeleteUserDialog({ open, onOpenChange, user }: { open: boolean; onOpenChange: (v: boolean) => void; user: any }) {
+  const fetcher = useFetcher<FormActionData>();
+  const actionData = fetcher.data as FormActionData | undefined;
+
+  useFetcherSuccess(fetcher, () => {
+    onOpenChange(false);
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete User</DialogTitle>
+        </DialogHeader>
+        {user && (
+          <fetcher.Form method="post" className="space-y-4">
+            <input type="hidden" name="_action" value="removeUser" />
+            <input type="hidden" name="userId" value={user.id} />
+            
+            {/* General error alert */}
+            {actionData?.status === "error" && actionData.error && fetcher.state === 'idle' && (
+              <Alert variant="destructive">
+                <AlertCircleIcon />
+                <AlertTitle>User deletion failed.</AlertTitle>
+                <AlertDescription>{actionData.error}</AlertDescription>
+              </Alert>
+            )}
+            
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to delete {user.email}? This action cannot be undone.
+            </p>
+            
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" variant="destructive" disabled={fetcher.state !== "idle"}>
+                Delete
+              </Button>
+            </DialogFooter>
+          </fetcher.Form>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function MembersPage() {
   const { users, invitations } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
 
-  const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [editDialogOpen, setEditDialogOpen] = React.useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [selectedUser, setSelectedUser] = React.useState<any | null>(null);
   const [inviteDialogOpen, setInviteDialogOpen] = React.useState(false);
 
   function openEdit(m: any) {
     setSelectedUser(m);
-    setDialogOpen(true);
+    setEditDialogOpen(true);
   }
 
-  // useEffect(() => {
-  //   if (fetcher.data?.error) {
-  //     toast.error(fetcher.data.error);
-  //   }
-  // }, [fetcher.data?.error]);
+  function openDelete(m: any) {
+    setSelectedUser(m);
+    setDeleteDialogOpen(true);
+  }
 
   return (
     <div className="p-6">
@@ -335,14 +382,9 @@ export default function MembersPage() {
                         <DropdownMenuItem onClick={() => openEdit(row)}>
                           Edit Role
                         </DropdownMenuItem>
-
-                        <fetcher.Form method="post">
-                          <input type="hidden" name="_action" value="removeUser" />
-                          <input type="hidden" name="userId" value={row.id} />
-                          <DropdownMenuItem asChild variant="destructive">
-                            <button type="submit" className="w-full text-left">Remove User</button>
-                          </DropdownMenuItem>
-                        </fetcher.Form>
+                        <DropdownMenuItem onClick={() => openDelete(row)} variant="destructive">
+                          Remove User
+                        </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>
@@ -407,8 +449,9 @@ export default function MembersPage() {
         </div>
       )}
       
-      <EditRoleDialog open={dialogOpen} onOpenChange={setDialogOpen} user={selectedUser!} />
-      <InviteMemberDialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen} />
+      <EditRoleDialog open={editDialogOpen} onOpenChange={setEditDialogOpen} user={selectedUser!} key={'edit' + selectedUser?.id}/>
+      <DeleteUserDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen} user={selectedUser!} key={'delete' + selectedUser?.id}/>
+      <InviteMemberDialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen} key={'invite' + inviteDialogOpen}/>
     </div>
   );
 }
