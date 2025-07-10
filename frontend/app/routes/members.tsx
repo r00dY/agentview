@@ -1,4 +1,4 @@
-import { redirect, useLoaderData, useFetcher } from "react-router";
+import { redirect, useLoaderData, useFetcher, Outlet, Link } from "react-router";
 import type { Route } from "./+types/members";
 import { auth } from "../../lib/auth.server";
 import {
@@ -347,9 +347,13 @@ export default function MembersPage() {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-semibold">Organization Members</h1>
-        <Button onClick={() => setInviteDialogOpen(true)}>
-          <Plus className="w-4 h-4" />
-          Invite Member
+
+        
+        <Button asChild>
+          <Link to="invitation-new">
+            <Plus className="w-4 h-4" />
+            Invite Member
+          </Link>
         </Button>
       </div>
       
@@ -452,6 +456,8 @@ export default function MembersPage() {
       <EditRoleDialog open={editDialogOpen} onOpenChange={setEditDialogOpen} user={selectedUser!} key={'edit' + selectedUser?.id}/>
       <DeleteUserDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen} user={selectedUser!} key={'delete' + selectedUser?.id}/>
       <InviteMemberDialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen} key={'invite' + inviteDialogOpen}/>
+
+      <Outlet />
     </div>
   );
 }
