@@ -177,12 +177,27 @@ export async function action({ request }: Route.ActionArgs) {
           }
       }
 
-      case "removeMember": {
-        const memberIdOrEmail = formData.get("memberId") as string;
-        await (auth.api as any).removeMember({
-          headers: request.headers,
-          body: { memberIdOrEmail },
-        });
+      case "removeUser": {
+        const userId = formData.get("userId") as string;
+
+          try {
+            await auth.api.removeUser({
+              headers: request.headers,
+              body: { userId },
+            });
+          }
+          catch (error) {
+            if (error instanceof Error) {
+              return {
+                status: "error",
+                error: error.message,
+              }
+            }
+            return {
+              status: "error",
+              error: "Unexpected error",
+            }
+          }
         break;
       }
 
@@ -275,6 +290,12 @@ export default function MembersPage() {
     setDialogOpen(true);
   }
 
+  // useEffect(() => {
+  //   if (fetcher.data?.error) {
+  //     toast.error(fetcher.data.error);
+  //   }
+  // }, [fetcher.data?.error]);
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
@@ -316,8 +337,8 @@ export default function MembersPage() {
                         </DropdownMenuItem>
 
                         <fetcher.Form method="post">
-                          <input type="hidden" name="_action" value="removeMember" />
-                          <input type="hidden" name="memberId" value={row.id} />
+                          <input type="hidden" name="_action" value="removeUser" />
+                          <input type="hidden" name="userId" value={row.id} />
                           <DropdownMenuItem asChild variant="destructive">
                             <button type="submit" className="w-full text-left">Remove User</button>
                           </DropdownMenuItem>
