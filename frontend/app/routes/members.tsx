@@ -17,7 +17,7 @@ import { Label } from "~/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { MoreHorizontal, Plus, AlertCircleIcon, Trash2 } from "lucide-react";
-import React, { useEffect } from "react";
+import React from "react";
 import { APIError } from "better-auth/api";
 import type { FormActionData } from "~/lib/FormActionData";
 import { useFetcherSuccess } from "~/lib/useFetcherSuccess";
