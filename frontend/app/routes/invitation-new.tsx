@@ -1,11 +1,9 @@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import type { Route } from "./+types/home";
-import { Form, useActionData, useFetcher, useNavigate } from "react-router";
+import { useFetcher, useNavigate } from "react-router";
 import { auth } from "../../lib/auth.server";
 import { redirect } from "react-router";
-import { APIError } from "better-auth/api";
 import { createInvitation } from "../../lib/invitations";
-import type { FormActionData } from "~/lib/FormActionData";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { AlertCircleIcon } from "lucide-react";
 import { Label } from "~/components/ui/label";
@@ -38,24 +36,24 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function InvitationNew() {
+  const fetcher = useFetcher();
   const navigate = useNavigate();
-  const actionData = useActionData<typeof action>() as FormActionData | undefined;
-
+  
   return <div className="bg-red-500">
     <Dialog open={true} onOpenChange={() => { navigate(-1) }}>
     <DialogContent>
         <DialogHeader>
           <DialogTitle>Invite Member</DialogTitle>
         </DialogHeader>
-        <Form method="post" className="space-y-4">
+        <fetcher.Form method="post" className="space-y-4">
           <input type="hidden" name="_action" value="inviteMember" />
           
           {/* General error alert */}
-          {actionData?.status === "error" && actionData.error && (
+          {fetcher.data?.status === "error" && fetcher.data.error && (
             <Alert variant="destructive">
               <AlertCircleIcon />
               <AlertTitle>Invitation failed.</AlertTitle>
-              <AlertDescription>{actionData.error}</AlertDescription>
+              <AlertDescription>{fetcher.data.error}</AlertDescription>
             </Alert>
           )}
           
@@ -66,11 +64,12 @@ export default function InvitationNew() {
               name="email"
               type="email"
               placeholder="john@doe.com"
+              autoComplete="off"
               required
             />
-            {actionData?.status === "error" && actionData?.fieldErrors?.email && (
+            {fetcher.data?.status === "error" && fetcher.data?.fieldErrors?.email && (
               <p id="email-error" className="text-sm text-destructive">
-                {actionData.fieldErrors.email}
+                {fetcher.data.fieldErrors.email}
               </p>
             )}
           </div>
@@ -85,9 +84,9 @@ export default function InvitationNew() {
                 <SelectItem value={"admin"}>Admin</SelectItem>
               </SelectContent>
             </Select>
-            {actionData?.status === "error" && actionData?.fieldErrors?.role && (
+            {fetcher.data?.status === "error" && fetcher.data?.fieldErrors?.role && (
               <p id="role-error" className="text-sm text-destructive">
-                {actionData.fieldErrors.role}
+                {fetcher.data.fieldErrors.role}
               </p>
             )}
           </div>
@@ -95,13 +94,12 @@ export default function InvitationNew() {
             <Button type="button" variant="outline">
               Cancel
             </Button>
-            <Button type="submit" disabled={false}>
+            <Button type="submit" disabled={fetcher.state !== "idle"}>
               Send Invitation
             </Button>
           </DialogFooter>
-        </Form>
+        </fetcher.Form>
       </DialogContent>
     </Dialog>
-
   </div>
 }
