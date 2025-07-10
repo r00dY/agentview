@@ -21,59 +21,26 @@ import React from "react";
 import { APIError } from "better-auth/api";
 import type { FormActionData } from "~/lib/FormActionData";
 import { useFetcherSuccess } from "~/lib/useFetcherSuccess";
+import { invitations as invitationsTable } from "../../db/schema";
+import { db } from "../../lib/db.server";
+import { eq } from "drizzle-orm";
 
 enum Role {
-  OWNER = "owner",
   ADMIN = "admin",
-  MEMBER = "member"
+  USER = "user"
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-  // Get current member info in default org to ensure they are owner
-  // const { member: selfMember } = await auth.api.getActiveMember({
-  //   headers: request.headers,
-  // });
+  const users = await auth.api.listUsers({
+    headers: request.headers,
+    query: {
+      limit: 100,
+    },
+  });
 
-  // if (!selfMember || !selfMember.role.split(",").includes("owner")) {
-  //   return redirect("/");
-  // }
+  const invitations = await db.select().from(invitationsTable);
 
-
-  // List members & invitations (using `any` to bypass strict typings)
-
-  const fullOrganisation = await auth.api.getFullOrganization({ headers: request.headers, query: { organizationSlug: "default" } });
-
-  if (!fullOrganisation) {
-    throw new Error("Organization not found");
-  }
-
-  const members = fullOrganisation.members;
-  const invitations = fullOrganisation.invitations.filter((i) => i.status !== "canceled");
-
-  console.log("MEMBERS:");
-  console.log(members);
-
-  console.log("INVITATIONS:");
-  console.log(invitations);
-
-  // const rows: Member[] = [
-  //   ...members.map((m: any) => ({
-  //     id: m.id,
-  //     email: m.user.email,
-  //     name: m.user.name,
-  //     role: m.role,
-  //     status: "active" as const,
-  //   })),
-  //   ...invitations.map((i: any) => ({
-  //     id: i.id,
-  //     email: i.email,
-  //     name: "-",
-  //     role: i.role,
-  //     status: i.status === "pending" ? ("pending" as const) : ("active" as const),
-  //   })),
-  // ];
-
-  return { members, invitations };
+  return { users: users.users, invitations };
 }
 
 function InviteMemberDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
@@ -120,14 +87,13 @@ function InviteMemberDialog({ open, onOpenChange }: { open: boolean; onOpenChang
           </div>
           <div className="space-y-2">
             <Label htmlFor="inviteMemberRole">Role</Label>
-            <Select defaultValue={Role.MEMBER} name="role">
+            <Select defaultValue={Role.USER} name="role">
               <SelectTrigger>
                 <SelectValue placeholder="Select a role" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={Role.MEMBER}>Member</SelectItem>
+                <SelectItem value={Role.USER}>User</SelectItem>
                 <SelectItem value={Role.ADMIN}>Admin</SelectItem>
-                <SelectItem value={Role.OWNER}>Owner</SelectItem>
               </SelectContent>
             </Select>
             {actionData?.status === "error" && actionData?.fieldErrors?.role && fetcher.state === 'idle' && (
@@ -157,12 +123,12 @@ export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
   const _action = formData.get("_action");
 
-  const fullOrganisation = await auth.api.getFullOrganization({ headers: request.headers, query: { organizationSlug: "default" } });
-
-  if (!fullOrganisation) {
-    throw new Error("Organization not found");
+  if (session.user.role !== "admin") {
+    return {
+      status: "error",
+      error: "Not authorized.",
+    }
   }
-
 
   try {
     switch (_action) {
@@ -170,13 +136,61 @@ export async function action({ request }: Route.ActionArgs) {
         const email = formData.get("email") as string;
         const role = formData.get("role") as Role;
 
+        // Validate email correctness
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!email || !emailRegex.test(email)) {
+          return {
+            status: "error",
+            fieldErrors: { email: "Please enter a valid email address." }
+          };
+        }
+
+        // Validate role
+        if (role !== "admin" && role !== "user") {
+          return {
+            status: "error",
+            fieldErrors: { role: "Incorrect role." }
+          };
+        }
+
         try {
-          await auth.api.createInvitation({
-            headers: request.headers,
-            body: { email, role, organizationId: fullOrganisation.id },
+          // Check if user already exists
+          const existingUser = await db.query.user.findFirst({
+            where: (u, { eq }) => eq(u.email, email),
           });
 
-          console.log("Invitation created");
+          if (existingUser) {
+            return {
+              status: "error",
+              fieldErrors: { email: "A user with this email already exists." }
+            };
+          }
+
+          // Check if invitation already exists
+          const existingInvitation = await db.query.invitations.findFirst({
+            where: (i, { eq }) => eq(i.email, email),
+          });
+          
+          if (existingInvitation) {
+            return {
+              status: "error",
+              fieldErrors: { email: "An invitation with this email already exists." }
+            };
+          }
+
+          await db.insert(invitationsTable).values({
+            id: crypto.randomUUID(),
+            email,
+            role,
+            invited_by: session.user.id,
+            status: "pending",
+            created_at: new Date(),
+            expires_at: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30), // 30 days
+          });
+
+          return {
+            status: "success"
+          }
         }
         catch (error) {
           if (error instanceof APIError) {
@@ -190,21 +204,36 @@ export async function action({ request }: Route.ActionArgs) {
             error: "Unexpected error",
           }
         }
-
-        return {
-          status: "success",
-        }
       }
 
       case "updateRole": {
-        const memberId = formData.get("memberId") as string;
-        const role = formData.get("role") as string;
-        await (auth.api as any).updateMemberRole({
-          headers: request.headers,
-          body: { memberId, role },
-        });
-        break;
+        const userId = formData.get("userId") as string;
+        const role = formData.get("role") as Role;
+
+          try {
+            await auth.api.setRole({
+              headers: request.headers,
+              body: { userId, role },
+            });
+
+            return {
+              status: "success"
+            }
+            
+          } catch (error) {
+            if (error instanceof APIError) {
+              return {
+                status: "error",
+                error: error.message,
+              }
+            }
+            return {
+              status: "error",
+              error: "Unexpected error",
+            }
+          }
       }
+
       case "removeMember": {
         const memberIdOrEmail = formData.get("memberId") as string;
         await (auth.api as any).removeMember({
@@ -213,16 +242,12 @@ export async function action({ request }: Route.ActionArgs) {
         });
         break;
       }
+
       case "cancelInvite": {
         const invitationId = formData.get("invitationId") as string;
 
         try {
-          await auth.api.cancelInvitation({
-            headers: request.headers,
-            body: { invitationId },
-          });
-
-          console.log("Invitation cancelled");
+          await db.delete(invitationsTable).where(eq(invitationsTable.id, invitationId));
         }
         catch (error) {
           if (error instanceof APIError) {
@@ -236,7 +261,6 @@ export async function action({ request }: Route.ActionArgs) {
             error: "Unexpected error",
           }
         }
-
       }
       // Resend invite not implemented yet
       default:
@@ -248,13 +272,8 @@ export async function action({ request }: Route.ActionArgs) {
   }
 }
 
-function EditRoleDialog({ open, onOpenChange, member }: { open: boolean; onOpenChange: (v: boolean) => void; member: any | null }) {
+function EditRoleDialog({ open, onOpenChange, user }: { open: boolean; onOpenChange: (v: boolean) => void; user: any }) {
   const fetcher = useFetcher();
-  const [role, setRole] = React.useState<string>(member?.role ?? Role.MEMBER);
-
-  React.useEffect(() => {
-    if (member) setRole(member.role);
-  }, [member]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -262,23 +281,21 @@ function EditRoleDialog({ open, onOpenChange, member }: { open: boolean; onOpenC
         <DialogHeader>
           <DialogTitle>Edit Role</DialogTitle>
         </DialogHeader>
-        {member && (
+        {user && (
           <fetcher.Form method="post" className="space-y-4">
             <input type="hidden" name="_action" value="updateRole" />
-            <input type="hidden" name="memberId" value={member.id} />
+            <input type="hidden" name="userId" value={user.id} />
             <div className="space-y-2">
               <Label htmlFor="role">Role</Label>
-              <Select value={role} onValueChange={setRole}>
+              <Select defaultValue={user.role} name="role">
                 <SelectTrigger>
                   <SelectValue placeholder="Select a role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={Role.OWNER}>Owner</SelectItem>
                   <SelectItem value={Role.ADMIN}>Admin</SelectItem>
-                  <SelectItem value={Role.MEMBER}>Member</SelectItem>
+                  <SelectItem value={Role.USER}>User</SelectItem>
                 </SelectContent>
               </Select>
-              <input type="hidden" name="role" value={role} />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
@@ -294,15 +311,15 @@ function EditRoleDialog({ open, onOpenChange, member }: { open: boolean; onOpenC
 }
 
 export default function MembersPage() {
-  const { members, invitations } = useLoaderData<typeof loader>();
+  const { users, invitations } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
 
   const [dialogOpen, setDialogOpen] = React.useState(false);
-  const [selectedMember, setSelectedMember] = React.useState<any | null>(null);
+  const [selectedUser, setSelectedUser] = React.useState<any | null>(null);
   const [inviteDialogOpen, setInviteDialogOpen] = React.useState(false);
 
   function openEdit(m: any) {
-    setSelectedMember(m);
+    setSelectedUser(m);
     setDialogOpen(true);
   }
 
@@ -329,10 +346,10 @@ export default function MembersPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {members.map((row) => (
+            {users.map((row) => (
               <TableRow key={row.id}>
-                <TableCell>{row.user.email}</TableCell>
-                <TableCell>{row.user.name}</TableCell>
+                <TableCell>{row.email}</TableCell>
+                <TableCell>{row.name}</TableCell>
                 <TableCell>{row.role}</TableCell>
                 <TableCell>
                   <DropdownMenu>
@@ -382,7 +399,7 @@ export default function MembersPage() {
                   <TableCell>{invitation.role}</TableCell>
                   <TableCell className="capitalize">
                     {(() => {
-                      const isExpired = invitation.status === 'pending' && invitation.expiresAt && new Date(invitation.expiresAt) < new Date();
+                      const isExpired = invitation.status === 'pending' && invitation.expires_at && new Date(invitation.expires_at) < new Date();
                       const displayStatus = isExpired ? 'expired' : invitation.status;
                       
                       return (
@@ -417,7 +434,7 @@ export default function MembersPage() {
         </div>
       )}
       
-      <EditRoleDialog open={dialogOpen} onOpenChange={setDialogOpen} member={selectedMember} />
+      <EditRoleDialog open={dialogOpen} onOpenChange={setDialogOpen} user={selectedUser!} />
       <InviteMemberDialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen} />
     </div>
   );
