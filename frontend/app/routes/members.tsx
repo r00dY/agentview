@@ -16,7 +16,7 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
-import { MoreHorizontal, Plus, AlertCircleIcon } from "lucide-react";
+import { MoreHorizontal, Plus, AlertCircleIcon, Trash2 } from "lucide-react";
 import React from "react";
 import { APIError } from "better-auth/api";
 import type { FormActionData } from "~/lib/FormActionData";
@@ -48,13 +48,13 @@ export async function loader({ request }: Route.LoaderArgs) {
   }
 
   const members = fullOrganisation.members;
-  const invitations = fullOrganisation.invitations;
+  const invitations = fullOrganisation.invitations.filter((i) => i.status !== "canceled");
 
   console.log("MEMBERS:");
   console.log(members);
 
-  // console.log("INVITATIONS:");
-  // console.log(invitations);
+  console.log("INVITATIONS:");
+  console.log(invitations);
 
   // const rows: Member[] = [
   //   ...members.map((m: any) => ({
@@ -83,7 +83,8 @@ function InviteMemberDialog({ open, onOpenChange }: { open: boolean; onOpenChang
   useFetcherSuccess(fetcher, () => {
     onOpenChange(false);
   });
-  
+
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -169,8 +170,6 @@ export async function action({ request }: Route.ActionArgs) {
         const email = formData.get("email") as string;
         const role = formData.get("role") as Role;
 
-        console.log(email, role);
-
         try {
           await auth.api.createInvitation({
             headers: request.headers,
@@ -216,11 +215,28 @@ export async function action({ request }: Route.ActionArgs) {
       }
       case "cancelInvite": {
         const invitationId = formData.get("invitationId") as string;
-        await (auth.api as any).cancelInvitation({
-          headers: request.headers,
-          body: { invitationId },
-        });
-        break;
+
+        try {
+          await auth.api.cancelInvitation({
+            headers: request.headers,
+            body: { invitationId },
+          });
+
+          console.log("Invitation cancelled");
+        }
+        catch (error) {
+          if (error instanceof APIError) {
+            return {
+              status: "error",
+              error: error.message,
+            }
+          }
+          return {
+            status: "error",
+            error: "Unexpected error",
+          }
+        }
+
       }
       // Resend invite not implemented yet
       default:
@@ -232,7 +248,7 @@ export async function action({ request }: Route.ActionArgs) {
   }
 }
 
-function EditRoleDialog({ open, onOpenChange, member }: { open: boolean; onOpenChange: (v: boolean) => void; member: Member | null }) {
+function EditRoleDialog({ open, onOpenChange, member }: { open: boolean; onOpenChange: (v: boolean) => void; member: any | null }) {
   const fetcher = useFetcher();
   const [role, setRole] = React.useState<string>(member?.role ?? Role.MEMBER);
 
@@ -282,10 +298,10 @@ export default function MembersPage() {
   const fetcher = useFetcher();
 
   const [dialogOpen, setDialogOpen] = React.useState(false);
-  const [selectedMember, setSelectedMember] = React.useState<typeof members[number] | null>(null);
+  const [selectedMember, setSelectedMember] = React.useState<any | null>(null);
   const [inviteDialogOpen, setInviteDialogOpen] = React.useState(false);
 
-  function openEdit(m: typeof members[number]) {
+  function openEdit(m: any) {
     setSelectedMember(m);
     setDialogOpen(true);
   }
@@ -295,64 +311,112 @@ export default function MembersPage() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-semibold">Organization Members</h1>
         <Button onClick={() => setInviteDialogOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" />
+          <Plus className="w-4 h-4" />
           Invite Member
         </Button>
       </div>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Email</TableHead>
-            <TableHead>Name</TableHead>
-            <TableHead>Role</TableHead>
-            {/* <TableHead>Status</TableHead> */}
-            <TableHead></TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {members.map((row) => (
-            <TableRow key={row.id}>
-              <TableCell>{row.user.email}</TableCell>
-              <TableCell>{row.user.name}</TableCell>
-              <TableCell>{row.role}</TableCell>
-              {/* <TableCell className="capitalize">{row.status ?? "active"}</TableCell> */}
-              <TableCell>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon">
-                      <MoreHorizontal className="w-4 h-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => openEdit(row)}>
-                        Edit Role
-                      </DropdownMenuItem>
-
-                      <fetcher.Form method="post">
-                        <input type="hidden" name="_action" value="removeMember" />
-                        <input type="hidden" name="memberId" value={row.id} />
-                        <DropdownMenuItem asChild variant="destructive">
-                          <button type="submit" className="w-full text-left">Remove User</button>
-                        </DropdownMenuItem>
-                      </fetcher.Form>
-{/*                       
-                    {row.status === "pending" && (
-                      <fetcher.Form method="post">
-                        <input type="hidden" name="_action" value="cancelInvite" />
-                        <input type="hidden" name="invitationId" value={row.id} />
-                        <DropdownMenuItem asChild variant="destructive">
-                          <button type="submit" className="w-full text-left">Cancel Invite</button>
-                        </DropdownMenuItem>
-                      </fetcher.Form>
-                    )} */}
-                    {/* Resend invitation could be added here */}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </TableCell>
+      
+      {/* Members Table */}
+      <div className="mb-8">
+        <h2 className="text-lg font-medium mb-4">Active Members</h2>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Email</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead></TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {members.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell>{row.user.email}</TableCell>
+                <TableCell>{row.user.name}</TableCell>
+                <TableCell>{row.role}</TableCell>
+                <TableCell>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon">
+                        <MoreHorizontal className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => openEdit(row)}>
+                          Edit Role
+                        </DropdownMenuItem>
+
+                        <fetcher.Form method="post">
+                          <input type="hidden" name="_action" value="removeMember" />
+                          <input type="hidden" name="memberId" value={row.id} />
+                          <DropdownMenuItem asChild variant="destructive">
+                            <button type="submit" className="w-full text-left">Remove User</button>
+                          </DropdownMenuItem>
+                        </fetcher.Form>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Invitations Table */}
+      {invitations && invitations.length > 0 && (
+        <div>
+          <h2 className="text-lg font-medium mb-4">Pending Invitations</h2>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Email</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {invitations.map((invitation) => (
+                <TableRow key={invitation.id}>
+                  <TableCell>{invitation.email}</TableCell>
+                  <TableCell>{invitation.role}</TableCell>
+                  <TableCell className="capitalize">
+                    {(() => {
+                      const isExpired = invitation.status === 'pending' && invitation.expiresAt && new Date(invitation.expiresAt) < new Date();
+                      const displayStatus = isExpired ? 'expired' : invitation.status;
+                      
+                      return (
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          displayStatus === 'pending' 
+                            ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                          {displayStatus}
+                        </span>
+                      );
+                    })()}
+                  </TableCell>
+                  <TableCell>
+                    <fetcher.Form method="post">
+                      <input type="hidden" name="_action" value="cancelInvite" />
+                      <input type="hidden" name="invitationId" value={invitation.id} />
+                      <Button 
+                        type="submit" 
+                        variant="ghost" 
+                        size="icon"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        disabled={fetcher.state !== "idle"}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </fetcher.Form>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+      
       <EditRoleDialog open={dialogOpen} onOpenChange={setDialogOpen} member={selectedMember} />
       <InviteMemberDialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen} />
     </div>
