@@ -162,6 +162,7 @@ export default function MembersPage() {
               <TableHead>User</TableHead>
               <TableHead>Role</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -179,7 +180,6 @@ export default function MembersPage() {
                 <TableCell>
                 {(() => {
                       const isExpired = invitation.status === 'pending' && invitation.expires_at && new Date(invitation.expires_at) < new Date();
-                      const displayStatus = isExpired ? 'expired' : invitation.status;
 
                       if (isExpired) {
                         return <Badge variant="destructive">Invite expired</Badge>
@@ -187,15 +187,6 @@ export default function MembersPage() {
                         return <Badge variant="secondary">Invite pending</Badge>
                       }
                       
-                      
-                      return (
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          displayStatus === 'pending' 
-                            ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
-                        }`}>
-                          {displayStatus}
-                        </span>
-                      );
                     })()}
 
                 </TableCell>
