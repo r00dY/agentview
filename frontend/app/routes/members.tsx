@@ -13,6 +13,7 @@ import { Button } from "~/components/ui/button";
 import { Plus, Trash2 } from "lucide-react";
 import { APIError } from "better-auth/api";
 import { cancelInvitation, createInvitation, getPendingInvitations } from "../../lib/invitations";
+import { Badge } from "~/components/ui/badge";
 
 enum Role {
   ADMIN = "admin",
@@ -126,48 +127,114 @@ export default function MembersPage() {
   const { users, invitations } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
 
-  return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-semibold">Organization Members</h1>
+  return <div>
 
-        
-        <Button asChild>
+    <div className="py-3 px-6 border-b flex items-center justify-between min-h-[56px]">
+      <div>
+        <h1 className="text-lg font-medium leading-none">Members</h1>
+        {/* <p className="text-sm text-muted-foreground mt-1">Invitations are sent to the email address you provide. They will expire in 30 days.</p> */}
+      </div>
+
+      <div>
+      </div>
+    </div>
+
+    <div className="p-6 max-w-6xl">
+      
+      {/* Members Table */}
+      <div className="mb-8">
+        {/* <h2 className="text-lg font-medium mb-4">Active Members</h2> */}
+
+        <div className="flex justify-end mb-3">
+
+        <Button asChild size="sm">
           <Link to="invite">
             <Plus className="w-4 h-4" />
             Invite Member
           </Link>
         </Button>
-      </div>
-      
-      {/* Members Table */}
-      <div className="mb-8">
-        <h2 className="text-lg font-medium mb-4">Active Members</h2>
+        </div>
+
+        <div className="border rounded-md">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Email</TableHead>
-              <TableHead>Name</TableHead>
+              <TableHead>User</TableHead>
               <TableHead>Role</TableHead>
-              <TableHead></TableHead>
+              <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
+
+          {invitations.map((invitation) => (
+              <TableRow key={invitation.id}>
+                <TableCell >
+                  
+                  <div className="flex flex-col min-h-[50px] justify-center">
+                  <div className="font-medium">{invitation.email}</div>
+                  </div>
+                  
+                </TableCell>
+                <TableCell>{invitation.role}</TableCell>
+                <TableCell>
+                {(() => {
+                      const isExpired = invitation.status === 'pending' && invitation.expires_at && new Date(invitation.expires_at) < new Date();
+                      const displayStatus = isExpired ? 'expired' : invitation.status;
+
+                      if (isExpired) {
+                        return <Badge variant="destructive">Invite expired</Badge>
+                      } else {
+                        return <Badge variant="secondary">Invite pending</Badge>
+                      }
+                      
+                      
+                      return (
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          displayStatus === 'pending' 
+                            ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                          {displayStatus}
+                        </span>
+                      );
+                    })()}
+
+                </TableCell>
+                <TableCell>
+                    <fetcher.Form method="post">
+                      <input type="hidden" name="_action" value="cancelInvite" />
+                      <input type="hidden" name="invitationId" value={invitation.id} />
+                      <Button 
+                        type="submit" 
+                        variant="outline" 
+                        size="xs"
+                        disabled={fetcher.state !== "idle"}
+                      >
+                        Cancel invite
+                      </Button>
+                    </fetcher.Form>
+                </TableCell>
+              </TableRow>
+            ))}
+
             {users.map((row) => (
               <TableRow key={row.id}>
-                <TableCell>{row.email}</TableCell>
-                <TableCell>{row.name}</TableCell>
+                <TableCell><div className="flex flex-col justify-center min-h-[50px] ">
+                  <div className="font-medium">{row.name}</div>
+                  <div className="text-sm text-muted-foreground">{row.email}</div>
+                  </div></TableCell>
                 <TableCell>{row.role}</TableCell>
+                <TableCell><Badge>Active</Badge></TableCell>
                 <TableCell>
                   <div className="flex gap-2">
-                    <Button asChild variant="outline" size="xs">
-                      <Link to={`/members/${row.id}/edit`}>
-                        Edit
+
+                  <Button asChild variant="outline" size="xs">
+                      <Link to={`/members/${row.id}/delete`}>
+                        Remove
                       </Link>
                     </Button>
                     <Button asChild variant="outline" size="xs">
-                      <Link to={`/members/${row.id}/delete`}>
-                        Remove
+                      <Link to={`/members/${row.id}/edit`}>
+                        Edit
                       </Link>
                     </Button>
                   </div>
@@ -177,9 +244,9 @@ export default function MembersPage() {
           </TableBody>
         </Table>
       </div>
+      </div>
 
-      {/* Invitations Table */}
-      {invitations && invitations.length > 0 && (
+      {/* {invitations && invitations.length > 0 && (
         <div>
           <h2 className="text-lg font-medium mb-4">Pending Invitations</h2>
           <Table>
@@ -192,6 +259,9 @@ export default function MembersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
+
+
+
               {invitations.map((invitation) => (
                 <TableRow key={invitation.id}>
                   <TableCell>{invitation.email}</TableCell>
@@ -230,9 +300,9 @@ export default function MembersPage() {
             </TableBody>
           </Table>
         </div>
-      )}
+      )} */}
       
       <Outlet />
     </div>
-  );
+  </div>
 }
