@@ -36,6 +36,7 @@
   },
   "devDependencies": {
     "@react-router/dev": "^7.5.3",
+    "@tailwindcss/typography": "^0.5.16",
     "@tailwindcss/vite": "^4.1.4",
     "@types/node": "^20",
     "@types/pg": "^8.15.4",

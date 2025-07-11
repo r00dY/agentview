@@ -8,8 +8,7 @@ import {
     useNavigate
   } from "react-router";
   
-  import { LogOut, PlusCircle, ShoppingBag, User2, ShoppingBasket, Gauge, ChevronUp, User, Edit, Lock, Users } from "lucide-react"
-  import { Button } from "../components/ui/button"
+  import { LogOut, PlusCircle, ShoppingBag, User2, ShoppingBasket, Gauge, ChevronUp, User, Edit, Lock, Users, Mail } from "lucide-react"
   import {
     SidebarProvider,
     Sidebar,
@@ -27,9 +26,7 @@ import {
 import type { Route } from "./+types/sidebar_layout";
 import { auth } from "../../lib/auth.server";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
-import { Label } from "~/components/ui/label";
-import { Input } from "~/components/ui/input";
+
 import React from "react";
 import { EditProfileDialog } from "~/components/EditProfileDialog";
 import { ChangePasswordDialog } from "~/components/ChangePasswordDialog";
@@ -46,12 +43,13 @@ export async function loader({request}: Route.LoaderArgs) {
   }
 
   return {
-    user: session.user
+    user: session.user,
+    showEmails: true
   };
 }
 
 export default function Layout() {
-  const { user } = useLoaderData<typeof loader>()
+  const { user, showEmails } = useLoaderData<typeof loader>()
   const logoutFetcher = useFetcher()
 
   const [editProfileOpen, setEditProfileOpen] = React.useState(false)
@@ -126,6 +124,22 @@ export default function Layout() {
                       <Link to="/members">
                         <Users className="mr-2 h-4 w-4" />
                         <span>Members</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>}
+
+            { showEmails && <SidebarGroup>
+              <SidebarGroupLabel>Developer</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <Link to="/emails">
+                        <Mail className="mr-2 h-4 w-4" />
+                        <span>Emails</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

@@ -93,7 +93,7 @@ export async function createInvitation(email: string, role: string, invitedById:
 You've been invited to join the AgentView project as a ${role}.
 
 To accept your invitation and create your account, please click the link below:
-https://localhost:2137/signup?invitationId=${import.meta.env.HOST}
+${process.env.ROOT_URL}/signup?invitationId=${newId}
 
 If you did not expect this invitation, you can safely ignore this email.
 
@@ -103,7 +103,7 @@ The AgentView Team
     html: `<p>Hello,</p>
 <p>You've been invited to join the <strong>AgentView</strong> project as a <strong>${role}</strong>.</p>
 <p>To accept your invitation and create your account, please click the link below:</p>
-<p><a href="https://${import.meta.env.HOST}/signup?invitationId=${newId}">Accept Invitation</a></p>
+<p><a href="${process.env.ROOT_URL}/signup?invitationId=${newId}">Accept Invitation</a></p>
 <p>If you did not expect this invitation, you can safely ignore this email.</p>
 <p>Best regards,<br/>The AgentView Team</p>`
   }, invitedById);

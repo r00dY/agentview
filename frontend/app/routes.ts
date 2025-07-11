@@ -9,6 +9,8 @@ export default [
             route(":userId/edit", "routes/membersEdit.tsx"),
             route(":userId/delete", "routes/membersDelete.tsx"),
         ]),
+        route("emails", "routes/emails.tsx"),
+        route("emails/:id", "routes/emailDetail.tsx"),
     ]),
     route("login", "routes/login.tsx"),
     route("signup", "routes/signup.tsx"),
