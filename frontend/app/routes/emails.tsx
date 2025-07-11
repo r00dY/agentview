@@ -48,7 +48,6 @@ export default function Emails() {
               <TableRow>
                 <TableHead>To</TableHead>
                 <TableHead>Subject</TableHead>
-                <TableHead>From</TableHead>
                 <TableHead>Date</TableHead>
               </TableRow>
             </TableHeader>
@@ -71,7 +70,6 @@ export default function Emails() {
                       {email.subject || '(No subject)'}
                     </Link>
                   </TableCell>
-                  <TableCell>{email.from}</TableCell>
                   <TableCell>
                     {new Date(email.created_at).toLocaleDateString('en-US', {
                       year: 'numeric',
