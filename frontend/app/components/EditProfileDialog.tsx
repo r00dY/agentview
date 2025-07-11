@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import { Input } from "~/components/ui/input";
@@ -39,17 +39,20 @@ export function EditProfileDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Edit Profile</DialogTitle>
-          <DialogDescription>Update your profile information here.</DialogDescription>
-        </DialogHeader>
 
-        <editFetcher.Form
+
+      <DialogContent>
+
+<editFetcher.Form
           action="/user"
           method="put"
           className="space-y-4"
         >
+        <DialogHeader>
+          <DialogTitle>Edit Profile</DialogTitle>
+        </DialogHeader>
+
+        <DialogBody className="space-y-4">
           {/* General error alert */}
           {actionData?.status === "error" && actionData.error && editFetcher.state === 'idle' && (
             <Alert variant="destructive">
@@ -85,7 +88,9 @@ export function EditProfileDialog({
               </p>
             )}
           </div>
-          <DialogFooter>
+
+        </DialogBody>
+        <DialogFooter>
             <Button
               variant="outline"
               type="button"
@@ -95,7 +100,9 @@ export function EditProfileDialog({
             </Button>
             <Button type="submit" disabled={editFetcher.state !== 'idle'}>Save Changes</Button>
           </DialogFooter>
+
         </editFetcher.Form>
+        
       </DialogContent>
     </Dialog>
   );

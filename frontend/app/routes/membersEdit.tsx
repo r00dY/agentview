@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import type { Route } from "./+types/membersEdit";
 import { redirect, useFetcher, useLoaderData, useNavigate } from "react-router";
 import { auth } from "../../lib/auth.server";
@@ -62,11 +62,15 @@ export default function MembersEdit() {
   return <div className="bg-red-500">
     <Dialog open={true} onOpenChange={() => { navigate(-1) }}>
     <DialogContent>
+    <fetcher.Form method="post" className="space-y-4">
+
+
         <DialogHeader>
           <DialogTitle>Edit Member</DialogTitle>
         </DialogHeader>
         
-          <fetcher.Form method="post" className="space-y-4">
+        <DialogBody className="space-y-5">
+
             <input type="hidden" name="_action" value="updateRole" />
             <input type="hidden" name="userId" value={user.id} />
             
@@ -96,13 +100,15 @@ export default function MembersEdit() {
                 </SelectContent>
               </Select>
             </div>
+          </DialogBody>
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => navigate(-1)}>
                 Cancel
               </Button>
               <Button type="submit" disabled={fetcher.state !== "idle"}>Save</Button>
             </DialogFooter>
-          </fetcher.Form>
+            </fetcher.Form>
       </DialogContent>
     </Dialog>
   </div>

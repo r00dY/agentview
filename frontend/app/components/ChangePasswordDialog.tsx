@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import { Input } from "~/components/ui/input";
@@ -28,16 +28,18 @@ export function ChangePasswordDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Change Password</DialogTitle>
-          <DialogDescription>Update your password here.</DialogDescription>
-        </DialogHeader>
 
-        <changePasswordFetcher.Form
+      <changePasswordFetcher.Form
           action="/change-password"
           method="post"
           className="space-y-4"
         >
+
+        <DialogHeader>
+          <DialogTitle>Change Password</DialogTitle>
+        </DialogHeader>
+
+<DialogBody className="space-y-4 mb-4">
           {/* General error alert */}
           {actionData?.status === "error" && actionData.error && changePasswordFetcher.state === 'idle' && (
             <Alert variant="destructive">
@@ -89,7 +91,7 @@ export function ChangePasswordDialog({
               </p>
             )}
           </div>
-
+          </DialogBody>
           <DialogFooter>
             <Button
               variant="outline"

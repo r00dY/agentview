@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import type { Route } from "./+types/membersDelete";
 import { redirect, useFetcher, useLoaderData, useNavigate } from "react-router";
 import { auth } from "../../lib/auth.server";
@@ -69,10 +69,13 @@ export default function MembersDelete() {
     <div>
       <Dialog open={true} onOpenChange={() => { navigate(-1) }}>
         <DialogContent>
+        <fetcher.Form method="post">
+
           <DialogHeader>
             <DialogTitle>Delete User</DialogTitle>
           </DialogHeader>
-          <fetcher.Form method="post" className="space-y-4 my-3">
+
+          <DialogBody>
             <input type="hidden" name="userId" value={user.id} />
             
             {/* General error alert */}
@@ -85,12 +88,12 @@ export default function MembersDelete() {
             )}
             
             <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">
-                Are you sure you want to delete <strong>{user.email}</strong>? This action cannot be undone.
+              <p className="text-sm">
+                Are you sure you want to delete <strong className="font-medium">{user.email}</strong>? This action cannot be undone.
               </p>
             </div>
-            
-            <DialogFooter>
+            </DialogBody>
+            <DialogFooter className="border-0">
               <Button type="button" variant="outline" onClick={() => navigate(-1)}>
                 Cancel
               </Button>

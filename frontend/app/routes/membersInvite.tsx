@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import type { Route } from "./+types/home";
 import { useFetcher, useNavigate } from "react-router";
 import { auth } from "../../lib/auth.server";
@@ -42,10 +42,13 @@ export default function InvitationNew() {
   return <div className="bg-red-500">
     <Dialog open={true} onOpenChange={() => { navigate(-1) }}>
     <DialogContent>
+    <fetcher.Form method="post" className="space-y-4">
+
         <DialogHeader>
           <DialogTitle>Invite Member</DialogTitle>
         </DialogHeader>
-        <fetcher.Form method="post" className="space-y-4">
+
+        <DialogBody className="space-y-4">
           <input type="hidden" name="_action" value="inviteMember" />
           
           {/* General error alert */}
@@ -90,6 +93,7 @@ export default function InvitationNew() {
               </p>
             )}
           </div>
+          </DialogBody>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => navigate(-1)}>
               Cancel
