@@ -167,7 +167,7 @@ export default function MembersPage() {
                     </Button>
                     <Button asChild variant="outline" size="xs">
                       <Link to={`/members/${row.id}/delete`}>
-                        Delete
+                        Remove
                       </Link>
                     </Button>
                   </div>
@@ -217,12 +217,11 @@ export default function MembersPage() {
                       <input type="hidden" name="invitationId" value={invitation.id} />
                       <Button 
                         type="submit" 
-                        variant="ghost" 
-                        size="icon"
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        variant="outline" 
+                        size="xs"
                         disabled={fetcher.state !== "idle"}
                       >
-                        <Trash2 className="w-4 h-4" />
+                        Remove
                       </Button>
                     </fetcher.Form>
                   </TableCell>

@@ -132,22 +132,8 @@ export default function Layout() {
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>}
-
           </SidebarContent>
-
-          {/* <SidebarFooter className="border-t p-3">
-            <div className="flex items-center gap-3">
-              <div className="flex flex-col">
-                <div className="text-sm font-medium">User</div>
-                <div className="text-sm mb-2 text-muted-foreground">{user.email}</div>
-
-                <logoutFetcher.Form method="post" action="/logout">
-                  <Button variant={"outline"} type="submit">Log out <LogOut className="h-4 w-4" /></Button>
-                </logoutFetcher.Form>
-              </div>
-            </div>
-          </SidebarFooter> */}
-
+          
       <SidebarFooter className="border-t p-3">
           <SidebarMenu>
             <SidebarMenuItem>
