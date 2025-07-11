@@ -1,13 +1,6 @@
 import { integer, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { user, session, account, verification } from "./auth-schema";
 
-// export const usersTable = pgTable("test_table", {
-//   id: integer().primaryKey().generatedAlwaysAsIdentity(),
-//   name: varchar({ length: 255 }).notNull(),
-//   age: integer().notNull(),
-//   email: varchar({ length: 255 }).notNull().unique(),
-// });
-
 export const invitations = pgTable("invitation", {
   id: text('id').primaryKey(),
   email: varchar({ length: 255 }).notNull(),
@@ -18,3 +11,17 @@ export const invitations = pgTable("invitation", {
   invited_by: text('invited_by').references(() => user.id, { onDelete: 'cascade' })
 });
 
+export const email = pgTable("email", {
+  id: text('id').primaryKey(),
+  user_id: text('user_id').references(() => user.id),
+  to: varchar({ length: 255 }).notNull(),
+  subject: varchar({ length: 255 }),
+  body: text('body'),
+  text: text('text'),
+  from: varchar({ length: 255 }).notNull(),
+  cc: varchar({ length: 255 }),
+  bcc: varchar({ length: 255 }),
+  reply_to: varchar({ length: 255 }),
+  created_at: timestamp().notNull(),
+  updated_at: timestamp().notNull(),
+});

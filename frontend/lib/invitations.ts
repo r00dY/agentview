@@ -1,6 +1,7 @@
 import { db } from "./db.server";
 import { invitations as invitationTable } from "../db/schema";
 import { eq } from "drizzle-orm";
+import { addEmail } from "./email";
 
 export async function getInvitation(invitationId: string) {
   const invitationRows = await db.select().from(invitationTable).where(eq(invitationTable.id, invitationId));
@@ -71,13 +72,39 @@ export async function createInvitation(email: string, role: string, invitedById:
     throw new Error("An invitation with this email already exists.");
   }
 
+
+  const newId = crypto.randomUUID();
+
   await db.insert(invitationTable).values({
-    id: crypto.randomUUID(),
+    id: newId,
     email,
     role,
     invited_by: invitedById,
     status: "pending",
     created_at: new Date(),
     expires_at: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30), // 30 days
-  });
+  }).returning();
+
+  await addEmail({
+    to: email,
+    subject: "You're Invited to Join AgentView!",
+    text: `Hello,
+
+You've been invited to join the AgentView project as a ${role}.
+
+To accept your invitation and create your account, please click the link below:
+https://localhost:2137/signup?invitationId=${import.meta.env.HOST}
+
+If you did not expect this invitation, you can safely ignore this email.
+
+Best regards,
+The AgentView Team
+`,
+    html: `<p>Hello,</p>
+<p>You've been invited to join the <strong>AgentView</strong> project as a <strong>${role}</strong>.</p>
+<p>To accept your invitation and create your account, please click the link below:</p>
+<p><a href="https://${import.meta.env.HOST}/signup?invitationId=${newId}">Accept Invitation</a></p>
+<p>If you did not expect this invitation, you can safely ignore this email.</p>
+<p>Best regards,<br/>The AgentView Team</p>`
+  }, invitedById);
 }
