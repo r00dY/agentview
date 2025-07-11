@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { ArrowLeft } from "lucide-react";
+import { Header, HeaderTitle } from "~/components/Header";
 
 export async function loader({ request, params }: Route.LoaderArgs) {
   // Get the specific email
@@ -26,26 +27,21 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 export default function EmailDetail() {
   const { email: emailData } = useLoaderData<typeof loader>();
 
-  return (
-    <div className="p-6">
-      <div className="mb-4">
-        <Button variant="outline" asChild>
-          <Link to="/emails">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Emails
-          </Link>
-        </Button>
-      </div>
+  return <div>
+
+<Header>
+            <HeaderTitle title="Email" />
+        </Header>
+    <div className="p-6 max-w-6xl">
+
+
 
       <Card>
-        <CardHeader>
-          <CardTitle>Email Details</CardTitle>
-        </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium text-muted-foreground">To</label>
-              <p className="font-bold">{emailData.to}</p>
+              <p className="font-medium">{emailData.to}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">From</label>
@@ -109,5 +105,5 @@ export default function EmailDetail() {
         </CardContent>
       </Card>
     </div>
-  );
+    </div>
 } 

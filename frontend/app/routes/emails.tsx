@@ -12,21 +12,9 @@ import {
   TableCell,
 } from "~/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Header, HeaderTitle } from "~/components/Header";
 
 export async function loader({ request }: Route.LoaderArgs) {
-//   const session = await auth.api.getSession({
-//     headers: request.headers,
-//   });
-
-//   if (!session) {
-//     return redirect('/login');
-//   }
-
-//   // Check if emails feature is enabled
-//   if (process.env.SHOW_EMAILS !== 'true') {
-//     throw new Response("Not Found", { status: 404 });
-//   }
-
   // Get last 100 emails, sorted newest to oldest
   const emails = await db
     .select({
@@ -46,13 +34,15 @@ export async function loader({ request }: Route.LoaderArgs) {
 export default function Emails() {
   const { emails } = useLoaderData<typeof loader>();
 
-  return (
-    <div className="p-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Emails</CardTitle>
-        </CardHeader>
-        <CardContent>
+  return <div>
+
+    <Header>
+      <HeaderTitle title="Emails" />
+    </Header>
+
+    <div className="p-6 max-w-6xl">
+
+          <div className="border rounded-md">
           <Table>
             <TableHeader>
               <TableRow>
@@ -70,7 +60,7 @@ export default function Emails() {
                       to={`/emails/${email.id}`}
                       className="hover:underline"
                     >
-                      <span className="font-bold">{email.to}</span>
+                      <span className="font-medium">{email.to}</span>
                     </Link>
                   </TableCell>
                   <TableCell>
@@ -95,13 +85,7 @@ export default function Emails() {
               ))}
             </TableBody>
           </Table>
-          {emails.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              No emails found.
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
-  );
 } 
