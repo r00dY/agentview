@@ -41,19 +41,19 @@ export default function EmailDetail() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium text-muted-foreground">To</label>
-              <p className="font-medium">{emailData.to}</p>
+              <p className="text-sm font-medium">{emailData.to}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">From</label>
-              <p>{emailData.from}</p>
+              <p className="text-sm">{emailData.from}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Subject</label>
-              <p>{emailData.subject || '(No subject)'}</p>
+              <p className="text-sm">{emailData.subject || '(No subject)'}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Date</label>
-              <p>
+              <p className="text-sm">
                 {new Date(emailData.created_at).toLocaleDateString('en-US', {
                   year: 'numeric',
                   month: 'long',
