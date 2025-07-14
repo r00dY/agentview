@@ -11,7 +11,6 @@ import {
   TableRow,
   TableCell,
 } from "~/components/ui/table";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Header, HeaderTitle } from "~/components/Header";
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -41,8 +40,7 @@ export default function Emails() {
     </Header>
 
     <div className="p-6 max-w-6xl">
-
-          <div className="border rounded-md">
+        <div className="border rounded-md">
           <Table>
             <TableHeader>
               <TableRow>
@@ -63,7 +61,7 @@ export default function Emails() {
                     </Link>
                   </TableCell>
                   <TableCell>
-                    <Link 
+                    <Link
                       to={`/emails/${email.id}`}
                       className="hover:underline"
                     >
