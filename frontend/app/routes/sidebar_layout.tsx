@@ -24,7 +24,7 @@ import {
     SidebarGroupContent,
   } from "../components/ui/sidebar"
 import type { Route } from "./+types/sidebar_layout";
-import { auth } from "../../lib/auth.server";
+import { auth } from "~/lib/auth.server";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
 
 import React from "react";

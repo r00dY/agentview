@@ -1,7 +1,7 @@
 import { data } from "react-router";
 import type { Route } from "./+types/clients";
-import { db } from "../../../lib/db.server";
-import { clients } from "../../../db/schema";
+import { db } from "~/lib/db.server";
+import { clients } from "~/db/schema";
 
 export async function loader({ params, request }: Route.LoaderArgs) {
 

@@ -7,7 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { AlertCircleIcon } from "lucide-react";
 import { useFetcher } from "react-router";
 import type { FormActionData } from "~/lib/FormActionData";
-import { useFetcherSuccess } from "~/lib/useFetcherSuccess";
+import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
 
 interface EditProfileDialogProps {
   open: boolean;

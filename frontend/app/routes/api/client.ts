@@ -1,7 +1,7 @@
 import { data } from "react-router";
 import type { Route } from "./+types/client";
-import { db } from "../../../lib/db.server";
-import { clients } from "../../../db/schema";
+import { db } from "~/lib/db.server";
+import { clients } from "~/db/schema";
 import { eq } from "drizzle-orm";
 
 export async function loader({ params, request }: Route.LoaderArgs) {

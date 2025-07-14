@@ -1,6 +1,6 @@
 import { redirect, useLoaderData, useFetcher, Outlet, Link } from "react-router";
 import type { Route } from "./+types/members";
-import { auth } from "../../lib/auth.server";
+import { auth } from "~/lib/auth.server";
 import {
   Table,
   TableHeader,
@@ -11,9 +11,9 @@ import {
 } from "~/components/ui/table";
 import { Button } from "~/components/ui/button";
 import { Plus } from "lucide-react";
-import { cancelInvitation, getPendingInvitations } from "../../lib/invitations";
+import { cancelInvitation, getPendingInvitations } from "~/lib/invitations";
 import { Badge } from "~/components/ui/badge";
-import { Header, HeaderTitle } from "~/components/Header";
+import { Header, HeaderTitle } from "~/components/header";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const users = await auth.api.listUsers({

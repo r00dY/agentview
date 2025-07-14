@@ -1,5 +1,5 @@
 import { db } from "./db.server";
-import { email as emailTable } from "../db/schema";
+import { email as emailTable } from "~/db/schema";
 import type { EmailPayload } from "./types";
 
 export async function addEmail(emailPayload: EmailPayload, userId: string) {

@@ -3,7 +3,7 @@ import { createAuthMiddleware, APIError } from "better-auth/api";
 import { admin } from "better-auth/plugins"
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "./db.server";
-import { user, session, account, verification } from "../db/auth-schema";
+import { user, session, account, verification } from "~/db/auth-schema";
 import { getValidInvitation, acceptInvitation, getInvitation } from "./invitations";
 import { eq } from "drizzle-orm";
 import { areThereRemainingAdmins } from "./areThereRemainingAdmins";

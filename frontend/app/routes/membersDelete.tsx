@@ -1,7 +1,7 @@
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import type { Route } from "./+types/membersDelete";
 import { redirect, useFetcher, useLoaderData, useNavigate } from "react-router";
-import { auth } from "../../lib/auth.server";
+import { auth } from "~/lib/auth.server";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { AlertCircleIcon } from "lucide-react";
 import { Button } from "~/components/ui/button";

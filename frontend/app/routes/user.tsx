@@ -1,5 +1,5 @@
 import type { Route } from "./+types/user";
-import { auth } from "../../lib/auth.server";
+import { auth } from "~/lib/auth.server";
 import { APIError } from "better-auth/api";
 import type { FormActionData, FormActionDataError } from "~/lib/FormActionData";
 import { data } from "react-router";

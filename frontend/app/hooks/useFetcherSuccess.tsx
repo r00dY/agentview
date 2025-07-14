@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { FetcherWithComponents } from "react-router";
-import type { FormActionData, FormActionDataSuccess } from "./FormActionData";
+import type { FormActionData, FormActionDataSuccess } from "../lib/FormActionData";
 
 export function useFetcherSuccess(
   fetcher: FetcherWithComponents<FormActionData>,

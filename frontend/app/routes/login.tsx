@@ -3,7 +3,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import type { Route } from "./+types/login";
-import { auth } from "../../lib/auth.server";
+import { auth } from "~/lib/auth.server";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { AlertCircleIcon } from "lucide-react";

@@ -1,5 +1,5 @@
 import { db } from "./db.server";
-import { invitations as invitationTable } from "../db/schema";
+import { invitations as invitationTable } from "~/db/schema";
 import { eq } from "drizzle-orm";
 import { addEmail } from "./email";
 
