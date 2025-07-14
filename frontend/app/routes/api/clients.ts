@@ -23,21 +23,17 @@ export async function action({ request }: Route.ActionArgs) {
     throw new Response("Method not allowed", { status: 405 });
   }
 
-  // Validate that there are no parameters
-  const url = new URL(request.url);
-  if (url.searchParams.toString()) {
-    return { error: "POST request should not contain any parameters" };
-  }
-
   try {
     // Create a new client in the database
-    await db.insert(clients).values({});
+    const [newClient] = await db.insert(clients).values({}).returning();
     
     // Since we can't return the inserted record easily without returning(),
     // we'll return a success message
-    return { success: true, message: "Client created successfully" };
+    return data(newClient, {
+      status: 201
+    });
+
   } catch (error) {
-    console.error("Error creating client:", error);
-    return { error: "Failed to create client" };
+    return data({ error: "Failed to create client" }, { status: 500 });
   }
 }
