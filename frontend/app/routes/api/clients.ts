@@ -4,13 +4,11 @@ import { db } from "../../../lib/db.server";
 import { clients } from "../../../db/schema";
 
 export async function loader({ params, request }: Route.LoaderArgs) {
-  // Only allow POST method
-  if (request.method !== "POST") {
-    throw new Response("Method not allowed", { status: 405 });
-  }
-  
-  return data([], {
-    status: 200,
+
+  return data({
+    error: "Unauthorized"
+  }, {
+    status: 401,
     headers: {
       "Content-Type": "application/json",
     },
