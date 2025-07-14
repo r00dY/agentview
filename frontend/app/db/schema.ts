@@ -26,7 +26,7 @@ export const email = pgTable("email", {
   updated_at: timestamp().notNull().defaultNow(),
 });
 
-export const clients = pgTable("client", {
+export const client = pgTable("client", {
   id: uuid("id").primaryKey().defaultRandom(),
   created_at: timestamp().notNull().defaultNow(),
   updated_at: timestamp().notNull().defaultNow(),
