@@ -1,4 +1,4 @@
-import { integer, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { integer, pgTable, text, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
 import { user, session, account, verification } from "./auth-schema";
 
 export const invitations = pgTable("invitation", {
@@ -22,6 +22,12 @@ export const email = pgTable("email", {
   cc: varchar({ length: 255 }),
   bcc: varchar({ length: 255 }),
   reply_to: varchar({ length: 255 }),
-  created_at: timestamp().notNull(),
-  updated_at: timestamp().notNull(),
+  created_at: timestamp().notNull().defaultNow(),
+  updated_at: timestamp().notNull().defaultNow(),
+});
+
+export const clients = pgTable("client", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  created_at: timestamp().notNull().defaultNow(),
+  updated_at: timestamp().notNull().defaultNow(),
 });
