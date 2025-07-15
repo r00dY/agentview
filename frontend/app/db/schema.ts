@@ -1,5 +1,6 @@
-import { integer, pgTable, text, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
+import { integer, pgTable, text, timestamp, uuid, varchar, jsonb } from "drizzle-orm/pg-core";
 import { user, session, account, verification } from "./auth-schema";
+import type { Database } from "lucide-react";
 
 export const invitations = pgTable("invitation", {
   id: text('id').primaryKey(),
@@ -31,3 +32,23 @@ export const client = pgTable("client", {
   created_at: timestamp().notNull().defaultNow(),
   updated_at: timestamp().notNull().defaultNow(),
 });
+
+export const thread = pgTable("thread", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  created_at: timestamp().notNull().defaultNow(),
+  updated_at: timestamp().notNull().defaultNow(),
+  data: jsonb("data"),
+  client_id: uuid("client_id").notNull().references(() => client.id, { onDelete: 'cascade' }),
+  type: varchar({ length: 255 }).notNull(),
+});
+
+export const activity = pgTable("activity", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  created_at: timestamp().notNull().defaultNow(),
+  updated_at: timestamp().notNull().defaultNow(),
+  data: jsonb("data"),
+  thread_id: uuid("thread_id").notNull().references(() => thread.id, { onDelete: 'cascade' }),
+  type: varchar({ length: 255 }).notNull(),
+  role: varchar({ length: 255 }).notNull(),
+});
+
