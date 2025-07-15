@@ -17,7 +17,4 @@ export default [
     route("logout", "routes/logout.tsx"),
     route("change-password", "routes/change-password.tsx"),
 
-    route("api/clients", "routes/api/clients.ts"),
-    route("api/clients/:id", "routes/api/client.ts"),
-
 ] satisfies RouteConfig;
