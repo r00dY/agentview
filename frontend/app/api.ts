@@ -80,6 +80,13 @@ const ActivitySchema = z.object({
   role: z.string(),
 })
 
+const ActivityCreateSchema = ActivitySchema.pick({
+  thread_id: true,
+  type: true,
+  role: true,
+  content: true,
+})
+
 
 const ThreadSchema = z.object({
   id: z.string(),
@@ -140,10 +147,7 @@ app.openapi(threadGETRoute, async (c) => {
   const threadRow = await db.query.thread.findFirst({
     where: eq(thread.id, id),
     with: {
-      activities: true,
-      // activities: {
-      //   orderBy: [asc(activity.created_at)],
-      // }
+      activities: true
     }
   });
 
@@ -151,20 +155,8 @@ app.openapi(threadGETRoute, async (c) => {
     return c.json({ error: "Thread not found" }, 404);
   }
 
-  // // Get activities for this thread, sorted by created_at (oldest first)
-  // const activities = await db.query.activity.findMany({
-  //   where: eq(activity.thread_id, id),
-  //   orderBy: [activity.created_at],
-  // });
-
-  // const threadWithActivities = {
-  //   ...threadRow,
-  //   activities,
-  // };
-
   return c.json({ data: threadRow }, 200);
 })
-
 
 
 /* --------- ACTIVITIES --------- */
@@ -174,12 +166,7 @@ const activitiesPOSTRoute = createRoute({
   method: 'post',
   path: '/activities',
   request: {
-    body: body(z.object({
-      thread_id: z.string(),
-      type: z.string(),
-      role: z.string(),
-      content: z.any(),
-    }))
+    body: body(ActivityCreateSchema)
   },
   responses: {
     201: response_data(ActivitySchema)
