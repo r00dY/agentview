@@ -9,6 +9,7 @@ import { client } from './db/schema'
 import { eq } from 'drizzle-orm'
 import { response_data, response_error, body } from './lib/hono_utils'
 
+
 const app = new OpenAPIHono()
 
 
@@ -68,7 +69,7 @@ app.openapi(clientGETRoute, async (c) => {
 
 
 // The OpenAPI documentation will be available at /doc
-app.doc('/doc', {
+app.doc('/openapi', {
   openapi: '3.0.0',
   info: {
     version: '1.0.0',
@@ -76,7 +77,7 @@ app.doc('/doc', {
   },
 })
 
-app.get('/ui', swaggerUI({ url: '/doc' }))
+app.get('/docs', swaggerUI({ url: '/openapi' }))
 
 app.get('/', (c) => c.text('Hello Agent View!'))
 
