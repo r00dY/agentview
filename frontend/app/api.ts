@@ -81,7 +81,6 @@ const ActivitySchema = z.object({
 })
 
 const ActivityCreateSchema = ActivitySchema.pick({
-  thread_id: true,
   type: true,
   role: true,
   content: true,
@@ -164,8 +163,11 @@ app.openapi(threadGETRoute, async (c) => {
 // Activities POST
 const activitiesPOSTRoute = createRoute({
   method: 'post',
-  path: '/activities',
+  path: '/threads/{thread_id}/activities',
   request: {
+    params: z.object({
+      thread_id: z.string(),
+    }),
     body: body(ActivityCreateSchema)
   },
   responses: {
@@ -174,7 +176,8 @@ const activitiesPOSTRoute = createRoute({
 })
 
 app.openapi(activitiesPOSTRoute, async (c) => {
-  const { thread_id, type, role, content } = await c.req.json()
+  const { thread_id } = c.req.param()
+  const { type, role, content } = await c.req.json()
   
   const [newActivity] = await db.insert(activity).values({
     thread_id,
