@@ -85,12 +85,12 @@ export default function ThreadPage() {
 
   console.log('fetcher.data', fetcher.data)
     
-  return <div>
+  return <div className="flex-1 overflow-y-auto">
     <Header>
       <HeaderTitle title={`Thread`} />
     </Header>
 
-    <div className="p-6 max-w-4xl space-y-6">
+    <div className="p-6 max-w-4xl space-y-6 ">
       {/* Thread Details */}
       <Card>
         <CardHeader>

@@ -8,7 +8,7 @@ import {
     useNavigate
   } from "react-router";
   
-  import { LogOut, PlusCircle, ShoppingBag, User2, ShoppingBasket, Gauge, ChevronUp, User, Edit, Lock, Users, Mail } from "lucide-react"
+  import { LogOut, PlusCircle, ShoppingBag, User2, ShoppingBasket, Gauge, ChevronUp, User, Edit, Lock, Users, Mail, MessageCircle } from "lucide-react"
   import {
     SidebarProvider,
     Sidebar,
@@ -80,8 +80,8 @@ export default function Layout() {
                 <SidebarMenu>
                   <SidebarMenuItem>
                     <SidebarMenuButton asChild>
-                      <Link to="/users">
-                        <ShoppingBasket className="mr-2 h-4 w-4" />
+                      <Link to="/threads">
+                        <MessageCircle className="mr-2 h-4 w-4" />
                         <span>Conversations</span>
                       </Link>
                     </SidebarMenuButton>
@@ -94,14 +94,14 @@ export default function Layout() {
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem> */}
-                  <SidebarMenuItem>
+                  {/* <SidebarMenuItem>
                     <SidebarMenuButton asChild>
                       <Link to="/products">
                         <ShoppingBag className="mr-2 h-4 w-4" />
                         <span>Products</span>
                       </Link>
                     </SidebarMenuButton>
-                  </SidebarMenuItem>
+                  </SidebarMenuItem> */}
 
                   <SidebarMenuItem>
                     <SidebarMenuButton asChild>
