@@ -74,7 +74,7 @@ export default function Threads() {
 
     <div className="basis-[335px] flex-shrink-0 flex-grow-0 border-r flex flex-col ">
 
-      <Header>
+      <Header className="px-3">
         <HeaderTitle title={`Threads`} />
       </Header>
 

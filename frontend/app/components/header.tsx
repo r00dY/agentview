@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { cn } from "~/lib/utils";
 
 interface HeaderProps {
   children: ReactNode;
@@ -7,7 +8,7 @@ interface HeaderProps {
 
 export function Header({ children, className = "" }: HeaderProps) {
   return (
-    <div className={`py-3 px-6 border-b flex items-center justify-between min-h-[56px] ${className}`}>
+    <div className={cn('py-3 px-6 border-b flex items-center justify-between min-h-[56px]', className)}>
       {children}
     </div>
   );
