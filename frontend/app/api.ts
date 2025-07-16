@@ -6,7 +6,7 @@ import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { swaggerUI } from '@hono/swagger-ui'
 import { db } from './lib/db.server'
 import { client, thread, activity, run } from './db/schema'
-import { asc, eq } from 'drizzle-orm'
+import { asc, eq, ne } from 'drizzle-orm'
 import { response_data, response_error, body } from './lib/hono_utils'
 import { config } from './agentview.config'
 
@@ -201,12 +201,18 @@ app.openapi(activitiesPOSTRoute, async (c) => {
   const threadRow = await db.query.thread.findFirst({
     where: eq(thread.id, thread_id),
     with: {
-      runs: true
+      runs: {
+        where: ne(run.state, 'completed')
+      },
     }
   });
 
   if (!threadRow) {
     return c.json({ error: "Thread not found" }, 404);
+  }
+
+  if (threadRow.runs.length >= 2) {
+    return c.json({ error: "SYSTEM ERROR: Thread has multiple non-completed runs" }, 400);
   }
 
   // Find thread configuration by type
@@ -232,30 +238,14 @@ app.openapi(activitiesPOSTRoute, async (c) => {
     return c.json({ error: `Invalid content: ${error.message}` }, 400);
   }
 
-  let threadStatus = 'idle';
-  
-  if (threadRow.runs.length > 0) {
-    // Check if all runs are completed
-    const allCompleted = threadRow.runs.every(run => run.state === 'completed');
-    if (allCompleted) {
-      threadStatus = 'idle';
-    } else {
-      // Find the non-completed run (should be the latest one)
-      const nonCompletedRun = threadRow.runs.find(run => run.state !== 'completed');
-      
-      if (nonCompletedRun) {
-        threadStatus = nonCompletedRun.state; // 'in_progress' or 'failed'
-      }
-    }
-  }
+  const activeRun = threadRow.runs.length > 0 ? threadRow.runs[0] : null;
 
   // Check thread status conditions
-  if (threadStatus === 'in_progress' || threadStatus === 'failed') {
-    return c.json({ error: `Cannot add user activity when thread status is '${threadStatus}'` }, 400);
+  if (activeRun) {
+    return c.json({ error: `Cannot add user activity while thread has an non-completed run. Run state: ${activeRun.state}` }, 400);
   }
 
   const finalActivity = await db.transaction(async (tx) => {
-
     // Thread status is 'idle', so we can proceed
     // First create the activity
     const [newActivity] = await tx.insert(activity).values({
