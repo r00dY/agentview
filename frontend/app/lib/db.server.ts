@@ -1,6 +1,6 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { user, session, account, verification } from "~/db/auth-schema";
-import { invitations, email, client, thread, activity, threadRelations, activityRelations } from "~/db/schema";
+import { invitations, email, client, thread, activity, threadRelations, activityRelations, run, runRelations } from "~/db/schema";
 
 export const db = drizzle(process.env.DATABASE_URL!, {
   schema: {
@@ -13,7 +13,9 @@ export const db = drizzle(process.env.DATABASE_URL!, {
     client,
     thread,
     activity,
+    run,
     threadRelations,
-    activityRelations
+    activityRelations,
+    runRelations
   }
 });

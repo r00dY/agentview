@@ -5,7 +5,7 @@ import { Hono } from 'hono'
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { swaggerUI } from '@hono/swagger-ui'
 import { db } from './lib/db.server'
-import { client, thread, activity } from './db/schema'
+import { client, thread, activity, run } from './db/schema'
 import { asc, eq } from 'drizzle-orm'
 import { response_data, response_error, body } from './lib/hono_utils'
 import { config } from './agentview.config'
@@ -200,6 +200,9 @@ app.openapi(activitiesPOSTRoute, async (c) => {
   // Find the thread to get its type
   const threadRow = await db.query.thread.findFirst({
     where: eq(thread.id, thread_id),
+    with: {
+      runs: true
+    }
   });
 
   if (!threadRow) {
@@ -210,6 +213,10 @@ app.openapi(activitiesPOSTRoute, async (c) => {
   const threadConfig = config.threads.find((t: any) => t.type === threadRow.type);
   if (!threadConfig) {
     return c.json({ error: `Thread type '${threadRow.type}' not found in configuration` }, 400);
+  }
+
+  if (role !== "user") {
+    return c.json({ error: "Only activities with role 'user' are allowed" }, 400);
   }
 
   // Find activity configuration by type and role
@@ -224,15 +231,55 @@ app.openapi(activitiesPOSTRoute, async (c) => {
   } catch (error: any) {
     return c.json({ error: `Invalid content: ${error.message}` }, 400);
   }
+
+  let threadStatus = 'idle';
   
-  const [newActivity] = await db.insert(activity).values({
-    thread_id,
-    type,
-    role,
-    content,
-  }).returning();
+  if (threadRow.runs.length > 0) {
+    // Check if all runs are completed
+    const allCompleted = threadRow.runs.every(run => run.state === 'completed');
+    if (allCompleted) {
+      threadStatus = 'idle';
+    } else {
+      // Find the non-completed run (should be the latest one)
+      const nonCompletedRun = threadRow.runs.find(run => run.state !== 'completed');
+      
+      if (nonCompletedRun) {
+        threadStatus = nonCompletedRun.state; // 'in_progress' or 'failed'
+      }
+    }
+  }
+
+  // Check thread status conditions
+  if (threadStatus === 'in_progress' || threadStatus === 'failed') {
+    return c.json({ error: `Cannot add user activity when thread status is '${threadStatus}'` }, 400);
+  }
+
+  const finalActivity = await db.transaction(async (tx) => {
+
+    // Thread status is 'idle', so we can proceed
+    // First create the activity
+    const [newActivity] = await tx.insert(activity).values({
+      thread_id,
+      type,
+      role,
+      content,
+    }).returning();
+
+    // Create a new run with status 'in_progress' and set trigger_activity_id
+    const [newRun] = await tx.insert(run).values({
+      thread_id,
+      trigger_activity_id: newActivity.id,
+      state: 'in_progress',
+    }).returning();
+
+    // Return the activity with the run_id
+    return {
+      ...newActivity,
+      run_id: newRun.id
+    };
+  })
   
-  return c.json({ data: newActivity }, 201);
+  return c.json({ data: finalActivity }, 201);
 })
 
 
