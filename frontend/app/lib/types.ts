@@ -16,7 +16,7 @@ export interface EmailPayload {
 
 
   
-// export type AgentViewConfig = {
-//     email: (payload: EmailPayload) => Promise<void>;
-
-// }
+export type AgentViewConfig = {
+    email: (payload: EmailPayload) => Promise<void>;
+  threads: any
+}

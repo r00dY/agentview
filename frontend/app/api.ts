@@ -8,6 +8,7 @@ import { db } from './lib/db.server'
 import { client, thread, activity } from './db/schema'
 import { asc, eq } from 'drizzle-orm'
 import { response_data, response_error, body } from './lib/hono_utils'
+import { config } from './agentview.config'
 
 
 const app = new OpenAPIHono()
@@ -111,12 +112,27 @@ const threadsPOSTRoute = createRoute({
     body: body(ThreadCreateSchema)
   },
   responses: {
-    201: response_data(ThreadSchema)
+    201: response_data(ThreadSchema),
+    400: response_error()
   },
 })
 
 app.openapi(threadsPOSTRoute, async (c) => {
   const body = await c.req.json()
+
+  // Find thread configuration by type
+  const threadConfig = config.threads.find((t: any) => t.type === body.type);
+  if (!threadConfig) {
+    return c.json({ error: `Thread type '${body.type}' not found in configuration` }, 400);
+  }
+
+  // Validate metadata against the schema
+  try {
+    threadConfig.metadata.parse(body.metadata);
+  } catch (error: any) {
+    return c.json({ error: `Invalid metadata: ${error.message}` }, 400);
+  }
+
   const [newThread] = await db.insert(thread).values(body).returning();
   
   return c.json({ data: {
@@ -171,13 +187,43 @@ const activitiesPOSTRoute = createRoute({
     body: body(ActivityCreateSchema)
   },
   responses: {
-    201: response_data(ActivitySchema)
+    201: response_data(ActivitySchema),
+    400: response_error(),
+    404: response_error()
   },
 })
 
 app.openapi(activitiesPOSTRoute, async (c) => {
   const { thread_id } = c.req.param()
   const { type, role, content } = await c.req.json()
+  
+  // Find the thread to get its type
+  const threadRow = await db.query.thread.findFirst({
+    where: eq(thread.id, thread_id),
+  });
+
+  if (!threadRow) {
+    return c.json({ error: "Thread not found" }, 404);
+  }
+
+  // Find thread configuration by type
+  const threadConfig = config.threads.find((t: any) => t.type === threadRow.type);
+  if (!threadConfig) {
+    return c.json({ error: `Thread type '${threadRow.type}' not found in configuration` }, 400);
+  }
+
+  // Find activity configuration by type and role
+  const activityConfig = threadConfig.activities.find((a: any) => a.type === type && a.role === role);
+  if (!activityConfig) {
+    return c.json({ error: `Activity type '${type}' with role '${role}' not found in configuration` }, 400);
+  }
+
+  // Validate content against the schema
+  try {
+    activityConfig.content.parse(content);
+  } catch (error: any) {
+    return c.json({ error: `Invalid content: ${error.message}` }, 400);
+  }
   
   const [newActivity] = await db.insert(activity).values({
     thread_id,
