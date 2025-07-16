@@ -90,7 +90,7 @@ export default function ThreadPage() {
       <HeaderTitle title={`Thread`} />
     </Header>
 
-    <div className="p-6 max-w-6xl space-y-6">
+    <div className="p-6 max-w-4xl space-y-6">
       {/* Thread Details */}
       <Card>
         <CardHeader>
@@ -135,6 +135,7 @@ export default function ThreadPage() {
       </Card>
 
 
+
         <div className="space-y-6 mt-12">
             {thread.activities.map((activity) => (
             <div key={activity.id} className="relative">
@@ -148,7 +149,6 @@ export default function ThreadPage() {
                     { activity.type === "message" && (<div className="border p-3 rounded-lg" dangerouslySetInnerHTML={{ __html: (activity.content as unknown as string) }}></div>)}
                     { activity.type !== "message" && (<div className="border p-3 rounded-lg italic text-muted-foreground">no view</div>)}
                 </div>)}
-                
             </div>
             ))}
         </div>
@@ -164,8 +164,12 @@ export default function ThreadPage() {
             <CardContent>
                 <fetcher.Form method="post">
                     <Textarea name="message" placeholder="Reply here..."/>
-                    <Button type="submit">Send</Button>
+                    <Button type="submit" disabled={fetcher.state !== 'idle'}>Send</Button>
                 </fetcher.Form>
+
+                { fetcher.data?.error && (
+                    <div className="text-red-500">{fetcher.data.error}</div>
+                )}
                 
             </CardContent>
         </Card>
