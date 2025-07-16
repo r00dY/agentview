@@ -3,7 +3,7 @@ import type { Route } from "./+types/home";
 import { useFetcher, useNavigate } from "react-router";
 import { auth } from "~/lib/auth.server";
 import { redirect } from "react-router";
-import { createInvitation } from "~/lib/invitations";
+import { createInvitation } from "~/lib/invitations.server";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { AlertCircleIcon } from "lucide-react";
 import { Label } from "~/components/ui/label";

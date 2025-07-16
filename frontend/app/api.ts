@@ -11,7 +11,7 @@ import { response_data, response_error, body } from './lib/hono_utils'
 import { config } from './agentview.config'
 
 
-const app = new OpenAPIHono()
+export const app = new OpenAPIHono()
 
 
 /* --------- CLIENTS --------- */
@@ -187,7 +187,7 @@ const activitiesPOSTRoute = createRoute({
     body: body(ActivityCreateSchema)
   },
   responses: {
-    201: response_data(ActivitySchema),
+    201: response_data(z.array(ActivitySchema)),
     400: response_error(),
     404: response_error()
   },
@@ -245,10 +245,10 @@ app.openapi(activitiesPOSTRoute, async (c) => {
     return c.json({ error: `Cannot add user activity while thread has an non-completed run. Run state: ${activeRun.state}` }, 400);
   }
 
-  const finalActivity = await db.transaction(async (tx) => {
+  const userActivity = await db.transaction(async (tx) => {
     // Thread status is 'idle', so we can proceed
     // First create the activity
-    const [newActivity] = await tx.insert(activity).values({
+    const [userActivity] = await tx.insert(activity).values({
       thread_id,
       type,
       role,
@@ -258,18 +258,43 @@ app.openapi(activitiesPOSTRoute, async (c) => {
     // Create a new run with status 'in_progress' and set trigger_activity_id
     const [newRun] = await tx.insert(run).values({
       thread_id,
-      trigger_activity_id: newActivity.id,
+      trigger_activity_id: userActivity.id,
       state: 'in_progress',
     }).returning();
 
     // Return the activity with the run_id
     return {
-      ...newActivity,
+      ...userActivity,
       run_id: newRun.id
     };
   })
-  
-  return c.json({ data: finalActivity }, 201);
+
+  /*** MOCK RESPONSE ***/
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+
+  const assistantActivity = await db.transaction(async (tx) => {
+    // Thread status is 'idle', so we can proceed
+    // First create the activity
+    const [assistantActivity] = await tx.insert(activity).values({
+      thread_id,
+      type: "message",
+      role: "assistant",
+      content: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
+      run_id: userActivity.run_id,
+    }).returning();
+
+    // Update the run with 'completed' status and set finished_at
+    await tx.update(run)
+      .set({
+        state: 'completed',
+        finished_at: new Date(),
+      })
+      .where(eq(run.id, userActivity.run_id));
+
+    return assistantActivity
+  })
+
+  return c.json({ data: [userActivity, assistantActivity] }, 201);
 })
 
 

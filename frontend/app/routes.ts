@@ -11,10 +11,14 @@ export default [
         ]),
         route("emails", "routes/emails.tsx"),
         route("emails/:id", "routes/emailDetail.tsx"),
+        route("threads/:id", "routes/thread.tsx"),
     ]),
     route("login", "routes/login.tsx"),
     route("signup", "routes/signup.tsx"),
     route("logout", "routes/logout.tsx"),
     route("change-password", "routes/change-password.tsx"),
+
+
+
 
 ] satisfies RouteConfig;

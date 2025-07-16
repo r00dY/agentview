@@ -11,7 +11,7 @@ import {
 } from "~/components/ui/table";
 import { Button } from "~/components/ui/button";
 import { Plus } from "lucide-react";
-import { cancelInvitation, getPendingInvitations } from "~/lib/invitations";
+import { cancelInvitation, getPendingInvitations } from "~/lib/invitations.server";
 import { Badge } from "~/components/ui/badge";
 import { Header, HeaderTitle } from "~/components/header";
 

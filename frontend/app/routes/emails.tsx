@@ -11,7 +11,7 @@ import {
   TableRow,
   TableCell,
 } from "~/components/ui/table";
-import { Header, HeaderTitle } from "~/components/Header";
+import { Header, HeaderTitle } from "~/components/header";
 
 export async function loader({ request }: Route.LoaderArgs) {
   // Get last 100 emails, sorted newest to oldest

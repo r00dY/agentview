@@ -8,7 +8,7 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { AlertCircleIcon } from "lucide-react";
 import { type FormActionData, type FormActionDataError } from "~/lib/FormActionData";
-import { getValidInvitation } from "~/lib/invitations";
+import { getValidInvitation } from "~/lib/invitations.server";
 
 
 export async function loader({ request }: Route.LoaderArgs) {
