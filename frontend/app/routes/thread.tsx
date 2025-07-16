@@ -85,13 +85,15 @@ export default function ThreadPage() {
 
   console.log('fetcher.data', fetcher.data)
     
-  return <div className="flex-1 overflow-y-auto">
+  return <>
     <Header>
       <HeaderTitle title={`Thread`} />
     </Header>
 
-    <div className="p-6 max-w-4xl space-y-6 ">
+    <div className="flex-1 overflow-y-auto">
       {/* Thread Details */}
+
+      <div className=" p-6 max-w-4xl space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Thread Details</CardTitle>
@@ -208,6 +210,6 @@ export default function ThreadPage() {
           )}
         </CardContent>
       </Card> */}
-    </div>
-  </div>
+    </div></div>
+  </>
 }
