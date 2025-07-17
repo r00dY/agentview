@@ -11,9 +11,10 @@ export default [
         ]),
         route("emails", "routes/emails.tsx"),
         route("emails/:id", "routes/emailDetail.tsx"),
-        // route("threads/:id", "routes/thread.tsx"),
 
         route("threads", "routes/threads.tsx", [
+            index("routes/threadsIndex.tsx"),
+            route("new", "routes/threadNew.tsx"),
             route(":id", "routes/thread.tsx"),
         ]),
     ]),

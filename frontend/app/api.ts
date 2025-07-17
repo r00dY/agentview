@@ -9,6 +9,7 @@ import { client, thread, activity, run } from './db/schema'
 import { asc, eq, ne } from 'drizzle-orm'
 import { response_data, response_error, body } from './lib/hono_utils'
 import { config } from './agentview.config'
+import { isUUID } from './lib/isUUID'
 
 
 export const app = new OpenAPIHono()
@@ -131,6 +132,18 @@ app.openapi(threadsPOSTRoute, async (c) => {
     threadConfig.metadata.parse(body.metadata);
   } catch (error: any) {
     return c.json({ error: `Invalid metadata: ${error.message}` }, 400);
+  }
+
+  // Validate whether client exists in db
+  if (!isUUID(body.client_id)) {
+    return c.json({ error: `Invalid client id: ${body.client_id}` }, 400);
+  }
+
+  const clientExists = await db.query.client.findFirst({
+    where: eq(client.id, body.client_id)
+  });
+  if (!clientExists) {
+    return c.json({ error: `Client with id '${body.client_id}' does not exist` }, 400);
   }
 
   const [newThread] = await db.insert(thread).values(body).returning();
