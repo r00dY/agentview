@@ -61,14 +61,15 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   }
 
   return {
-    threads: threadRows
+    threads: threadRows,
+    activeThreadId: params.id
   }
 
 }
 
 
 export default function Threads() {
-  const { threads } = useLoaderData<typeof loader>();
+  const { threads, activeThreadId } = useLoaderData<typeof loader>();
 
   return <div className="flex flex-row items-stretch h-full">
 
@@ -83,7 +84,7 @@ export default function Threads() {
         {threads.map((thread) => (
           <div key={thread.id}>
             <Link to={`/threads/${thread.id}`}>
-              <div className="p-3 border-b hover:bg-gray-50 transition-colors">
+              <div className={`p-3 border-b hover:bg-gray-50 transition-colors duration-50 ${thread.id === activeThreadId ? 'bg-gray-100' : ''}`}>
                 <div className="flex flex-col gap-1">
                     <div className="text-sm font-medium">{thread.id}</div>
                     <div className="text-xs text-gray-500">
