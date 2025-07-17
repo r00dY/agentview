@@ -204,6 +204,9 @@ app.openapi(activitiesPOSTRoute, async (c) => {
       runs: {
         where: ne(run.state, 'completed')
       },
+      activities: {
+        orderBy: (activity, { asc }) => [asc(activity.created_at)]
+      }
     }
   });
 
@@ -270,18 +273,66 @@ app.openapi(activitiesPOSTRoute, async (c) => {
   })
 
   /*** MOCK RESPONSE ***/
-  await new Promise((resolve) => setTimeout(resolve, 2000));
+  
+  const input = { 
+      thread: {
+        id: threadRow.id,
+        created_at: threadRow.created_at,
+        updated_at: threadRow.updated_at,
+        metadata: threadRow.metadata,
+        client_id: threadRow.client_id,
+        type: threadRow.type,
+        activities: [...threadRow.activities, userActivity]
+      }
+  }
 
-  const assistantActivity = await db.transaction(async (tx) => {
-    // Thread status is 'idle', so we can proceed
-    // First create the activity
-    const [assistantActivity] = await tx.insert(activity).values({
-      thread_id,
-      type: "message",
-      role: "assistant",
-      content: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
-      run_id: userActivity.run_id,
-    }).returning();
+  const newActivities = await config.run(input)
+
+  // Create a dynamic schema for activities based on thread configuration
+  const createActivitySchema = (threadConfig: any) => {
+    const activitySchemas = threadConfig.activities
+      .filter((a: any) => a.role !== 'user') // Exclude user activities from output validation
+      .map((a: any) => 
+        z.object({
+          type: z.literal(a.type),
+          role: z.literal(a.role),
+          content: a.content
+        })
+      );
+    
+    return z.array(z.union(activitySchemas));
+  };
+
+  // Validate newActivities using Zod schema
+  try {
+    const activitySchema = createActivitySchema(threadConfig);
+    activitySchema.parse(newActivities);
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      const errorMessages = error.errors.map((err: any) => 
+        `${err.path.join('.')}: ${err.message}`
+      ).join(', ');
+      return c.json({ error: `Invalid activities format: ${errorMessages}` }, 400);
+    }
+    return c.json({ error: `Validation error: ${error.message}` }, 400);
+  }
+
+  // Create all activities and update run in a single transaction
+  const allActivities = await db.transaction(async (tx) => {
+    const createdActivities = [];
+    
+    // Create each activity from newActivities
+    for (const activityData of newActivities) {
+      const [createdActivity] = await tx.insert(activity).values({
+        thread_id,
+        type: activityData.type,
+        role: activityData.role,
+        content: activityData.content,
+        run_id: userActivity.run_id,
+      }).returning();
+      
+      createdActivities.push(createdActivity);
+    }
 
     // Update the run with 'completed' status and set finished_at
     await tx.update(run)
@@ -291,10 +342,10 @@ app.openapi(activitiesPOSTRoute, async (c) => {
       })
       .where(eq(run.id, userActivity.run_id));
 
-    return assistantActivity
-  })
+    return createdActivities;
+  });
 
-  return c.json({ data: [userActivity, assistantActivity] }, 201);
+  return c.json({ data: [userActivity, ...allActivities] }, 201);
 })
 
 

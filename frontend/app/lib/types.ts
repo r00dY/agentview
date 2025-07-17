@@ -13,10 +13,11 @@ export interface EmailPayload {
     contentType?: string;
   }>;
 }
-
-
   
 export type AgentViewConfig = {
-    email: (payload: EmailPayload) => Promise<void>;
+  email: (payload: EmailPayload) => Promise<void>;
   threads: any
+  run: (state: {
+    thread: any
+  }) => Promise<any[]>;
 }
