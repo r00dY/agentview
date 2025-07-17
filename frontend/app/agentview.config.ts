@@ -31,6 +31,8 @@ export const config : AgentViewConfig = {
         }
     ],
     run: async (input: any) => {
+        console.log('run!', input)
+
         const response = await client.responses.create({
             model: "gpt-4.1",
             input: [
@@ -44,6 +46,8 @@ export const config : AgentViewConfig = {
                 }))
             ]
         });
+
+        console.log(response.output_text)
         
         return [{
             type: "message",
