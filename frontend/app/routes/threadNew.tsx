@@ -73,35 +73,29 @@ export default function ThreadNew() {
 
     <div className="flex-1 overflow-y-auto">
       <div className="p-6 max-w-4xl space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>New Thread</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Form method="post" className="space-y-4">
-              {actionData?.error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{actionData.error}</AlertDescription>
-                </Alert>
-              )}
-              
-              <div className="space-y-2">
-                <Label htmlFor="product_id">Product ID</Label>
-                <Input
-                  id="product_id"
-                  name="product_id"
-                  type="text"
-                  placeholder="Enter product ID"
-                  required
-                />
-              </div>
-              
-              <Button type="submit" className="w-full">
-                Create Thread
-              </Button>
-            </Form>
-          </CardContent>
-        </Card>
+
+          <Form method="post" className="space-y-4">
+            {actionData?.error && (
+              <Alert variant="destructive">
+                <AlertDescription>{actionData.error}</AlertDescription>
+              </Alert>
+            )}
+            
+            <div className="space-y-2">
+              <Label htmlFor="product_id">Product ID</Label>
+              <Input
+                id="product_id"
+                name="product_id"
+                type="text"
+                placeholder="Enter product ID"
+                required
+              />
+            </div>
+            
+            <Button type="submit" className="w-full">
+              Create Thread
+            </Button>
+          </Form>
       </div>
     </div>
   </>
