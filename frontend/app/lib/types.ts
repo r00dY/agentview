@@ -17,7 +17,5 @@ export interface EmailPayload {
 export type AgentViewConfig = {
   email: (payload: EmailPayload) => Promise<void>;
   threads: any
-  run: (state: {
-    thread: any
-  }) => Promise<any[]>;
+  run: (state: { thread: any }) => Promise<any[]> | AsyncGenerator<any, any, any>;
 }

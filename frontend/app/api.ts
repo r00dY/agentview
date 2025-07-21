@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
+import { streamSSE } from 'hono/streaming'
 
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { swaggerUI } from '@hono/swagger-ui'
@@ -83,12 +84,14 @@ const ActivitySchema = z.object({
   role: z.string(),
 })
 
-const ActivityCreateSchema = ActivitySchema.pick({
-  type: true,
-  role: true,
-  content: true,
+const ActivityCreateSchema = z.object({
+  stream: z.boolean().optional(),
+  input: ActivitySchema.pick({
+    type: true,
+    role: true,
+    content: true,
+  })
 })
-
 
 const ThreadSchema = z.object({
   id: z.string(),
@@ -209,7 +212,7 @@ const activitiesPOSTRoute = createRoute({
 
 app.openapi(activitiesPOSTRoute, async (c) => {
   const { thread_id } = c.req.param()
-  const { type, role, content } = await c.req.json()
+  const { stream, input: { type, role, content } } = await c.req.json()
   
   // Find the thread to get its type
   const threadRow = await db.query.thread.findFirst({
@@ -241,12 +244,14 @@ app.openapi(activitiesPOSTRoute, async (c) => {
   if (role !== "user") {
     return c.json({ error: "Only activities with role 'user' are allowed" }, 400);
   }
-
+  
   // Find activity configuration by type and role
   const activityConfig = threadConfig.activities.find((a: any) => a.type === type && a.role === role);
   if (!activityConfig) {
     return c.json({ error: `Activity type '${type}' with role '${role}' not found in configuration` }, 400);
   }
+
+
 
   // Validate content against the schema
   try {
@@ -262,6 +267,10 @@ app.openapi(activitiesPOSTRoute, async (c) => {
     return c.json({ error: `Cannot add user activity while thread has an non-completed run. Run state: ${activeRun.state}` }, 400);
   }
 
+
+  
+
+  // Create user activity and run
   const userActivity = await db.transaction(async (tx) => {
     // Thread status is 'idle', so we can proceed
     // First create the activity
@@ -296,16 +305,11 @@ app.openapi(activitiesPOSTRoute, async (c) => {
         metadata: threadRow.metadata,
         client_id: threadRow.client_id,
         type: threadRow.type,
-        activities: [...threadRow.activities]
-      },
-      userActivity
+        activities: [...threadRow.activities, userActivity]
+      }
   }
 
-
-  const newActivities = await config.run(input)
-
-  // Create a dynamic schema for activities based on thread configuration
-  const createActivitySchema = (threadConfig: any) => {
+  function validateActivity(activity: any) {
     const activitySchemas = threadConfig.activities
       .filter((a: any) => a.role !== 'user') // Exclude user activities from output validation
       .map((a: any) => 
@@ -315,55 +319,76 @@ app.openapi(activitiesPOSTRoute, async (c) => {
           content: a.content
         })
       );
-    
-    return z.array(z.union(activitySchemas));
-  };
 
-  // Validate newActivities using Zod schema
-  try {
-    const activitySchema = createActivitySchema(threadConfig);
-    activitySchema.parse(newActivities);
-  } catch (error: any) {
-    if (error instanceof z.ZodError) {
-      const errorMessages = error.errors.map((err: any) => 
-        `${err.path.join('.')}: ${err.message}`
-      ).join(', ');
-      return c.json({ error: `Invalid activities format: ${errorMessages}` }, 400);
-    }
-    return c.json({ error: `Validation error: ${error.message}` }, 400);
+    const schema = z.union(activitySchemas);
+    schema.parse(activity);
   }
 
-  // Create all activities and update run in a single transaction
-  const allActivities = await db.transaction(async (tx) => {
-    const createdActivities = [];
-    
-    // Create each activity from newActivities
-    for (const activityData of newActivities) {
-      const [createdActivity] = await tx.insert(activity).values({
-        thread_id,
-        type: activityData.type,
-        role: activityData.role,
-        content: activityData.content,
-        run_id: userActivity.run_id,
-      }).returning();
-      
-      createdActivities.push(createdActivity);
+
+  if (!stream) {
+    let newActivities: any[] = [];
+
+    // collect activities
+    if (isAsyncIterable(config.run)) {
+      for await (const activity of config.run(input)) {
+        newActivities.push(activity);
+      }
+    } else {
+      const result = await config.run(input);
+      if (!Array.isArray(result)) {
+        return c.json({ error: "Invalid response from run function, it's not an array" }, 400);
+      } else {
+        for (const activity of result) {
+          newActivities.push(activity);
+        }
+      }
     }
 
-    // Update the run with 'completed' status and set finished_at
-    await tx.update(run)
-      .set({
-        state: 'completed',
-        finished_at: new Date(),
-      })
-      .where(eq(run.id, userActivity.run_id));
+    // validate activities
+    for (const activity of newActivities) {
+      try {
+        validateActivity(activity);
+      }
+      catch (error: any) {
+        return c.json({ error: error.message }, 400);
+      }
+    }
+  
+    // Create all activities and update run in a single transaction
+    const allActivities = await db.transaction(async (tx) => {
+      const createdActivities = [];
+      
+      // Create each activity from newActivities
+      for (const activityData of newActivities) {
+        const [createdActivity] = await tx.insert(activity).values({
+          thread_id,
+          type: activityData.type,
+          role: activityData.role,
+          content: activityData.content,
+          run_id: userActivity.run_id,
+        }).returning();
+        
+        createdActivities.push(createdActivity);
+      }
 
-    return createdActivities;
-  });
+      // Update the run with 'completed' status and set finished_at
+      await tx.update(run)
+        .set({
+          state: 'completed',
+          finished_at: new Date(),
+        })
+        .where(eq(run.id, userActivity.run_id));
 
-  return c.json({ data: [userActivity, ...allActivities] }, 201);
+      return createdActivities;
+    });
+
+    return c.json({ data: [userActivity, ...allActivities] }, 201);
+  }
+  else {
+    return c.json({ error: "Streaming is not supported yet" }, 400);
+  }
+
 })
-
 
 // The OpenAPI documentation will be available at /doc
 app.doc('/openapi', {

@@ -56,9 +56,11 @@ export async function action({ request, params }: Route.ActionArgs) {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                type: "message",
-                role: "user",
-                content: message
+                input: {
+                    type: "message",
+                    role: "user",
+                    content: message
+                }
             }),
         });
 
