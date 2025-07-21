@@ -100,7 +100,8 @@ const ThreadSchema = z.object({
   metadata: z.any(),
   client_id: z.string(),
   type: z.string(),
-  activities: z.array(ActivitySchema)
+  activities: z.array(ActivitySchema),
+  state: z.string()
 })
 
 const ThreadCreateSchema = ThreadSchema.pick({
@@ -154,7 +155,8 @@ app.openapi(threadsPOSTRoute, async (c) => {
   
   return c.json({ data: {
     ...newThread,
-    activities: []
+    activities: [],
+    state: 'idle'
   } }, 201);
 })
 
@@ -179,7 +181,10 @@ app.openapi(threadGETRoute, async (c) => {
   const threadRow = await db.query.thread.findFirst({
     where: eq(thread.id, thread_id),
     with: {
-      activities: true
+      activities: true,
+      runs: {
+        where: ne(run.state, 'completed')
+      },
     }
   });
 
@@ -187,7 +192,10 @@ app.openapi(threadGETRoute, async (c) => {
     return c.json({ error: "Thread not found" }, 404);
   }
 
-  return c.json({ data: threadRow }, 200);
+  return c.json({ data: {
+    ...threadRow,
+    state: threadRow.runs.length > 0 ? threadRow.runs[0].state : 'idle'
+  } }, 200);
 })
 
 
@@ -301,8 +309,6 @@ app.openapi(activitiesPOSTRoute, async (c) => {
     return c.json({ error: `Activity type '${type}' with role '${role}' not found in configuration` }, 400);
   }
 
-
-
   // Validate content against the schema
   try {
     activityConfig.content.parse(content);
@@ -319,6 +325,7 @@ app.openapi(activitiesPOSTRoute, async (c) => {
 
   // Create user activity and run
   const userActivity = await db.transaction(async (tx) => {
+
     // Thread status is 'idle', so we can proceed
     // First create the activity
     const [userActivity] = await tx.insert(activity).values({
@@ -470,6 +477,11 @@ app.openapi(activitiesPOSTRoute, async (c) => {
   
         try {
           console.log('writing user activity')
+
+          await stream.writeSSE({
+            data: JSON.stringify({ state: 'in_progress' }),
+            event: 'thread.state',
+          })
   
           await stream.writeSSE({
             data: JSON.stringify(userActivity),
@@ -526,12 +538,18 @@ app.openapi(activitiesPOSTRoute, async (c) => {
               }
             }
           }
+
+          await stream.writeSSE({
+            data: JSON.stringify({ state: 'idle' }),
+            event: 'thread.state',
+          })
+
         }
-        catch (error: any) {
+      catch (error: any) {
           setRunAsFailed()
           await stream.writeSSE({
-            data: JSON.stringify({ error: error.message }),
-            event: 'error',
+            data: JSON.stringify({ state: 'failed' }),
+            event: 'thread.state',
           })
         }
       })
