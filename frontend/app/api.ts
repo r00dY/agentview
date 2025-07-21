@@ -10,6 +10,7 @@ import { asc, eq, ne } from 'drizzle-orm'
 import { response_data, response_error, body } from './lib/hono_utils'
 import { config } from './agentview.config'
 import { isUUID } from './lib/isUUID'
+import { isAsyncIterable } from './lib/utils'
 
 
 export const app = new OpenAPIHono()
@@ -285,7 +286,7 @@ app.openapi(activitiesPOSTRoute, async (c) => {
     };
   })
 
-  /*** MOCK RESPONSE ***/
+  /*** GENERATE RESPONSE ***/
   
   const input = { 
       thread: {
@@ -295,9 +296,11 @@ app.openapi(activitiesPOSTRoute, async (c) => {
         metadata: threadRow.metadata,
         client_id: threadRow.client_id,
         type: threadRow.type,
-        activities: [...threadRow.activities, userActivity]
-      }
+        activities: [...threadRow.activities]
+      },
+      userActivity
   }
+
 
   const newActivities = await config.run(input)
 

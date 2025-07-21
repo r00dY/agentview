@@ -46,8 +46,6 @@ export const config : AgentViewConfig = {
                 }))
             ]
         });
-
-        console.log(response.output_text)
         
         return [{
             type: "message",
