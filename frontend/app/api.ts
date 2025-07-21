@@ -456,20 +456,9 @@ app.openapi(activitiesPOSTRoute, async (c) => {
           }
         }
       }
-
-      // for await (const activity of config.run(input)) {
-      //   await stream.writeSSE({
-      // }
-
     })
-
-
-
-
-
-    return c.json({ error: "Streaming is not supported yet" }, 400);
   }
-
+  
 })
 
 // The OpenAPI documentation will be available at /doc
