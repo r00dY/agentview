@@ -161,10 +161,10 @@ app.openapi(threadsPOSTRoute, async (c) => {
 // Thread GET
 const threadGETRoute = createRoute({
   method: 'get',
-  path: '/threads/{id}',
+  path: '/threads/{thread_id}',
   request: {
     params: z.object({
-      id: z.string(),
+      thread_id: z.string(),
     }),
   },
   responses: {
@@ -174,10 +174,10 @@ const threadGETRoute = createRoute({
 })
 
 app.openapi(threadGETRoute, async (c) => {
-  const { id } = c.req.param()
+  const { thread_id } = c.req.param()
 
   const threadRow = await db.query.thread.findFirst({
-    where: eq(thread.id, id),
+    where: eq(thread.id, thread_id),
     with: {
       activities: true
     }
@@ -192,6 +192,56 @@ app.openapi(threadGETRoute, async (c) => {
 
 
 /* --------- ACTIVITIES --------- */
+
+app.get('/test', async (c) => {
+
+
+  // return streamSSE(c, async (stream) => { 
+
+  //   stream.onAbort(() => {
+  //     console.log('aborted!')
+  //   })
+
+  //   console.log('log 1')
+  //   await stream.writeSSE({
+  //     data: JSON.stringify({ log: 1 }),
+  //     event: 'activity',
+  //   })
+  //   await new Promise(resolve => setTimeout(resolve, 5000))
+
+  //   console.log('log 2')
+  //   await stream.writeSSE({
+  //     data: JSON.stringify({ log: 1 }),
+  //     event: 'activity',
+  //   })
+  //   await new Promise(resolve => setTimeout(resolve, 5000))
+
+  //   console.log('log 3')
+  //   await stream.writeSSE({
+  //     data: JSON.stringify({ log: 1 }),
+  //     event: 'activity',
+  //   })
+
+  // })
+
+  c.req.raw.signal.addEventListener('abort', () => {
+    console.log('aborted!')
+  })
+
+  
+
+  // c.req.raw.on('close', () => {
+  //   console.log('closed!')
+  // })
+
+  console.log('Test endpoint start');
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  console.log('Between delays');
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  console.log('Test endpoint end');
+  return c.json({ message: 'Test complete' });
+});
+
 
 // Activities POST
 const activitiesPOSTRoute = createRoute({
@@ -293,7 +343,22 @@ app.openapi(activitiesPOSTRoute, async (c) => {
   })
 
   /*** GENERATE RESPONSE ***/
-  
+
+  const setRunAsFailed = async () => {
+    console.log('setting run as failed')
+
+    await db.update(run)
+      .set({
+        state: 'failed',
+        finished_at: new Date(),
+      })
+      .where(eq(run.id, userActivity.run_id));
+  }
+
+  c.req.raw.signal.addEventListener('abort', setRunAsFailed)
+
+  // const eror
+
   const input = { 
       thread: {
         id: threadRow.id,
@@ -366,94 +431,115 @@ app.openapi(activitiesPOSTRoute, async (c) => {
     return allActivities;
   }
 
-  if (!stream) {
-    let newActivities: any[] = [];
-
-    const runOutput = config.run(input)
-
-    // collect activities
-    if (isAsyncIterable(runOutput)) {
-      for await (const activity of runOutput) {
-        newActivities.push(activity);
-      }
-    } else {
-      const result = await runOutput;
-      if (!Array.isArray(result)) {
-        return c.json({ error: "Invalid response from run function, it's not an array" }, 400);
-      } else {
-        for (const activity of result) {
+  try {
+    if (!stream) {
+      let newActivities: any[] = [];
+  
+      const runOutput = config.run(input)
+  
+      // collect activities
+      if (isAsyncIterable(runOutput)) {
+        for await (const activity of runOutput) {
           newActivities.push(activity);
         }
-      }
-    }
-
-    const allActivities = await completeRunWithNewActivities(newActivities);
-    return c.json({ data: [userActivity, ...allActivities] }, 201);
-  }
-  else {
-  
-
-    console.log('streaming!')
-
-    return streamSSE(c, async (stream) => { 
-
-      console.log('writing user activity')
-
-      await stream.writeSSE({
-        data: JSON.stringify(userActivity),
-        event: 'activity',
-      })
-
-      const runOutput = config.run(input)
-
-      if (isAsyncIterable(runOutput)) {
-        console.log('is async iterable')
-
-        for await (const activityData of runOutput) {
-
-          console.log('writing activity', activityData)
-
-          const [newActivity] = await db.insert(activity).values({
-            thread_id,
-            type: activityData.type,
-            role: activityData.role,
-            content: activityData.content,
-            run_id: userActivity.run_id,
-          }).returning();
-
-          await stream.writeSSE({
-            data: JSON.stringify(newActivity),
-            event: 'activity',
-          })
-        }
-
-        console.log('updating run as completed')
-
-        await db.update(run)
-          .set({
-            state: 'completed',
-            finished_at: new Date(),
-          })
-          .where(eq(run.id, userActivity.run_id));
-
-      }
-      else {
-        console.log('not async iterable')
-
-        const newActivities = await runOutput;
-        if (!Array.isArray(newActivities)) {
+      } else {
+        const result = await runOutput;
+        if (!Array.isArray(result)) {
+          setRunAsFailed()
           return c.json({ error: "Invalid response from run function, it's not an array" }, 400);
         } else {
-          const allActivities = await completeRunWithNewActivities(newActivities);
-          for (const newActivity of allActivities) {
-            await stream.writeSSE({
-              data: JSON.stringify(newActivity),
-              event: 'activity',
-            })
+          for (const activity of result) {
+            newActivities.push(activity);
           }
         }
       }
-    })
+  
+      const allActivities = await completeRunWithNewActivities(newActivities);
+      return c.json({ data: [userActivity, ...allActivities] }, 201);
+    }
+    else {
+    
+  
+      console.log('streaming!')
+  
+      return streamSSE(c, async (stream) => { 
+
+        stream.onAbort(() => {
+          setRunAsFailed()
+        })
+  
+        try {
+          console.log('writing user activity')
+  
+          await stream.writeSSE({
+            data: JSON.stringify(userActivity),
+            event: 'activity',
+          })
+    
+          const runOutput = config.run(input)
+    
+          if (isAsyncIterable(runOutput)) {
+            console.log('is async iterable')
+    
+            for await (const activityData of runOutput) {
+    
+              console.log('writing activity', activityData)
+    
+              const [newActivity] = await db.insert(activity).values({
+                thread_id,
+                type: activityData.type,
+                role: activityData.role,
+                content: activityData.content,
+                run_id: userActivity.run_id,
+              }).returning();
+    
+              await stream.writeSSE({
+                data: JSON.stringify(newActivity),
+                event: 'activity',
+              })
+            }
+    
+            console.log('updating run as completed')
+    
+            await db.update(run)
+              .set({
+                state: 'completed',
+                finished_at: new Date(),
+              })
+              .where(eq(run.id, userActivity.run_id));
+    
+          }
+          else {
+            console.log('not async iterable')
+    
+            const newActivities = await runOutput;
+            if (!Array.isArray(newActivities)) {
+              setRunAsFailed()
+              return c.json({ error: "Invalid response from run function, it's not an array" }, 400);
+            } else {
+              const allActivities = await completeRunWithNewActivities(newActivities);
+              for (const newActivity of allActivities) {
+                await stream.writeSSE({
+                  data: JSON.stringify(newActivity),
+                  event: 'activity',
+                })
+              }
+            }
+          }
+        }
+        catch (error: any) {
+          setRunAsFailed()
+          await stream.writeSSE({
+            data: JSON.stringify({ error: error.message }),
+            event: 'error',
+          })
+        }
+      })
+    }
+  }
+  catch (error: any) {
+    setRunAsFailed()
+    return c.json({ error: error.message }, 400);
   }
 
 })

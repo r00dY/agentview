@@ -60,6 +60,8 @@ export const config : AgentViewConfig = {
             content: "I got your question 1"
         };
 
+        throw { message: 'gowno' }
+
         await new Promise(resolve => setTimeout(resolve, 1000));
 
         yield {
