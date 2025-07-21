@@ -267,9 +267,6 @@ app.openapi(activitiesPOSTRoute, async (c) => {
     return c.json({ error: `Cannot add user activity while thread has an non-completed run. Run state: ${activeRun.state}` }, 400);
   }
 
-
-  
-
   // Create user activity and run
   const userActivity = await db.transaction(async (tx) => {
     // Thread status is 'idle', so we can proceed
@@ -458,7 +455,7 @@ app.openapi(activitiesPOSTRoute, async (c) => {
       }
     })
   }
-  
+
 })
 
 // The OpenAPI documentation will be available at /doc
