@@ -324,33 +324,17 @@ app.openapi(activitiesPOSTRoute, async (c) => {
     schema.parse(activity);
   }
 
-
-  if (!stream) {
-    let newActivities: any[] = [];
-
-    // collect activities
-    if (isAsyncIterable(config.run)) {
-      for await (const activity of config.run(input)) {
-        newActivities.push(activity);
-      }
-    } else {
-      const result = await config.run(input);
-      if (!Array.isArray(result)) {
-        return c.json({ error: "Invalid response from run function, it's not an array" }, 400);
-      } else {
-        for (const activity of result) {
-          newActivities.push(activity);
-        }
-      }
-    }
-
+  async function completeRunWithNewActivities(newActivities: any[]) {
     // validate activities
     for (const activity of newActivities) {
       try {
         validateActivity(activity);
       }
       catch (error: any) {
-        return c.json({ error: error.message }, 400);
+        throw {
+          error: error.message,
+        }
+        // return c.json({ error: error.message }, 400);
       }
     }
   
@@ -382,9 +366,107 @@ app.openapi(activitiesPOSTRoute, async (c) => {
       return createdActivities;
     });
 
+    return allActivities;
+  }
+
+  if (!stream) {
+    let newActivities: any[] = [];
+
+    const runOutput = config.run(input)
+
+    // collect activities
+    if (isAsyncIterable(runOutput)) {
+      for await (const activity of runOutput) {
+        newActivities.push(activity);
+      }
+    } else {
+      const result = await runOutput;
+      if (!Array.isArray(result)) {
+        return c.json({ error: "Invalid response from run function, it's not an array" }, 400);
+      } else {
+        for (const activity of result) {
+          newActivities.push(activity);
+        }
+      }
+    }
+
+    const allActivities = await completeRunWithNewActivities(newActivities);
     return c.json({ data: [userActivity, ...allActivities] }, 201);
   }
   else {
+  
+
+    console.log('streaming!')
+
+    return streamSSE(c, async (stream) => { 
+
+      console.log('writing user activity')
+
+      await stream.writeSSE({
+        data: JSON.stringify(userActivity),
+        event: 'activity',
+      })
+
+      const runOutput = config.run(input)
+
+      if (isAsyncIterable(runOutput)) {
+        console.log('is async iterable')
+
+        for await (const activityData of runOutput) {
+
+          console.log('writing activity', activityData)
+
+          const [newActivity] = await db.insert(activity).values({
+            thread_id,
+            type: activityData.type,
+            role: activityData.role,
+            content: activityData.content,
+            run_id: userActivity.run_id,
+          }).returning();
+
+          await stream.writeSSE({
+            data: JSON.stringify(newActivity),
+            event: 'activity',
+          })
+        }
+
+        console.log('updating run as completed')
+
+        await db.update(run)
+          .set({
+            state: 'completed',
+            finished_at: new Date(),
+          })
+          .where(eq(run.id, userActivity.run_id));
+
+      }
+      else {
+        console.log('not async iterable')
+
+        const newActivities = await runOutput;
+        if (!Array.isArray(newActivities)) {
+          return c.json({ error: "Invalid response from run function, it's not an array" }, 400);
+        } else {
+          const allActivities = await completeRunWithNewActivities(newActivities);
+          for (const newActivity of allActivities) {
+            await stream.writeSSE({
+              data: JSON.stringify(newActivity),
+              event: 'activity',
+            })
+          }
+        }
+      }
+
+      // for await (const activity of config.run(input)) {
+      //   await stream.writeSSE({
+      // }
+
+    })
+
+
+
+
+
     return c.json({ error: "Streaming is not supported yet" }, 400);
   }
 

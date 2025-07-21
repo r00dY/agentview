@@ -30,27 +30,71 @@ export const config : AgentViewConfig = {
             ]
         }
     ],
-    run: async (input: any) => {
-        console.log('run!', input)
+    // run: async function (input: any) {
+    //     await new Promise(resolve => setTimeout(resolve, 1000));
+    //     return [{
+    //         type: "message",
+    //         role: "assistant",
+    //         content: "I got your question 1"
+    //     },
+    //     {
+    //         type: "message",
+    //         role: "assistant",
+    //         content: "I got your question 2"
+    //     },
+    //     {
+    //         type: "message",
+    //         role: "assistant",
+    //         content: "I got your question 3"
+    //     }]
+    // },
 
-        const response = await client.responses.create({
-            model: "gpt-4.1",
-            input: [
-                {
-                    role: "developer",
-                    content: "You are witty and a little silly, answer in this silly way. You are also a little bit of a know it all."
-                },
-                ...input.thread.activities.map((a: any) => ({
-                    role: a.role,
-                    content: a.content
-                }))
-            ]
-        });
-        
-        return [{
+    run: async function* (input: any) {
+
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // First yield a canned response
+        yield {
             type: "message",
             role: "assistant",
-            content: response.output_text
-        }]
+            content: "I got your question 1"
+        };
+
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        yield {
+            type: "message",
+            role: "assistant",
+            content: "I got your question 2"
+        };
+
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        yield {
+            type: "message",
+            role: "assistant",
+            content: "I got your question 3"
+        };
+
+        // // Then yield the real response
+        // const response = await client.responses.create({
+        //     model: "gpt-4.1",
+        //     input: [
+        //         {
+        //             role: "developer",
+        //             content: "You are witty and a little silly, answer in this silly way. You are also a little bit of a know it all."
+        //         },
+        //         ...input.thread.activities.map((a: any) => ({
+        //             role: a.role,
+        //             content: a.content
+        //         }))
+        //     ]
+        // });
+
+        // yield {
+        //     type: "message",
+        //     role: "assistant",
+        //     content: response.output_text
+        // };
     }
 }
