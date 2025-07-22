@@ -30,11 +30,16 @@
 
 
 // Async generator to send activity and yield events
-export async function* sendActivity(thread_id: string, activity: { type: string; role: string; content: any }) {
+
+
+
+export async function* sendActivity(thread_id: string, activity: { type: string; role: string; content: any }, options?: { signal?: AbortSignal }) {
+
   const response = await fetch(`http://localhost:2138/threads/${thread_id}/activities`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ stream: true, input: activity }),
+    signal: options?.signal
   });
   if (!response.body) throw new Error('No response body for SSE');
   const reader = response.body.getReader();
@@ -66,19 +71,31 @@ export async function* sendActivity(thread_id: string, activity: { type: string;
     }
   }
 
-  while (!done) {
-    const { value, done: streamDone } = await reader.read();
-    if (streamDone) break;
-    buffer += new TextDecoder().decode(value);
-    let lastEventIdx = buffer.lastIndexOf('\n\n');
-    if (lastEventIdx !== -1) {
-      const eventsChunk = buffer.slice(0, lastEventIdx);
-      for await (const event of parseSSE(eventsChunk)) {
-        yield event;
+//   try {
+    while (!done) {
+      if (options?.signal?.aborted) {
+        // Optionally yield an abort event or just break
+        break;
       }
-      buffer = buffer.slice(lastEventIdx + 2);
+      const { value, done: streamDone } = await reader.read();
+      if (streamDone) break;
+      buffer += new TextDecoder().decode(value);
+      let lastEventIdx = buffer.lastIndexOf('\n\n');
+      if (lastEventIdx !== -1) {
+        const eventsChunk = buffer.slice(0, lastEventIdx);
+        for await (const event of parseSSE(eventsChunk)) {
+          yield event;
+        }
+        buffer = buffer.slice(lastEventIdx + 2);
+      }
     }
-  }
+//   } catch (err: any) {
+//     if (err.name === 'AbortError') {
+//       // Optionally yield an abort event or just return
+//       return;
+//     }
+//     throw err;
+//   }
 }
 
 

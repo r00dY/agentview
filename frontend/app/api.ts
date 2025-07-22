@@ -471,11 +471,17 @@ app.openapi(activitiesPOSTRoute, async (c) => {
     
   
       console.log('streaming!')
+
+      // let aborted = false
   
       return streamSSE(c, async (stream) => { 
 
         stream.onAbort(() => {
+          // aborted = true
+          console.log('onAbort!')
+
           setRunAsFailed()
+          stream.close()
         })
   
         try {
@@ -528,9 +534,9 @@ app.openapi(activitiesPOSTRoute, async (c) => {
             console.log('not async iterable')
     
             const newActivities = await runOutput;
+
             if (!Array.isArray(newActivities)) {
-              setRunAsFailed()
-              return c.json({ error: "Invalid response from run function, it's not an array" }, 400);
+              throw { error: "Invalid response from run function, it's not an array" }
             } else {
               const allActivities = await completeRunWithNewActivities(newActivities);
               for (const newActivity of allActivities) {
@@ -549,6 +555,8 @@ app.openapi(activitiesPOSTRoute, async (c) => {
 
         }
         catch (error: any) {
+          console.log('Catch!', error)
+
           setRunAsFailed()
           await stream.writeSSE({
             data: JSON.stringify({ state: 'failed' }),
@@ -564,6 +572,7 @@ app.openapi(activitiesPOSTRoute, async (c) => {
   }
 
 })
+
 
 // The OpenAPI documentation will be available at /doc
 app.doc('/openapi', {

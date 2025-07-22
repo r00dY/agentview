@@ -51,7 +51,7 @@ export const config : AgentViewConfig = {
 
     run: async function* (input: any) {
 
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 3000));
 
         // First yield a canned response
         yield {
@@ -62,7 +62,7 @@ export const config : AgentViewConfig = {
 
         // throw { message: 'gowno' }
 
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 3000));
 
         yield {
             type: "message",
@@ -70,7 +70,7 @@ export const config : AgentViewConfig = {
             content: "I got your question 2"
         };
 
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 3000));
 
         yield {
             type: "message",

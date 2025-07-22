@@ -1,14 +1,11 @@
 import { redirect, useLoaderData, useFetcher, Outlet, Link, Form , data} from "react-router";
 import type { Route } from "./+types/thread";
 import { Button } from "~/components/ui/button";
-// import { Plus } from "lucide-react";
-// import { Badge } from "~/components/ui/badge";
 import { Header, HeaderTitle } from "~/components/header";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-// import { isUUID } from "~/lib/isUUID";
 import { Textarea } from "~/components/ui/textarea";
 import { sendActivity } from "~/hooks/useThread";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 export async function loader({ request, params }: Route.LoaderArgs) {
     try {
@@ -37,15 +34,17 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
 export default function  ThreadPageWrapper() {
     const loaderData = useLoaderData<typeof loader>();
+    console.log(loaderData)
     return <ThreadPage key={loaderData.thread.id} />
 }
 
 
-
 function ThreadPage() {
-  const loaderData = useLoaderData<typeof loader>();
+    const loaderData = useLoaderData<typeof loader>();
 
-  const [thread, setThread] = useState(loaderData.thread)
+    const [thread, setThread] = useState(loaderData.thread)
+
+    const abortControllerRef = useRef<AbortController | null>(null)
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault()
@@ -55,7 +54,9 @@ function ThreadPage() {
         
         if (message) {
             try {
-                for await (const event of sendActivity(thread.id, { type: "message", role: "user", content: message })) {
+                abortControllerRef.current = new AbortController()
+
+                for await (const event of sendActivity(thread.id, { type: "message", role: "user", content: message }, { signal: abortControllerRef.current.signal })) {
                     if (event.event === 'activity') {
                         setThread(thread => ({ ...thread, activities: [...thread.activities, event.data] }))
                     }
@@ -63,6 +64,8 @@ function ThreadPage() {
                         setThread(thread => ({ ...thread, state: event.data.state }))
                     }
                 }
+
+                abortControllerRef.current = null
             } catch (error) {
                 console.error(error)
             }
@@ -155,6 +158,9 @@ function ThreadPage() {
                 <form method="post" onSubmit={handleSubmit}>
                     <Textarea name="message" placeholder="Reply here..."/>
                     <Button type="submit" disabled={thread.state !== 'idle'}>Send</Button>
+                    { thread.state !== 'idle' && <Button type="button" onClick={() => {
+                        abortControllerRef.current?.abort()
+                    }}>Cancel</Button> }
                 </form>
 
                 {/* { fetcher.data?.error && (
