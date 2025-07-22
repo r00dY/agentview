@@ -1,17 +1,5 @@
 import { redirect, useLoaderData, useFetcher, Outlet, Link, Form , data} from "react-router";
 import type { Route } from "./+types/thread";
-// import { auth } from "~/lib/auth.server";
-// import { db } from "~/lib/db.server";
-// import { thread, activity, run } from "~/db/schema";
-// import { eq, ne } from "drizzle-orm";
-// import {
-//   Table,
-//   TableHeader,
-//   TableBody,
-//   TableHead,
-//   TableRow,
-//   TableCell,
-// } from "~/components/ui/table";
 import { Button } from "~/components/ui/button";
 // import { Plus } from "lucide-react";
 // import { Badge } from "~/components/ui/badge";
@@ -19,7 +7,8 @@ import { Header, HeaderTitle } from "~/components/header";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 // import { isUUID } from "~/lib/isUUID";
 import { Textarea } from "~/components/ui/textarea";
-import { useThread } from "~/hooks/useThread";
+import { sendActivity } from "~/hooks/useThread";
+import { useState } from "react";
 
 export async function loader({ request, params }: Route.LoaderArgs) {
     try {
@@ -37,7 +26,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
         return data({
             thread: payload.data,
-            thread_id: params.id
         });
 
     } catch (error) {
@@ -45,67 +33,48 @@ export async function loader({ request, params }: Route.LoaderArgs) {
             error: "Failed to fetch thread"
         }, { status: 400 })
     }
-
 }
 
-// export async function action({ request, params }: Route.ActionArgs) {
-//     const formData = await request.formData();
-//     const message = formData.get("message");
-
-//     try {
-//         const response = await fetch(`http://localhost:2138/threads/${params.id}/activities`, {
-//             method: 'POST',
-//             headers: {
-//                 'Content-Type': 'application/json',
-//             },
-//             body: JSON.stringify({
-//                 input: {
-//                     type: "message",
-//                     role: "user",
-//                     content: message
-//                 }
-//             }),
-//         });
-
-//         const payload = await response.json()
-
-//         if (!response.ok) {
-//             return data(payload, { status: 400 })
-//         }
-
-//         return data(payload);
-
-//     } catch (error) {
-//         console.log(error);
-//         return data({
-//             error: "Failed to send message"
-//         }, { status: 400 })
-//     }
-// }
+export default function  ThreadPageWrapper() {
+    const loaderData = useLoaderData<typeof loader>();
+    return <ThreadPage key={loaderData.thread.id} />
+}
 
 
 
+function ThreadPage() {
+  const loaderData = useLoaderData<typeof loader>();
 
+  const [thread, setThread] = useState(loaderData.thread)
 
-export default function ThreadPage() {
-  const { thread_id } = useLoaderData<typeof loader>();
-//   const fetcher = useFetcher<typeof action>();
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault()
 
-    const data = useThread(thread_id)
-
-    console.log(data)
-
-    const thread = data.thread
+        const formData = new FormData(e.target as HTMLFormElement)
+        const message = formData.get("message")
+        
+        if (message) {
+            try {
+                for await (const event of sendActivity(thread.id, { type: "message", role: "user", content: message })) {
+                    if (event.event === 'activity') {
+                        setThread(thread => ({ ...thread, activities: [...thread.activities, event.data] }))
+                    }
+                    else if (event.event === 'thread.state') {
+                        setThread(thread => ({ ...thread, state: event.data.state }))
+                    }
+                }
+            } catch (error) {
+                console.error(error)
+            }
+        }
+    }
 
   return <>
     <Header>
       <HeaderTitle title={`Thread`} />
     </Header>
 
-    {/* { data.state === 'loading' && <div>Loading...</div>} */}
-    { data.state === 'error' && <div>Error</div>}
-
-    { data.state === 'success' && thread !== null && <div className="flex-1 overflow-y-auto">
+   <div className="flex-1 overflow-y-auto">
 
       <div className=" p-6 max-w-4xl space-y-6">
       <Card>
@@ -183,14 +152,7 @@ export default function ThreadPage() {
                 <CardTitle>New Activity</CardTitle>
             </CardHeader>
             <CardContent>
-                <form method="post" onSubmit={(e) => {
-                    e.preventDefault()
-                    const formData = new FormData(e.target as HTMLFormElement)
-                    const message = formData.get("message")
-                    if (message) {
-                        data.addActivity({ type: "message", role: "user", content: message })
-                    }
-                }}>
+                <form method="post" onSubmit={handleSubmit}>
                     <Textarea name="message" placeholder="Reply here..."/>
                     <Button type="submit" disabled={thread.state !== 'idle'}>Send</Button>
                 </form>
@@ -204,6 +166,6 @@ export default function ThreadPage() {
 
     </div>
     
-    </div> }
+    </div> 
   </>
 }

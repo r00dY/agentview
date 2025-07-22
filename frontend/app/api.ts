@@ -548,7 +548,7 @@ app.openapi(activitiesPOSTRoute, async (c) => {
           })
 
         }
-      catch (error: any) {
+        catch (error: any) {
           setRunAsFailed()
           await stream.writeSSE({
             data: JSON.stringify({ state: 'failed' }),
