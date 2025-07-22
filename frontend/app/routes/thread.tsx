@@ -44,8 +44,6 @@ function ThreadPage() {
 
     const [thread, setThread] = useState(loaderData.thread)
 
-    const abortControllerRef = useRef<AbortController | null>(null)
-
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault()
 
@@ -54,9 +52,7 @@ function ThreadPage() {
         
         if (message) {
             try {
-                abortControllerRef.current = new AbortController()
-
-                for await (const event of sendActivity(thread.id, { type: "message", role: "user", content: message }, { signal: abortControllerRef.current.signal })) {
+                for await (const event of sendActivity(thread.id, { type: "message", role: "user", content: message })) {
                     if (event.event === 'activity') {
                         setThread(thread => ({ ...thread, activities: [...thread.activities, event.data] }))
                     }
@@ -64,8 +60,6 @@ function ThreadPage() {
                         setThread(thread => ({ ...thread, state: event.data.state }))
                     }
                 }
-
-                abortControllerRef.current = null
             } catch (error) {
                 console.error(error)
             }
@@ -157,10 +151,10 @@ function ThreadPage() {
             <CardContent>
                 <form method="post" onSubmit={handleSubmit}>
                     <Textarea name="message" placeholder="Reply here..."/>
-                    <Button type="submit" disabled={thread.state !== 'idle'}>Send</Button>
+                    {/* <Button type="submit" disabled={thread.state !== 'idle'}>Send</Button>
                     { thread.state !== 'idle' && <Button type="button" onClick={() => {
                         abortControllerRef.current?.abort()
-                    }}>Cancel</Button> }
+                    }}>Cancel</Button> } */}
                 </form>
 
                 {/* { fetcher.data?.error && (
