@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
+import { cors } from 'hono/cors'
 import { streamSSE } from 'hono/streaming'
 
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
@@ -14,7 +15,9 @@ import { isUUID } from './lib/isUUID'
 import { isAsyncIterable } from './lib/utils'
 
 
+
 export const app = new OpenAPIHono()
+app.use('*', cors())
 
 
 /* --------- CLIENTS --------- */

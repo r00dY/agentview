@@ -55,80 +55,102 @@ export function useThread(threadId: string) {
     };
   }, [threadId]);
 
-//   // Add activity with streaming
-//   const addActivity = useCallback(
-//     async (input: { type: string; role: string; content: any }) => {
-//       if (!threadRef.current) return;
-//       return new Promise<void>((resolve, reject) => {
-//         const es = new EventSource(`http://localhost:2138/threads/${threadId}/activities/stream?${new URLSearchParams({ stream: 'true' })}`, { withCredentials: false });
-//         let done = false;
+  // Add activity with streaming
+  const addActivity = useCallback(
+    async (input: { type: string; role: string; content: any }) => {
+      if (!threadRef.current) return;
+      return new Promise<void>(async (resolve, reject) => {
+        let done = false;
+        let controller = new AbortController();
+        try {
+          const response = await fetch(`http://localhost:2138/threads/${threadId}/activities`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ stream: true, input }),
+            signal: controller.signal,
+          });
+          if (!response.body) throw new Error('No response body for SSE');
+          const reader = response.body.getReader();
+          let buffer = '';
 
-//         // Send the POST request to start the stream
-//         fetch(`http://localhost:2138/threads/${threadId}/activities`, {
-//           method: 'POST',
-//           headers: { 'Content-Type': 'application/json' },
-//           body: JSON.stringify({ stream: true, input }),
-//         }).catch((err) => {
-//           es.close();
-//           setInternal((prev) => ({ state: 'error', error: err, thread: null }));
-//           reject(err);
-//         });
+          // Helper to parse SSE events
+          function parseSSE(chunk: string) {
+            const events = chunk.split(/\n(?=data:|event:|id:)/g);
+            for (const eventStr of events) {
+              let eventType = 'message';
+              let data = '';
+              for (const line of eventStr.split('\n')) {
+                if (line.startsWith('event:')) {
+                  eventType = line.replace('event:', '').trim();
+                } else if (line.startsWith('data:')) {
+                  data += line.replace('data:', '').trim();
+                }
+              }
+              handleEvent(eventType, data);
+            }
+          }
 
-//         es.onmessage = (event) => {
-//           // Default event (shouldn't be used, but just in case)
-//           try {
-//             const data = JSON.parse(event.data);
-//             // Fallback: treat as activity
-//             updateThreadWithActivity(data);
-//           } catch {}
-//         };
-//         es.addEventListener('activity', (event: MessageEvent) => {
-//           try {
-//             const activity: Activity = JSON.parse(event.data);
-//             updateThreadWithActivity(activity);
-//           } catch {}
-//         });
-//         es.addEventListener('thread.state', (event: MessageEvent) => {
-//           try {
-//             const { state } = JSON.parse(event.data);
-//             updateThreadState(state);
-//           } catch {}
-//         });
-//         es.onerror = (err) => {
-//           if (!done) {
-//             es.close();
-//             setInternal((prev) => ({ state: 'error', error: err, thread: null }));
-//             reject(err);
-//           }
-//         };
-//         es.addEventListener('end', () => {
-//           done = true;
-//           es.close();
-//           resolve();
-//         });
+          function handleEvent(eventType: string, data: string) {
+            try {
+              if (eventType === 'activity') {
+                const activity: Activity = JSON.parse(data);
+                updateThreadWithActivity(activity);
+              } else if (eventType === 'thread.state') {
+                const { state } = JSON.parse(data);
+                updateThreadState(state);
+              } else if (eventType === 'end') {
+                done = true;
+                controller.abort();
+                resolve();
+              } else if (eventType === 'message') {
+                // fallback/default
+                const parsed = JSON.parse(data);
+                updateThreadWithActivity(parsed);
+              }
+            } catch (err) {
+              // ignore parse errors
+            }
+          }
 
-//         function updateThreadWithActivity(activity: Activity) {
-//           setInternal((prev) => {
-//             if (prev.state !== 'success' || !prev.thread) return prev;
-//             // Avoid duplicates
-//             if (prev.thread.activities.some((a) => a.id === activity.id)) return prev;
-//             const updated = { ...prev.thread, activities: [...prev.thread.activities, activity] };
-//             threadRef.current = updated;
-//             return { ...prev, thread: updated };
-//           });
-//         }
-//         function updateThreadState(state: string) {
-//           setInternal((prev) => {
-//             if (prev.state !== 'success' || !prev.thread) return prev;
-//             const updated = { ...prev.thread, state };
-//             threadRef.current = updated;
-//             return { ...prev, thread: updated };
-//           });
-//         }
-//       });
-//     },
-//     [threadId]
-//   );
+          while (!done) {
+            const { value, done: streamDone } = await reader.read();
+            if (streamDone) break;
+            buffer += new TextDecoder().decode(value);
+            let lastEventIdx = buffer.lastIndexOf('\n\n');
+            if (lastEventIdx !== -1) {
+              const eventsChunk = buffer.slice(0, lastEventIdx);
+              parseSSE(eventsChunk);
+              buffer = buffer.slice(lastEventIdx + 2);
+            }
+          }
+        } catch (err) {
+          controller.abort();
+          setInternal((prev) => ({ state: 'error', error: err, thread: null }));
+          reject(err);
+        }
 
-  return { ...internal, addActivity: () => {} };
+        function updateThreadWithActivity(activity: Activity) {
+          setInternal((prev) => {
+            if (prev.state !== 'success' || !prev.thread) return prev;
+            // Avoid duplicates
+            if (prev.thread.activities.some((a) => a.id === activity.id)) return prev;
+            const updated = { ...prev.thread, activities: [...prev.thread.activities, activity] };
+            threadRef.current = updated;
+            return { ...prev, thread: updated };
+          });
+        }
+        function updateThreadState(state: string) {
+          setInternal((prev) => {
+            if (prev.state !== 'success' || !prev.thread) return prev;
+            const updated = { ...prev.thread, state };
+            threadRef.current = updated;
+            return { ...prev, thread: updated };
+          });
+        }
+      });
+    },
+    [threadId]
+  );
+
+  return { ...internal, addActivity };
 } 

@@ -12,13 +12,13 @@ import type { Route } from "./+types/thread";
 //   TableRow,
 //   TableCell,
 // } from "~/components/ui/table";
-// import { Button } from "~/components/ui/button";
+import { Button } from "~/components/ui/button";
 // import { Plus } from "lucide-react";
 // import { Badge } from "~/components/ui/badge";
 import { Header, HeaderTitle } from "~/components/header";
-// import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 // import { isUUID } from "~/lib/isUUID";
-// import { Textarea } from "~/components/ui/textarea";
+import { Textarea } from "~/components/ui/textarea";
 import { useThread } from "~/hooks/useThread";
 
 export async function loader({ request, params }: Route.LoaderArgs) {
@@ -95,17 +95,19 @@ export default function ThreadPage() {
 
     console.log(data)
 
+    const thread = data.thread
+
   return <>
     <Header>
       <HeaderTitle title={`Thread`} />
     </Header>
 
-    { data.state === 'loading' && <div>Loading...</div>}
+    {/* { data.state === 'loading' && <div>Loading...</div>} */}
     { data.state === 'error' && <div>Error</div>}
 
-    { data.state === 'success' && <div className="flex-1 overflow-y-auto">
+    { data.state === 'success' && thread !== null && <div className="flex-1 overflow-y-auto">
 
-      {/* <div className=" p-6 max-w-4xl space-y-6">
+      <div className=" p-6 max-w-4xl space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Thread Details</CardTitle>
@@ -171,24 +173,36 @@ export default function ThreadPage() {
             ))}
         </div>
 
-        <Card>
+        <div>
+            { thread.state === 'in_progress' && <div>in progress...</div>}
+            { thread.state === 'failed' && <div>failed</div>}
+        </div>
+
+        { (thread.state === 'idle' || thread.state === 'in_progress') && <Card>
             <CardHeader>
                 <CardTitle>New Activity</CardTitle>
             </CardHeader>
             <CardContent>
-                <fetcher.Form method="post">
+                <form method="post" onSubmit={(e) => {
+                    e.preventDefault()
+                    const formData = new FormData(e.target as HTMLFormElement)
+                    const message = formData.get("message")
+                    if (message) {
+                        data.addActivity({ type: "message", role: "user", content: message })
+                    }
+                }}>
                     <Textarea name="message" placeholder="Reply here..."/>
-                    <Button type="submit" disabled={fetcher.state !== 'idle'}>Send</Button>
-                </fetcher.Form>
+                    <Button type="submit" disabled={thread.state !== 'idle'}>Send</Button>
+                </form>
 
-                { fetcher.data?.error && (
+                {/* { fetcher.data?.error && (
                     <div className="text-red-500">{fetcher.data.error}</div>
-                )}
+                )} */}
                 
             </CardContent>
-        </Card>
+        </Card> }
 
-    </div> */}
+    </div>
     
     </div> }
   </>
