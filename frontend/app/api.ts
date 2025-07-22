@@ -472,16 +472,14 @@ app.openapi(activitiesPOSTRoute, async (c) => {
   
       console.log('streaming!')
 
-      // let aborted = false
+      let aborted = false
   
       return streamSSE(c, async (stream) => { 
 
         stream.onAbort(() => {
-          // aborted = true
           console.log('onAbort!')
-
           setRunAsFailed()
-          stream.close()
+          aborted = true
         })
   
         try {
@@ -503,6 +501,9 @@ app.openapi(activitiesPOSTRoute, async (c) => {
             console.log('is async iterable')
     
             for await (const activityData of runOutput) {
+              if (aborted) {
+                return;
+              }
     
               console.log('writing activity', activityData)
     
@@ -534,6 +535,10 @@ app.openapi(activitiesPOSTRoute, async (c) => {
             console.log('not async iterable')
     
             const newActivities = await runOutput;
+
+            if (aborted) {
+              return;
+            }
 
             if (!Array.isArray(newActivities)) {
               throw { error: "Invalid response from run function, it's not an array" }
