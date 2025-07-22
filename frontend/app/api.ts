@@ -155,13 +155,16 @@ app.openapi(threadsPOSTRoute, async (c) => {
   }
 
   const [newThread] = await db.insert(thread).values(body).returning();
-  
-  return c.json({ data: {
-    ...newThread,
-    activities: [],
-    state: 'idle'
-  } }, 201);
+
+  return c.json({
+    data: {
+      ...newThread,
+      activities: [],
+      state: 'idle'
+    }
+  }, 201);
 })
+
 
 // Thread GET
 const threadGETRoute = createRoute({
@@ -195,16 +198,31 @@ app.openapi(threadGETRoute, async (c) => {
     return c.json({ error: "Thread not found" }, 404);
   }
 
-  return c.json({ data: {
-    ...threadRow,
-    state: threadRow.runs.length > 0 ? threadRow.runs[0].state : 'idle'
-  } }, 200);
+  return c.json({
+    data: {
+      ...threadRow,
+      state: threadRow.runs.length > 0 ? threadRow.runs[0].state : 'idle'
+    }
+  }, 200);
 })
 
 
 /* --------- ACTIVITIES --------- */
 
 app.get('/test', async (c) => {
+
+  // Start a long-running task that logs every 1s, but do not await it
+  (async () => {
+    for (let i = 1; i <= 10; i++) {
+      console.log(`Long running task: tick ${i}`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    console.log('Long running task: done');
+  })();
+
+  return c.json({ message: 'Test complete' });
+
+
 
 
   // return streamSSE(c, async (stream) => { 
@@ -239,7 +257,7 @@ app.get('/test', async (c) => {
     console.log('aborted!')
   })
 
-  
+
 
   // c.req.raw.on('close', () => {
   //   console.log('closed!')
@@ -274,7 +292,7 @@ const activitiesPOSTRoute = createRoute({
 app.openapi(activitiesPOSTRoute, async (c) => {
   const { thread_id } = c.req.param()
   const { stream, input: { type, role, content } } = await c.req.json()
-  
+
   // Find the thread to get its type
   const threadRow = await db.query.thread.findFirst({
     where: eq(thread.id, thread_id),
@@ -305,7 +323,7 @@ app.openapi(activitiesPOSTRoute, async (c) => {
   if (role !== "user") {
     return c.json({ error: "Only activities with role 'user' are allowed" }, 400);
   }
-  
+
   // Find activity configuration by type and role
   const activityConfig = threadConfig.activities.find((a: any) => a.type === type && a.role === role);
   if (!activityConfig) {
@@ -350,26 +368,32 @@ app.openapi(activitiesPOSTRoute, async (c) => {
       ...userActivity,
       run_id: newRun.id
     };
-  })
+  });
 
-  /*** GENERATE RESPONSE ***/
+  /*** 
+   * 
+   * SIMULATION OF THE BACKGROUND JOB RUNNING
+   * 
+   * This should go to the queue but for now is scheduled in HTTP Server process
+   * 
+   * Caveats:
+   * - when server goes down then state is not recovered (dangling `in_progress` run)
+   * 
+   ***/
 
-  const setRunAsFailed = async () => {
-    console.log('setting run as failed')
+  (async () => {
+    const setRunAsFailed = async () => {
+      console.log('setting run as failed')
 
-    await db.update(run)
-      .set({
-        state: 'failed',
-        finished_at: new Date(),
-      })
-      .where(eq(run.id, userActivity.run_id));
-  }
+      await db.update(run)
+        .set({
+          state: 'failed',
+          finished_at: new Date(),
+        })
+        .where(eq(run.id, userActivity.run_id));
+    }
 
-  c.req.raw.signal.addEventListener('abort', setRunAsFailed)
-
-  // const eror
-
-  const input = { 
+    const input = {
       thread: {
         id: threadRow.id,
         created_at: threadRow.created_at,
@@ -379,202 +403,413 @@ app.openapi(activitiesPOSTRoute, async (c) => {
         type: threadRow.type,
         activities: [...threadRow.activities, userActivity]
       }
-  }
+    }
 
-  function validateActivity(activity: any) {
-    const activitySchemas = threadConfig.activities
-      .filter((a: any) => a.role !== 'user') // Exclude user activities from output validation
-      .map((a: any) => 
-        z.object({
-          type: z.literal(a.type),
-          role: z.literal(a.role),
-          content: a.content
-        })
-      );
+    function validateActivity(activity: any) {
+      const activitySchemas = threadConfig.activities
+        .filter((a: any) => a.role !== 'user') // Exclude user activities from output validation
+        .map((a: any) =>
+          z.object({
+            type: z.literal(a.type),
+            role: z.literal(a.role),
+            content: a.content
+          })
+        );
 
-    const schema = z.union(activitySchemas);
-    schema.parse(activity);
-  }
+      const schema = z.union(activitySchemas);
+      schema.parse(activity);
+    }
 
-  async function completeRunWithNewActivities(newActivities: any[]) {
-    // validate activities
-    for (const activity of newActivities) {
+    // async function completeRunWithNewActivities(newActivities: any[]) {
+    //   // validate activities
+    //   for (const activity of newActivities) {
+    //     try {
+    //       validateActivity(activity);
+    //     }
+    //     catch (error: any) {
+    //       throw {
+    //         error: error.message,
+    //       }
+    //       // return c.json({ error: error.message }, 400);
+    //     }
+    //   }
+
+    //   // Create all activities and update run in a single transaction
+    //   const allActivities = await db.transaction(async (tx) => {
+    //     const createdActivities = [];
+
+    //     // Create each activity from newActivities
+    //     for (const activityData of newActivities) {
+    //       const [createdActivity] = await tx.insert(activity).values({
+    //         thread_id,
+    //         type: activityData.type,
+    //         role: activityData.role,
+    //         content: activityData.content,
+    //         run_id: userActivity.run_id,
+    //       }).returning();
+
+    //       createdActivities.push(createdActivity);
+    //     }
+
+    //     // Update the run with 'completed' status and set finished_at
+    //     await tx.update(run)
+    //       .set({
+    //         state: 'completed',
+    //         finished_at: new Date(),
+    //       })
+    //       .where(eq(run.id, userActivity.run_id));
+
+    //     return createdActivities;
+    //   });
+
+    //   return allActivities;
+    // }
+
+    async function validateAndInsertActivity(activityData: any) {
       try {
-        validateActivity(activity);
+        validateActivity(activityData);
       }
       catch (error: any) {
         throw {
           error: error.message,
         }
-        // return c.json({ error: error.message }, 400);
-      }
-    }
-  
-    // Create all activities and update run in a single transaction
-    const allActivities = await db.transaction(async (tx) => {
-      const createdActivities = [];
-      
-      // Create each activity from newActivities
-      for (const activityData of newActivities) {
-        const [createdActivity] = await tx.insert(activity).values({
-          thread_id,
-          type: activityData.type,
-          role: activityData.role,
-          content: activityData.content,
-          run_id: userActivity.run_id,
-        }).returning();
-        
-        createdActivities.push(createdActivity);
       }
 
-      // Update the run with 'completed' status and set finished_at
-      await tx.update(run)
+      const [newActivity] = await db.insert(activity).values({
+        thread_id,
+        type: activityData.type,
+        role: activityData.role,
+        content: activityData.content,
+        run_id: userActivity.run_id,
+      }).returning();
+
+      return newActivity;
+    }
+
+
+    try {
+      // console.log('writing user activity')
+
+      // await stream.writeSSE({
+      //   data: JSON.stringify({ state: 'in_progress' }),
+      //   event: 'thread.state',
+      // })
+
+      // await stream.writeSSE({
+      //   data: JSON.stringify(userActivity),
+      //   event: 'activity',
+      // })
+
+      const runOutput = config.run(input)
+
+      if (isAsyncIterable(runOutput)) {
+        console.log('is async iterable')
+
+        for await (const activityData of runOutput) {
+
+          validateAndInsertActivity(activityData)
+
+          // try {
+          //   validateActivity(activityData);
+          // }
+          // catch (error: any) {
+          //   throw {
+          //     error: error.message,
+          //   }
+          // }
+
+          // console.log('writing activity', activityData)
+
+          // const [newActivity] = await db.insert(activity).values({
+          //   thread_id,
+          //   type: activityData.type,
+          //   role: activityData.role,
+          //   content: activityData.content,
+          //   run_id: userActivity.run_id,
+          // }).returning();
+
+          // // await stream.writeSSE({
+          // //   data: JSON.stringify(newActivity),
+          // //   event: 'activity',
+          // // })
+        }
+
+      }
+      else {
+        console.log('not async iterable')
+
+        const newActivities = await runOutput;
+
+        if (!Array.isArray(newActivities)) {
+          throw { error: "Invalid response from run function, it's not an array" }
+        } else {
+          for (const activityData of newActivities) {
+            validateAndInsertActivity(activityData)
+          }
+
+          // const allActivities = await completeRunWithNewActivities(newActivities);
+          // for (const newActivity of allActivities) {
+          //   await stream.writeSSE({
+          //     data: JSON.stringify(newActivity),
+          //     event: 'activity',
+          //   })
+          // }
+        }
+      }
+
+      console.log('updating run as completed')
+
+      await db.update(run)
         .set({
           state: 'completed',
           finished_at: new Date(),
         })
         .where(eq(run.id, userActivity.run_id));
 
-      return createdActivities;
-    });
+      // await stream.writeSSE({
+      //   data: JSON.stringify({ state: 'idle' }),
+      //   event: 'thread.state',
+      // })
 
-    return allActivities;
-  }
-
-  try {
-    if (!stream) {
-      let newActivities: any[] = [];
-  
-      const runOutput = config.run(input)
-  
-      // collect activities
-      if (isAsyncIterable(runOutput)) {
-        for await (const activity of runOutput) {
-          newActivities.push(activity);
-        }
-      } else {
-        const result = await runOutput;
-        if (!Array.isArray(result)) {
-          setRunAsFailed()
-          return c.json({ error: "Invalid response from run function, it's not an array" }, 400);
-        } else {
-          for (const activity of result) {
-            newActivities.push(activity);
-          }
-        }
-      }
-  
-      const allActivities = await completeRunWithNewActivities(newActivities);
-      return c.json({ data: [userActivity, ...allActivities] }, 201);
     }
-    else {
-    
-  
-      console.log('streaming!')
+    catch (error: any) {
+      console.log('Catch!', error)
 
-      let aborted = false
-  
-      return streamSSE(c, async (stream) => { 
-
-        stream.onAbort(() => {
-          console.log('onAbort!')
-          setRunAsFailed()
-          aborted = true
-        })
-  
-        try {
-          console.log('writing user activity')
-
-          await stream.writeSSE({
-            data: JSON.stringify({ state: 'in_progress' }),
-            event: 'thread.state',
-          })
-  
-          await stream.writeSSE({
-            data: JSON.stringify(userActivity),
-            event: 'activity',
-          })
-    
-          const runOutput = config.run(input)
-    
-          if (isAsyncIterable(runOutput)) {
-            console.log('is async iterable')
-    
-            for await (const activityData of runOutput) {
-              if (aborted) {
-                return;
-              }
-    
-              console.log('writing activity', activityData)
-    
-              const [newActivity] = await db.insert(activity).values({
-                thread_id,
-                type: activityData.type,
-                role: activityData.role,
-                content: activityData.content,
-                run_id: userActivity.run_id,
-              }).returning();
-    
-              await stream.writeSSE({
-                data: JSON.stringify(newActivity),
-                event: 'activity',
-              })
-            }
-    
-            console.log('updating run as completed')
-    
-            await db.update(run)
-              .set({
-                state: 'completed',
-                finished_at: new Date(),
-              })
-              .where(eq(run.id, userActivity.run_id));
-    
-          }
-          else {
-            console.log('not async iterable')
-    
-            const newActivities = await runOutput;
-
-            if (aborted) {
-              return;
-            }
-
-            if (!Array.isArray(newActivities)) {
-              throw { error: "Invalid response from run function, it's not an array" }
-            } else {
-              const allActivities = await completeRunWithNewActivities(newActivities);
-              for (const newActivity of allActivities) {
-                await stream.writeSSE({
-                  data: JSON.stringify(newActivity),
-                  event: 'activity',
-                })
-              }
-            }
-          }
-
-          await stream.writeSSE({
-            data: JSON.stringify({ state: 'idle' }),
-            event: 'thread.state',
-          })
-
-        }
-        catch (error: any) {
-          console.log('Catch!', error)
-
-          setRunAsFailed()
-          await stream.writeSSE({
-            data: JSON.stringify({ state: 'failed' }),
-            event: 'thread.state',
-          })
-        }
-      })
+      setRunAsFailed()
+      // await stream.writeSSE({
+      //   data: JSON.stringify({ state: 'failed' }),
+      //   event: 'thread.state',
+      // })
     }
-  }
-  catch (error: any) {
-    setRunAsFailed()
-    return c.json({ error: error.message }, 400);
-  }
+
+  })();
+
+  return c.json({ data: null }, 200);
+
+
+  // /*** GENERATE RESPONSE ***/
+
+  // const setRunAsFailed = async () => {
+  //   console.log('setting run as failed')
+
+  //   await db.update(run)
+  //     .set({
+  //       state: 'failed',
+  //       finished_at: new Date(),
+  //     })
+  //     .where(eq(run.id, userActivity.run_id));
+  // }
+
+  // c.req.raw.signal.addEventListener('abort', setRunAsFailed)
+
+  // // const eror
+
+  // const input = { 
+  //     thread: {
+  //       id: threadRow.id,
+  //       created_at: threadRow.created_at,
+  //       updated_at: threadRow.updated_at,
+  //       metadata: threadRow.metadata,
+  //       client_id: threadRow.client_id,
+  //       type: threadRow.type,
+  //       activities: [...threadRow.activities, userActivity]
+  //     }
+  // }
+
+  // function validateActivity(activity: any) {
+  //   const activitySchemas = threadConfig.activities
+  //     .filter((a: any) => a.role !== 'user') // Exclude user activities from output validation
+  //     .map((a: any) => 
+  //       z.object({
+  //         type: z.literal(a.type),
+  //         role: z.literal(a.role),
+  //         content: a.content
+  //       })
+  //     );
+
+  //   const schema = z.union(activitySchemas);
+  //   schema.parse(activity);
+  // }
+
+  // async function completeRunWithNewActivities(newActivities: any[]) {
+  //   // validate activities
+  //   for (const activity of newActivities) {
+  //     try {
+  //       validateActivity(activity);
+  //     }
+  //     catch (error: any) {
+  //       throw {
+  //         error: error.message,
+  //       }
+  //       // return c.json({ error: error.message }, 400);
+  //     }
+  //   }
+
+  //   // Create all activities and update run in a single transaction
+  //   const allActivities = await db.transaction(async (tx) => {
+  //     const createdActivities = [];
+
+  //     // Create each activity from newActivities
+  //     for (const activityData of newActivities) {
+  //       const [createdActivity] = await tx.insert(activity).values({
+  //         thread_id,
+  //         type: activityData.type,
+  //         role: activityData.role,
+  //         content: activityData.content,
+  //         run_id: userActivity.run_id,
+  //       }).returning();
+
+  //       createdActivities.push(createdActivity);
+  //     }
+
+  //     // Update the run with 'completed' status and set finished_at
+  //     await tx.update(run)
+  //       .set({
+  //         state: 'completed',
+  //         finished_at: new Date(),
+  //       })
+  //       .where(eq(run.id, userActivity.run_id));
+
+  //     return createdActivities;
+  //   });
+
+  //   return allActivities;
+  // }
+
+  // try {
+  //   if (!stream) {
+  //     let newActivities: any[] = [];
+
+  //     const runOutput = config.run(input)
+
+  //     // collect activities
+  //     if (isAsyncIterable(runOutput)) {
+  //       for await (const activity of runOutput) {
+  //         newActivities.push(activity);
+  //       }
+  //     } else {
+  //       const result = await runOutput;
+  //       if (!Array.isArray(result)) {
+  //         setRunAsFailed()
+  //         return c.json({ error: "Invalid response from run function, it's not an array" }, 400);
+  //       } else {
+  //         for (const activity of result) {
+  //           newActivities.push(activity);
+  //         }
+  //       }
+  //     }
+
+  //     const allActivities = await completeRunWithNewActivities(newActivities);
+  //     return c.json({ data: [userActivity, ...allActivities] }, 201);
+  //   }
+  //   else {
+
+
+  //     console.log('streaming!')
+
+  //     let aborted = false
+
+  //     return streamSSE(c, async (stream) => { 
+
+  //       stream.onAbort(() => {
+  //         console.log('onAbort!')
+  //         setRunAsFailed()
+  //         aborted = true
+  //       })
+
+  //       try {
+  //         console.log('writing user activity')
+
+  //         await stream.writeSSE({
+  //           data: JSON.stringify({ state: 'in_progress' }),
+  //           event: 'thread.state',
+  //         })
+
+  //         await stream.writeSSE({
+  //           data: JSON.stringify(userActivity),
+  //           event: 'activity',
+  //         })
+
+  //         const runOutput = config.run(input)
+
+  //         if (isAsyncIterable(runOutput)) {
+  //           console.log('is async iterable')
+
+  //           for await (const activityData of runOutput) {
+  //             if (aborted) {
+  //               return;
+  //             }
+
+  //             console.log('writing activity', activityData)
+
+  //             const [newActivity] = await db.insert(activity).values({
+  //               thread_id,
+  //               type: activityData.type,
+  //               role: activityData.role,
+  //               content: activityData.content,
+  //               run_id: userActivity.run_id,
+  //             }).returning();
+
+  //             await stream.writeSSE({
+  //               data: JSON.stringify(newActivity),
+  //               event: 'activity',
+  //             })
+  //           }
+
+  //           console.log('updating run as completed')
+
+  //           await db.update(run)
+  //             .set({
+  //               state: 'completed',
+  //               finished_at: new Date(),
+  //             })
+  //             .where(eq(run.id, userActivity.run_id));
+
+  //         }
+  //         else {
+  //           console.log('not async iterable')
+
+  //           const newActivities = await runOutput;
+
+  //           if (aborted) {
+  //             return;
+  //           }
+
+  //           if (!Array.isArray(newActivities)) {
+  //             throw { error: "Invalid response from run function, it's not an array" }
+  //           } else {
+  //             const allActivities = await completeRunWithNewActivities(newActivities);
+  //             for (const newActivity of allActivities) {
+  //               await stream.writeSSE({
+  //                 data: JSON.stringify(newActivity),
+  //                 event: 'activity',
+  //               })
+  //             }
+  //           }
+  //         }
+
+  //         await stream.writeSSE({
+  //           data: JSON.stringify({ state: 'idle' }),
+  //           event: 'thread.state',
+  //         })
+
+  //       }
+  //       catch (error: any) {
+  //         console.log('Catch!', error)
+
+  //         setRunAsFailed()
+  //         await stream.writeSSE({
+  //           data: JSON.stringify({ state: 'failed' }),
+  //           event: 'thread.state',
+  //         })
+  //       }
+  //     })
+  //   }
+  // }
+  // catch (error: any) {
+  //   setRunAsFailed()
+  //   return c.json({ error: error.message }, 400);
+  // }
 
 })
 
@@ -594,8 +829,8 @@ app.get('/', (c) => c.text('Hello Agent View!'))
 
 
 serve({
-    fetch: app.fetch,
-    port: 2138
+  fetch: app.fetch,
+  port: 2138
 })
 
 console.log("Agent View API running...")
