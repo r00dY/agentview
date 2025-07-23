@@ -78,6 +78,38 @@ export const config : AgentViewConfig = {
             content: "I got your question 3"
         };
 
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        yield {
+            type: "message",
+            role: "assistant",
+            content: "I got your question 4"
+        };
+
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        yield {
+            type: "message",
+            role: "assistant",
+            content: "I got your question 5"
+        };
+
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        yield {
+            type: "message",
+            role: "assistant",
+            content: "I got your question 6"
+        };
+
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        yield {
+            type: "message",
+            role: "assistant",
+            content: "I got your question 7"
+        };
+
         // // Then yield the real response
         // const response = await client.responses.create({
         //     model: "gpt-4.1",

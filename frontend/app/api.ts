@@ -181,27 +181,44 @@ const threadGETRoute = createRoute({
   },
 })
 
-app.openapi(threadGETRoute, async (c) => {
-  const { thread_id } = c.req.param()
-
+async function fetchThreadWithLastRun(thread_id: string) {
   const threadRow = await db.query.thread.findFirst({
     where: eq(thread.id, thread_id),
     with: {
-      activities: true,
+      activities: {
+        orderBy: (activity, { asc }) => [asc(activity.created_at)]
+      },
       runs: {
-        where: ne(run.state, 'completed')
+        orderBy: (run, { desc }) => [desc(run.created_at)],
+        limit: 1
       },
     }
   });
 
-  if (!threadRow) {
+  const lastRun = threadRow?.runs[0]
+  const lastRunState = lastRun?.state
+  const threadState = (lastRunState === undefined || lastRunState === 'completed') ? 'idle' : lastRunState
+
+  return {
+    thread: threadRow,
+    lastRun: lastRun,
+    state: threadState
+  }
+}
+
+app.openapi(threadGETRoute, async (c) => {
+  const { thread_id } = c.req.param()
+
+  const data = await fetchThreadWithLastRun(thread_id);
+
+  if (!data.thread) {
     return c.json({ error: "Thread not found" }, 404);
   }
 
   return c.json({
     data: {
-      ...threadRow,
-      state: threadRow.runs.length > 0 ? threadRow.runs[0].state : 'idle'
+      ...data.thread,
+      state: data.state
     }
   }, 200);
 })
@@ -293,18 +310,10 @@ app.openapi(activitiesPOSTRoute, async (c) => {
   const { thread_id } = c.req.param()
   const { stream, input: { type, role, content } } = await c.req.json()
 
-  // Find the thread to get its type
-  const threadRow = await db.query.thread.findFirst({
-    where: eq(thread.id, thread_id),
-    with: {
-      runs: {
-        where: ne(run.state, 'completed')
-      },
-      activities: {
-        orderBy: (activity, { asc }) => [asc(activity.created_at)]
-      }
-    }
-  });
+  const data = await fetchThreadWithLastRun(thread_id);
+  const threadRow = data.thread
+  const lastRun = data.lastRun
+  const state = data.state
 
   if (!threadRow) {
     return c.json({ error: "Thread not found" }, 404);
@@ -337,11 +346,9 @@ app.openapi(activitiesPOSTRoute, async (c) => {
     return c.json({ error: `Invalid content: ${error.message}` }, 400);
   }
 
-  const activeRun = threadRow.runs.length > 0 ? threadRow.runs[0] : null;
-
   // Check thread status conditions
-  if (activeRun) {
-    return c.json({ error: `Cannot add user activity while thread has an non-completed run. Run state: ${activeRun.state}` }, 400);
+  if (state !== 'idle') {
+    return c.json({ error: `Cannot add user activity while thread is not in 'idle' state. Thread state: ${state}` }, 400);
   }
 
   // Create user activity and run
@@ -420,51 +427,6 @@ app.openapi(activitiesPOSTRoute, async (c) => {
       schema.parse(activity);
     }
 
-    // async function completeRunWithNewActivities(newActivities: any[]) {
-    //   // validate activities
-    //   for (const activity of newActivities) {
-    //     try {
-    //       validateActivity(activity);
-    //     }
-    //     catch (error: any) {
-    //       throw {
-    //         error: error.message,
-    //       }
-    //       // return c.json({ error: error.message }, 400);
-    //     }
-    //   }
-
-    //   // Create all activities and update run in a single transaction
-    //   const allActivities = await db.transaction(async (tx) => {
-    //     const createdActivities = [];
-
-    //     // Create each activity from newActivities
-    //     for (const activityData of newActivities) {
-    //       const [createdActivity] = await tx.insert(activity).values({
-    //         thread_id,
-    //         type: activityData.type,
-    //         role: activityData.role,
-    //         content: activityData.content,
-    //         run_id: userActivity.run_id,
-    //       }).returning();
-
-    //       createdActivities.push(createdActivity);
-    //     }
-
-    //     // Update the run with 'completed' status and set finished_at
-    //     await tx.update(run)
-    //       .set({
-    //         state: 'completed',
-    //         finished_at: new Date(),
-    //       })
-    //       .where(eq(run.id, userActivity.run_id));
-
-    //     return createdActivities;
-    //   });
-
-    //   return allActivities;
-    // }
-
     async function validateAndInsertActivity(activityData: any) {
       try {
         validateActivity(activityData);
@@ -486,52 +448,14 @@ app.openapi(activitiesPOSTRoute, async (c) => {
       return newActivity;
     }
 
-
     try {
-      // console.log('writing user activity')
-
-      // await stream.writeSSE({
-      //   data: JSON.stringify({ state: 'in_progress' }),
-      //   event: 'thread.state',
-      // })
-
-      // await stream.writeSSE({
-      //   data: JSON.stringify(userActivity),
-      //   event: 'activity',
-      // })
-
       const runOutput = config.run(input)
 
       if (isAsyncIterable(runOutput)) {
         console.log('is async iterable')
 
         for await (const activityData of runOutput) {
-
           validateAndInsertActivity(activityData)
-
-          // try {
-          //   validateActivity(activityData);
-          // }
-          // catch (error: any) {
-          //   throw {
-          //     error: error.message,
-          //   }
-          // }
-
-          // console.log('writing activity', activityData)
-
-          // const [newActivity] = await db.insert(activity).values({
-          //   thread_id,
-          //   type: activityData.type,
-          //   role: activityData.role,
-          //   content: activityData.content,
-          //   run_id: userActivity.run_id,
-          // }).returning();
-
-          // // await stream.writeSSE({
-          // //   data: JSON.stringify(newActivity),
-          // //   event: 'activity',
-          // // })
         }
 
       }
@@ -546,14 +470,6 @@ app.openapi(activitiesPOSTRoute, async (c) => {
           for (const activityData of newActivities) {
             validateAndInsertActivity(activityData)
           }
-
-          // const allActivities = await completeRunWithNewActivities(newActivities);
-          // for (const newActivity of allActivities) {
-          //   await stream.writeSSE({
-          //     data: JSON.stringify(newActivity),
-          //     event: 'activity',
-          //   })
-          // }
         }
       }
 
@@ -566,252 +482,130 @@ app.openapi(activitiesPOSTRoute, async (c) => {
         })
         .where(eq(run.id, userActivity.run_id));
 
-      // await stream.writeSSE({
-      //   data: JSON.stringify({ state: 'idle' }),
-      //   event: 'thread.state',
-      // })
-
     }
     catch (error: any) {
       console.log('Catch!', error)
-
       setRunAsFailed()
-      // await stream.writeSSE({
-      //   data: JSON.stringify({ state: 'failed' }),
-      //   event: 'thread.state',
-      // })
     }
 
   })();
 
   return c.json({ data: null }, 200);
 
-
-  // /*** GENERATE RESPONSE ***/
-
-  // const setRunAsFailed = async () => {
-  //   console.log('setting run as failed')
-
-  //   await db.update(run)
-  //     .set({
-  //       state: 'failed',
-  //       finished_at: new Date(),
-  //     })
-  //     .where(eq(run.id, userActivity.run_id));
-  // }
-
-  // c.req.raw.signal.addEventListener('abort', setRunAsFailed)
-
-  // // const eror
-
-  // const input = { 
-  //     thread: {
-  //       id: threadRow.id,
-  //       created_at: threadRow.created_at,
-  //       updated_at: threadRow.updated_at,
-  //       metadata: threadRow.metadata,
-  //       client_id: threadRow.client_id,
-  //       type: threadRow.type,
-  //       activities: [...threadRow.activities, userActivity]
-  //     }
-  // }
-
-  // function validateActivity(activity: any) {
-  //   const activitySchemas = threadConfig.activities
-  //     .filter((a: any) => a.role !== 'user') // Exclude user activities from output validation
-  //     .map((a: any) => 
-  //       z.object({
-  //         type: z.literal(a.type),
-  //         role: z.literal(a.role),
-  //         content: a.content
-  //       })
-  //     );
-
-  //   const schema = z.union(activitySchemas);
-  //   schema.parse(activity);
-  // }
-
-  // async function completeRunWithNewActivities(newActivities: any[]) {
-  //   // validate activities
-  //   for (const activity of newActivities) {
-  //     try {
-  //       validateActivity(activity);
-  //     }
-  //     catch (error: any) {
-  //       throw {
-  //         error: error.message,
-  //       }
-  //       // return c.json({ error: error.message }, 400);
-  //     }
-  //   }
-
-  //   // Create all activities and update run in a single transaction
-  //   const allActivities = await db.transaction(async (tx) => {
-  //     const createdActivities = [];
-
-  //     // Create each activity from newActivities
-  //     for (const activityData of newActivities) {
-  //       const [createdActivity] = await tx.insert(activity).values({
-  //         thread_id,
-  //         type: activityData.type,
-  //         role: activityData.role,
-  //         content: activityData.content,
-  //         run_id: userActivity.run_id,
-  //       }).returning();
-
-  //       createdActivities.push(createdActivity);
-  //     }
-
-  //     // Update the run with 'completed' status and set finished_at
-  //     await tx.update(run)
-  //       .set({
-  //         state: 'completed',
-  //         finished_at: new Date(),
-  //       })
-  //       .where(eq(run.id, userActivity.run_id));
-
-  //     return createdActivities;
-  //   });
-
-  //   return allActivities;
-  // }
-
-  // try {
-  //   if (!stream) {
-  //     let newActivities: any[] = [];
-
-  //     const runOutput = config.run(input)
-
-  //     // collect activities
-  //     if (isAsyncIterable(runOutput)) {
-  //       for await (const activity of runOutput) {
-  //         newActivities.push(activity);
-  //       }
-  //     } else {
-  //       const result = await runOutput;
-  //       if (!Array.isArray(result)) {
-  //         setRunAsFailed()
-  //         return c.json({ error: "Invalid response from run function, it's not an array" }, 400);
-  //       } else {
-  //         for (const activity of result) {
-  //           newActivities.push(activity);
-  //         }
-  //       }
-  //     }
-
-  //     const allActivities = await completeRunWithNewActivities(newActivities);
-  //     return c.json({ data: [userActivity, ...allActivities] }, 201);
-  //   }
-  //   else {
-
-
-  //     console.log('streaming!')
-
-  //     let aborted = false
-
-  //     return streamSSE(c, async (stream) => { 
-
-  //       stream.onAbort(() => {
-  //         console.log('onAbort!')
-  //         setRunAsFailed()
-  //         aborted = true
-  //       })
-
-  //       try {
-  //         console.log('writing user activity')
-
-  //         await stream.writeSSE({
-  //           data: JSON.stringify({ state: 'in_progress' }),
-  //           event: 'thread.state',
-  //         })
-
-  //         await stream.writeSSE({
-  //           data: JSON.stringify(userActivity),
-  //           event: 'activity',
-  //         })
-
-  //         const runOutput = config.run(input)
-
-  //         if (isAsyncIterable(runOutput)) {
-  //           console.log('is async iterable')
-
-  //           for await (const activityData of runOutput) {
-  //             if (aborted) {
-  //               return;
-  //             }
-
-  //             console.log('writing activity', activityData)
-
-  //             const [newActivity] = await db.insert(activity).values({
-  //               thread_id,
-  //               type: activityData.type,
-  //               role: activityData.role,
-  //               content: activityData.content,
-  //               run_id: userActivity.run_id,
-  //             }).returning();
-
-  //             await stream.writeSSE({
-  //               data: JSON.stringify(newActivity),
-  //               event: 'activity',
-  //             })
-  //           }
-
-  //           console.log('updating run as completed')
-
-  //           await db.update(run)
-  //             .set({
-  //               state: 'completed',
-  //               finished_at: new Date(),
-  //             })
-  //             .where(eq(run.id, userActivity.run_id));
-
-  //         }
-  //         else {
-  //           console.log('not async iterable')
-
-  //           const newActivities = await runOutput;
-
-  //           if (aborted) {
-  //             return;
-  //           }
-
-  //           if (!Array.isArray(newActivities)) {
-  //             throw { error: "Invalid response from run function, it's not an array" }
-  //           } else {
-  //             const allActivities = await completeRunWithNewActivities(newActivities);
-  //             for (const newActivity of allActivities) {
-  //               await stream.writeSSE({
-  //                 data: JSON.stringify(newActivity),
-  //                 event: 'activity',
-  //               })
-  //             }
-  //           }
-  //         }
-
-  //         await stream.writeSSE({
-  //           data: JSON.stringify({ state: 'idle' }),
-  //           event: 'thread.state',
-  //         })
-
-  //       }
-  //       catch (error: any) {
-  //         console.log('Catch!', error)
-
-  //         setRunAsFailed()
-  //         await stream.writeSSE({
-  //           data: JSON.stringify({ state: 'failed' }),
-  //           event: 'thread.state',
-  //         })
-  //       }
-  //     })
-  //   }
-  // }
-  // catch (error: any) {
-  //   setRunAsFailed()
-  //   return c.json({ error: error.message }, 400);
-  // }
-
 })
+
+
+// Activities POST
+const activityWatchRoute = createRoute({
+  method: 'get',
+  path: '/threads/{thread_id}/activities/watch',
+  request: {
+    query: z.object({
+      last_activity_id: z.string().optional(),
+    })
+  },
+  responses: {
+    // 201: response_data(z.array(ActivitySchema)),
+    400: response_error(),
+    404: response_error()
+  },
+})
+
+
+// Activities Watch (SSE)
+app.openapi(activityWatchRoute, async (c) => {
+  const { thread_id } = c.req.param()
+
+  const data = await fetchThreadWithLastRun(thread_id);
+  const threadRow = data.thread
+  const lastRun = data.lastRun
+  const state = data.state
+
+
+  if (!threadRow) {
+    return c.json({ error: "Thread not found" }, 404);
+  }
+
+  if (state !== 'in_progress') {
+    return c.json({ error: "Thread must be in 'in_progress' state to watch" }, 400);
+  }
+
+  let lastActivityId = threadRow.activities[threadRow.activities.length - 1].id
+
+  if (c.req.query().last_activity_id) {
+    const activity = threadRow.activities.find((a) => a.id === c.req.query().last_activity_id)
+    if (!activity) {
+      return c.json({ error: "Last activity id not found" }, 400);
+    }
+    lastActivityId = activity.id
+  }
+
+  // Only include activities before lastActivityId in ignoredActivityIds
+  const ignoredActivityIds = threadRow.activities
+    .slice(0, threadRow.activities.findIndex((a) => a.id === lastActivityId))
+    .map((a) => a.id);
+
+  // 4. Start SSE stream
+  return streamSSE(c, async (stream) => {
+    let running = true;
+    stream.onAbort(() => {
+      running = false;
+    });
+
+    // Always start with thread.state in_progress
+    await stream.writeSSE({
+      data: JSON.stringify({ state: 'in_progress' }),
+      event: 'thread.state',
+    });
+
+    /**
+     * 
+     * POLLING HERE
+     * 
+     * Soon we'll need to create a proper messaging, when some LLM API will be streaming characters then even NOTIFY/LISTEN won't make it performance-wise.
+     * 
+     */
+    while (running) {
+      const data = await fetchThreadWithLastRun(thread_id);
+      const threadRow = data.thread
+      const lastRun = data.lastRun
+      const state = data.state
+
+      if (!threadRow || !lastRun) {
+        throw new Error('unreachable');
+      }
+
+      // Check for new activities by comparing count
+      const activities = threadRow?.activities;
+
+      for (const activity of activities) {
+        if (ignoredActivityIds.includes(activity.id)) {
+          continue;
+        }
+        ignoredActivityIds.push(activity.id)
+        await stream.writeSSE({
+          data: JSON.stringify(activity),
+          event: 'activity',
+        });
+      }
+
+      // End if run is no longer in_progress
+      if (state !== 'in_progress') {
+        await stream.writeSSE({
+          data: JSON.stringify({ state }),
+          event: 'thread.state',
+        });
+        break;
+      }
+
+      // Wait 1s before next poll
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  });
+});
+
+
+
 
 
 // The OpenAPI documentation will be available at /doc
