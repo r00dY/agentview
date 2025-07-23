@@ -227,6 +227,8 @@ function ThreadPage() {
         }
     }
 
+    console.log(thread)
+
   return <>
     <Header>
       <HeaderTitle title={`Thread`} />
@@ -281,8 +283,6 @@ function ThreadPage() {
         </CardContent>
       </Card>
 
-
-
         <div className="space-y-6 mt-12">
             {thread.activities.map((activity) => (
             <div key={activity.id} className="relative">
@@ -305,14 +305,14 @@ function ThreadPage() {
             { thread.state === 'failed' && <div>failed</div>}
         </div>
 
-        { (thread.state === 'idle' || thread.state === 'in_progress') && <Card>
+        <Card>
             <CardHeader>
                 <CardTitle>New Activity</CardTitle>
             </CardHeader>
             <CardContent>
                 <form method="post" onSubmit={handleSubmit}>
                     <Textarea name="message" placeholder="Reply here..."/>
-                    <Button type="submit" disabled={thread.state !== 'idle'}>Send</Button>
+                    <Button type="submit" disabled={thread.state === 'in_progress'}>Send</Button>
 
                     {/*
                     { thread.state !== 'idle' && <Button type="button" onClick={() => {
@@ -327,7 +327,7 @@ function ThreadPage() {
                 )} */}
                 
             </CardContent>
-        </Card> }
+        </Card>
 
     </div>
     

@@ -15,7 +15,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     },
     orderBy: (thread, { desc }) => [desc(thread.updated_at)]
   })
-
+  
   return {
     threads: threadRows,
     userLocale: userLocale,

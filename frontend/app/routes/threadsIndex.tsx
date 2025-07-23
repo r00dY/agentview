@@ -10,6 +10,11 @@ export async function loader() {
     orderBy: (thread, { desc }) => [desc(thread.updated_at)]
   })
 
-  return redirect(`/threads/${threadRows[0].id}`)
+  if (threadRows[0]?.id) {
+    return redirect(`/threads/${threadRows[0].id}`)
+  }
+  else {
+    return redirect('/threads/new')
+  }
 }
 

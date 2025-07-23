@@ -186,6 +186,9 @@ async function fetchThreadWithLastRun(thread_id: string) {
     where: eq(thread.id, thread_id),
     with: {
       activities: {
+        with: {
+          run: true
+        },
         orderBy: (activity, { asc }) => [asc(activity.created_at)]
       },
       runs: {
@@ -199,8 +202,19 @@ async function fetchThreadWithLastRun(thread_id: string) {
   const lastRunState = lastRun?.state
   const threadState = (lastRunState === undefined || lastRunState === 'completed') ? 'idle' : lastRunState
 
+  if (!threadRow) {
+    return {
+      thread: threadRow,
+      lastRun: lastRun,
+      state: threadState
+    }
+  }
+
   return {
-    thread: threadRow,
+    thread: {
+      ...threadRow,
+      activities: threadRow.activities.filter((a) => a.run_id === lastRun?.id || a.run?.state === 'completed')
+    },
     lastRun: lastRun,
     state: threadState
   }
@@ -319,10 +333,6 @@ app.openapi(activitiesPOSTRoute, async (c) => {
     return c.json({ error: "Thread not found" }, 404);
   }
 
-  if (threadRow.runs.length >= 2) {
-    return c.json({ error: "SYSTEM ERROR: Thread has multiple non-completed runs" }, 400);
-  }
-
   // Find thread configuration by type
   const threadConfig = config.threads.find((t: any) => t.type === threadRow.type);
   if (!threadConfig) {
@@ -347,8 +357,8 @@ app.openapi(activitiesPOSTRoute, async (c) => {
   }
 
   // Check thread status conditions
-  if (state !== 'idle') {
-    return c.json({ error: `Cannot add user activity while thread is not in 'idle' state. Thread state: ${state}` }, 400);
+  if (state === 'in_progress') {
+    return c.json({ error: `Cannot add user activity when thread is in 'in_progress' state.` }, 400);
   }
 
   // Create user activity and run
