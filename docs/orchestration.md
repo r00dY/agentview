@@ -10,11 +10,9 @@ There are 2 kinds of streaming:
 - streaming full items one by one (quite easy)
 - streaming parts of items (message chunks, thinking tokens, tool parameters etc.)
 
-I'd argue that streaming message chunks is the most important.
-
 ## Thread states
 
-**There can be only one active run for a thread**. I don't know if this assumption will make it to the future but let's simplify for now.
+**There can be only one active run for a thread**. I don't know if this assumption will hold in the future for long, but let's keep it simple for now.
 
 So we have 3 thread states:
 - `idle` (no run is in progress)
@@ -24,39 +22,42 @@ So we have 3 thread states:
 
 ## API
 
-I'm very much into the API which is not super granular and allows for quickly asking the current state, replacing all state and having a correct state in the front-end.
+In order to get up-to-date thread state, just call `GET` on `/threads/{thread_id}`
 
-That's the purpose of `/threads/{thread_id}` endpoint. It always returns:
+It essentially returns:
 - thread properties
-- activities
+- a list of all activities
 - thread state
 
-We could imagine that each operation in the backend could return this whole structure, we could updated it in the front-end and voila - all works.
+This endpoint outputs all the incomplete activities (being streamed right now), failed activities for the last run (hiding them would be an awkward UX).
 
-But it's not that easy - with streaming we get enormous amount of events and we must send "deltas" to the front-end, otherwise it would be completely impractical.
+Essentially if you want your local client state to be up-to-date, just call this endpoint and replace entire state -> voila.
 
-This can be achieved via `/threads/{thread_id}/watch` which send SSE events about thread changes:
-- new activities added
+### Problem: streaming
+
+While streaming we get enormous amount of events and we just can't send full thread state each time. We must send "deltas" (data patches) to the client.
+
+This is the role of `/threads/{thread_id}/watch` endpoint. It uses SSE to send events notifying client about thread state changes:
+- activity changes (inserts, updates)
 - thread state changes
 
-Front-end should take those deltas and apply them to local state safely.
+The client should apply SSE deltas to the local state to update it.
 
-`/threads/{thread_id}/watch` has a very important query param: `last_activity_id`. It says that all items starting from (and including) `last_activity_id` should be streamed.
+### How should client apply deltas from `/watch`
 
-### Important assumptions
+Let's start with what is the first event streamed:
+1. If query parameter `last_activity_id` is passed, then this will be the first activity sent in the stream. It can be any activity from the thread. All consecutive activites will be streamed in order.
+2. If `last_activity_id` is not defined, then the stream starts with newest activity in the thread. 
 
-1. We're not storing event "deltas" in the backend so we can't replay them. This makes storage smaller and architecture much simpler. Whenever stateless agent endpoint emits delta event, we first append it to our already existing item in db and then send this event via pub/sub. If there's any open HTTP connection listening to such an event, it might consume the delta and stream it to the user.
-2. Challenge: what if connection drops in front-end? After it is restored, some deltas might be gone and the local state would be incorrect.
-3. This implies a **super important assumption**: teh `/watch` endpoint always starts with ENTIRE ACTIVITY (`last_activity_id`, might be incomplete) and only after starts sending remaining deltas.
-4. This makes front-end life so much easier as it allows trivial state restoration. Basically front-end should remove last activity and replace it with new events coming from server which results in fully coherent state.
+The important thing is that we're not storing deltas in the backend, so we can't replay them. This makes storage smaller and architecture much simpler. Whenever stateless agent endpoint emits delta event, we first append it to our already existing item in db and then send the same delta event via pub/sub. If there's any open HTTP connection listening to this delta's thread, it will consume it and stream it to the user.
 
-Actually, each time user makes a call to the `/watch`:
-1. Every activity is started from the very beginning, we never start with streaming activity starting half-way.
-2. Let's assume the first activity coming from event has id `abcd`. In that case local storage of `abcd` should be removed and ALL ACTIVITIES AFTER THAT.
+Challenge: what if client connection drops and reconnects after a while? If we just created new call to `/watch` and it would continue sending deltas, then local state would have missing information!
 
-It allows for a fully consistent local state. 
+This implies an **important assumption**: the `/watch` endpoint **never** starts with sending deltas "from the middle of the message". It **always** replays entire activity (`last_activity_id`) from start, first event is all the content that was already produced, and only then deltas start flowing again. This makes client much easier to build as it allows for trivial state restoration. Essentially, any time clients sees a beginning of new activity from `/watch`, it must just remove all the local state back to this activity (included) and start applying changes again.
 
-And there won't be any UI glitches / blinks. The first chunk of the first message will be always as big or even bigger (if some deltas were appended) than current local state. So replacing is safe without glitches. 
+**Any time `/watch` endpoint emits new activity event, let's assume its id is `xxx`, then the client must find in local state activity `xxx`, remove it entirely with ALL CONSECUTIVE ITEMS, and start applying changes again.
+
+It allows for a fully consistent local state.  And there won't be any UI glitches / blinks. The first chunk of the first message will be always as big or even bigger (if some deltas were appended) than current local state. So replacing is safe without glitches. 
 
 ### Failed state - POST new item
 
@@ -64,38 +65,37 @@ Thread might have items from last failed run. It makes UX better, in case of err
 
 But what happens when we add a new item in that case?
 
-Actually I think there are a couple of **failed state continuation strategies**:
+Actually I think there are a couple of **failed state continuation strategies** possible:
 
 1. Completely block new items forever (not interesting).
-2. Start over from the last correct item. 
+2. Start over from the last correct item (as if previous failed run didn't happen).
 3. There could be even strategy that allows for POSTing new activites when thread is `in_progress`. That could cancel current run and create a new run with 2 concatenated user messages as input. Nice UX!
 
-Right now we have strategy 2, ignoring 1 or 3. Let's keep it simple.
+**Right now we have strategy 2**, ignoring 1 or 3. Let's keep it simple.
 
-#### Problem
+#### Problem: what should client do with remaining 'failed' activities in local state
 
-The issue is that when we POST activity we should discard previous failed messages - how? They're already in local state, how should front-end behave here. Front-end might not even know the "strategy" and the state should be driven from backend, front-end shouldn't drive the logic.
+The issue is that when we POST activity we should discard previous failed messages - but how? They're already in local state. I don't think front-end should have any logic hardcoded, the logic of managing thread state should be driven from backend.
 
-Right now, if you sent new item to failed thread, and get 200 response, and then make `/watch?last_message_id={last_failed_id}` it will fail. It's because `last_failed_id` is already gone, it "doesn't exist". It was discarded by our strategy of discarding failed items.
+So if you send a new item to a failed thread, and get 200 response, and then make `/watch?last_message_id={last_failed_id}` it will fail. It's because `last_failed_id` is already gone, it "doesn't exist", based on strategy 2 of discarding failed activities after new activity POST.
 
-The best way to go around it? Before `/watch` just get a fresh thread state, or...
+What's the solution? Each `POST` sends in the response new thread state (in the same format as `GET /thread/{thread_id}`). If the client replaces the state, then `/watch` will work flawlessly.
 
-Actually for simplification each `POST` sends new thread state so that client can just `setState(thread)` and it's all up-to-date. Running `/watch` from that point is perfectly allowed. 
-
-IDEA: maybe `/watch` should send fresh state at the beginning? Idk... probably unnecessary.
+Actually calling `GET /thread/{thread_id}` before each `/watch` wouldn't be silly. I even thought of making `/watch` emit full thread state in the beginning but it seems a bit off.
 
 
 ## Architecture
 
-Each POST of activity triggers a "job" that is running even when connection is lost.
+Each POST of activity triggers a "job" that is running even when connection is lost. Right now it's running in HTTP server process.
 
-This job saves to the DB, which is THE ONLY SOURCE OF TRUTH.
+This job saves updates to the DB, which is THE ONLY SOURCE OF TRUTH.
 
-`/watch` event can listen to changes from that job and stream them to the user. Right now it's done by polling, but it should be done by pub/sub (too many events to do it other way. But it's trivial).
+`/watch` event can listen to changes from that job and stream them to the user. Right now it's done by polling, but it should be done by pub/sub. The events for standard text streaming are so frequent that I can't imagine polling SQL DB each time a change happens.
 
-Each delta will:
-1. be appended to the item in db
-2. sent via pub/sub.
+The easiest way to do it is this:
+1. Delta is emitted from agent stateless endpoint
+2. It's appended to the item in DB.
+3. At the same time it's emmitted via pub/sub (Redis?)
+4. If any connection is listening it will send delta. If not, then well... ignore it, it can be lost. Any time new `/watch` is run, it will start emitting from the beginning of the activity, so the changes from the delta will be applied there.
 
-If any connection is listening it will send delta. If not, then well... ignore it. The appeneded data will be send when new `/watch` connection is opened anyway, so nothing is lost.
 
