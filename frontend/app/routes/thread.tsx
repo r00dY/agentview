@@ -138,10 +138,52 @@ function ThreadPage() {
     }
 
     useEffect(() => {
+        // let abortController : AbortController | undefined = undefined;
+
         if (thread.state === 'in_progress') {
-            watchThread()
+
+            (async () => {
+
+                try {
+                    const query = thread.activities.length > 0 ? `?last_activity_id=${thread.activities[thread.activities.length - 1].id}` : ''
+        
+                    const response = await fetch(`http://localhost:2138/threads/${thread.id}/activities/watch${query}`, {
+                        headers: {
+                            'Content-Type': 'application/json',
+                        }
+                    });
+        
+                    for await (const event of parseSSE(response)) {
+                        if (event.event === 'activity') {
+                            setThread(prevThread => {
+                                const existingIdx = prevThread.activities.findIndex(a => a.id === event.data.id);
+                                if (existingIdx === -1) {
+                                    // New activity, append
+                                    return { ...prevThread, activities: [...prevThread.activities, event.data] };
+                                } else {
+                                    // Existing activity, replace and remove all after
+                                    return {
+                                        ...prevThread,
+                                        activities: [
+                                            ...prevThread.activities.slice(0, existingIdx),
+                                            event.data
+                                        ]
+                                    };
+                                }
+                            });
+                        }
+                        else if (event.event === 'thread.state') {
+                            setThread(thread => ({ ...thread, state: event.data.state }))
+                        }
+                    }
+        
+                } catch (error) {
+                    console.error(error)
+                }
+            })()
         }
-    }, [])
+
+    }, [thread.state])
 
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -176,7 +218,7 @@ function ThreadPage() {
                 }
                 else {
                     console.log('activity pushed successfully')
-                    watchThread()
+                    setThread(prevThread => ({ ...prevThread, state: 'in_progress' }))
                 }
             } catch (error) {
                 console.error(error)
