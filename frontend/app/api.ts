@@ -323,16 +323,6 @@ app.openapi(activitiesPOSTRoute, async (c) => {
    ***/
 
   (async () => {
-    const setRunAsFailed = async () => {
-      console.log('setting run as failed')
-
-      await db.update(run)
-        .set({
-          state: 'failed',
-          finished_at: new Date(),
-        })
-        .where(eq(run.id, userActivity.run_id));
-    }
 
     const input = {
       thread: {
@@ -361,6 +351,14 @@ app.openapi(activitiesPOSTRoute, async (c) => {
       schema.parse(activity);
     }
 
+    async function isStillRunning() {
+      const currentRun = await db.query.run.findFirst({ where: eq(run.id, userActivity.run_id) });
+      if (currentRun && currentRun.state === 'in_progress') {
+        return true
+      }
+      return false
+    }
+
     async function validateAndInsertActivity(activityData: any) {
       try {
         validateActivity(activityData);
@@ -369,6 +367,10 @@ app.openapi(activitiesPOSTRoute, async (c) => {
         throw {
           error: error.message,
         }
+      }
+
+      if (!(await isStillRunning())) {
+        throw new Error('Run is not in progress')
       }
 
       const [newActivity] = await db.insert(activity).values({
@@ -382,6 +384,7 @@ app.openapi(activitiesPOSTRoute, async (c) => {
       return newActivity;
     }
 
+
     try {
       const runOutput = config.run(input)
 
@@ -389,7 +392,7 @@ app.openapi(activitiesPOSTRoute, async (c) => {
         console.log('is async iterable')
 
         for await (const activityData of runOutput) {
-          validateAndInsertActivity(activityData)
+          await validateAndInsertActivity(activityData)
         }
 
       }
@@ -409,6 +412,10 @@ app.openapi(activitiesPOSTRoute, async (c) => {
 
       console.log('updating run as completed')
 
+      if (!(await isStillRunning())) {
+        return
+      }
+
       await db.update(run)
         .set({
           state: 'completed',
@@ -416,11 +423,22 @@ app.openapi(activitiesPOSTRoute, async (c) => {
         })
         .where(eq(run.id, userActivity.run_id));
 
+
     }
     catch (error: any) {
       console.log('Catch!', error)
-      setRunAsFailed()
-    }
+
+      if (!(await isStillRunning())) {
+        return
+      }
+      
+      await db.update(run)
+        .set({
+          state: 'failed',
+          finished_at: new Date(),
+          })
+          .where(eq(run.id, userActivity.run_id));
+      }
 
   })();
 
@@ -428,6 +446,40 @@ app.openapi(activitiesPOSTRoute, async (c) => {
 })
 
 
+// Cancel Run Endpoint
+const threadCancelRoute = createRoute({
+  method: 'post',
+  path: '/threads/{thread_id}/cancel',
+  request: {
+    params: z.object({
+      thread_id: z.string(),
+    }),
+  },
+  responses: {
+    200: response_data(z.object({})),
+    400: response_error(),
+    404: response_error(),
+  },
+});
+
+app.openapi(threadCancelRoute, async (c) => {
+  const { thread_id } = c.req.param();
+  const threadRow = await fetchThreadWithLastRun(thread_id);
+  if (!threadRow) {
+    return c.json({ error: 'Thread not found' }, 404);
+  }
+  if (threadRow.state !== 'in_progress' || !threadRow.lastRun) {
+    return c.json({ error: 'Thread is not in progress' }, 400);
+  }
+  // Set the run as failed
+  await db.update(run)
+    .set({
+      state: 'failed',
+      finished_at: new Date(),
+    })
+    .where(eq(run.id, threadRow.lastRun.id));
+  return c.json({ data: {} }, 200);
+});
 
 
 // Activities POST

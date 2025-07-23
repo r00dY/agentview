@@ -182,6 +182,11 @@ function ThreadPage() {
         }
     }
 
+    const handleCancel = async () => {
+        const response = await fetch(`http://localhost:2138/threads/${thread.id}/cancel`, {
+            method: 'POST',
+        })
+    }
 
     
   return <>
@@ -266,7 +271,13 @@ function ThreadPage() {
             { thread.state === 'failed' && <div>failed</div>}
         </div>
 
-        <Card>
+
+    </div>
+    
+    </div> 
+
+
+    <Card>
             <CardHeader>
                 <CardTitle>New Activity</CardTitle>
             </CardHeader>
@@ -275,10 +286,10 @@ function ThreadPage() {
                     <Textarea name="message" placeholder="Reply here..."/>
                     <Button type="submit" disabled={thread.state === 'in_progress'}>Send</Button>
 
-                    {/*
-                    { thread.state !== 'idle' && <Button type="button" onClick={() => {
-                        abortControllerRef.current?.abort()
-                    }}>Cancel</Button> } */}
+                    
+                        { thread.state === 'in_progress' && <Button type="button" onClick={() => {
+                            handleCancel()
+                    }}>Cancel</Button> }
                 </form>
 
                 { formError && <div className="text-red-500">{formError}</div> }
@@ -289,9 +300,5 @@ function ThreadPage() {
                 
             </CardContent>
         </Card>
-
-    </div>
-    
-    </div> 
   </>
 }
