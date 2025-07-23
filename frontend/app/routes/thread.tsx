@@ -102,7 +102,7 @@ function ThreadPage() {
                 try {
                     const query = thread.activities.length > 0 ? `?last_activity_id=${thread.activities[thread.activities.length - 1].id}` : ''
         
-                    const response = await fetch(`http://localhost:2138/threads/${thread.id}/activities/watch${query}`, {
+                    const response = await fetch(`http://localhost:2138/threads/${thread.id}/watch${query}`, {
                         headers: {
                             'Content-Type': 'application/json',
                         }

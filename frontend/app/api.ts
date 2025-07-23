@@ -232,68 +232,6 @@ app.openapi(threadGETRoute, async (c) => {
 
 /* --------- ACTIVITIES --------- */
 
-app.get('/test', async (c) => {
-
-  // Start a long-running task that logs every 1s, but do not await it
-  (async () => {
-    for (let i = 1; i <= 10; i++) {
-      console.log(`Long running task: tick ${i}`);
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-    console.log('Long running task: done');
-  })();
-
-  return c.json({ message: 'Test complete' });
-
-
-
-
-  // return streamSSE(c, async (stream) => { 
-
-  //   stream.onAbort(() => {
-  //     console.log('aborted!')
-  //   })
-
-  //   console.log('log 1')
-  //   await stream.writeSSE({
-  //     data: JSON.stringify({ log: 1 }),
-  //     event: 'activity',
-  //   })
-  //   await new Promise(resolve => setTimeout(resolve, 5000))
-
-  //   console.log('log 2')
-  //   await stream.writeSSE({
-  //     data: JSON.stringify({ log: 1 }),
-  //     event: 'activity',
-  //   })
-  //   await new Promise(resolve => setTimeout(resolve, 5000))
-
-  //   console.log('log 3')
-  //   await stream.writeSSE({
-  //     data: JSON.stringify({ log: 1 }),
-  //     event: 'activity',
-  //   })
-
-  // })
-
-  c.req.raw.signal.addEventListener('abort', () => {
-    console.log('aborted!')
-  })
-
-
-
-  // c.req.raw.on('close', () => {
-  //   console.log('closed!')
-  // })
-
-  console.log('Test endpoint start');
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  console.log('Between delays');
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  console.log('Test endpoint end');
-  return c.json({ message: 'Test complete' });
-});
-
 
 // Activities POST
 const activitiesPOSTRoute = createRoute({
@@ -490,10 +428,12 @@ app.openapi(activitiesPOSTRoute, async (c) => {
 })
 
 
+
+
 // Activities POST
 const activityWatchRoute = createRoute({
   method: 'get',
-  path: '/threads/{thread_id}/activities/watch',
+  path: '/threads/{thread_id}/watch',
   request: {
     query: z.object({
       last_activity_id: z.string().optional(),
@@ -533,16 +473,6 @@ app.openapi(activityWatchRoute, async (c) => {
   else {
     lastActivityIndex = threadRow.activities.length - 1
   }
-
-  // // push the index back to the last non-failed activity
-  // while(lastActivityIndex >= 0) {
-  //   if (threadRow.activities[lastActivityIndex].run?.state === 'failed') {
-  //     lastActivityIndex--
-  //   }
-  //   else {
-  //     break
-  //   }
-  // }
 
   // Only include activities before lastActivityId in ignoredActivityIds
   const ignoredActivityIds = threadRow.activities
