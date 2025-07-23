@@ -490,8 +490,7 @@ app.openapi(activitiesPOSTRoute, async (c) => {
 
   })();
 
-  return c.json({ data: null }, 200);
-
+  return c.json({ data: userActivity }, 200);
 })
 
 
@@ -521,14 +520,13 @@ app.openapi(activityWatchRoute, async (c) => {
   const lastRun = data.lastRun
   const state = data.state
 
-
   if (!threadRow) {
     return c.json({ error: "Thread not found" }, 404);
   }
 
-  if (state !== 'in_progress') {
-    return c.json({ error: "Thread must be in 'in_progress' state to watch" }, 400);
-  }
+  // if (state !== 'in_progress') {
+  //   return c.json({ error: "Thread must be in 'in_progress' state to watch" }, 400);
+  // }
 
   let lastActivityId = threadRow.activities[threadRow.activities.length - 1].id
 
@@ -554,7 +552,7 @@ app.openapi(activityWatchRoute, async (c) => {
 
     // Always start with thread.state in_progress
     await stream.writeSSE({
-      data: JSON.stringify({ state: 'in_progress' }),
+      data: JSON.stringify({ state }),
       event: 'thread.state',
     });
 
