@@ -85,30 +85,6 @@ export async function* parseSSE(response: Response) {
     }
   }
 
-
-
-function filterActivitiesWithTrailingFailed(activities: any[]) {
-  if (!Array.isArray(activities)) return [];
-
-  // Helper to check if an activity is failed
-  function isFailed(activity: any) {
-    return activity?.run?.state === 'failed';
-  }
-
-  const trailingFailedActivities = []
-
-  for (let i = activities.length - 1; i >= 0; i--) {
-    if (isFailed(activities[i])) {
-      trailingFailedActivities.unshift(activities[i])
-    }
-    else {
-      break
-    }
-  }
-
-  return [...activities.filter(a => !isFailed(a)), ...trailingFailedActivities]
-}
-
   
 
 function ThreadPage() {
@@ -197,7 +173,7 @@ function ThreadPage() {
                 }
                 else {
                     console.log('activity pushed successfully')
-                    setThread(prevThread => ({ ...prevThread, state: 'in_progress' }))
+                    setThread(payload.data)
                 }
             } catch (error) {
                 console.error(error)
@@ -263,19 +239,13 @@ function ThreadPage() {
       </Card>
 
         <div className="space-y-6 mt-12">
-            {filterActivitiesWithTrailingFailed(thread.activities).map((activity) => { 
-                console.log(activity)
-
-                if (activity.run.state === 'failed' && activity.run.id !== thread.runs[0].id) {
-                    return null
-                }
-                
+            {thread.activities.map((activity) => { 
                 return <div key={activity.id} className="relative">
 
                 { activity.role === "user" && (<div className="pl-[25%] relative flex flex-col justify-end">
                     { activity.type === "message" && (<div className="border bg-muted p-3 rounded-lg">
                         <div dangerouslySetInnerHTML={{ __html: (activity.content as unknown as string) }}></div>
-                        <div className="text-xs text-muted-foreground">{activity.run.state}</div>
+                        {/* <div className="text-xs text-muted-foreground">{activity.run.state}</div> */}
                     </div>)}
                     { activity.type !== "message" && (<div className="border bg-muted p-3 rounded-lg italic text-muted-foreground">no view</div>)}
                 </div>)}
@@ -283,7 +253,7 @@ function ThreadPage() {
                 { activity.role !== "user" && (<div className="pr-[25%] relative flex flex-col justify-start">
                     { activity.type === "message" && (<div className="border p-3 rounded-lg">
                         <div dangerouslySetInnerHTML={{ __html: (activity.content as unknown as string) }}></div>
-                        <div className="text-xs text-muted-foreground">{activity.run.state}</div>
+                        {/* <div className="text-xs text-muted-foreground">{activity.run.state}</div> */}
                     </div>)}
                     { activity.type !== "message" && (<div className="border p-3 rounded-lg italic text-muted-foreground">no view</div>)}
                 </div>)}

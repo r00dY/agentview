@@ -181,13 +181,13 @@ const threadGETRoute = createRoute({
   },
 })
 
-async function fetchThreadWithLastRun(thread_id: string, options: { includeAllFailedActivities: boolean } = { includeAllFailedActivities: false }) {
+async function fetchThreadWithLastRun(thread_id: string) {
   const threadRow = await db.query.thread.findFirst({
     where: eq(thread.id, thread_id),
     with: {
       activities: {
         with: {
-          run: true
+          run: true,
         },
         orderBy: (activity, { asc }) => [asc(activity.created_at)]
       },
@@ -209,19 +209,14 @@ async function fetchThreadWithLastRun(thread_id: string, options: { includeAllFa
   // }
 
   if (!threadRow) {
-    return {
-      thread: threadRow,
-      lastRun: lastRun,
-      state: threadState
-    }
+    return undefined
   }
 
   return {
-    thread: {
-      ...threadRow,
-      activities: options.includeAllFailedActivities ? threadRow.activities : threadRow.activities.filter((a) => a.run_id === lastRun?.id || a.run?.state === 'completed')
-    },
-    lastRun: lastRun,
+    ...threadRow,
+    activities: threadRow.activities.filter((a) => a.run_id === lastRun?.id || a.run?.state === 'completed'),
+    runs: undefined,
+    lastRun,
     state: threadState
   }
 }
@@ -229,17 +224,14 @@ async function fetchThreadWithLastRun(thread_id: string, options: { includeAllFa
 app.openapi(threadGETRoute, async (c) => {
   const { thread_id } = c.req.param()
 
-  const data = await fetchThreadWithLastRun(thread_id);
+  const threadRow = await fetchThreadWithLastRun(thread_id);
 
-  if (!data.thread) {
+  if (!threadRow) {
     return c.json({ error: "Thread not found" }, 404);
   }
 
   return c.json({
-    data: {
-      ...data.thread,
-      state: data.state
-    }
+    data: threadRow
   }, 200);
 })
 
@@ -330,10 +322,7 @@ app.openapi(activitiesPOSTRoute, async (c) => {
   const { thread_id } = c.req.param()
   const { stream, input: { type, role, content } } = await c.req.json()
 
-  const data = await fetchThreadWithLastRun(thread_id);
-  const threadRow = data.thread
-  const lastRun = data.lastRun
-  const state = data.state
+  const threadRow = await fetchThreadWithLastRun(thread_id);
 
   if (!threadRow) {
     return c.json({ error: "Thread not found" }, 404);
@@ -363,7 +352,7 @@ app.openapi(activitiesPOSTRoute, async (c) => {
   }
 
   // Check thread status conditions
-  if (state === 'in_progress') {
+  if (threadRow.state === 'in_progress') {
     return c.json({ error: `Cannot add user activity when thread is in 'in_progress' state.` }, 400);
   }
 
@@ -503,7 +492,7 @@ app.openapi(activitiesPOSTRoute, async (c) => {
 
   })();
 
-  return c.json({ data: userActivity }, 200);
+  return c.json({ data: await fetchThreadWithLastRun(thread_id) }, 200);
 })
 
 
@@ -528,10 +517,7 @@ const activityWatchRoute = createRoute({
 app.openapi(activityWatchRoute, async (c) => {
   const { thread_id } = c.req.param()
 
-  const data = await fetchThreadWithLastRun(thread_id, { includeAllFailedActivities: true });
-  const threadRow = data.thread
-  const lastRun = data.lastRun
-  const state = data.state
+  const threadRow = await fetchThreadWithLastRun(thread_id);
 
   if (!threadRow) {
     return c.json({ error: "Thread not found" }, 404);
@@ -554,15 +540,15 @@ app.openapi(activityWatchRoute, async (c) => {
     lastActivityIndex = threadRow.activities.length - 1
   }
 
-  // push the index back to the last non-failed activity
-  while(lastActivityIndex >= 0) {
-    if (threadRow.activities[lastActivityIndex].run?.state === 'failed') {
-      lastActivityIndex--
-    }
-    else {
-      break
-    }
-  }
+  // // push the index back to the last non-failed activity
+  // while(lastActivityIndex >= 0) {
+  //   if (threadRow.activities[lastActivityIndex].run?.state === 'failed') {
+  //     lastActivityIndex--
+  //   }
+  //   else {
+  //     break
+  //   }
+  // }
 
   // Only include activities before lastActivityId in ignoredActivityIds
   const ignoredActivityIds = threadRow.activities
@@ -578,7 +564,7 @@ app.openapi(activityWatchRoute, async (c) => {
 
     // Always start with thread.state in_progress
     await stream.writeSSE({
-      data: JSON.stringify({ state }),
+      data: JSON.stringify({ state: threadRow.state }),
       event: 'thread.state',
     });
 
@@ -590,12 +576,9 @@ app.openapi(activityWatchRoute, async (c) => {
      * 
      */
     while (running) {
-      const data = await fetchThreadWithLastRun(thread_id);
-      const threadRow = data.thread
-      const lastRun = data.lastRun
-      const state = data.state
+      const threadRow = await fetchThreadWithLastRun(thread_id);
 
-      if (!threadRow || !lastRun) {
+      if (!threadRow || !threadRow.lastRun) {
         throw new Error('unreachable');
       }
 
@@ -614,9 +597,9 @@ app.openapi(activityWatchRoute, async (c) => {
       }
 
       // End if run is no longer in_progress
-      if (state !== 'in_progress') {
+      if (threadRow.state !== 'in_progress') {
         await stream.writeSSE({
-          data: JSON.stringify({ state }),
+          data: JSON.stringify({ state: threadRow.state }),
           event: 'thread.state',
         });
         break;
