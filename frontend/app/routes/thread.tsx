@@ -4,8 +4,7 @@ import { Button } from "~/components/ui/button";
 import { Header, HeaderTitle } from "~/components/header";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Textarea } from "~/components/ui/textarea";
-import { sendActivity } from "~/hooks/useThread";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export async function loader({ request, params }: Route.LoaderArgs) {
     try {
@@ -34,34 +33,154 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
 export default function  ThreadPageWrapper() {
     const loaderData = useLoaderData<typeof loader>();
-    console.log(loaderData)
     return <ThreadPage key={loaderData.thread.id} />
 }
+
+
+export async function* parseSSE(response: Response) {
+    if (!response.body) throw new Error('No response body for SSE');
+    if (!response.ok) throw new Error('Response not ok');
+    
+    const reader = response.body.getReader();
+    let buffer = '';
+    let done = false;
+  
+    // Helper to parse SSE events as an async generator
+    async function* parseSSE(chunk: string) {
+      const eventStrings = chunk.split("\n\n");
+  
+      for (const eventStr of eventStrings) {
+        let eventType: string | undefined = undefined;
+        let data : string = '';
+  
+        for (const line of eventStr.split('\n')) {
+          if (line.startsWith('event:')) {
+            eventType = line.replace('event:', '').trim();
+          } else if (line.startsWith('data:')) {
+            data += line.replace('data:', '').trim();
+          }
+        }
+  
+        if (eventType && data !== '') {
+          yield { event: eventType, data: JSON.parse(data) };
+          if (eventType === 'end') {
+            done = true;
+          }
+        }
+      }
+    }
+  
+    while (!done) {
+        const { value, done: streamDone } = await reader.read();
+        if (streamDone) break;
+        buffer += new TextDecoder().decode(value);
+        let lastEventIdx = buffer.lastIndexOf('\n\n');
+        if (lastEventIdx !== -1) {
+            const eventsChunk = buffer.slice(0, lastEventIdx);
+            for await (const event of parseSSE(eventsChunk)) {
+            yield event;
+            }
+            buffer = buffer.slice(lastEventIdx + 2);
+        }
+    }
+  }
+
+
 
 
 function ThreadPage() {
     const loaderData = useLoaderData<typeof loader>();
 
     const [thread, setThread] = useState(loaderData.thread)
+    const [formError, setFormError] = useState<string | null>(null)
+
+
+    const watchThread = async () => {
+        console.log('watch thread')
+
+        try {
+
+            const query = thread.activities.length > 0 ? `?last_activity_id=${thread.activities[thread.activities.length - 1].id}` : ''
+
+            const response = await fetch(`http://localhost:2138/threads/${thread.id}/activities/watch${query}`, {
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+
+            for await (const event of parseSSE(response)) {
+                if (event.event === 'activity') {
+                    setThread(prevThread => {
+                        const existingIdx = prevThread.activities.findIndex(a => a.id === event.data.id);
+                        if (existingIdx === -1) {
+                            // New activity, append
+                            return { ...prevThread, activities: [...prevThread.activities, event.data] };
+                        } else {
+                            // Existing activity, replace and remove all after
+                            return {
+                                ...prevThread,
+                                activities: [
+                                    ...prevThread.activities.slice(0, existingIdx),
+                                    event.data
+                                ]
+                            };
+                        }
+                    });
+                }
+                else if (event.event === 'thread.state') {
+                    setThread(thread => ({ ...thread, state: event.data.state }))
+                }
+            }
+
+        } catch (error) {
+            console.error(error)
+        }
+    }
+
+    useEffect(() => {
+        if (thread.state === 'in_progress') {
+            watchThread()
+        }
+    }, [])
+
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault()
+
+        setFormError(null)
 
         const formData = new FormData(e.target as HTMLFormElement)
         const message = formData.get("message")
         
         if (message) {
             try {
-                for await (const event of sendActivity(thread.id, { type: "message", role: "user", content: message })) {
-                    if (event.event === 'activity') {
-                        setThread(thread => ({ ...thread, activities: [...thread.activities, event.data] }))
-                    }
-                    else if (event.event === 'thread.state') {
-                        setThread(thread => ({ ...thread, state: event.data.state }))
-                    }
+                const response = await fetch(`http://localhost:2138/threads/${thread.id}/activities`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        input: {
+                            type: "message",
+                            role: "user",
+                            content: message
+                        }
+                    })
+                });
+                
+                const payload = await response.json()
+
+                if (!response.ok) {
+                    console.error(payload)
+                    setFormError('response not ok') // FIXME: error format fucked up (Zod)
+                }
+                else {
+                    console.log('activity pushed successfully')
+                    watchThread()
                 }
             } catch (error) {
                 console.error(error)
+                setFormError(error instanceof Error ? error.message : 'Unknown error')
             }
         }
     }
@@ -151,11 +270,15 @@ function ThreadPage() {
             <CardContent>
                 <form method="post" onSubmit={handleSubmit}>
                     <Textarea name="message" placeholder="Reply here..."/>
-                    {/* <Button type="submit" disabled={thread.state !== 'idle'}>Send</Button>
+                    <Button type="submit" disabled={thread.state !== 'idle'}>Send</Button>
+
+                    {/*
                     { thread.state !== 'idle' && <Button type="button" onClick={() => {
                         abortControllerRef.current?.abort()
                     }}>Cancel</Button> } */}
                 </form>
+
+                { formError && <div className="text-red-500">{formError}</div> }
 
                 {/* { fetcher.data?.error && (
                     <div className="text-red-500">{fetcher.data.error}</div>

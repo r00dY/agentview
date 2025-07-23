@@ -53,14 +53,11 @@ export const config : AgentViewConfig = {
 
         await new Promise(resolve => setTimeout(resolve, 3000));
 
-        // First yield a canned response
         yield {
             type: "message",
             role: "assistant",
             content: "I got your question 1"
         };
-
-        // throw { message: 'gowno' }
 
         await new Promise(resolve => setTimeout(resolve, 3000));
 
@@ -103,11 +100,35 @@ export const config : AgentViewConfig = {
         };
 
         await new Promise(resolve => setTimeout(resolve, 3000));
-        
+
         yield {
             type: "message",
             role: "assistant",
             content: "I got your question 7"
+        };
+
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        yield {
+            type: "message",
+            role: "assistant",
+            content: "I got your question 8"
+        };
+
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        yield {
+            type: "message",
+            role: "assistant",
+            content: "I got your question 9"
+        };
+
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        yield {
+            type: "message",
+            role: "assistant",
+            content: "I got your question 10"
         };
 
         // // Then yield the real response
