@@ -202,12 +202,6 @@ async function fetchThreadWithLastRun(thread_id: string) {
   const lastRunState = lastRun?.state
   const threadState = (lastRunState === undefined || lastRunState === 'completed') ? 'idle' : lastRunState
 
-  // return {
-  //   thread: threadRow,
-  //   lastRun: lastRun,
-  //   state: threadState
-  // }
-
   if (!threadRow) {
     return undefined
   }
