@@ -87,6 +87,29 @@ export async function* parseSSE(response: Response) {
 
 
 
+function filterActivitiesWithTrailingFailed(activities: any[]) {
+  if (!Array.isArray(activities)) return [];
+
+  // Helper to check if an activity is failed
+  function isFailed(activity: any) {
+    return activity?.run?.state === 'failed';
+  }
+
+  const trailingFailedActivities = []
+
+  for (let i = activities.length - 1; i >= 0; i--) {
+    if (isFailed(activities[i])) {
+      trailingFailedActivities.unshift(activities[i])
+    }
+    else {
+      break
+    }
+  }
+
+  return [...activities.filter(a => !isFailed(a)), ...trailingFailedActivities]
+}
+
+  
 
 function ThreadPage() {
     const loaderData = useLoaderData<typeof loader>();
@@ -94,56 +117,12 @@ function ThreadPage() {
     const [thread, setThread] = useState(loaderData.thread)
     const [formError, setFormError] = useState<string | null>(null)
 
-
-    const watchThread = async () => {
-        console.log('watch thread')
-
-        try {
-
-            const query = thread.activities.length > 0 ? `?last_activity_id=${thread.activities[thread.activities.length - 1].id}` : ''
-
-            const response = await fetch(`http://localhost:2138/threads/${thread.id}/activities/watch${query}`, {
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            });
-
-            for await (const event of parseSSE(response)) {
-                if (event.event === 'activity') {
-                    setThread(prevThread => {
-                        const existingIdx = prevThread.activities.findIndex(a => a.id === event.data.id);
-                        if (existingIdx === -1) {
-                            // New activity, append
-                            return { ...prevThread, activities: [...prevThread.activities, event.data] };
-                        } else {
-                            // Existing activity, replace and remove all after
-                            return {
-                                ...prevThread,
-                                activities: [
-                                    ...prevThread.activities.slice(0, existingIdx),
-                                    event.data
-                                ]
-                            };
-                        }
-                    });
-                }
-                else if (event.event === 'thread.state') {
-                    setThread(thread => ({ ...thread, state: event.data.state }))
-                }
-            }
-
-        } catch (error) {
-            console.error(error)
-        }
-    }
-
     useEffect(() => {
         // let abortController : AbortController | undefined = undefined;
 
         if (thread.state === 'in_progress') {
 
             (async () => {
-
                 try {
                     const query = thread.activities.length > 0 ? `?last_activity_id=${thread.activities[thread.activities.length - 1].id}` : ''
         
@@ -227,8 +206,8 @@ function ThreadPage() {
         }
     }
 
-    console.log(thread)
 
+    
   return <>
     <Header>
       <HeaderTitle title={`Thread`} />
@@ -284,20 +263,32 @@ function ThreadPage() {
       </Card>
 
         <div className="space-y-6 mt-12">
-            {thread.activities.map((activity) => (
-            <div key={activity.id} className="relative">
+            {filterActivitiesWithTrailingFailed(thread.activities).map((activity) => { 
+                console.log(activity)
+
+                if (activity.run.state === 'failed' && activity.run.id !== thread.runs[0].id) {
+                    return null
+                }
+                
+                return <div key={activity.id} className="relative">
 
                 { activity.role === "user" && (<div className="pl-[25%] relative flex flex-col justify-end">
-                    { activity.type === "message" && (<div className="border bg-muted p-3 rounded-lg" dangerouslySetInnerHTML={{ __html: (activity.content as unknown as string) }}></div>)}
+                    { activity.type === "message" && (<div className="border bg-muted p-3 rounded-lg">
+                        <div dangerouslySetInnerHTML={{ __html: (activity.content as unknown as string) }}></div>
+                        <div className="text-xs text-muted-foreground">{activity.run.state}</div>
+                    </div>)}
                     { activity.type !== "message" && (<div className="border bg-muted p-3 rounded-lg italic text-muted-foreground">no view</div>)}
                 </div>)}
                 
                 { activity.role !== "user" && (<div className="pr-[25%] relative flex flex-col justify-start">
-                    { activity.type === "message" && (<div className="border p-3 rounded-lg" dangerouslySetInnerHTML={{ __html: (activity.content as unknown as string) }}></div>)}
+                    { activity.type === "message" && (<div className="border p-3 rounded-lg">
+                        <div dangerouslySetInnerHTML={{ __html: (activity.content as unknown as string) }}></div>
+                        <div className="text-xs text-muted-foreground">{activity.run.state}</div>
+                    </div>)}
                     { activity.type !== "message" && (<div className="border p-3 rounded-lg italic text-muted-foreground">no view</div>)}
                 </div>)}
             </div>
-            ))}
+             })}
         </div>
 
         <div>

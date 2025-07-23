@@ -59,7 +59,6 @@ export const run = pgTable("run", {
   created_at: timestamp().notNull().defaultNow(),
   finished_at: timestamp(),
   thread_id: uuid("thread_id").notNull().references(() => thread.id, { onDelete: 'cascade' }),
-  trigger_activity_id: uuid("trigger_activity_id"),
   state: varchar({ length: 255 }).notNull(),
 });
 
@@ -72,10 +71,6 @@ export const runRelations = relations(run, ({ one, many }) => ({
   thread: one(thread, {
     fields: [run.thread_id],
     references: [thread.id],
-  }),
-  trigger_activity: one(activity, {
-    fields: [run.trigger_activity_id],
-    references: [activity.id],
   }),
   activities: many(activity)
 }));

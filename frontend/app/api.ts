@@ -181,7 +181,7 @@ const threadGETRoute = createRoute({
   },
 })
 
-async function fetchThreadWithLastRun(thread_id: string) {
+async function fetchThreadWithLastRun(thread_id: string, options: { includeAllFailedActivities: boolean } = { includeAllFailedActivities: false }) {
   const threadRow = await db.query.thread.findFirst({
     where: eq(thread.id, thread_id),
     with: {
@@ -202,6 +202,12 @@ async function fetchThreadWithLastRun(thread_id: string) {
   const lastRunState = lastRun?.state
   const threadState = (lastRunState === undefined || lastRunState === 'completed') ? 'idle' : lastRunState
 
+  // return {
+  //   thread: threadRow,
+  //   lastRun: lastRun,
+  //   state: threadState
+  // }
+
   if (!threadRow) {
     return {
       thread: threadRow,
@@ -213,7 +219,7 @@ async function fetchThreadWithLastRun(thread_id: string) {
   return {
     thread: {
       ...threadRow,
-      activities: threadRow.activities.filter((a) => a.run_id === lastRun?.id || a.run?.state === 'completed')
+      activities: options.includeAllFailedActivities ? threadRow.activities : threadRow.activities.filter((a) => a.run_id === lastRun?.id || a.run?.state === 'completed')
     },
     lastRun: lastRun,
     state: threadState
@@ -364,6 +370,12 @@ app.openapi(activitiesPOSTRoute, async (c) => {
   // Create user activity and run
   const userActivity = await db.transaction(async (tx) => {
 
+    // Create a new run with status 'in_progress' and set trigger_activity_id
+    const [newRun] = await tx.insert(run).values({
+      thread_id,
+      state: 'in_progress',
+    }).returning();
+
     // Thread status is 'idle', so we can proceed
     // First create the activity
     const [userActivity] = await tx.insert(activity).values({
@@ -371,20 +383,11 @@ app.openapi(activitiesPOSTRoute, async (c) => {
       type,
       role,
       content,
-    }).returning();
-
-    // Create a new run with status 'in_progress' and set trigger_activity_id
-    const [newRun] = await tx.insert(run).values({
-      thread_id,
-      trigger_activity_id: userActivity.id,
-      state: 'in_progress',
+      run_id: newRun.id,
     }).returning();
 
     // Return the activity with the run_id
-    return {
-      ...userActivity,
-      run_id: newRun.id
-    };
+    return userActivity;
   });
 
   /*** 
@@ -525,7 +528,7 @@ const activityWatchRoute = createRoute({
 app.openapi(activityWatchRoute, async (c) => {
   const { thread_id } = c.req.param()
 
-  const data = await fetchThreadWithLastRun(thread_id);
+  const data = await fetchThreadWithLastRun(thread_id, { includeAllFailedActivities: true });
   const threadRow = data.thread
   const lastRun = data.lastRun
   const state = data.state
@@ -538,19 +541,32 @@ app.openapi(activityWatchRoute, async (c) => {
   //   return c.json({ error: "Thread must be in 'in_progress' state to watch" }, 400);
   // }
 
-  let lastActivityId = threadRow.activities[threadRow.activities.length - 1].id
+  let lastActivityIndex: number;
 
   if (c.req.query().last_activity_id) {
-    const activity = threadRow.activities.find((a) => a.id === c.req.query().last_activity_id)
-    if (!activity) {
+    lastActivityIndex = threadRow.activities.findIndex((a) => a.id === c.req.query().last_activity_id)
+
+    if (lastActivityIndex === -1) {
       return c.json({ error: "Last activity id not found" }, 400);
     }
-    lastActivityId = activity.id
+  }
+  else {
+    lastActivityIndex = threadRow.activities.length - 1
+  }
+
+  // push the index back to the last non-failed activity
+  while(lastActivityIndex >= 0) {
+    if (threadRow.activities[lastActivityIndex].run?.state === 'failed') {
+      lastActivityIndex--
+    }
+    else {
+      break
+    }
   }
 
   // Only include activities before lastActivityId in ignoredActivityIds
   const ignoredActivityIds = threadRow.activities
-    .slice(0, threadRow.activities.findIndex((a) => a.id === lastActivityId))
+    .slice(0, threadRow.activities.findIndex((a) => a.id === threadRow.activities[lastActivityIndex].id))
     .map((a) => a.id);
 
   // 4. Start SSE stream
