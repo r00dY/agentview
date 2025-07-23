@@ -50,86 +50,31 @@ export const config : AgentViewConfig = {
     // },
 
     run: async function* (input: any) {
+        const lastUserMessage = input.thread.activities[input.thread.activities.length - 1].content;
 
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        for (let i = 0; i < 10; i++) {
 
-        yield {
-            type: "message",
-            role: "assistant",
-            content: "I got your question 1"
-        };
+            // Check if lastUserMessage matches "make_error.<number>" pattern
+            const match = /^make_error\.(\d+)$/.exec(lastUserMessage);
+            let isMakeError = false;
+            let errorNumber: number | null = null;
+            if (match) {
+                isMakeError = true;
+                errorNumber = parseInt(match[1], 10);
+            }
 
-        await new Promise(resolve => setTimeout(resolve, 3000));
+            if (isMakeError && errorNumber === i) {
+                throw { zesralo_sie: 5 }
+            }
 
-        yield {
-            type: "message",
-            role: "assistant",
-            content: "I got your question 2"
-        };
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            yield {
+                type: "message",
+                role: "assistant",
+                content: `I got your question ${i + 1}`
+            };
+        }
 
-        await new Promise(resolve => setTimeout(resolve, 3000));
-
-        yield {
-            type: "message",
-            role: "assistant",
-            content: "I got your question 3"
-        };
-
-        await new Promise(resolve => setTimeout(resolve, 3000));
-
-        yield {
-            type: "message",
-            role: "assistant",
-            content: "I got your question 4"
-        };
-
-        await new Promise(resolve => setTimeout(resolve, 3000));
-
-        yield {
-            type: "message",
-            role: "assistant",
-            content: "I got your question 5"
-        };
-
-        await new Promise(resolve => setTimeout(resolve, 3000));
-
-        yield {
-            type: "message",
-            role: "assistant",
-            content: "I got your question 6"
-        };
-
-        await new Promise(resolve => setTimeout(resolve, 3000));
-
-        yield {
-            type: "message",
-            role: "assistant",
-            content: "I got your question 7"
-        };
-
-        await new Promise(resolve => setTimeout(resolve, 3000));
-
-        yield {
-            type: "message",
-            role: "assistant",
-            content: "I got your question 8"
-        };
-
-        await new Promise(resolve => setTimeout(resolve, 3000));
-
-        yield {
-            type: "message",
-            role: "assistant",
-            content: "I got your question 9"
-        };
-
-        await new Promise(resolve => setTimeout(resolve, 3000));
-
-        yield {
-            type: "message",
-            role: "assistant",
-            content: "I got your question 10"
-        };
 
         // // Then yield the real response
         // const response = await client.responses.create({
