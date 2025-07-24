@@ -16,7 +16,18 @@ import { isAsyncIterable } from './lib/utils'
 
 
 
-export const app = new OpenAPIHono()
+export const app = new OpenAPIHono({
+  defaultHook: (result, c) => {
+    if (!result.success) {
+
+      return c.json({
+        message: 'Validation error',
+        issues: result.error.issues
+      }, 422)
+
+    }
+  }
+})
 app.use('*', cors())
 
 
@@ -42,7 +53,7 @@ const clientsPOSTRoute = createRoute({
 
 app.openapi(clientsPOSTRoute, async (c) => {
   const [newClient] = await db.insert(client).values({}).returning();
-  return c.json({ data: newClient }, 201);
+  return c.json(newClient, 201);
 })
 
 
@@ -69,10 +80,10 @@ app.openapi(clientGETRoute, async (c) => {
   });
 
   if (!clientRow) {
-    return c.json({ error: "Client not found" }, 404);
+    return c.json({ message: "Client not found" }, 404);
   }
 
-  return c.json({ data: clientRow }, 200);
+  return c.json(clientRow, 200);
 })
 
 /* --------- THREADS --------- */
@@ -88,7 +99,6 @@ const ActivitySchema = z.object({
 })
 
 const ActivityCreateSchema = z.object({
-  stream: z.boolean().optional(),
   input: ActivitySchema.pick({
     type: true,
     role: true,
@@ -111,74 +121,6 @@ const ThreadCreateSchema = ThreadSchema.pick({
   client_id: true,
   type: true,
   metadata: true,
-})
-
-// Threads POST
-const threadsPOSTRoute = createRoute({
-  method: 'post',
-  path: '/threads',
-  request: {
-    body: body(ThreadCreateSchema)
-  },
-  responses: {
-    201: response_data(ThreadSchema),
-    400: response_error()
-  },
-})
-
-app.openapi(threadsPOSTRoute, async (c) => {
-  const body = await c.req.json()
-
-  // Find thread configuration by type
-  const threadConfig = config.threads.find((t: any) => t.type === body.type);
-  if (!threadConfig) {
-    return c.json({ error: `Thread type '${body.type}' not found in configuration` }, 400);
-  }
-
-  // Validate metadata against the schema
-  try {
-    threadConfig.metadata.parse(body.metadata);
-  } catch (error: any) {
-    return c.json({ error: `Invalid metadata: ${error.message}` }, 400);
-  }
-
-  // Validate whether client exists in db
-  if (!isUUID(body.client_id)) {
-    return c.json({ error: `Invalid client id: ${body.client_id}` }, 400);
-  }
-
-  const clientExists = await db.query.client.findFirst({
-    where: eq(client.id, body.client_id)
-  });
-  if (!clientExists) {
-    return c.json({ error: `Client with id '${body.client_id}' does not exist` }, 400);
-  }
-
-  const [newThread] = await db.insert(thread).values(body).returning();
-
-  return c.json({
-    data: {
-      ...newThread,
-      activities: [],
-      state: 'idle'
-    }
-  }, 201);
-})
-
-
-// Thread GET
-const threadGETRoute = createRoute({
-  method: 'get',
-  path: '/threads/{thread_id}',
-  request: {
-    params: z.object({
-      thread_id: z.string(),
-    }),
-  },
-  responses: {
-    200: response_data(ThreadSchema),
-    404: response_error()
-  },
 })
 
 async function fetchThreadWithLastRun(thread_id: string) {
@@ -215,18 +157,81 @@ async function fetchThreadWithLastRun(thread_id: string) {
   }
 }
 
+
+// Threads POST
+const threadsPOSTRoute = createRoute({
+  method: 'post',
+  path: '/threads',
+  request: {
+    body: body(ThreadCreateSchema)
+  },
+  responses: {
+    201: response_data(ThreadSchema),
+    400: response_error()
+  },
+})
+
+app.openapi(threadsPOSTRoute, async (c) => {
+  const body = await c.req.json()
+
+  // Find thread configuration by type
+  const threadConfig = config.threads.find((t: any) => t.type === body.type);
+  if (!threadConfig) {
+    return c.json({ message: `Thread type '${body.type}' not found in configuration` }, 400);
+  }
+
+  // Validate metadata against the schema
+  try {
+    threadConfig.metadata.parse(body.metadata);
+  } catch (error: any) {
+    return c.json({ message: error.message }, 400);
+  }
+
+  // Validate whether client exists in db
+  if (!isUUID(body.client_id)) {
+    return c.json({ message: `Invalid client id: ${body.client_id}` }, 400);
+  }
+
+  const clientExists = await db.query.client.findFirst({
+    where: eq(client.id, body.client_id)
+  });
+  if (!clientExists) {
+    return c.json({ message: `Client with id '${body.client_id}' does not exist` }, 400);
+  }
+
+  const [newThread] = await db.insert(thread).values(body).returning();
+
+  return c.json(await fetchThreadWithLastRun(newThread.id), 201);
+})
+
+
+// Thread GET
+const threadGETRoute = createRoute({
+  method: 'get',
+  path: '/threads/{thread_id}',
+  request: {
+    params: z.object({
+      thread_id: z.string(),
+    }),
+  },
+  responses: {
+    200: response_data(ThreadSchema),
+    404: response_error()
+  },
+})
+
+
+
 app.openapi(threadGETRoute, async (c) => {
   const { thread_id } = c.req.param()
 
   const threadRow = await fetchThreadWithLastRun(thread_id);
 
   if (!threadRow) {
-    return c.json({ error: "Thread not found" }, 404);
+    return c.json({ message: "Thread not found" }, 404);
   }
 
-  return c.json({
-    data: threadRow
-  }, 200);
+  return c.json(threadRow, 200);
 })
 
 
@@ -252,40 +257,40 @@ const activitiesPOSTRoute = createRoute({
 
 app.openapi(activitiesPOSTRoute, async (c) => {
   const { thread_id } = c.req.param()
-  const { stream, input: { type, role, content } } = await c.req.json()
+  const { input: { type, role, content } } = await c.req.json()
 
   const threadRow = await fetchThreadWithLastRun(thread_id);
 
   if (!threadRow) {
-    return c.json({ error: "Thread not found" }, 404);
+    return c.json({ message: "Thread not found" }, 404);
   }
 
   // Find thread configuration by type
   const threadConfig = config.threads.find((t: any) => t.type === threadRow.type);
   if (!threadConfig) {
-    return c.json({ error: `Thread type '${threadRow.type}' not found in configuration` }, 400);
+    return c.json({ message: `Thread type '${threadRow.type}' not found in configuration` }, 400);
   }
 
   if (role !== "user") {
-    return c.json({ error: "Only activities with role 'user' are allowed" }, 400);
+    return c.json({ message: "Only activities with role 'user' are allowed" }, 400);
   }
 
   // Find activity configuration by type and role
   const activityConfig = threadConfig.activities.find((a: any) => a.type === type && a.role === role);
   if (!activityConfig) {
-    return c.json({ error: `Activity type '${type}' with role '${role}' not found in configuration` }, 400);
+    return c.json({ message: `Activity type '${type}' with role '${role}' not found in configuration` }, 400);
   }
 
   // Validate content against the schema
   try {
     activityConfig.content.parse(content);
   } catch (error: any) {
-    return c.json({ error: `Invalid content: ${error.message}` }, 400);
+    return c.json({ message: `Invalid content: ${error.message}` }, 400);
   }
 
   // Check thread status conditions
   if (threadRow.state === 'in_progress') {
-    return c.json({ error: `Cannot add user activity when thread is in 'in_progress' state.` }, 400);
+    return c.json({ message: `Cannot add user activity when thread is in 'in_progress' state.` }, 400);
   }
 
   // Create user activity and run
@@ -442,7 +447,7 @@ app.openapi(activitiesPOSTRoute, async (c) => {
 
   })();
 
-  return c.json({ data: await fetchThreadWithLastRun(thread_id) }, 200);
+  return c.json(await fetchThreadWithLastRun(thread_id), 200);
 })
 
 
@@ -466,10 +471,10 @@ app.openapi(threadCancelRoute, async (c) => {
   const { thread_id } = c.req.param();
   const threadRow = await fetchThreadWithLastRun(thread_id);
   if (!threadRow) {
-    return c.json({ error: 'Thread not found' }, 404);
+    return c.json({ message: 'Thread not found' }, 404);
   }
   if (threadRow.state !== 'in_progress' || !threadRow.lastRun) {
-    return c.json({ error: 'Thread is not in progress' }, 400);
+    return c.json({ message: 'Thread is not in progress' }, 400);
   }
   // Set the run as failed
   await db.update(run)
@@ -478,9 +483,9 @@ app.openapi(threadCancelRoute, async (c) => {
       finished_at: new Date(),
     })
     .where(eq(run.id, threadRow.lastRun.id));
-  return c.json({ data: {} }, 200);
-});
 
+  return c.json(await fetchThreadWithLastRun(thread_id), 200);
+});
 
 // Activities POST
 const activityWatchRoute = createRoute({
@@ -506,11 +511,11 @@ app.openapi(activityWatchRoute, async (c) => {
   const threadRow = await fetchThreadWithLastRun(thread_id);
 
   if (!threadRow) {
-    return c.json({ error: "Thread not found" }, 404);
+    return c.json({ message: "Thread not found" }, 404);
   }
 
   // if (state !== 'in_progress') {
-  //   return c.json({ error: "Thread must be in 'in_progress' state to watch" }, 400);
+  //   return c.json({ message: "Thread must be in 'in_progress' state to watch" }, 400);
   // }
 
   let lastActivityIndex: number;
@@ -519,7 +524,7 @@ app.openapi(activityWatchRoute, async (c) => {
     lastActivityIndex = threadRow.activities.findIndex((a) => a.id === c.req.query().last_activity_id)
 
     if (lastActivityIndex === -1) {
-      return c.json({ error: "Last activity id not found" }, 400);
+      return c.json({ message: "Last activity id not found" }, 400);
     }
   }
   else {

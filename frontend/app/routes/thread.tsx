@@ -6,26 +6,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Textarea } from "~/components/ui/textarea";
 import { useEffect, useRef, useState } from "react";
 
-export async function loader({ request, params }: Route.LoaderArgs) {
-    console.log('loader')
-    
+export async function loader({ request, params }: Route.LoaderArgs) {    
     const response = await fetch(`http://localhost:2138/threads/${params.id}`, {
         headers: {
             'Content-Type': 'application/json',
         }
     });
 
-    const payload = await response.json()
-
-    console.log('response.ok?', response.ok)
-    console.log('payload', payload)
+    const threadData = await response.json()
 
     if (!response.ok) {
-        throw data(payload, { status: 400 })
+        throw data(threadData, { status: 400 })
     }
 
     return data({
-        thread: payload.data,
+        thread: threadData,
     });
 }
 
@@ -33,7 +28,6 @@ export default function  ThreadPageWrapper() {
     const loaderData = useLoaderData<typeof loader>();
     return <ThreadPage key={loaderData.thread.id} />
 }
-
 
 export async function* parseSSE(response: Response) {
     if (!response.body) throw new Error('No response body for SSE');
@@ -171,7 +165,7 @@ function ThreadPage() {
                 }
                 else {
                     console.log('activity pushed successfully')
-                    setThread(payload.data)
+                    setThread(payload)
                 }
             } catch (error) {
                 console.error(error)

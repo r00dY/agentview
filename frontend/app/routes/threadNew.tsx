@@ -25,13 +25,13 @@ export async function action({ request, params }: Route.ActionArgs) {
             body: JSON.stringify({}),
         });
 
+        const clientData = await clientResponse.json();
+
         if (!clientResponse.ok) {
-            const clientError = await clientResponse.json();
-            return { error: clientError.error || "Failed to create client" };
+            return { error: clientData };
         }
 
-        const clientData = await clientResponse.json();
-        const client_id = clientData.data.id;
+        const client_id = clientData.id;
 
         // Then create the thread with the new client_id
         const threadResponse = await fetch(`http://localhost:2138/threads`, {
@@ -48,14 +48,14 @@ export async function action({ request, params }: Route.ActionArgs) {
             }),
         });
 
-        const threadPayload = await threadResponse.json();
+        const threadData = await threadResponse.json();
 
         if (!threadResponse.ok) {
-            return { error: threadPayload.error || "Failed to create thread" };
+            return { error: threadData || "Failed to create thread" };
         }
 
         // Redirect to the new thread
-        return redirect(`/threads/${threadPayload.data.id}`);
+        return redirect(`/threads/${threadData.id}`);
 
     } catch (error) {
         console.error(error);

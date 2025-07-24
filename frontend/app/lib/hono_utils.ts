@@ -4,9 +4,7 @@ export function response_data<T extends z.ZodTypeAny>(schema: T, description?: s
     return {
       content: {
         'application/json': {
-          schema: z.object({
-            data: schema,
-          }),
+          schema,
         },
       },
       description: description ?? 'Undescribed',
@@ -17,7 +15,7 @@ export function response_data<T extends z.ZodTypeAny>(schema: T, description?: s
     return {
       content: {
         'application/json': {
-          schema: z.object({ error: z.string() }),
+          schema: z.object({ message: z.string() }),
         },
       },
       description: description ?? 'Undescribed',
@@ -28,7 +26,7 @@ export function response_data<T extends z.ZodTypeAny>(schema: T, description?: s
     return {
       content: {
         'application/json': {
-          schema: schema,
+          schema,
         },
       }
     }
