@@ -7,28 +7,26 @@ import { Textarea } from "~/components/ui/textarea";
 import { useEffect, useRef, useState } from "react";
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-    try {
-        const response = await fetch(`http://localhost:2138/threads/${params.id}`, {
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        });
-
-        const payload = await response.json()
-
-        if (!response.ok) {
-            return data(payload, { status: 400 })
+    console.log('loader')
+    
+    const response = await fetch(`http://localhost:2138/threads/${params.id}`, {
+        headers: {
+            'Content-Type': 'application/json',
         }
+    });
 
-        return data({
-            thread: payload.data,
-        });
+    const payload = await response.json()
 
-    } catch (error) {
-        return data({
-            error: "Failed to fetch thread"
-        }, { status: 400 })
+    console.log('response.ok?', response.ok)
+    console.log('payload', payload)
+
+    if (!response.ok) {
+        throw data(payload, { status: 400 })
     }
+
+    return data({
+        thread: payload.data,
+    });
 }
 
 export default function  ThreadPageWrapper() {
