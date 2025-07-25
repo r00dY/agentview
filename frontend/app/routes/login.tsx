@@ -10,6 +10,14 @@ import { AlertCircleIcon } from "lucide-react";
 import { APIError } from "better-auth/api";
 import { type FormActionData, type FormActionDataError } from "~/lib/FormActionData";
 
+function redirectUrl(request: Request) {
+  const url = new URL(request.url);
+  const redirectTo = url.searchParams.get('redirect');
+  if (redirectTo && redirectTo.startsWith('/')) {
+    return redirectTo;
+  }
+  return '/';
+}
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await auth.api.getSession({
@@ -17,7 +25,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   });
   
   if (session) {
-    return redirect('/');
+    return redirect(redirectUrl(request));
   }
 } 
 
@@ -52,7 +60,7 @@ export async function action({
         },
     });
 
-    return redirect('/', { headers });
+    return redirect(redirectUrl(request), { headers });
     
   } catch (error) {
     if (error instanceof APIError) {
