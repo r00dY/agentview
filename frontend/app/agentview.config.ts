@@ -78,7 +78,6 @@ export const config : AgentViewConfig = {
 
         
 
-
         // // Then yield the real response
         // const response = await client.responses.create({
         //     model: "gpt-4.1",
