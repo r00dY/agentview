@@ -1,10 +1,15 @@
-import { redirect, useLoaderData, useFetcher, Outlet, Link, Form , data} from "react-router";
+import { redirect, useLoaderData, useFetcher, Outlet, Link, Form , data, useParams} from "react-router";
 import type { Route } from "./+types/thread";
 import { Button } from "~/components/ui/button";
 import { Header, HeaderTitle } from "~/components/header";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Textarea } from "~/components/ui/textarea";
 import { useEffect, useRef, useState } from "react";
+import { parseSSE } from "~/lib/parseSSE";
+import { db } from "~/lib/db.server";
+import { commentThreads, commentMessages } from "~/db/schema";
+import { eq } from "drizzle-orm";
+import { auth } from "~/lib/auth.server";
 
 export async function loader({ request, params }: Route.LoaderArgs) {    
     const response = await fetch(`http://localhost:2138/threads/${params.id}`, {
@@ -19,9 +24,147 @@ export async function loader({ request, params }: Route.LoaderArgs) {
         throw data(threadData, { status: 400 })
     }
 
+    console.log('loader called, num of messages:', threadData.activities[0].commentThread.commentMessages.length)
     return data({
         thread: threadData,
     });
+    
+}
+
+
+
+export async function action({ request, params }: Route.ActionArgs) {
+    const formData = await request.formData();
+    const content = formData.get("content");
+    const activityId = formData.get("activityId");
+    
+    if (!content || typeof content !== 'string') {
+        return { error: "Comment content is required" };
+    }
+    
+    if (!activityId || typeof activityId !== 'string') {
+        return { error: "Activity ID is required" };
+    }
+
+    try {
+        // Get current user
+        const session = await auth.api.getSession({ headers: request.headers });
+        if (!session) {
+            return { error: "Authentication required" };
+        }
+
+        // Check if comment thread exists for this activity
+        let commentThread = await db.query.commentThreads.findFirst({
+            where: eq(commentThreads.activityId, activityId),
+            with: {
+                commentMessages: {
+                    orderBy: (commentMessages, { asc }) => [asc(commentMessages.createdAt)]
+                }
+            }
+        });
+
+        // If no comment thread exists, create one
+        if (!commentThread) {
+            const [newThread] = await db.insert(commentThreads).values({
+                activityId: activityId,
+            }).returning();
+            
+            commentThread = {
+                ...newThread,
+                commentMessages: []
+            };
+        }
+
+        // Create the comment message
+        const [newMessage] = await db.insert(commentMessages).values({
+            commentThreadId: commentThread!.id,
+            userId: session.user.id,
+            content: content,
+        }).returning();
+
+        // Return success
+        return { success: true, messageId: newMessage.id };
+        
+    } catch (error) {
+        console.error('Error creating comment:', error);
+        return { error: "Failed to create comment" };
+    }
+}
+
+function CommentThread({ commentThread, activityId }: { commentThread: any, activityId: string }) {
+    const [isExpanded, setIsExpanded] = useState(false);
+    const fetcher = useFetcher();
+
+    const commentCount = commentThread?.commentMessages?.length || 0;
+
+    // console.log(commentCount)
+
+    return (
+        <div className="mt-2">
+            <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="text-xs text-muted-foreground hover:text-foreground"
+            >
+                💬 {commentCount} comment{commentCount !== 1 ? 's' : ''}
+            </Button>
+            
+            {isExpanded && (
+                <div className="mt-3 space-y-3">
+                    {/* Existing comments */}
+                    {commentThread?.commentMessages?.map((message: any) => (
+                        <div key={message.id} className="bg-muted/50 p-3 rounded-lg">
+                            <div className="flex items-start gap-2">
+                                <div className="flex-1">
+                                    <div className="text-sm font-medium text-muted-foreground">
+                                        {message.userId}
+                                    </div>
+                                    <div className="text-sm mt-1">
+                                        {message.content}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground mt-1">
+                                        {new Date(message.createdAt).toLocaleString()}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    
+                    {/* New comment form */}
+                    <fetcher.Form method="post" className="space-y-2">
+                        <Textarea 
+                            name="content" 
+                            placeholder="Add a comment..." 
+                            className="min-h-[80px]"
+                            required
+                        />
+                        <input type="hidden" name="activityId" value={activityId} />
+                        <div className="flex gap-2">
+                            <Button 
+                                type="submit" 
+                                size="sm" 
+                                disabled={fetcher.state !== 'idle'}
+                            >
+                                {fetcher.state !== 'idle' ? 'Posting...' : 'Post Comment'}
+                            </Button>
+                            <Button 
+                                type="button" 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => setIsExpanded(false)}
+                            >
+                                Cancel
+                            </Button>
+                        </div>
+                        {fetcher.data?.error && (
+                            <div className="text-sm text-red-500">{fetcher.data.error}</div>
+                        )}
+                    </fetcher.Form>
+                </div>
+            )}
+        </div>
+    );
 }
 
 export default function  ThreadPageWrapper() {
@@ -29,61 +172,27 @@ export default function  ThreadPageWrapper() {
     return <ThreadPage key={loaderData.thread.id} />
 }
 
-export async function* parseSSE(response: Response) {
-    if (!response.body) throw new Error('No response body for SSE');
-    if (!response.ok) throw new Error('Response not ok');
-    
-    const reader = response.body.getReader();
-    let buffer = '';
-    let done = false;
-  
-    // Helper to parse SSE events as an async generator
-    async function* parseSSE(chunk: string) {
-      const eventStrings = chunk.split("\n\n");
-  
-      for (const eventStr of eventStrings) {
-        let eventType: string | undefined = undefined;
-        let data : string = '';
-  
-        for (const line of eventStr.split('\n')) {
-          if (line.startsWith('event:')) {
-            eventType = line.replace('event:', '').trim();
-          } else if (line.startsWith('data:')) {
-            data += line.replace('data:', '').trim();
-          }
-        }
-  
-        if (eventType && data !== '') {
-          yield { event: eventType, data: JSON.parse(data) };
-          if (eventType === 'end') {
-            done = true;
-          }
-        }
-      }
-    }
-  
-    while (!done) {
-        const { value, done: streamDone } = await reader.read();
-        if (streamDone) break;
-        buffer += new TextDecoder().decode(value);
-        let lastEventIdx = buffer.lastIndexOf('\n\n');
-        if (lastEventIdx !== -1) {
-            const eventsChunk = buffer.slice(0, lastEventIdx);
-            for await (const event of parseSSE(eventsChunk)) {
-            yield event;
-            }
-            buffer = buffer.slice(lastEventIdx + 2);
-        }
-    }
-  }
-
-  
-
 function ThreadPage() {
     const loaderData = useLoaderData<typeof loader>();
 
     const [thread, setThread] = useState(loaderData.thread)
     const [formError, setFormError] = useState<string | null>(null)
+    const [isStreaming, setStreaming] = useState(false)
+
+    useEffect(() => {
+        console.log('first comment thread messages length', thread.activities[0].commentThread.commentMessages.length)
+    }, [thread])
+
+
+    // temporary 
+    useEffect(() => {
+        if (!isStreaming) {
+            setThread(loaderData.thread)
+        }
+    }, [loaderData.thread])
+
+    // console.log('first comment thread', thread.activities[0].commentThread)
+    console.log('first comment thread messages length', thread.activities[0].commentThread.commentMessages.length)
 
     useEffect(() => {
         // let abortController : AbortController | undefined = undefined;
@@ -100,6 +209,8 @@ function ThreadPage() {
                         }
                     });
         
+                    setStreaming(true)
+
                     for await (const event of parseSSE(response)) {
                         if (event.event === 'activity') {
                             setThread(prevThread => {
@@ -126,6 +237,8 @@ function ThreadPage() {
         
                 } catch (error) {
                     console.error(error)
+                } finally {
+                    setStreaming(false)
                 }
             })()
         }
@@ -254,6 +367,14 @@ function ThreadPage() {
                     </div>)}
                     { activity.type !== "message" && (<div className="border p-3 rounded-lg italic text-muted-foreground">no view</div>)}
                 </div>)}
+                
+                {/* Comment thread for each activity */}
+                <div className="mt-2">
+                    <CommentThread 
+                        commentThread={activity.commentThread} 
+                        activityId={activity.id} 
+                    />
+                </div>
             </div>
              })}
         </div>

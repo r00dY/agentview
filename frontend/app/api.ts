@@ -96,6 +96,7 @@ const ActivitySchema = z.object({
   thread_id: z.string(),
   type: z.string(),
   role: z.string(),
+  commentThread: z.any(),
 })
 
 const ActivityCreateSchema = z.object({
@@ -130,6 +131,22 @@ async function fetchThreadWithLastRun(thread_id: string) {
       activities: {
         with: {
           run: true,
+          commentThread: {
+            with: {
+              commentMessages: {
+                orderBy: (commentMessages, { asc }) => [asc(commentMessages.updatedAt)]
+              }
+            }
+          }
+          // commentThread: {
+          //   with: {
+          //     commentMessages: {
+          //       with: {
+          //         mentions: true,
+          //       }
+          //     }
+          //   }
+          // }
         },
         orderBy: (activity, { asc }) => [asc(activity.created_at)]
       },
@@ -591,6 +608,39 @@ app.openapi(activityWatchRoute, async (c) => {
     }
   });
 });
+
+/* --------- COMMENTS --------- */
+
+// // Thread GET
+// const threadGETCommentsRoute = createRoute({
+//   method: 'get',
+//   path: '/threads/{thread_id}/comments',
+//   request: {
+//     params: z.object({
+//       thread_id: z.string(),
+//     }),
+//   },
+//   responses: {
+//     200: response_data(ThreadSchema),
+//     404: response_error()
+//   },
+// })
+
+// app.openapi(threadGETRoute, async (c) => {
+//   const { thread_id } = c.req.param()
+
+//   const threadRow = await fetchThreadWithLastRun(thread_id);
+
+//   if (!threadRow) {
+//     return c.json({ message: "Thread not found" }, 404);
+//   }
+
+//   return c.json(threadRow, 200);
+// })
+
+
+
+
 
 
 

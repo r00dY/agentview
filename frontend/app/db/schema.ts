@@ -74,19 +74,17 @@ export const commentThreads = pgTable('comment_threads', {
 export const commentMessages = pgTable('comment_messages', {
   id: uuid('id').primaryKey().defaultRandom(),
   commentThreadId: uuid('comment_thread_id').notNull().references(() => commentThreads.id, { onDelete: 'cascade' }),
-  userId: uuid('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   content: text('content').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
-
-
 // User mentions within comment messages
 export const commentMentions = pgTable('comment_mentions', {
   id: uuid('id').primaryKey().defaultRandom(),
   commentMessageId: uuid('comment_message_id').notNull().references(() => commentMessages.id, { onDelete: 'cascade' }),
-  mentionedUserId: uuid('mentioned_user_id').notNull().references(() => user.id, { onDelete: 'cascade' })
+  mentionedUserId: text('mentioned_user_id').notNull().references(() => user.id, { onDelete: 'cascade' })
 });
 
 // // Edit history for comment messages
@@ -98,8 +96,6 @@ export const commentMentions = pgTable('comment_mentions', {
 //   editedAt: timestamp('edited_at', { withTimezone: true }).defaultNow(),
 //   editReason: text('edit_reason'), // Optional reason for edit
 // });
-
-
 
 export const threadRelations = relations(thread, ({ many }) => ({
   activities: many(activity),
@@ -131,6 +127,12 @@ export const activityRelations = relations(activity, ({ one }) => ({
 
 export const commentThreadsRelations = relations(commentThreads, ({ many }) => ({
   commentMessages: many(commentMessages),
-  mentions: many(commentMentions),
 }))
 
+export const commentMessagesRelations = relations(commentMessages, ({ one, many }) => ({
+  commentThread: one(commentThreads, {
+    fields: [commentMessages.commentThreadId],
+    references: [commentThreads.id],
+  }),
+  mentions: many(commentMentions),
+}))
