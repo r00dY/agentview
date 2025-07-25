@@ -24,7 +24,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
         throw data(threadData, { status: 400 })
     }
 
-    console.log('loader called, num of messages:', threadData.activities[0].commentThread.commentMessages.length)
+    console.log('loader called, num of messages:', threadData.activities[0].commentThread?.commentMessages?.length)
     return data({
         thread: threadData,
     });
@@ -179,11 +179,6 @@ function ThreadPage() {
     const [formError, setFormError] = useState<string | null>(null)
     const [isStreaming, setStreaming] = useState(false)
 
-    useEffect(() => {
-        console.log('first comment thread messages length', thread.activities[0].commentThread.commentMessages.length)
-    }, [thread])
-
-
     // temporary 
     useEffect(() => {
         if (!isStreaming) {
@@ -192,7 +187,7 @@ function ThreadPage() {
     }, [loaderData.thread])
 
     // console.log('first comment thread', thread.activities[0].commentThread)
-    console.log('first comment thread messages length', thread.activities[0].commentThread.commentMessages.length)
+    console.log('first comment thread messages length', thread.activities[0].commentThread?.commentMessages?.length)
 
     useEffect(() => {
         // let abortController : AbortController | undefined = undefined;
