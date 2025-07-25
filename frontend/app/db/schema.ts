@@ -87,15 +87,15 @@ export const commentMentions = pgTable('comment_mentions', {
   mentionedUserId: text('mentioned_user_id').notNull().references(() => user.id, { onDelete: 'cascade' })
 });
 
-// // Edit history for comment messages
-// export const commentMessageEdits = pgTable('comment_message_edits', {
-//   id: uuid('id').primaryKey().defaultRandom(),
-//   commentMessageId: uuid('comment_message_id').notNull().references(() => commentMessages.id, { onDelete: 'cascade' }),
-//   previousContent: text('previous_content').notNull(),
-//   editedBy: uuid('edited_by').notNull().references(() => user.id, { onDelete: 'cascade' }),
-//   editedAt: timestamp('edited_at', { withTimezone: true }).defaultNow(),
-//   editReason: text('edit_reason'), // Optional reason for edit
-// });
+
+// Edit history for comment messages
+export const commentMessageEdits = pgTable('comment_message_edits', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  commentMessageId: uuid('comment_message_id').notNull().references(() => commentMessages.id, { onDelete: 'cascade' }),
+  previousContent: text('previous_content').notNull(),
+  editedAt: timestamp('edited_at', { withTimezone: true }).defaultNow(),
+});
+
 
 export const threadRelations = relations(thread, ({ many }) => ({
   activities: many(activity),
@@ -135,4 +135,5 @@ export const commentMessagesRelations = relations(commentMessages, ({ one, many 
     references: [commentThreads.id],
   }),
   mentions: many(commentMentions),
+  edits: many(commentMessageEdits),
 }))

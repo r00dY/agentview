@@ -37,9 +37,12 @@ export async function loader({request}: Route.LoaderArgs) {
   const session = await auth.api.getSession({
     headers: request.headers,
   });
+  
+  const url = new URL(request.url);
+  const relativeUrl = url.pathname + url.search + url.hash;
 
   if (!session) {
-    return redirect('/login');
+    return redirect('/login?redirect=' + encodeURIComponent(relativeUrl));
   }
 
   return {
