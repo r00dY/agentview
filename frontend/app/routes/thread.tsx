@@ -259,6 +259,12 @@ function CommentMessageItem({ message, userId, activityId }: { message: any, use
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">
                         {new Date(message.createdAt).toLocaleString()}
+                        {message.updatedAt && message.updatedAt !== message.createdAt && (
+                            <>
+                                {" · "}
+                                Edited
+                            </>
+                        )}
                     </div>
                 </div>
                 {isOwn && (
