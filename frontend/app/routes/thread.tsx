@@ -7,9 +7,10 @@ import { Textarea } from "~/components/ui/textarea";
 import { useEffect, useRef, useState } from "react";
 import { parseSSE } from "~/lib/parseSSE";
 import { db } from "~/lib/db.server";
-import { commentThreads, commentMessages } from "~/db/schema";
+import { commentThreads, commentMessages, commentMessageEdits } from "~/db/schema";
 import { eq } from "drizzle-orm";
 import { auth } from "~/lib/auth.server";
+import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
 
 export async function loader({ request, params }: Route.LoaderArgs) {    
     const response = await fetch(`http://localhost:2138/threads/${params.id}`, {
@@ -24,19 +25,62 @@ export async function loader({ request, params }: Route.LoaderArgs) {
         throw data(threadData, { status: 400 })
     }
 
-    console.log('loader called, num of messages:', threadData.activities[0].commentThread?.commentMessages?.length)
+    // Get current user
+    let userId = null;
+    try {
+        const session = await auth.api.getSession({ headers: request.headers });
+        userId = session?.user?.id || null;
+    } catch {}
+
     return data({
         thread: threadData,
+        userId,
     });
-    
 }
-
-
 
 export async function action({ request, params }: Route.ActionArgs) {
     const formData = await request.formData();
     const content = formData.get("content");
     const activityId = formData.get("activityId");
+    const editCommentMessageId = formData.get("editCommentMessageId");
+    
+    // Editing a comment message
+    if (editCommentMessageId && typeof editCommentMessageId === 'string') {
+        if (!content || typeof content !== 'string') {
+            return { error: "Comment content is required" };
+        }
+        try {
+            // Get current user
+            const session = await auth.api.getSession({ headers: request.headers });
+            if (!session) {
+                return { error: "Authentication required" };
+            }
+            // Find the comment message
+            const [message] = await db
+                .select()
+                .from(commentMessages)
+                .where(eq(commentMessages.id, editCommentMessageId));
+            if (!message) {
+                return { error: "Comment message not found" };
+            }
+            if (message.userId !== session.user.id) {
+                return { error: "You can only edit your own comments." };
+            }
+            // Store previous content in edit history
+            await db.insert(commentMessageEdits).values({
+                commentMessageId: editCommentMessageId,
+                previousContent: message.content,
+            });
+            // Update the comment message
+            await db.update(commentMessages)
+                .set({ content, updatedAt: new Date() })
+                .where(eq(commentMessages.id, editCommentMessageId));
+            return { status: 'success', data: null };
+        } catch (error) {
+            console.error('Error editing comment:', error);
+            return { error: "Failed to edit comment" };
+        }
+    }
     
     if (!content || typeof content !== 'string') {
         return { error: "Comment content is required" };
@@ -83,7 +127,7 @@ export async function action({ request, params }: Route.ActionArgs) {
         }).returning();
 
         // Return success
-        return { success: true, messageId: newMessage.id };
+        return { status: 'success', data: { message: newMessage } };
         
     } catch (error) {
         console.error('Error creating comment:', error);
@@ -91,7 +135,7 @@ export async function action({ request, params }: Route.ActionArgs) {
     }
 }
 
-function CommentThread({ commentThread, activityId }: { commentThread: any, activityId: string }) {
+function CommentThread({ commentThread, activityId, userId }: { commentThread: any, activityId: string, userId: string | null }) {
     const [isExpanded, setIsExpanded] = useState(false);
     const fetcher = useFetcher();
 
@@ -114,21 +158,13 @@ function CommentThread({ commentThread, activityId }: { commentThread: any, acti
                 <div className="mt-3 space-y-3">
                     {/* Existing comments */}
                     {commentThread?.commentMessages?.map((message: any) => (
-                        <div key={message.id} className="bg-muted/50 p-3 rounded-lg">
-                            <div className="flex items-start gap-2">
-                                <div className="flex-1">
-                                    <div className="text-sm font-medium text-muted-foreground">
-                                        {message.userId}
-                                    </div>
-                                    <div className="text-sm mt-1">
-                                        {message.content}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground mt-1">
-                                        {new Date(message.createdAt).toLocaleString()}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        <CommentMessageItem
+                            key={message.id}
+                            message={message}
+                            userId={userId}
+                            fetcher={fetcher}
+                            activityId={activityId}
+                        />
                     ))}
                     
                     {/* New comment form */}
@@ -163,6 +199,80 @@ function CommentThread({ commentThread, activityId }: { commentThread: any, acti
                     </fetcher.Form>
                 </div>
             )}
+        </div>
+    );
+}
+
+// New subcomponent for comment message item with edit logic
+function CommentMessageItem({ message, userId, activityId }: { message: any, userId: string | null, fetcher: any, activityId: string }) {
+    const [isEditing, setIsEditing] = useState(false);
+    const [editContent, setEditContent] = useState(message.content);
+    const fetcher = useFetcher();
+
+    if (isEditing) {
+        console.log('fetcher state', fetcher.state)
+    }
+
+    const isOwn = userId && message.userId === userId;
+
+    useFetcherSuccess(fetcher, (data) => {
+        console.log('fetcher success', data)
+        setIsEditing(false)
+    })
+
+    if (isEditing) {
+        return (
+            <fetcher.Form method="post" className="space-y-2">
+                <Textarea
+                    name="content"
+                    value={editContent}
+                    onChange={e => setEditContent(e.target.value)}
+                    className="min-h-[60px]"
+                    required
+                />
+                <input type="hidden" name="editCommentMessageId" value={message.id} />
+                <input type="hidden" name="activityId" value={activityId} />
+                <div className="flex gap-2">
+                    <Button type="submit" size="sm" disabled={fetcher.state !== 'idle'}>
+                        {fetcher.state !== 'idle' ? 'Saving...' : 'Save'}
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setIsEditing(false)}>
+                        Cancel
+                    </Button>
+                </div>
+                {fetcher.data?.error && (
+                    <div className="text-sm text-red-500">{fetcher.data.error}</div>
+                )}
+            </fetcher.Form>
+        );
+    }
+
+    return (
+        <div className="bg-muted/50 p-3 rounded-lg">
+            <div className="flex items-start gap-2">
+                <div className="flex-1">
+                    <div className="text-sm font-medium text-muted-foreground">
+                        {message.userId}
+                    </div>
+                    <div className="text-sm mt-1">
+                        {message.content}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                        {new Date(message.createdAt).toLocaleString()}
+                    </div>
+                </div>
+                {isOwn && (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        className="ml-2 text-xs"
+                        onClick={() => setIsEditing(true)}
+                    >
+                        Edit
+                    </Button>
+                )}
+            </div>
         </div>
     );
 }
@@ -368,6 +478,7 @@ function ThreadPage() {
                     <CommentThread 
                         commentThread={activity.commentThread} 
                         activityId={activity.id} 
+                        userId={loaderData.userId}
                     />
                 </div>
             </div>

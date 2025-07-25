@@ -134,7 +134,7 @@ async function fetchThreadWithLastRun(thread_id: string) {
           commentThread: {
             with: {
               commentMessages: {
-                orderBy: (commentMessages, { asc }) => [asc(commentMessages.updatedAt)]
+                orderBy: (commentMessages, { asc }) => [asc(commentMessages.createdAt)]
               }
             }
           }
