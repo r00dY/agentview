@@ -62,6 +62,45 @@ export const run = pgTable("run", {
   state: varchar({ length: 255 }).notNull(),
 });
 
+
+export const commentThreads = pgTable('comment_threads', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  activityId: uuid('activity_id').notNull().references(() => activity.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+// Comment messages within threads
+export const commentMessages = pgTable('comment_messages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  commentThreadId: uuid('comment_thread_id').notNull().references(() => commentThreads.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  content: text('content').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+
+
+// User mentions within comment messages
+export const commentMentions = pgTable('comment_mentions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  commentMessageId: uuid('comment_message_id').notNull().references(() => commentMessages.id, { onDelete: 'cascade' }),
+  mentionedUserId: uuid('mentioned_user_id').notNull().references(() => user.id, { onDelete: 'cascade' })
+});
+
+// // Edit history for comment messages
+// export const commentMessageEdits = pgTable('comment_message_edits', {
+//   id: uuid('id').primaryKey().defaultRandom(),
+//   commentMessageId: uuid('comment_message_id').notNull().references(() => commentMessages.id, { onDelete: 'cascade' }),
+//   previousContent: text('previous_content').notNull(),
+//   editedBy: uuid('edited_by').notNull().references(() => user.id, { onDelete: 'cascade' }),
+//   editedAt: timestamp('edited_at', { withTimezone: true }).defaultNow(),
+//   editReason: text('edit_reason'), // Optional reason for edit
+// });
+
+
+
 export const threadRelations = relations(thread, ({ many }) => ({
   activities: many(activity),
   runs: many(run)
@@ -84,4 +123,14 @@ export const activityRelations = relations(activity, ({ one }) => ({
     fields: [activity.run_id],
     references: [run.id],
   }),
+  commentThread: one(commentThreads, {
+    fields: [activity.id],
+    references: [commentThreads.activityId],
+  }),
 }));
+
+export const commentThreadsRelations = relations(commentThreads, ({ many }) => ({
+  commentMessages: many(commentMessages),
+  mentions: many(commentMentions),
+}))
+
