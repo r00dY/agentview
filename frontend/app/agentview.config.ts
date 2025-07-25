@@ -68,12 +68,15 @@ export const config : AgentViewConfig = {
             }
 
             await new Promise(resolve => setTimeout(resolve, 1000));
+
             yield {
                 type: "message",
                 role: "assistant",
-                content: `I got your question ${i + 1}`
+                content: `I got your question ${i + 1}`,
             };
         }
+
+        
 
 
         // // Then yield the real response
