@@ -297,7 +297,7 @@ function ThreadPage() {
     }, [loaderData.thread])
 
     // console.log('first comment thread', thread.activities[0].commentThread)
-    console.log('first comment thread messages length', thread.activities[0].commentThread?.commentMessages?.length)
+    // console.log('first comment thread messages length', thread.activities[0].commentThread?.commentMessages?.length)
 
     useEffect(() => {
         // let abortController : AbortController | undefined = undefined;
@@ -489,7 +489,6 @@ function ThreadPage() {
             { thread.state === 'in_progress' && <div>in progress...</div>}
             { thread.state === 'failed' && <div>failed</div>}
         </div>
-
 
     </div>
     
