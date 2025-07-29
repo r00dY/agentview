@@ -4,7 +4,7 @@ import Document from '@tiptap/extension-document'
 import Paragraph from '@tiptap/extension-paragraph'
 import Text from '@tiptap/extension-text'
 import Mention from '@tiptap/extension-mention'
-import { UndoRedo } from '@tiptap/extensions'
+import { UndoRedo, Placeholder} from '@tiptap/extensions'
 import { computePosition, flip, shift } from '@floating-ui/dom'
 import { posToDOMRect, ReactRenderer } from '@tiptap/react'
 
@@ -216,6 +216,9 @@ export function DemoTextEditor() {
         Paragraph, 
         Text,
         UndoRedo,
+        Placeholder.configure({
+          placeholder: 'Add a comment...',
+        }),
         Mention.configure({
             HTMLAttributes: {
               class: 'bg-cyan-50 text-cyan-800 px-1 py-0.5 rounded-md',

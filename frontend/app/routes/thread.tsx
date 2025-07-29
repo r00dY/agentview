@@ -328,7 +328,6 @@ function CommentThread({ commentThread, activityId, userId }: { commentThread: a
 // New subcomponent for comment message item with edit logic
 function CommentMessageItem({ message, userId, activityId }: { message: any, userId: string | null, fetcher: any, activityId: string }) {
     const [isEditing, setIsEditing] = useState(false);
-    // const [editContent, setEditContent] = useState(message.content);
     const fetcher = useFetcher();
 
     if (isEditing) {
@@ -348,8 +347,6 @@ function CommentMessageItem({ message, userId, activityId }: { message: any, use
                 <Textarea
                     name="content"
                     defaultValue={message.content}
-                    // value={editContent}
-                    // onChange={e => setEditContent(e.target.value)}
                     className="min-h-[60px]"
                     required
                 />
