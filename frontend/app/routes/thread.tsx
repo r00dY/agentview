@@ -7,10 +7,30 @@ import { Textarea } from "~/components/ui/textarea";
 import { useEffect, useRef, useState } from "react";
 import { parseSSE } from "~/lib/parseSSE";
 import { db } from "~/lib/db.server";
-import { commentThreads, commentMessages, commentMessageEdits } from "~/db/schema";
-import { eq } from "drizzle-orm";
+import { commentThreads, commentMessages, commentMessageEdits, commentMentions } from "~/db/schema";
+import { eq, inArray, and } from "drizzle-orm";
 import { auth } from "~/lib/auth.server";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
+import { extractMentions } from "~/lib/utils";
+
+/**
+ * Thread page with comment functionality including mentions.
+ * 
+ * Mention Format: @[user_id:abcdef] where abcdef is the user ID
+ * Examples:
+ * - "Hello @[user_id:user123] how are you?"
+ * - "Thanks @[user_id:admin456] for the help!"
+ * 
+ * Features:
+ * - Extract mentions from comment content
+ * - Store mentions in comment_mentions table
+ * - Handle mentions during edits (keep existing, add new, remove old)
+ * - Visual highlighting of mentions in the UI
+ */
+// Helper function to highlight mentions in content
+function highlightMentions(content: string) {
+    return content.replace(/@\[user_id:([^\]]+)\]/g, '<span class="bg-blue-100 text-blue-800 px-1 py-0.5 rounded text-xs font-medium">@$1</span>');
+}
 
 export async function loader({ request, params }: Route.LoaderArgs) {    
     const response = await fetch(`http://localhost:2138/threads/${params.id}`, {
@@ -66,15 +86,67 @@ export async function action({ request, params }: Route.ActionArgs) {
             if (message.userId !== session.user.id) {
                 return { error: "You can only edit your own comments." };
             }
+            
+            // Extract mentions from new content
+            const newMentions = extractMentions(content);
+            const previousMentions = extractMentions(message.content);
+            
             // Store previous content in edit history
             await db.insert(commentMessageEdits).values({
                 commentMessageId: editCommentMessageId,
                 previousContent: message.content,
             });
+            
             // Update the comment message
             await db.update(commentMessages)
                 .set({ content, updatedAt: new Date() })
                 .where(eq(commentMessages.id, editCommentMessageId));
+            
+            // Handle mentions for edits
+            if (newMentions.length > 0 || previousMentions.length > 0) {
+                // Get existing mentions for this message
+                const existingMentions = await db
+                    .select()
+                    .from(commentMentions)
+                    .where(eq(commentMentions.commentMessageId, editCommentMessageId));
+                
+                const existingMentionedUserIds = existingMentions.map(m => m.mentionedUserId);
+                
+                // Find mentions to keep (existed before and still exist)
+                const mentionsToKeep = newMentions.filter(mention => 
+                    previousMentions.includes(mention) && existingMentionedUserIds.includes(mention)
+                );
+                
+                // Find new mentions to add
+                const newMentionsToAdd = newMentions.filter(mention => 
+                    !existingMentionedUserIds.includes(mention)
+                );
+                
+                // Find mentions to remove (existed before but not in new content)
+                const mentionsToRemove = existingMentionedUserIds.filter(mention => 
+                    !newMentions.includes(mention)
+                );
+                
+                // Remove mentions that are no longer present
+                if (mentionsToRemove.length > 0) {
+                    await db.delete(commentMentions)
+                        .where(and(
+                            eq(commentMentions.commentMessageId, editCommentMessageId),
+                            inArray(commentMentions.mentionedUserId, mentionsToRemove)
+                        ));
+                }
+                
+                // Add new mentions
+                if (newMentionsToAdd.length > 0) {
+                    await db.insert(commentMentions).values(
+                        newMentionsToAdd.map(mentionedUserId => ({
+                            commentMessageId: editCommentMessageId,
+                            mentionedUserId,
+                        }))
+                    );
+                }
+            }
+            
             return { status: 'success', data: null };
         } catch (error) {
             console.error('Error editing comment:', error);
@@ -107,24 +179,40 @@ export async function action({ request, params }: Route.ActionArgs) {
             }
         });
 
-        // If no comment thread exists, create one
-        if (!commentThread) {
-            const [newThread] = await db.insert(commentThreads).values({
-                activityId: activityId,
-            }).returning();
-            
-            commentThread = {
-                ...newThread,
-                commentMessages: []
-            };
-        }
+        const newMessage = await db.transaction(async (tx) => {
 
-        // Create the comment message
-        const [newMessage] = await db.insert(commentMessages).values({
-            commentThreadId: commentThread!.id,
-            userId: session.user.id,
-            content: content,
-        }).returning();
+            // If no comment thread exists, create one
+            if (!commentThread) {
+                const [newThread] = await tx.insert(commentThreads).values({
+                    activityId: activityId,
+                }).returning();
+                
+                commentThread = {
+                    ...newThread,
+                    commentMessages: []
+                };
+            }
+
+            // Create the comment message
+            const [newMessage] = await tx.insert(commentMessages).values({
+                commentThreadId: commentThread!.id,
+                userId: session.user.id,
+                content: content,
+            }).returning();
+
+            // Handle mentions for new comments
+            const mentions = extractMentions(content);
+            if (mentions.length > 0) {
+                await tx.insert(commentMentions).values(
+                    mentions.map(mentionedUserId => ({
+                        commentMessageId: newMessage.id,
+                        mentionedUserId,
+                    }))
+                );
+            }
+
+            return newMessage;
+        })
 
         // Return success
         return { status: 'success', data: { message: newMessage } };
@@ -255,7 +343,7 @@ function CommentMessageItem({ message, userId, activityId }: { message: any, use
                         {message.userId}
                     </div>
                     <div className="text-sm mt-1">
-                        {message.content}
+                        <div dangerouslySetInnerHTML={{ __html: highlightMentions(message.content) }} />
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">
                         {new Date(message.createdAt).toLocaleString()}

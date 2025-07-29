@@ -84,7 +84,8 @@ export const commentMessages = pgTable('comment_messages', {
 export const commentMentions = pgTable('comment_mentions', {
   id: uuid('id').primaryKey().defaultRandom(),
   commentMessageId: uuid('comment_message_id').notNull().references(() => commentMessages.id, { onDelete: 'cascade' }),
-  mentionedUserId: text('mentioned_user_id').notNull().references(() => user.id, { onDelete: 'cascade' })
+  mentionedUserId: text('mentioned_user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
 });
 
 
