@@ -1,6 +1,6 @@
 import React, { useEffect, useImperativeHandle, useState } from 'react'
 
-export default props => {
+export const MentionList = (props: any) => {
   const [selectedIndex, setSelectedIndex] = useState(0)
 
   const selectItem = index => {
@@ -47,11 +47,11 @@ export default props => {
   }))
 
   return (
-    <div className="dropdown-menu" style={{backgroundColor: 'red', color: 'white'}}>
+    <div className="w-80 bg-white p-4 rounded-md border flex flex-col gap-2">
       {props.items.length ? (
         props.items.map((item, index) => (
           <button
-            className={index === selectedIndex ? 'is-selected' : ''}
+            className={`${index === selectedIndex ? 'bg-gray-100' : ''}`}
             key={index}
             onClick={() => selectItem(index)}
           >
@@ -59,7 +59,7 @@ export default props => {
           </button>
         ))
       ) : (
-        <div className="item">No result</div>
+        <div className="">No result</div>
       )}
     </div>
   )

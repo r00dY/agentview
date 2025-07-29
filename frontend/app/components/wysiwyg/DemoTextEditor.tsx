@@ -1,40 +1,31 @@
-import { EditorProvider } from '@tiptap/react'
+import { Editor, EditorProvider } from '@tiptap/react'
 // import { FloatingMenu, BubbleMenu } from '@tiptap/react/menus'
 import Document from '@tiptap/extension-document'
 import Paragraph from '@tiptap/extension-paragraph'
 import Text from '@tiptap/extension-text'
 import Mention from '@tiptap/extension-mention'
 import { UndoRedo } from '@tiptap/extensions'
+import { computePosition, flip, shift } from '@floating-ui/dom'
 
 import { posToDOMRect, ReactRenderer } from '@tiptap/react'
-import MentionList from './MentionList'
+import { MentionList } from './MentionList'
 
-// const updatePosition = (editor, element) => {
-//   const virtualElement = {
-//     getBoundingClientRect: () => posToDOMRect(editor.view, editor.state.selection.from, editor.state.selection.to),
-//   }
+const updatePosition = (editor: Editor, element: HTMLElement) => {
+  const virtualElement = {
+    getBoundingClientRect: () => posToDOMRect(editor.view, editor.state.selection.from, editor.state.selection.to),
+  }
 
-//   computePosition(virtualElement, element, {
-//     placement: 'bottom-start',
-//     strategy: 'absolute',
-//     middleware: [shift(), flip()],
-//   }).then(({ x, y, strategy }) => {
-//     element.style.width = 'max-content'
-//     element.style.position = strategy
-//     element.style.left = `${x}px`
-//     element.style.top = `${y}px`
-//   })
-// }
-
-const updatePosition = (editor, element) => {
+  computePosition(virtualElement, element, {
+    placement: 'bottom-start',
+    strategy: 'absolute',
+    middleware: [shift(), flip()],
+  }).then(({ x, y, strategy }) => {
     element.style.width = 'max-content'
-    element.style.position = 'absolute'
-    element.style.left = `100px`
-    element.style.top = `100px`
+    element.style.position = strategy
+    element.style.left = `${x}px`
+    element.style.top = `${y}px`
+  })
 }
-
-// define your extension array
-// const extensions = [Document, Paragraph, Text]
 
 const ITEMS = [
   'Lea Thompson',
@@ -87,10 +78,13 @@ export function DemoTextEditor() {
               },
             
               render: () => {
-                let component
+                let component: ReactRenderer<typeof MentionList>
             
                 return {
+
                   onStart: props => {
+                    console.log('onStart')
+
                     component = new ReactRenderer(MentionList, {
                       props,
                       editor: props.editor,
@@ -100,34 +94,43 @@ export function DemoTextEditor() {
                       return
                     }
             
-                    component.element.style.position = 'absolute'
+                    component.element.style.position = 'fixed'
             
                     document.body.appendChild(component.element)
 
-                    const rect = posToDOMRect(props.editor.view, props.editor.state.selection.from, props.editor.state.selection.to)
-                    console.log('(start) rect', rect)
-            
                     updatePosition(props.editor, component.element)
+
+                    // setIsPopoverOpen(true)
+                    // setItems(props.items)
                   },
             
                   onUpdate(props) {
+                    console.log('onUpdate')
+
                     component.updateProps(props)
             
                     if (!props.clientRect) {
                       return
                     }
 
-
-                    const rect = posToDOMRect(props.editor.view, props.editor.state.selection.from, props.editor.state.selection.to)
-                    console.log('(udpate) rect', rect)
-            
                     updatePosition(props.editor, component.element)
+
+
+                    // const rect = posToDOMRect(props.editor.view, props.editor.state.selection.from, props.editor.state.selection.to)
+                    // anchorRef.current!.style.left = `${rect.left}px`
+                    // anchorRef.current!.style.top = `${rect.bottom + 10}px`
+
+                    // setItems(props.items)
+
+                    // console.log('(update) rect', rect)
+            
                   },
             
                   onKeyDown(props) {
+                    console.log('onKeyDown', props)
+
                     if (props.event.key === 'Escape') {
                       component.destroy()
-            
                       return true
                     }
             
@@ -135,8 +138,11 @@ export function DemoTextEditor() {
                   },
             
                   onExit() {
-                    component.element.remove()
+                    console.log('onExit')
+
                     component.destroy()
+
+                    // setIsPopoverOpen(false)
                   },
                 }
               }
@@ -145,7 +151,7 @@ export function DemoTextEditor() {
         ]
         
         } content={"<p>Hello World!</p>"} immediatelyRender={false} />
-  )
+      )
 }
 
 
