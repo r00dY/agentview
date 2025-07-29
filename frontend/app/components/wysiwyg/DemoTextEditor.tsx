@@ -1,3 +1,4 @@
+import React, { useEffect, useImperativeHandle, useState } from 'react'
 import { Editor, EditorProvider } from '@tiptap/react'
 // import { FloatingMenu, BubbleMenu } from '@tiptap/react/menus'
 import Document from '@tiptap/extension-document'
@@ -6,9 +7,73 @@ import Text from '@tiptap/extension-text'
 import Mention from '@tiptap/extension-mention'
 import { UndoRedo } from '@tiptap/extensions'
 import { computePosition, flip, shift } from '@floating-ui/dom'
-
 import { posToDOMRect, ReactRenderer } from '@tiptap/react'
-import { MentionList } from './MentionList'
+
+export const MentionList = (props: any) => {
+  const [selectedIndex, setSelectedIndex] = useState(0)
+
+  const selectItem = index => {
+    const item = props.items[index]
+
+    if (item) {
+      props.command({ id: item })
+    }
+  }
+
+  const upHandler = () => {
+    setSelectedIndex((selectedIndex + props.items.length - 1) % props.items.length)
+  }
+
+  const downHandler = () => {
+    setSelectedIndex((selectedIndex + 1) % props.items.length)
+  }
+
+  const enterHandler = () => {
+    selectItem(selectedIndex)
+  }
+
+  useEffect(() => setSelectedIndex(0), [props.items])
+
+  useImperativeHandle(props.ref, () => ({
+    onKeyDown: ({ event }) => {
+      if (event.key === 'ArrowUp') {
+        upHandler()
+        return true
+      }
+
+      if (event.key === 'ArrowDown') {
+        downHandler()
+        return true
+      }
+
+      if (event.key === 'Enter') {
+        enterHandler()
+        return true
+      }
+
+      return false
+    },
+  }))
+
+  return (
+    <div className="w-80 bg-white p-4 rounded-md border flex flex-col gap-2">
+      {props.items.length ? (
+        props.items.map((item, index) => (
+          <button
+            className={`${index === selectedIndex ? 'bg-gray-100' : ''}`}
+            key={index}
+            onClick={() => selectItem(index)}
+          >
+            {item}
+          </button>
+        ))
+      ) : (
+        <div className="">No result</div>
+      )}
+    </div>
+  )
+}
+
 
 const updatePosition = (editor: Editor, element: HTMLElement) => {
   const virtualElement = {
@@ -64,7 +129,7 @@ export function DemoTextEditor() {
         UndoRedo,
         Mention.configure({
             HTMLAttributes: {
-              class: 'bg-blue-100 text-blue-800 text-sm font-medium px-2 py-0.5 rounded-md',
+              class: 'bg-blue-50 text-blue-800 px-1 py-0.5 rounded-md',
             },
             deleteTriggerWithBackspace: true,
 
