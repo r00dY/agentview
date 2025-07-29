@@ -12,7 +12,7 @@ import { eq, inArray, and } from "drizzle-orm";
 import { auth } from "~/lib/auth.server";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
 import { extractMentions } from "~/lib/utils";
-import { DemoTextEditor } from "~/components/DemoTextEditor";
+import { DemoTextEditor } from "~/components/wysiwyg/DemoTextEditor";
 
 /**
  * Thread page with comment functionality including mentions.
