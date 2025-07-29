@@ -1,6 +1,5 @@
 import React, { useEffect, useImperativeHandle, useState } from 'react'
 import { Editor, EditorProvider } from '@tiptap/react'
-// import { FloatingMenu, BubbleMenu } from '@tiptap/react/menus'
 import Document from '@tiptap/extension-document'
 import Paragraph from '@tiptap/extension-paragraph'
 import Text from '@tiptap/extension-text'
@@ -56,20 +55,22 @@ export const MentionList = (props: any) => {
   }))
 
   return (
-    <div className="w-80 bg-white p-4 rounded-md border flex flex-col gap-2">
-      {props.items.length ? (
-        props.items.map((item, index) => (
-          <button
-            className={`${index === selectedIndex ? 'bg-gray-100' : ''}`}
-            key={index}
-            onClick={() => selectItem(index)}
-          >
-            {item}
-          </button>
-        ))
-      ) : (
-        <div className="">No result</div>
-      )}
+    <div className="bg-popover text-popover-foreground z-50 w-72 rounded-md border p-1 shadow-md outline-hidden">
+      <div className="flex flex-col">
+        {props.items.length ? (
+          props.items.map((item, index) => (
+            <button
+              className={`rounded-sm px-2 py-1.5 text-sm outline-hidden flex justify-start  ${index === selectedIndex ? 'bg-accent' : ''}`}
+              key={index}
+              onClick={() => selectItem(index)}
+            >
+              {item}
+            </button>
+          ))
+        ) : (
+          <div className="text-muted-foreground px-2 py-1.5 text-sm">No results</div>
+        )}
+        </div>
     </div>
   )
 }
@@ -164,14 +165,9 @@ export function DemoTextEditor() {
                     document.body.appendChild(component.element)
 
                     updatePosition(props.editor, component.element)
-
-                    // setIsPopoverOpen(true)
-                    // setItems(props.items)
                   },
             
                   onUpdate(props) {
-                    console.log('onUpdate')
-
                     component.updateProps(props)
             
                     if (!props.clientRect) {
@@ -179,21 +175,9 @@ export function DemoTextEditor() {
                     }
 
                     updatePosition(props.editor, component.element)
-
-
-                    // const rect = posToDOMRect(props.editor.view, props.editor.state.selection.from, props.editor.state.selection.to)
-                    // anchorRef.current!.style.left = `${rect.left}px`
-                    // anchorRef.current!.style.top = `${rect.bottom + 10}px`
-
-                    // setItems(props.items)
-
-                    // console.log('(update) rect', rect)
-            
                   },
             
                   onKeyDown(props) {
-                    console.log('onKeyDown', props)
-
                     if (props.event.key === 'Escape') {
                       component.destroy()
                       return true
@@ -203,11 +187,7 @@ export function DemoTextEditor() {
                   },
             
                   onExit() {
-                    console.log('onExit')
-
                     component.destroy()
-
-                    // setIsPopoverOpen(false)
                   },
                 }
               }
