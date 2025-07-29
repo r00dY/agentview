@@ -129,9 +129,13 @@ export function DemoTextEditor() {
         Text,
         UndoRedo,
         Mention.configure({
-            HTMLAttributes: {
-              class: 'bg-blue-50 text-blue-800 px-1 py-0.5 rounded-md',
+            // HTMLAttributes: {
+            //   class: 'bg-blue-50 text-blue-800 px-1 py-0.5 rounded-md',
+            // },
+            renderText({ options, node }) {
+              return `${options.suggestion.char}${node.attrs.label ?? node.attrs.id}`
             },
+
             deleteTriggerWithBackspace: true,
 
             suggestion: {
@@ -195,7 +199,13 @@ export function DemoTextEditor() {
           })
         ]
         
-        } content={"<p>Hello World!</p>"} immediatelyRender={false} />
+        } 
+        content={"<p>Hello World!</p>"} 
+        immediatelyRender={false} 
+        onUpdate={({ editor }) => {
+          console.log(editor.getText())
+        }}
+        />
       )
 }
 
