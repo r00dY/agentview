@@ -8,14 +8,44 @@ import { UndoRedo } from '@tiptap/extensions'
 import { computePosition, flip, shift } from '@floating-ui/dom'
 import { posToDOMRect, ReactRenderer } from '@tiptap/react'
 
+
+const ITEMS = [
+  { id: '1', name: 'Lea Thompson' },
+  { id: '2', name: 'Cyndi Lauper' },
+  { id: '3', name: 'Tom Cruise' },
+  { id: '4', name: 'Madonna' },
+  { id: '5', name: 'Jerry Hall' },
+  { id: '6', name: 'Joan Collins' },
+  { id: '7', name: 'Winona Ryder' },
+  { id: '8', name: 'Christina Applegate' },
+  { id: '9', name: 'Alyssa Milano' },
+  { id: '10', name: 'Molly Ringwald' },
+  { id: '11', name: 'Ally Sheedy' },
+  { id: '12', name: 'Debbie Harry' },
+  { id: '13', name: 'Olivia Newton-John' },
+  { id: '14', name: 'Elton John' },
+  { id: '15', name: 'Michael J. Fox' },
+  { id: '16', name: 'Axl Rose' },
+  { id: '17', name: 'Emilio Estevez' },
+  { id: '18', name: 'Ralph Macchio' },
+  { id: '19', name: 'Rob Lowe' },
+  { id: '20', name: 'Jennifer Grey' },
+  { id: '21', name: 'Mickey Rourke' },
+  { id: '22', name: 'John Cusack' },
+  { id: '23', name: 'Matthew Broderick' },
+  { id: '24', name: 'Justine Bateman' },
+  { id: '25', name: 'Lisa Bonet' },
+]
+
+
 export const MentionList = (props: any) => {
   const [selectedIndex, setSelectedIndex] = useState(0)
 
-  const selectItem = index => {
+  const selectItem = (index: number) => {
     const item = props.items[index]
 
     if (item) {
-      props.command({ id: item })
+      props.command({ id: item.id, label: item.name })
     }
   }
 
@@ -64,7 +94,7 @@ export const MentionList = (props: any) => {
               key={index}
               onClick={() => selectItem(index)}
             >
-              {item}
+              {item.name}
             </button>
           ))
         ) : (
@@ -93,33 +123,91 @@ const updatePosition = (editor: Editor, element: HTMLElement) => {
   })
 }
 
-const ITEMS = [
-  'Lea Thompson',
-  'Cyndi Lauper',
-  'Tom Cruise',
-  'Madonna',
-  'Jerry Hall',
-  'Joan Collins',
-  'Winona Ryder',
-  'Christina Applegate',
-  'Alyssa Milano',
-  'Molly Ringwald',
-  'Ally Sheedy',
-  'Debbie Harry',
-  'Olivia Newton-John',
-  'Elton John',
-  'Michael J. Fox',
-  'Axl Rose',
-  'Emilio Estevez',
-  'Ralph Macchio',
-  'Rob Lowe',
-  'Jennifer Grey',
-  'Mickey Rourke',
-  'John Cusack',
-  'Matthew Broderick',
-  'Justine Bateman',
-  'Lisa Bonet',
-]
+// Function to convert text back to JSON structure
+export function textToJson(text: string): any {
+  const lines = text.split('\n')
+  const content: any[] = []
+  
+  for (const line of lines) {
+    if (line.trim() === '') {
+      // Empty line becomes an empty paragraph
+      content.push({
+        type: 'paragraph'
+      })
+    } else {
+      // Non-empty line needs to be parsed for mentions
+      const paragraphContent: any[] = []
+      let currentText = ''
+      let i = 0
+      
+      while (i < line.length) {
+        if (line[i] === '@' && line[i + 1] === '[') {
+          // Found a mention, add accumulated text first
+          if (currentText) {
+            paragraphContent.push({
+              type: 'text',
+              text: currentText
+            })
+            currentText = ''
+          }
+          
+          // Parse the mention
+          const mentionStart = i + 2 // Skip '@['
+          const mentionEnd = line.indexOf(']', mentionStart)
+          
+          if (mentionEnd !== -1) {
+            const mentionText = line.substring(mentionStart, mentionEnd)
+            const userIdMatch = mentionText.match(/user_id:(\d+)/)
+            
+            if (userIdMatch) {
+              const userId = userIdMatch[1]
+              // Find the corresponding item from ITEMS array
+              const item = ITEMS.find(item => item.id === userId)
+              
+              if (item) {
+                paragraphContent.push({
+                  type: 'mention',
+                  attrs: {
+                    id: userId,
+                    label: item.name,
+                    mentionSuggestionChar: '@'
+                  }
+                })
+              }
+            }
+            
+            i = mentionEnd + 1 // Skip past the closing ']'
+          } else {
+            // Malformed mention, treat as regular text
+            currentText += line[i]
+            i++
+          }
+        } else {
+          currentText += line[i]
+          i++
+        }
+      }
+      
+      // Add any remaining text
+      if (currentText) {
+        paragraphContent.push({
+          type: 'text',
+          text: currentText
+        })
+      }
+      
+      content.push({
+        type: 'paragraph',
+        content: paragraphContent
+      })
+    }
+  }
+  
+  return {
+    type: 'doc',
+    content: content
+  }
+}
 
 export function DemoTextEditor() {
   return (
@@ -129,11 +217,11 @@ export function DemoTextEditor() {
         Text,
         UndoRedo,
         Mention.configure({
-            // HTMLAttributes: {
-            //   class: 'bg-blue-50 text-blue-800 px-1 py-0.5 rounded-md',
-            // },
-            renderText({ options, node }) {
-              return `${options.suggestion.char}${node.attrs.label ?? node.attrs.id}`
+            HTMLAttributes: {
+              class: 'bg-cyan-50 text-cyan-800 px-1 py-0.5 rounded-md',
+            },
+            renderText({ node }) {
+              return `${node.attrs.mentionSuggestionChar}[user_id:${node.attrs.id}]`
             },
 
             deleteTriggerWithBackspace: true,
@@ -141,7 +229,7 @@ export function DemoTextEditor() {
             suggestion: {
               items: ({ query }) => {
                 const results = ITEMS
-                  .filter(item => item.toLowerCase().startsWith(query.toLowerCase()))
+                  .filter(item => item.name.toLowerCase().startsWith(query.toLowerCase()))
                   .slice(0, 5)
             
                 return results
@@ -200,10 +288,12 @@ export function DemoTextEditor() {
         ]
         
         } 
-        content={"<p>Hello World!</p>"} 
+        content={textToJson("Hello @[user_id:7]!\n\nWhat do you think about @[user_id:3] and @[user_id:2]?\n\nCheers")} 
         immediatelyRender={false} 
         onUpdate={({ editor }) => {
-          console.log(editor.getText())
+          console.log(editor.getJSON())
+          console.log(editor.getText({ blockSeparator: "\n"}))
+          console.log(editor.getHTML())
         }}
         />
       )
