@@ -12,6 +12,7 @@ import { eq, inArray, and } from "drizzle-orm";
 import { auth } from "~/lib/auth.server";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
 import { extractMentions } from "~/lib/utils";
+import { DemoTextEditor } from "~/components/DemoTextEditor";
 
 /**
  * Thread page with comment functionality including mentions.
@@ -525,13 +526,13 @@ function ThreadPage() {
         })
     }
 
-    
   return <>
     <Header>
       <HeaderTitle title={`Thread`} />
     </Header>
-
    <div className="flex-1 overflow-y-auto">
+
+   <DemoTextEditor/>
 
       <div className=" p-6 max-w-4xl space-y-6">
       <Card>
