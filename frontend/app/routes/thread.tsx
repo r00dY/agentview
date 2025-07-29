@@ -530,7 +530,13 @@ function ThreadPage() {
     </Header>
    <div className="flex-1 overflow-y-auto">
 
-   <DemoTextEditor/>
+    <div className="p-6 max-w-4xl">
+        <DemoTextEditor/>
+    </div>
+
+    <div className="p-6 max-w-4xl">
+
+    </div>
 
       <div className=" p-6 max-w-4xl space-y-6">
       <Card>
