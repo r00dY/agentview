@@ -16,20 +16,35 @@ import { extractMentions } from "~/lib/utils";
 /**
  * Thread page with comment functionality including mentions.
  * 
- * Mention Format: @[user_id:abcdef] where abcdef is the user ID
+ * Mention Format: @[property:value] where property is currently only 'user_id'
  * Examples:
  * - "Hello @[user_id:user123] how are you?"
  * - "Thanks @[user_id:admin456] for the help!"
  * 
  * Features:
- * - Extract mentions from comment content
+ * - Extract mentions from comment content with validation
  * - Store mentions in comment_mentions table
  * - Handle mentions during edits (keep existing, add new, remove old)
  * - Visual highlighting of mentions in the UI
+ * - Throws error for invalid @[...] format
  */
 // Helper function to highlight mentions in content
 function highlightMentions(content: string) {
-    return content.replace(/@\[user_id:([^\]]+)\]/g, '<span class="bg-blue-100 text-blue-800 px-1 py-0.5 rounded text-xs font-medium">@$1</span>');
+    return content.replace(/@\[([^\]]+)\]/g, (match, inside) => {
+        const colonIndex = inside.indexOf(':');
+        if (colonIndex === -1) {
+            return match; // Don't highlight invalid format
+        }
+        
+        const property = inside.substring(0, colonIndex).trim();
+        const value = inside.substring(colonIndex + 1).trim();
+        
+        if (property === 'user_id' && value) {
+            return `<span class="bg-blue-100 text-blue-800 px-1 py-0.5 rounded text-xs font-medium">@${value}</span>`;
+        }
+        
+        return match; // Don't highlight unsupported properties
+    });
 }
 
 export async function loader({ request, params }: Route.LoaderArgs) {    
@@ -88,8 +103,17 @@ export async function action({ request, params }: Route.ActionArgs) {
             }
             
             // Extract mentions from new content
-            const newMentions = extractMentions(content);
-            const previousMentions = extractMentions(message.content);
+            let newMentions, previousMentions;
+            let newUserMentions: string[] = [], previousUserMentions: string[] = [];
+            
+            try {
+                newMentions = extractMentions(content);
+                previousMentions = extractMentions(message.content);
+                newUserMentions = newMentions.user_id || [];
+                previousUserMentions = previousMentions.user_id || [];
+            } catch (error) {
+                return { error: `Invalid mention format: ${(error as Error).message}` };
+            }
             
             // Store previous content in edit history
             await db.insert(commentMessageEdits).values({
@@ -103,7 +127,7 @@ export async function action({ request, params }: Route.ActionArgs) {
                 .where(eq(commentMessages.id, editCommentMessageId));
             
             // Handle mentions for edits
-            if (newMentions.length > 0 || previousMentions.length > 0) {
+            if (newUserMentions.length > 0 || previousUserMentions.length > 0) {
                 // Get existing mentions for this message
                 const existingMentions = await db
                     .select()
@@ -113,18 +137,18 @@ export async function action({ request, params }: Route.ActionArgs) {
                 const existingMentionedUserIds = existingMentions.map(m => m.mentionedUserId);
                 
                 // Find mentions to keep (existed before and still exist)
-                const mentionsToKeep = newMentions.filter(mention => 
-                    previousMentions.includes(mention) && existingMentionedUserIds.includes(mention)
+                const mentionsToKeep = newUserMentions.filter(mention => 
+                    previousUserMentions.includes(mention) && existingMentionedUserIds.includes(mention)
                 );
                 
                 // Find new mentions to add
-                const newMentionsToAdd = newMentions.filter(mention => 
+                const newMentionsToAdd = newUserMentions.filter(mention => 
                     !existingMentionedUserIds.includes(mention)
                 );
                 
                 // Find mentions to remove (existed before but not in new content)
                 const mentionsToRemove = existingMentionedUserIds.filter(mention => 
-                    !newMentions.includes(mention)
+                    !newUserMentions.includes(mention)
                 );
                 
                 // Remove mentions that are no longer present
@@ -200,16 +224,25 @@ export async function action({ request, params }: Route.ActionArgs) {
                 content: content,
             }).returning();
 
-            // Handle mentions for new comments
-            const mentions = extractMentions(content);
-            if (mentions.length > 0) {
-                await tx.insert(commentMentions).values(
-                    mentions.map(mentionedUserId => ({
-                        commentMessageId: newMessage.id,
-                        mentionedUserId,
-                    }))
-                );
-            }
+                    // Handle mentions for new comments
+        let mentions;
+        let userMentions: string[] = [];
+        
+        try {
+            mentions = extractMentions(content);
+            userMentions = mentions.user_id || [];
+        } catch (error) {
+            throw new Error(`Invalid mention format: ${(error as Error).message}`);
+        }
+        
+        if (userMentions.length > 0) {
+            await tx.insert(commentMentions).values(
+                userMentions.map(mentionedUserId => ({
+                    commentMessageId: newMessage.id,
+                    mentionedUserId,
+                }))
+            );
+        }
 
             return newMessage;
         })
@@ -219,7 +252,7 @@ export async function action({ request, params }: Route.ActionArgs) {
         
     } catch (error) {
         console.error('Error creating comment:', error);
-        return { error: "Failed to create comment" };
+        return { error: "Failed to create comment: " + error.message };
     }
 }
 
