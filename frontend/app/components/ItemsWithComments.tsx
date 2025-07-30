@@ -174,7 +174,7 @@ export function ItemsWithComments() {
                         <div 
                             key={item.id}
                             ref={(el) => { commentRefs.current[item.id] = el; }}
-                            className={`bg-muted rounded-lg max-h-[400px] overflow-y-auto`} 
+                            className={`bg-muted rounded-lg max-h-[400px] overflow-y-auto  ${selectedItem?.id === item.id ? 'border-1 border-gray-300': ''}`} 
                             style={{ 
                                 height: `${item.comments.height}px`,
                                 position: 'absolute',
@@ -185,7 +185,7 @@ export function ItemsWithComments() {
                             onClick={() => setSelectedItem(item)}
                         >
                             <div className="p-3">
-                                <h4 className={`text-sm font-medium mb-2 ${selectedItem?.id === item.id ? 'underline': ''}`}>Comment for Item {item.id}</h4>
+                                <h4 className={`text-sm font-medium mb-2`}>Comment for Item {item.id}</h4>
                                 <p className="text-sm">This is a comment box positioned relative to its corresponding item.</p>
                             </div>
                         </div>
