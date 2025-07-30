@@ -10,33 +10,6 @@ import { posToDOMRect, ReactRenderer } from '@tiptap/react'
 import { cn } from '~/lib/utils'
 
 
-// const ITEMS = [
-//   { id: '1', name: 'Lea Thompson' },
-//   { id: '2', name: 'Cyndi Lauper' },
-//   { id: '3', name: 'Tom Cruise' },
-//   { id: '4', name: 'Madonna' },
-//   { id: '5', name: 'Jerry Hall' },
-//   { id: '6', name: 'Joan Collins' },
-//   { id: '7', name: 'Winona Ryder' },
-//   { id: '8', name: 'Christina Applegate' },
-//   { id: '9', name: 'Alyssa Milano' },
-//   { id: '10', name: 'Molly Ringwald' },
-//   { id: '11', name: 'Ally Sheedy' },
-//   { id: '12', name: 'Debbie Harry' },
-//   { id: '13', name: 'Olivia Newton-John' },
-//   { id: '14', name: 'Elton John' },
-//   { id: '15', name: 'Michael J. Fox' },
-//   { id: '16', name: 'Axl Rose' },
-//   { id: '17', name: 'Emilio Estevez' },
-//   { id: '18', name: 'Ralph Macchio' },
-//   { id: '19', name: 'Rob Lowe' },
-//   { id: '20', name: 'Jennifer Grey' },
-//   { id: '21', name: 'Mickey Rourke' },
-//   { id: '22', name: 'John Cusack' },
-//   { id: '23', name: 'Matthew Broderick' },
-//   { id: '24', name: 'Justine Bateman' },
-//   { id: '25', name: 'Lisa Bonet' },
-// ]
 
 
 export const MentionList = (props: any) => {
@@ -46,7 +19,7 @@ export const MentionList = (props: any) => {
     const item = props.items[index]
 
     if (item) {
-      props.command({ id: item.id, label: item.name })
+      props.command({ id: item.id, label: item.label })
     }
   }
 
@@ -95,7 +68,7 @@ export const MentionList = (props: any) => {
               key={index}
               onClick={() => selectItem(index)}
             >
-              {item.name}
+              {item.label}
             </button>
           ))
         ) : (
@@ -125,7 +98,7 @@ const updatePosition = (editor: Editor, element: HTMLElement) => {
 }
 
 // Function to convert text back to JSON structure
-export function textToJson(text: string): any {
+export function textToJson(text: string, mentionItems: TextEditorMentionItem[]): any {
   const lines = text.split('\n')
   const content: any[] = []
   
@@ -163,14 +136,14 @@ export function textToJson(text: string): any {
             if (userIdMatch) {
               const userId = userIdMatch[1]
               // Find the corresponding item from ITEMS array
-              const item = ITEMS.find(item => item.id === userId)
+              const item = mentionItems.find(item => item.id === userId)
               
               if (item) {
                 paragraphContent.push({
                   type: 'mention',
                   attrs: {
                     id: userId,
-                    label: item.name,
+                    label: item.label,
                     mentionSuggestionChar: '@'
                   }
                 })
@@ -221,7 +194,7 @@ export type DemoTextEditorProps = {
 }
 
 export function DemoTextEditor({ placeholder = 'Add a comment...', mentionItems = [], defaultValue = '', name = 'text-editor', className }: DemoTextEditorProps) {
-  const [value, setValue] = useState(defaultValue)
+  const [value, setValue] = useState(() => textToJson(defaultValue, mentionItems))
 
   return (<div>
     <input type="hidden" name={name} value={value} />
@@ -304,7 +277,7 @@ export function DemoTextEditor({ placeholder = 'Add a comment...', mentionItems 
         ]
         
         } 
-        content={textToJson(value)} 
+        content={value} 
         immediatelyRender={false} 
         onUpdate={({ editor }) => {
           setValue(editor.getText({ blockSeparator: "\n"}))
