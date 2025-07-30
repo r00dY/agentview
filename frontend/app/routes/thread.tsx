@@ -560,6 +560,13 @@ function ThreadPage() {
    <div className="flex-1 overflow-y-auto">
 
     <div className="p-6 max-w-4xl">
+        <div className="space-y-4 text-muted-foreground">
+          {Array.from({ length: 20 }).map((_, i) => (
+            <p key={i}>
+              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Paragraph {i + 1} of 20. Pellentesque euismod, nisi eu consectetur consectetur, nisl nisi consectetur nisi, euismod euismod nisi nisi euismod.
+            </p>
+          ))}
+        </div>
         <DemoTextEditor mentionItems={ITEMS} placeholder="Add a comment..." defaultValue={"Hello @[user_id:7]!\n\nWhat do you think about @[user_id:3] and @[user_id:2]?\n\nCheers"}/>
     </div>
 
@@ -654,7 +661,7 @@ function ThreadPage() {
     </div>
     
     </div> 
-
+{/* 
 
     <Card>
             <CardHeader>
@@ -673,11 +680,7 @@ function ThreadPage() {
 
                 { formError && <div className="text-red-500">{formError}</div> }
 
-                {/* { fetcher.data?.error && (
-                    <div className="text-red-500">{fetcher.data.error}</div>
-                )} */}
-                
             </CardContent>
-        </Card>
+        </Card> */}
   </>
 }

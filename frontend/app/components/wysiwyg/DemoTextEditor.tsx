@@ -1,4 +1,4 @@
-import React, { useEffect, useImperativeHandle, useState } from 'react'
+import React, { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import { Editor, EditorProvider } from '@tiptap/react'
 import Document from '@tiptap/extension-document'
 import Paragraph from '@tiptap/extension-paragraph'
@@ -10,9 +10,27 @@ import { posToDOMRect, ReactRenderer } from '@tiptap/react'
 import { cn } from '~/lib/utils'
 import { type SuggestionProps } from '@tiptap/suggestion'
 
-
-export const MentionList = (props: SuggestionProps<MentionNodeAttrs, any>) => {
+export const MentionList = forwardRef((props: SuggestionProps<MentionNodeAttrs, any>, ref) => {
   const [selectedIndex, setSelectedIndex] = useState(0)
+  const [position, setPosition] = useState<{ top: number, left: number }>({ top: 0, left: 0 })
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  useLayoutEffect(() => {
+    const clientRect = props.clientRect?.()!
+
+    const virtualElement = {
+      getBoundingClientRect: () => clientRect,
+    }
+  
+    computePosition(virtualElement, rootRef.current!, {
+      placement: 'bottom-start',
+      strategy: 'absolute',
+      middleware: [shift(), flip()],
+    }).then(({ x, y, strategy }) => {
+      setPosition({ top: y, left: x })
+    })
+    
+  }, [props.clientRect])
 
   const selectItem = (index: number) => {
     const item = props.items[index]
@@ -36,8 +54,8 @@ export const MentionList = (props: SuggestionProps<MentionNodeAttrs, any>) => {
 
   useEffect(() => setSelectedIndex(0), [props.items])
 
-  useImperativeHandle(props.ref, () => ({
-    onKeyDown: ({ event }) => {
+  useImperativeHandle(ref, () => ({
+    onKeyDown: ({ event }: { event: KeyboardEvent }) => {
       if (event.key === 'ArrowUp') {
         upHandler()
         return true
@@ -61,9 +79,7 @@ export const MentionList = (props: SuggestionProps<MentionNodeAttrs, any>) => {
     throw new Error("MentionList: clientRect is not available");
   }
 
-  const rect = props.clientRect?.()!;
-
-  return (<div style={{position: "fixed", top: (rect.top + rect.height + 10) + 'px', left: rect.left + 'px'}}>
+  return (<div style={{position: "fixed", top: (position.top) + 'px', left: position.left + 'px', zIndex: 1}} ref={rootRef}>
     <div className="bg-popover text-popover-foreground z-50 w-72 rounded-md border p-1 shadow-md outline-hidden">
       <div className="flex flex-col">
         {props.items.length ? (
@@ -82,7 +98,7 @@ export const MentionList = (props: SuggestionProps<MentionNodeAttrs, any>) => {
         </div>
     </div>
     </div>)
-}
+})
 
 
 const updatePosition = (editor: Editor, element: HTMLElement) => {
@@ -215,9 +231,10 @@ export type DemoTextEditorProps = {
 export function DemoTextEditor({ placeholder = 'Add a comment...', mentionItems = [], defaultValue = '', name = 'text-editor', className }: DemoTextEditorProps) {
   const [value, setValue] = useState(() => textToJson(defaultValue, mentionItems))
   const [mentionListProps, setMentionListProps] = useState<SuggestionProps<MentionNodeAttrs, any> | null>(null)
+  const mentionListRef = useRef<HTMLDivElement>(null)
 
   return (<div>
-    { mentionListProps && <MentionList {...mentionListProps} /> }
+    { mentionListProps && <MentionList {...mentionListProps} ref={mentionListRef} /> }
 
     <input type="hidden" name={name} value={value} />
     <EditorProvider extensions={[
@@ -248,72 +265,35 @@ export function DemoTextEditor({ placeholder = 'Add a comment...', mentionItems 
               },
             
               render: () => {
-                let component: ReactRenderer<typeof MentionList>
-            
                 return {
                   onStart: props => {
-                    console.log('onStart')
-
-                    // component = new ReactRenderer(MentionList, {
-                    //   props,
-                    //   editor: props.editor,
-                    // })
-            
-                    // if (!props.clientRect) {
-                    //   return
-                    // }
-            
-                    // component.element.style.position = 'fixed'
-            
-                    // document.body.appendChild(component.element)
-
-                    // updatePosition(props.editor, component.element)
-
                     if (!props.clientRect) {
                       return
                     }
 
-                    console.log('rect', props.clientRect())
-
                     setMentionListProps(props)
-
-                    // setMentionList({ props, top: props.clientRect.top, left: props.clientRect.left })
                   },
             
                   onUpdate(props) {
-                    console.log('onUpdate')
-
-                    if (props.clientRect) {
-                      console.log('rect', props.clientRect())
+                    if (!props.clientRect) {
+                      return
                     }
 
                     setMentionListProps(props)
-
-
-                    // component.updateProps(props)
-            
-                    // if (!props.clientRect) {
-                    //   return
-                    // }
-
-                    // updatePosition(props.editor, component.element)
                   },
             
                   onKeyDown(props) {
-                    console.log('onKeyDown')
-                    // if (props.event.key === 'Escape') {
-                    //   component.destroy()
-                    //   return true
-                    // }
-                    // return true
-            
-                    // return component.ref?.onKeyDown(props)
+                    if (props.event.key === 'Escape') {
+                      setMentionListProps(null)
+                      return true
+                    }
+
+                    // @ts-ignore
+                    return mentionListRef.current?.onKeyDown(props)          
                   },
             
                   onExit() {
-                    console.log('onExit')
                     setMentionListProps(null)
-                    // component.destroy()
                   },
                 }
               }
@@ -332,9 +312,6 @@ export function DemoTextEditor({ placeholder = 'Add a comment...', mentionItems 
             class: cn('border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 field-sizing-content min-h-16 w-full rounded-md border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm', className),
           },
         }}
-        // editorContainerProps={{
-        //   className: 'border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 flex field-sizing-content min-h-16 w-full rounded-md border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
-        // }}
         />
       </div>)
 }
