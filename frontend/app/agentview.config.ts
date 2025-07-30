@@ -90,11 +90,10 @@ export const config : AgentViewConfig = {
                 })(),
             };
 
-            console.log(message)
             yield message;
         }
 
-        
+
 
         
 

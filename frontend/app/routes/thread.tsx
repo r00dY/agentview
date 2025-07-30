@@ -13,6 +13,7 @@ import { auth } from "~/lib/auth.server";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
 import { extractMentions } from "~/lib/utils";
 import { TextEditor } from "~/components/wysiwyg/TextEditor";
+import { ItemsWithComments } from "~/components/ItemsWithComments";
 
 /**
  * Thread page with comment functionality including mentions.
@@ -611,6 +612,8 @@ function ThreadPage() {
         </CardContent>
       </Card>
 
+      <ItemsWithComments />
+
         <div className="space-y-6 mt-12">
             {thread.activities.map((activity) => { 
                 return <div key={activity.id} className="relative">
@@ -632,13 +635,13 @@ function ThreadPage() {
                 </div>)}
                 
                 {/* Comment thread for each activity */}
-                <div className="mt-2">
+                {/* <div className="mt-2">
                     <CommentThread 
                         commentThread={activity.commentThread} 
                         activityId={activity.id} 
                         userId={loaderData.userId}
                     />
-                </div>
+                </div> */}
             </div>
              })}
         </div>
