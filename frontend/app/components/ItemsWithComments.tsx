@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 
 const items = [
     { id: 1, height: 45, comments: { height: 100, color: "bg-teal-200" } },
-    { id: 2, height: 267, comments: { height: 100, color: "bg-amber-200" } },
+    { id: 2, height: 267, comments: { height: 400, color: "bg-amber-200" } },
     { id: 3, height: 100, comments: { height: 1500, color: "bg-teal-200" } },
     { id: 4, height: 234 },
     { id: 5, height: 50, comments: { height: 300, color: "bg-red-200" } },
@@ -70,7 +70,7 @@ export function ItemsWithComments() {
             const commentHeight = commentHeights[item.id];
 
             if (!item.comments) { 
-                correctItemPosition(itemIndex - 1, lastTop);
+                correctItemPosition(itemIndex - 1, lastTop - gap);
                 return
             }
 
@@ -79,28 +79,29 @@ export function ItemsWithComments() {
                 return;
             }
 
-            commentTops[item.id] = lastTop - commentHeight;
+            const newTop = lastTop - commentHeight;
+            commentTops[item.id] = newTop;
 
             if (itemIndex !== 0) {
-                correctItemPosition(itemIndex - 1, commentTop);
+                correctItemPosition(itemIndex - 1, newTop - gap);
             }
         }
 
-        let lastBottom = 0;
+        let lastBottom = -gap;
         items.forEach((item, index) => {
             if (!item.comments) { return }
 
             let top = itemTops[item.id];
 
-            if (top >= lastBottom) { // fits
+            if (top >= (lastBottom + gap)) { // fits
                 // do nothing
             }
             else if (selectedItem && selectedItem.id === item.id && selectedItem.comments) { // anchor
                 top = itemTops[item.id];
-                correctItemPosition(index - 1, top);
+                correctItemPosition(index - 1, top - gap);
             }
-            else if (top < lastBottom) { // doesn't fit
-                top = lastBottom
+            else { // doesn't fit
+                top = lastBottom + gap;
             }
 
             lastBottom = top + commentHeights[item.id];
@@ -159,7 +160,7 @@ export function ItemsWithComments() {
                         <div 
                             key={item.id}
                             ref={(el) => { commentRefs.current[item.id] = el; }}
-                            className={`${item.comments.color} rounded-lg max-h-[400px] overflow-y-auto ${selectedItem?.id === item.id ? 'border-ring ring-ring/50 ring-[3px]' : ''}`} 
+                            className={`bg-muted rounded-lg max-h-[400px] overflow-y-auto`} 
                             style={{ 
                                 height: `${item.comments.height}px`,
                                 position: 'absolute',
@@ -170,7 +171,7 @@ export function ItemsWithComments() {
                             onClick={() => setSelectedItem(item)}
                         >
                             <div className="p-3">
-                                <h4 className="text-sm font-medium mb-2">Comment for Item {item.id}</h4>
+                                <h4 className={`text-sm font-medium mb-2 ${selectedItem?.id === item.id ? 'underline': ''}`}>Comment for Item {item.id}</h4>
                                 <p className="text-sm">This is a comment box positioned relative to its corresponding item.</p>
                             </div>
                         </div>
