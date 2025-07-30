@@ -3,16 +3,15 @@ import { Editor, EditorProvider } from '@tiptap/react'
 import Document from '@tiptap/extension-document'
 import Paragraph from '@tiptap/extension-paragraph'
 import Text from '@tiptap/extension-text'
-import Mention from '@tiptap/extension-mention'
+import Mention, { type MentionNodeAttrs } from '@tiptap/extension-mention'
 import { UndoRedo, Placeholder} from '@tiptap/extensions'
 import { computePosition, flip, shift } from '@floating-ui/dom'
 import { posToDOMRect, ReactRenderer } from '@tiptap/react'
 import { cn } from '~/lib/utils'
+import { type SuggestionProps } from '@tiptap/suggestion'
 
 
-
-
-export const MentionList = (props: any) => {
+export const MentionList = (props: SuggestionProps<MentionNodeAttrs, any>) => {
   const [selectedIndex, setSelectedIndex] = useState(0)
 
   const selectItem = (index: number) => {
@@ -58,7 +57,13 @@ export const MentionList = (props: any) => {
     },
   }))
 
-  return (
+  if (!props.clientRect) {
+    throw new Error("MentionList: clientRect is not available");
+  }
+
+  const rect = props.clientRect?.()!;
+
+  return (<div style={{position: "fixed", top: (rect.top + rect.height + 10) + 'px', left: rect.left + 'px'}}>
     <div className="bg-popover text-popover-foreground z-50 w-72 rounded-md border p-1 shadow-md outline-hidden">
       <div className="flex flex-col">
         {props.items.length ? (
@@ -76,7 +81,7 @@ export const MentionList = (props: any) => {
         )}
         </div>
     </div>
-  )
+    </div>)
 }
 
 
@@ -95,6 +100,20 @@ const updatePosition = (editor: Editor, element: HTMLElement) => {
     element.style.left = `${x}px`
     element.style.top = `${y}px`
   })
+}
+
+async function getPosition(editor: Editor, element: HTMLElement) {
+  const virtualElement = {
+    getBoundingClientRect: () => posToDOMRect(editor.view, editor.state.selection.from, editor.state.selection.to),
+  }
+
+  const { x, y } = await computePosition(virtualElement, element, {
+    placement: 'bottom-start',
+    strategy: 'absolute',
+    middleware: [shift(), flip()],
+  })
+
+  return { x, y }
 }
 
 // Function to convert text back to JSON structure
@@ -195,8 +214,11 @@ export type DemoTextEditorProps = {
 
 export function DemoTextEditor({ placeholder = 'Add a comment...', mentionItems = [], defaultValue = '', name = 'text-editor', className }: DemoTextEditorProps) {
   const [value, setValue] = useState(() => textToJson(defaultValue, mentionItems))
+  const [mentionListProps, setMentionListProps] = useState<SuggestionProps<MentionNodeAttrs, any> | null>(null)
 
   return (<div>
+    { mentionListProps && <MentionList {...mentionListProps} /> }
+
     <input type="hidden" name={name} value={value} />
     <EditorProvider extensions={[
         Document, 
@@ -232,43 +254,66 @@ export function DemoTextEditor({ placeholder = 'Add a comment...', mentionItems 
                   onStart: props => {
                     console.log('onStart')
 
-                    component = new ReactRenderer(MentionList, {
-                      props,
-                      editor: props.editor,
-                    })
+                    // component = new ReactRenderer(MentionList, {
+                    //   props,
+                    //   editor: props.editor,
+                    // })
             
+                    // if (!props.clientRect) {
+                    //   return
+                    // }
+            
+                    // component.element.style.position = 'fixed'
+            
+                    // document.body.appendChild(component.element)
+
+                    // updatePosition(props.editor, component.element)
+
                     if (!props.clientRect) {
                       return
                     }
-            
-                    component.element.style.position = 'fixed'
-            
-                    document.body.appendChild(component.element)
 
-                    updatePosition(props.editor, component.element)
+                    console.log('rect', props.clientRect())
+
+                    setMentionListProps(props)
+
+                    // setMentionList({ props, top: props.clientRect.top, left: props.clientRect.left })
                   },
             
                   onUpdate(props) {
-                    component.updateProps(props)
-            
-                    if (!props.clientRect) {
-                      return
+                    console.log('onUpdate')
+
+                    if (props.clientRect) {
+                      console.log('rect', props.clientRect())
                     }
 
-                    updatePosition(props.editor, component.element)
+                    setMentionListProps(props)
+
+
+                    // component.updateProps(props)
+            
+                    // if (!props.clientRect) {
+                    //   return
+                    // }
+
+                    // updatePosition(props.editor, component.element)
                   },
             
                   onKeyDown(props) {
-                    if (props.event.key === 'Escape') {
-                      component.destroy()
-                      return true
-                    }
+                    console.log('onKeyDown')
+                    // if (props.event.key === 'Escape') {
+                    //   component.destroy()
+                    //   return true
+                    // }
+                    // return true
             
-                    return component.ref?.onKeyDown(props)
+                    // return component.ref?.onKeyDown(props)
                   },
             
                   onExit() {
-                    component.destroy()
+                    console.log('onExit')
+                    setMentionListProps(null)
+                    // component.destroy()
                   },
                 }
               }
