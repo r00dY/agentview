@@ -3,7 +3,7 @@ import { ItemsWithCommentsLayout } from "./ItemsWithCommentsLayout";
 
 // Global variable with hardcoded items
 
-const items = [
+const defaultItems = [
     { id: "1", height: 45, comments: { height: 100, color: "bg-teal-200" } },
     { id: "2", height: 267, comments: { height: 400, color: "bg-amber-200" } },
     { id: "3", height: 100, comments: { height: 1500, color: "bg-teal-200" } },
@@ -29,18 +29,31 @@ const items = [
 
 export function ItemsWithCommentsLayoutTest() {
     const [selectedItem, setSelectedItem] = useState<any | undefined>(undefined);
+
+    const [items, setItems] = useState(defaultItems);
+    
+    const handleHeightChange = (itemId: string, increment: boolean) => {
+        setItems(prevItems => 
+            prevItems.map(item => {
+                if (item.id === itemId && item.comments) {
+                    const newHeight = increment 
+                        ? item.comments.height + 100 
+                        : Math.max(100, item.comments.height - 100);
+                    return {
+                        ...item,
+                        comments: {
+                            ...item.comments,
+                            height: newHeight
+                        }
+                    };
+                }
+                return item;
+            })
+        );
+    };
     
     const layoutItems = items.map(item => ({
         ...item,
-        commentsComponent: item.comments ? <div className={`bg-muted rounded-lg max-h-[400px] overflow-y-auto  ${selectedItem?.id === item.id ? 'border-1 border-gray-300': ''}`} 
-            style={{ 
-                height: `${item.comments.height}px`,
-            }} onClick={() => { setSelectedItem(item); console.log('clicked', item) }} data-comment={true}>
-                <div className="p-3">
-                    <h4 className={`text-sm font-medium mb-2`}>Comment for Item {item.id}</h4>
-                    <p className="text-sm">This is a comment box positioned relative to its corresponding item.</p>
-                </div>
-            </div> : undefined,
         itemComponent: <div className={`border p-3 rounded-lg ${selectedItem?.id === item.id ? 'border-ring ring-ring/50 ring-[3px]' : ''}`}
             style={{ height: `${item.height}px` }}
             data-item={true}
@@ -52,8 +65,39 @@ export function ItemsWithCommentsLayoutTest() {
                 </div>
             </div>
         </div>,
+        commentsComponent: item.comments ? <div className={`bg-muted rounded-lg overflow-y-auto  ${selectedItem?.id === item.id ? 'border-1 border-gray-300': ''}`} 
+            style={{ 
+                height: `${item.comments.height}px`,
+            }} onClick={() => { setSelectedItem(item); console.log('clicked', item) }} data-comment={true}>
+                <div className="p-3">
+                    <div className="flex justify-between items-center mb-2">
+                        <h4 className={`text-sm font-medium`}>Comment for Item {item.id}</h4>
+                        <div className="flex gap-1">
+                            <button 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleHeightChange(item.id, false);
+                                }}
+                                className="w-6 h-6 rounded bg-gray-200 hover:bg-gray-300 text-xs font-bold flex items-center justify-center"
+                                disabled={item.comments.height <= 100}
+                            >
+                                -
+                            </button>
+                            <button 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleHeightChange(item.id, true);
+                                }}
+                                className="w-6 h-6 rounded bg-gray-200 hover:bg-gray-300 text-xs font-bold flex items-center justify-center"
+                            >
+                                +
+                            </button>
+                        </div>
+                    </div>
+                    <p className="text-sm">This is a comment box positioned relative to its corresponding item.</p>
+                </div>
+            </div> : undefined,
     }));
-
 
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {

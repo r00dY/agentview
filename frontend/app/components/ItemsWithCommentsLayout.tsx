@@ -14,19 +14,20 @@ export type ItemsWithCommentsLayoutProps = {
 }
 
 export function ItemsWithCommentsLayout({ items, selectedItemId }: ItemsWithCommentsLayoutProps) {
-    // const [selectedItem, setSelectedItem] = useState<any | null>(null);
-    
+    const selectedItem = items.find(item => item.id === selectedItemId);
+
     // Refs for items and comment boxes
     const itemRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
     const commentRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
     const containerRef = useRef<HTMLDivElement>(null);
     const bottomSpacerRef = useRef<HTMLDivElement>(null);
 
-    const selectedItem = items.find(item => item.id === selectedItemId);
 
     // Calculate and apply comment positions
     const updateCommentPositions = useCallback(() => {
         if (items.filter(item => item.commentsComponent !== undefined).length === 0) return; // no comments
+
+        console.log('udpating comment positions')
 
         const containerRect = containerRef.current!.getBoundingClientRect();
 
@@ -110,16 +111,13 @@ export function ItemsWithCommentsLayout({ items, selectedItemId }: ItemsWithComm
         else {
             bottomSpacerRef.current!.style.height = '0px';
         }
-
-        console.log(commentTops)
         
-    }, [selectedItem]);
+    }, [selectedItemId]);
 
     // Update positions when selection changes or component mounts
     useEffect(() => {
         updateCommentPositions();
     }, [updateCommentPositions]);
-
 
     return (
         <div className="flex flex-row gap-4 relative">
