@@ -13,7 +13,7 @@ import { auth } from "~/lib/auth.server";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
 import { extractMentions } from "~/lib/utils";
 import { TextEditor } from "~/components/wysiwyg/TextEditor";
-import { ItemsWithComments } from "~/components/ItemsWithComments";
+import { ItemsWithCommentsLayoutTest } from "~/components/ItemsWithCommentsLayoutTest";
 
 /**
  * Thread page with comment functionality including mentions.
@@ -612,7 +612,7 @@ function ThreadPage() {
         </CardContent>
       </Card>
 
-      <ItemsWithComments />
+      <ItemsWithCommentsLayoutTest />
 {/* 
         <div className="space-y-6 mt-12">
             {thread.activities.map((activity) => { 
