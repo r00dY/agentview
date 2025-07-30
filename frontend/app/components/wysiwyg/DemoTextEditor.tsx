@@ -7,35 +7,36 @@ import Mention from '@tiptap/extension-mention'
 import { UndoRedo, Placeholder} from '@tiptap/extensions'
 import { computePosition, flip, shift } from '@floating-ui/dom'
 import { posToDOMRect, ReactRenderer } from '@tiptap/react'
+import { cn } from '~/lib/utils'
 
 
-const ITEMS = [
-  { id: '1', name: 'Lea Thompson' },
-  { id: '2', name: 'Cyndi Lauper' },
-  { id: '3', name: 'Tom Cruise' },
-  { id: '4', name: 'Madonna' },
-  { id: '5', name: 'Jerry Hall' },
-  { id: '6', name: 'Joan Collins' },
-  { id: '7', name: 'Winona Ryder' },
-  { id: '8', name: 'Christina Applegate' },
-  { id: '9', name: 'Alyssa Milano' },
-  { id: '10', name: 'Molly Ringwald' },
-  { id: '11', name: 'Ally Sheedy' },
-  { id: '12', name: 'Debbie Harry' },
-  { id: '13', name: 'Olivia Newton-John' },
-  { id: '14', name: 'Elton John' },
-  { id: '15', name: 'Michael J. Fox' },
-  { id: '16', name: 'Axl Rose' },
-  { id: '17', name: 'Emilio Estevez' },
-  { id: '18', name: 'Ralph Macchio' },
-  { id: '19', name: 'Rob Lowe' },
-  { id: '20', name: 'Jennifer Grey' },
-  { id: '21', name: 'Mickey Rourke' },
-  { id: '22', name: 'John Cusack' },
-  { id: '23', name: 'Matthew Broderick' },
-  { id: '24', name: 'Justine Bateman' },
-  { id: '25', name: 'Lisa Bonet' },
-]
+// const ITEMS = [
+//   { id: '1', name: 'Lea Thompson' },
+//   { id: '2', name: 'Cyndi Lauper' },
+//   { id: '3', name: 'Tom Cruise' },
+//   { id: '4', name: 'Madonna' },
+//   { id: '5', name: 'Jerry Hall' },
+//   { id: '6', name: 'Joan Collins' },
+//   { id: '7', name: 'Winona Ryder' },
+//   { id: '8', name: 'Christina Applegate' },
+//   { id: '9', name: 'Alyssa Milano' },
+//   { id: '10', name: 'Molly Ringwald' },
+//   { id: '11', name: 'Ally Sheedy' },
+//   { id: '12', name: 'Debbie Harry' },
+//   { id: '13', name: 'Olivia Newton-John' },
+//   { id: '14', name: 'Elton John' },
+//   { id: '15', name: 'Michael J. Fox' },
+//   { id: '16', name: 'Axl Rose' },
+//   { id: '17', name: 'Emilio Estevez' },
+//   { id: '18', name: 'Ralph Macchio' },
+//   { id: '19', name: 'Rob Lowe' },
+//   { id: '20', name: 'Jennifer Grey' },
+//   { id: '21', name: 'Mickey Rourke' },
+//   { id: '22', name: 'John Cusack' },
+//   { id: '23', name: 'Matthew Broderick' },
+//   { id: '24', name: 'Justine Bateman' },
+//   { id: '25', name: 'Lisa Bonet' },
+// ]
 
 
 export const MentionList = (props: any) => {
@@ -209,15 +210,28 @@ export function textToJson(text: string): any {
   }
 }
 
-export function DemoTextEditor() {
-  return (
+export type TextEditorMentionItem = { id: string, label: string }
+
+export type DemoTextEditorProps = {
+  defaultValue?: string
+  placeholder?: string
+  name?: string
+  mentionItems: TextEditorMentionItem[],
+  className?: string
+}
+
+export function DemoTextEditor({ placeholder = 'Add a comment...', mentionItems = [], defaultValue = '', name = 'text-editor', className }: DemoTextEditorProps) {
+  const [value, setValue] = useState(defaultValue)
+
+  return (<div>
+    <input type="hidden" name={name} value={value} />
     <EditorProvider extensions={[
         Document, 
         Paragraph, 
         Text,
         UndoRedo,
         Placeholder.configure({
-          placeholder: 'Add a comment...',
+          placeholder,
         }),
         Mention.configure({
             HTMLAttributes: {
@@ -231,8 +245,8 @@ export function DemoTextEditor() {
 
             suggestion: {
               items: ({ query }) => {
-                const results = ITEMS
-                  .filter(item => item.name.toLowerCase().startsWith(query.toLowerCase()))
+                const results = mentionItems
+                  .filter(item => item.label.toLowerCase().startsWith(query.toLowerCase()))
                   .slice(0, 5)
             
                 return results
@@ -242,7 +256,6 @@ export function DemoTextEditor() {
                 let component: ReactRenderer<typeof MentionList>
             
                 return {
-
                   onStart: props => {
                     console.log('onStart')
 
@@ -291,23 +304,21 @@ export function DemoTextEditor() {
         ]
         
         } 
-        content={textToJson("Hello @[user_id:7]!\n\nWhat do you think about @[user_id:3] and @[user_id:2]?\n\nCheers")} 
+        content={textToJson(value)} 
         immediatelyRender={false} 
         onUpdate={({ editor }) => {
-          console.log(editor.getJSON())
-          console.log(editor.getText({ blockSeparator: "\n"}))
-          console.log(editor.getHTML())
+          setValue(editor.getText({ blockSeparator: "\n"}))
         }}
         editorProps={{
           attributes: {
-            class: 'border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 field-sizing-content min-h-16 w-full rounded-md border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
+            class: cn('border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 field-sizing-content min-h-16 w-full rounded-md border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm', className),
           },
         }}
         // editorContainerProps={{
         //   className: 'border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 flex field-sizing-content min-h-16 w-full rounded-md border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
         // }}
         />
-      )
+      </div>)
 }
 
 
