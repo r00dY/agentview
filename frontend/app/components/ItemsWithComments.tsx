@@ -25,6 +25,8 @@ const items = [
     { id: 20, height: 267, comments: { height: 1500, color: "bg-teal-200" } }
 ];
 
+const gap = 8;
+
 export function ItemsWithComments() {
     const [selectedItem, setSelectedItem] = useState<any | null>(null);
     
@@ -90,7 +92,7 @@ export function ItemsWithComments() {
 
             let top = itemTops[item.id];
 
-            if (top >= lastBottom) { // if fits
+            if (top >= lastBottom) { // fits
                 // do nothing
             }
             else if (selectedItem && selectedItem.id === item.id && selectedItem.comments) { // anchor
@@ -161,7 +163,8 @@ export function ItemsWithComments() {
                             style={{ 
                                 height: `${item.comments.height}px`,
                                 position: 'absolute',
-                                width: '100%'
+                                width: '100%',
+                                transition: 'top 0.35s cubic-bezier(0.16, 1, 0.3, 1)'
                             }}
                             data-comment={true}
                             onClick={() => setSelectedItem(item)}
