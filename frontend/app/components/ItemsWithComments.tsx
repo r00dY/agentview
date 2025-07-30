@@ -34,6 +34,7 @@ export function ItemsWithComments() {
     const itemRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
     const commentRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
     const containerRef = useRef<HTMLDivElement>(null);
+    const bottomSpacerRef = useRef<HTMLDivElement>(null);
 
     // Calculate and apply comment positions
     const updateCommentPositions = useCallback(() => {
@@ -111,6 +112,17 @@ export function ItemsWithComments() {
         Object.keys(commentTops).forEach((itemId) => {
             commentRefs.current[parseInt(itemId)]!.style.top = `${commentTops[parseInt(itemId)]}px`;
         });
+
+        console.log('lastBottom', lastBottom - containerRect.height);
+
+        const containerHeight = containerRect.height - bottomSpacerRef.current!.getBoundingClientRect().height;
+
+        if (lastBottom > containerHeight) {
+            bottomSpacerRef.current!.style.height = `${lastBottom - containerHeight}px`;
+        }
+        else {
+            bottomSpacerRef.current!.style.height = '0px';
+        }
         
     }, [selectedItem]);
 
@@ -149,6 +161,8 @@ export function ItemsWithComments() {
                         </div>
                     </div>
                 ))}
+
+                <div ref={bottomSpacerRef}/>
             </div>
             <div ref={containerRef} className="w-[300px] flex-none relative overflow-hidden">
                 {items.map((item) => {

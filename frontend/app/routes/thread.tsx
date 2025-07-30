@@ -613,7 +613,7 @@ function ThreadPage() {
       </Card>
 
       <ItemsWithComments />
-
+{/* 
         <div className="space-y-6 mt-12">
             {thread.activities.map((activity) => { 
                 return <div key={activity.id} className="relative">
@@ -621,7 +621,6 @@ function ThreadPage() {
                 { activity.role === "user" && (<div className="pl-[25%] relative flex flex-col justify-end">
                     { activity.type === "message" && (<div className="border bg-muted p-3 rounded-lg">
                         <div dangerouslySetInnerHTML={{ __html: (activity.content as unknown as string) }}></div>
-                        {/* <div className="text-xs text-muted-foreground">{activity.run.state}</div> */}
                     </div>)}
                     { activity.type !== "message" && (<div className="border bg-muted p-3 rounded-lg italic text-muted-foreground">no view</div>)}
                 </div>)}
@@ -629,19 +628,17 @@ function ThreadPage() {
                 { activity.role !== "user" && (<div className="pr-[25%] relative flex flex-col justify-start">
                     { activity.type === "message" && (<div className="border p-3 rounded-lg">
                         <div dangerouslySetInnerHTML={{ __html: (activity.content as unknown as string) }}></div>
-                        {/* <div className="text-xs text-muted-foreground">{activity.run.state}</div> */}
                     </div>)}
                     { activity.type !== "message" && (<div className="border p-3 rounded-lg italic text-muted-foreground">no view</div>)}
                 </div>)}
                 
-                {/* Comment thread for each activity */}
-                {/* <div className="mt-2">
+                <div className="mt-2">
                     <CommentThread 
                         commentThread={activity.commentThread} 
                         activityId={activity.id} 
                         userId={loaderData.userId}
                     />
-                </div> */}
+                </div>
             </div>
              })}
         </div>
@@ -649,7 +646,7 @@ function ThreadPage() {
         <div>
             { thread.state === 'in_progress' && <div>in progress...</div>}
             { thread.state === 'failed' && <div>failed</div>}
-        </div>
+        </div> */}
 
     </div>
     
