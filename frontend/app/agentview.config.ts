@@ -69,12 +69,32 @@ export const config : AgentViewConfig = {
 
             await new Promise(resolve => setTimeout(resolve, 1000));
 
-            yield {
+            const message = {
                 type: "message",
                 role: "assistant",
-                content: `I got your question ${i + 1}`,
+                content: (() => {
+                    const loremVariants = [
+                        `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Index: ${i + 1}`,
+                        `Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam. This is index ${i + 1}.`,
+                        `Quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Index: ${i + 1}`,
+                        `Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. The current index is ${i + 1}.`,
+                        `Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. This was index ${i + 1}.`,
+                        `Curabitur pretium tincidunt lacus. Nulla gravida orci a odio. Index: ${i + 1}`,
+                        `Nullam varius, turpis et commodo pharetra, est eros bibendum elit, nec luctus magna felis sollicitudin mauris. Index: ${i + 1}`,
+                        `Integer in mauris eu nibh euismod gravida. Duis ac tellus et risus vulputate vehicula. The index is ${i + 1}.`,
+                        `Donec lobortis risus a elit. Etiam tempor. Ut ullamcorper, ligula eu tempor congue, eros est euismod turpis, id tincidunt sapien risus a quam. Index: ${i + 1}`,
+                        `Maecenas fermentum consequat mi. Donec fermentum. Pellentesque malesuada nulla a mi. Duis sapien sem, aliquet nec, commodo eget, consequat quis, neque. Index: ${i + 1}.`
+                    ];
+                    // Pick a random variant each time
+                    return loremVariants[Math.floor(Math.random() * loremVariants.length)];
+                })(),
             };
+
+            console.log(message)
+            yield message;
         }
+
+        
 
         
 

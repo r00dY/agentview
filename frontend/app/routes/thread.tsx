@@ -559,13 +559,10 @@ function ThreadPage() {
     </Header>
    <div className="flex-1 overflow-y-auto">
 
-    <div className="p-6 max-w-4xl">
+    {/* <div className="p-6 max-w-4xl">
         <TextEditor mentionItems={ITEMS} placeholder="Add a comment..." defaultValue={"Hello @[user_id:7]!\n\nWhat do you think about @[user_id:3] and @[user_id:2]?\n\nCheers"}/>
-    </div>
+    </div> */}
 
-    <div className="p-6 max-w-4xl">
-
-    </div>
 
       <div className=" p-6 max-w-4xl space-y-6">
       <Card>
