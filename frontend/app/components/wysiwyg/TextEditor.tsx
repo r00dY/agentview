@@ -5,7 +5,7 @@ import Paragraph from '@tiptap/extension-paragraph'
 import Text from '@tiptap/extension-text'
 import Mention, { type MentionNodeAttrs } from '@tiptap/extension-mention'
 import { UndoRedo, Placeholder} from '@tiptap/extensions'
-import { computePosition, flip, shift } from '@floating-ui/dom'
+import { computePosition, flip, shift, offset } from '@floating-ui/dom'
 import { posToDOMRect, ReactRenderer } from '@tiptap/react'
 import { cn } from '~/lib/utils'
 import { type SuggestionProps } from '@tiptap/suggestion'
@@ -25,7 +25,7 @@ export const MentionList = forwardRef((props: SuggestionProps<MentionNodeAttrs, 
     computePosition(virtualElement, rootRef.current!, {
       placement: 'bottom-start',
       strategy: 'absolute',
-      middleware: [shift(), flip()],
+      middleware: [shift(), flip(), offset(6)],
     }).then(({ x, y, strategy }) => {
       setPosition({ top: y, left: x })
     })
@@ -100,37 +100,6 @@ export const MentionList = forwardRef((props: SuggestionProps<MentionNodeAttrs, 
     </div>)
 })
 
-
-const updatePosition = (editor: Editor, element: HTMLElement) => {
-  const virtualElement = {
-    getBoundingClientRect: () => posToDOMRect(editor.view, editor.state.selection.from, editor.state.selection.to),
-  }
-
-  computePosition(virtualElement, element, {
-    placement: 'bottom-start',
-    strategy: 'absolute',
-    middleware: [shift(), flip()],
-  }).then(({ x, y, strategy }) => {
-    element.style.width = 'max-content'
-    element.style.position = strategy
-    element.style.left = `${x}px`
-    element.style.top = `${y}px`
-  })
-}
-
-async function getPosition(editor: Editor, element: HTMLElement) {
-  const virtualElement = {
-    getBoundingClientRect: () => posToDOMRect(editor.view, editor.state.selection.from, editor.state.selection.to),
-  }
-
-  const { x, y } = await computePosition(virtualElement, element, {
-    placement: 'bottom-start',
-    strategy: 'absolute',
-    middleware: [shift(), flip()],
-  })
-
-  return { x, y }
-}
 
 // Function to convert text back to JSON structure
 export function textToJson(text: string, mentionItems: TextEditorMentionItem[]): any {
@@ -220,7 +189,7 @@ export function textToJson(text: string, mentionItems: TextEditorMentionItem[]):
 
 export type TextEditorMentionItem = { id: string, label: string }
 
-export type DemoTextEditorProps = {
+export type TextEditorProps = {
   defaultValue?: string
   placeholder?: string
   name?: string
@@ -228,7 +197,7 @@ export type DemoTextEditorProps = {
   className?: string
 }
 
-export function DemoTextEditor({ placeholder = 'Add a comment...', mentionItems = [], defaultValue = '', name = 'text-editor', className }: DemoTextEditorProps) {
+export function TextEditor({ placeholder = 'Add a comment...', mentionItems = [], defaultValue = '', name = 'text-editor', className }: TextEditorProps) {
   const [value, setValue] = useState(() => textToJson(defaultValue, mentionItems))
   const [mentionListProps, setMentionListProps] = useState<SuggestionProps<MentionNodeAttrs, any> | null>(null)
   const mentionListRef = useRef<HTMLDivElement>(null)
