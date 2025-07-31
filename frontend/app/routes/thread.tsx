@@ -272,7 +272,7 @@ function CommentThread({ commentThread, activity, userId, selected = false, user
     const commentCount = commentThread?.commentMessages?.length || 0;
 
     return (
-        <div className={`space-y-6 p-4 rounded-lg ${selected ? "bg-white shadow-lg border" : "bg-muted"}`} data-comment onClick={() => onSelect(activity)}>
+        <div className={`space-y-6 p-4 rounded-lg ${selected ? "bg-white border" : "bg-muted"}`} data-comment onClick={() => onSelect(activity)}>
             {/* Existing comments */}
             {commentThread?.commentMessages?.map((message: any) => (
                 <CommentMessageItem

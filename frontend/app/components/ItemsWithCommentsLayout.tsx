@@ -156,7 +156,7 @@ export function ItemsWithCommentsLayout({ items, selectedItemId }: ItemsWithComm
 
                 <div ref={bottomSpacerRef}/>
             </div>
-            <div ref={containerRef} className="w-[300px] flex-none relative ">
+            <div ref={containerRef} className="w-[300px] flex-none relative overflow-hidden">
                 {items.map((item) => {
                     if (!item.commentsComponent) {
                         return null;
