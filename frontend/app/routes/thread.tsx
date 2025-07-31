@@ -269,22 +269,15 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 function CommentThread({ commentThread, activity, userId, selected = false, users, onSelect }: { commentThread: any, activity: any, userId: string | null, selected: boolean, users: any[], onSelect: (activity: any) => void }) {
     const fetcher = useFetcher();
+    const isNewThread = !(commentThread?.commentMessages?.length > 0);
 
-    const commentCount = commentThread?.commentMessages?.length || 0;
-    const isNewComment = !(commentThread?.commentMessages?.length > 0);
-
-    const [isFocused, setIsFocused] = useState(false);
-    const [value, setValue] = useState("");
+    const formRef = useRef<HTMLFormElement>(null);
+    const [currentlyEditedItemId, setCurrentlyEditedItemId] = useState<string | null>(null); // "new" for new comment, comment id for edits
 
     useFetcherSuccess(fetcher, () => {
-        setValue("");
+        setCurrentlyEditedItemId(null);
+        formRef.current?.reset();
     });
-
-    useEffect(() => {
-        if (!selected) {
-            setIsFocused(false);
-        }
-    }, [selected])
 
     return (
         <div className={`space-y-6 py-3 px-3 rounded-lg ${selected ? "bg-white border" : "bg-muted"}`} data-comment={true} onClick={(e) => {
@@ -301,59 +294,58 @@ function CommentThread({ commentThread, activity, userId, selected = false, user
                     fetcher={fetcher}
                     activityId={activity.id}
                     user={users.find((user) => user.id === message.userId)}
-                    users={users}
+                    isEditing={currentlyEditedItemId === message.id}
+                    onRequestEdit={() => setCurrentlyEditedItemId(message.id)}
+                    onCancelEdit={() => setCurrentlyEditedItemId(null)}
                 />
             ))}
 
-            { selected && <>
-                    { isNewComment && <CommentMessageHeader title={users.find((user) => user.id === userId)?.name || "You"} /> }
-                    <fetcher.Form method="post" className="space-y-2">
-                        <Textarea
-                            name="content"
-                            placeholder={(isNewComment ? "Comment" : "Reply") + " or tag other, using @"}
-                            className="min-h-[10px] resize-none mb-0"
-                            required
-                            onFocus={() => setIsFocused(true)}
-                            // onBlur={() => setIsFocused(false)} // IMPORTANT: DO NOT THINK OF ADDING THIS ON BLUR HERE. The problem is that when you hit in other place than input, onBlur would be called immediately (before mouseup). This might hide the buttons, make the comment bounding box smaller, and mouseup can happen OUTSIDE of the box (this happens for example when you click "Cancel" which is at the bottom.). This triggers unwanted deselection of the comment.
-                            onChange={(e) => setValue(e.target.value)}
-                            value={value}
-                        />
+            {selected && <>
+                { isNewThread && <CommentMessageHeader title={users.find((user) => user.id === userId)?.name || "You"} />}
 
-                        <input type="hidden" name="activityId" value={activity.id} />
-                        <div className={`gap-2 justify-end mt-2 ${isFocused || value.length > 0 || isNewComment ? "flex" : "hidden"}`}>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => {
-                                    console.log('Cancel Click!')
-                                    // e.stopPropagation();
-                                    setIsFocused(false);
-                                    setValue("");
-                                    if (isNewComment) { 
-                                        console.log("cancel"); 
-                                        onSelect(null) 
-                                    }
-                                }}
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                type="submit"
-                                size="sm"
-                                disabled={fetcher.state !== 'idle'}
-                            >
-                                {fetcher.state !== 'idle' ? 'Posting...' : 'Comment'}
-                            </Button>
-                        </div>
-                        {fetcher.data?.error && (
-                            <div className="text-sm text-red-500">{fetcher.data.error}</div>
-                        )}
-                    </fetcher.Form>
-                </> }
+                { (isNewThread || currentlyEditedItemId === "new" || currentlyEditedItemId === null) && <fetcher.Form method="post" className="space-y-2" ref={formRef}>
+                    <Textarea
+                        name="content"
+                        placeholder={(isNewThread ? "Comment" : "Reply") + " or tag other, using @"}
+                        className="min-h-[10px] resize-none mb-0"
+                        required
+                        onFocus={() => {
+                            setCurrentlyEditedItemId("new");
+                        }}
+                    />
+
+                    <input type="hidden" name="activityId" value={activity.id} />
+                    <div className={`gap-2 justify-end mt-2 ${(currentlyEditedItemId === "new" || isNewThread) ? "flex" : "hidden"}`}>
+                        <Button
+                            type="reset"
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                                setCurrentlyEditedItemId(null);
+
+                                if (isNewThread) {
+                                    onSelect(null)
+                                }
+                            }}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="submit"
+                            size="sm"
+                            disabled={fetcher.state !== 'idle'}
+                        >
+                            {fetcher.state !== 'idle' ? 'Posting...' : 'Comment'}
+                        </Button>
+                    </div>
+                    {fetcher.data?.error && (
+                        <div className="text-sm text-red-500">{fetcher.data.error}</div>
+                    )}
+                </fetcher.Form> }
+            </>}
 
 
-           
+
         </div>
     );
 }
@@ -383,25 +375,14 @@ function CommentMessageHeader({ title, subtitle, actions }: { title: string, sub
 
 
 // New subcomponent for comment message item with edit logic
-function CommentMessageItem({ message, userId, activityId, user, users }: { message: any, userId: string | null, fetcher: any, activityId: string, user: any, users: any[] }) {
-    const [isEditing, setIsEditing] = useState(false);
-    const [editValue, setEditValue] = useState(message.content);
+function CommentMessageItem({ message, userId, activityId, user, isEditing, onRequestEdit, onCancelEdit }: { message: any, userId: string | null, fetcher: any, activityId: string, user: any, isEditing: boolean, onRequestEdit: () => void, onCancelEdit: () => void }) {
     const fetcher = useFetcher();
-
     const isOwn = userId && message.userId === userId;
-
-    useEffect(() => {
-        if (!isEditing) {
-            setEditValue(message.content);
-        }
-    }, [isEditing, message.content]);
-
-    useFetcherSuccess(fetcher, () => {
-        setIsEditing(false);
-    });
-
-
     const subtitle = new Date(message.createdAt).toLocaleString() + (message.updatedAt && message.updatedAt !== message.createdAt ? " · Edited" : "")
+    
+    useFetcherSuccess(fetcher, () => {
+        onCancelEdit();
+    });
 
     return (
         <div className="">
@@ -413,7 +394,7 @@ function CommentMessageItem({ message, userId, activityId, user, users }: { mess
                         variant="ghost"
                         size="xs"
                         className="ml-2 text-xs"
-                        onClick={() => setIsEditing(true)}
+                        onClick={() => onRequestEdit()}
                     >
                         Edit
                     </Button>
@@ -440,8 +421,7 @@ function CommentMessageItem({ message, userId, activityId, user, users }: { mess
 
                         <Textarea
                             name="content"
-                            value={editValue}
-                            onChange={e => setEditValue(e.target.value)}
+                            defaultValue={message.content}
                             className="min-h-[60px]"
                             required
                         />
@@ -452,10 +432,10 @@ function CommentMessageItem({ message, userId, activityId, user, users }: { mess
                                 {fetcher.state !== 'idle' ? 'Saving...' : 'Save'}
                             </Button>
                             <Button
-                                type="button"
+                                type="reset"
                                 variant="outline"
                                 size="sm"
-                                onClick={() => setIsEditing(false)}
+                                onClick={() => onCancelEdit()}
                             >
                                 Cancel
                             </Button>
@@ -710,15 +690,15 @@ function ThreadPage() {
         const handleClickOutside = (e: MouseEvent) => {
             console.log('handleClickOutside', e.target)
             const target = e.target as Element | null;
-            
+
             if (!target) return;
-            
+
             const isClickingItem = target.closest('[data-item]');
             const isClickingComment = target.closest('[data-comment]');
 
             console.log('isClickingItem', isClickingItem)
             console.log('isClickingComment', isClickingComment)
-            
+
             // Deselect if clicking outside both item and comment areas
             if (!isClickingItem && !isClickingComment) {
                 console.log('WESZŁO')
