@@ -271,12 +271,26 @@ function CommentThread({ commentThread, activity, userId, selected = false, user
     const fetcher = useFetcher();
 
     const commentCount = commentThread?.commentMessages?.length || 0;
-
     const isNewComment = !(commentThread?.commentMessages?.length > 0);
 
+    const [isFocused, setIsFocused] = useState(false);
+    const [value, setValue] = useState("");
+
+    useFetcherSuccess(fetcher, () => {
+        setValue("");
+    });
+
+    useEffect(() => {
+        if (!selected) {
+            setIsFocused(false);
+        }
+    }, [selected])
+
     return (
-        <div className={`space-y-6 py-4 px-3 rounded-lg ${selected ? "bg-white border" : "bg-muted"}`} data-comment onClick={(e) => {
-            onSelect(activity)
+        <div className={`space-y-6 py-3 px-3 rounded-lg ${selected ? "bg-white border" : "bg-muted"}`} data-comment={true} onClick={(e) => {
+            if (!selected) {
+                onSelect(activity)
+            }
         }}>
             {/* Existing comments */}
             {commentThread?.commentMessages?.map((message: any) => (
@@ -291,23 +305,36 @@ function CommentThread({ commentThread, activity, userId, selected = false, user
                 />
             ))}
 
-            { selected && <div className="space-y-4">
+            { selected && <>
                     { isNewComment && <CommentMessageHeader title={users.find((user) => user.id === userId)?.name || "You"} /> }
                     <fetcher.Form method="post" className="space-y-2">
                         <Textarea
                             name="content"
                             placeholder={(isNewComment ? "Comment" : "Reply") + " or tag other, using @"}
-                            className="min-h-[10px] resize-none"
+                            className="min-h-[10px] resize-none mb-0"
                             required
+                            onFocus={() => setIsFocused(true)}
+                            // onBlur={() => setIsFocused(false)}
+                            onChange={(e) => setValue(e.target.value)}
+                            value={value}
                         />
 
                         <input type="hidden" name="activityId" value={activity.id} />
-                        <div className="flex gap-2 justify-end">
+                        <div className={`gap-2 justify-end mt-2 ${isFocused || value.length > 0 || isNewComment ? "flex" : "hidden"}`}>
                             <Button
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                onClick={(e) => { e.stopPropagation(); onSelect(null) }}
+                                onClick={(e) => {
+                                    console.log('Cancel Click!')
+                                    // e.stopPropagation();
+                                    setIsFocused(false);
+                                    setValue("");
+                                    if (isNewComment) { 
+                                        console.log("cancel"); 
+                                        onSelect(null) 
+                                    }
+                                }}
                             >
                                 Cancel
                             </Button>
@@ -323,7 +350,7 @@ function CommentThread({ commentThread, activity, userId, selected = false, user
                             <div className="text-sm text-red-500">{fetcher.data.error}</div>
                         )}
                     </fetcher.Form>
-                </div> }
+                </> }
 
 
            
@@ -457,7 +484,7 @@ function ActivityMessage({ activity, isWhite = false, selected = false, onClick 
 }
 
 function ActivityView({ activity, onSelect, selected = false, onNewComment = () => { } }: { activity: any, onSelect: (activity: any) => void, selected: boolean, onNewComment: () => void }) {
-    return <div key={activity.id} className="relative" data-item>
+    return <div key={activity.id} className="relative" data-item={true}>
         <div className={`relative flex flex-col ${activity.role === "user" ? "pl-[10%] justify-end" : "pr-[10%] justify-start"}`}>
             <div className="relative">
 
@@ -673,14 +700,29 @@ function ThreadPage() {
     const [isNewCommentActive, setIsNewCommentActive] = useState<boolean>(false)
 
     function setSelectedActivity(activity: any) {
+        console.trace("setSelectedActivity stack trace");
+
         setIsNewCommentActive(false)
         _setSelectedActivity(activity)
     }
 
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
-            if (!(e.target instanceof Element) || (!e.target.closest('[data-item]') && !e.target.closest('[data-comment]'))) {
-                setSelectedActivity(null); // Deselect
+            console.log('handleClickOutside', e.target)
+            const target = e.target as Element | null;
+            
+            if (!target) return;
+            
+            const isClickingItem = target.closest('[data-item]');
+            const isClickingComment = target.closest('[data-comment]');
+
+            console.log('isClickingItem', isClickingItem)
+            console.log('isClickingComment', isClickingComment)
+            
+            // Deselect if clicking outside both item and comment areas
+            if (!isClickingItem && !isClickingComment) {
+                console.log('WESZŁO')
+                setSelectedActivity(null);
             }
         };
 
