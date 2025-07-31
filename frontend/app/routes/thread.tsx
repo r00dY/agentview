@@ -280,14 +280,44 @@ function CommentThread({ commentThread, activity, userId, selected = false, user
     });
 
     return (
-        <div className={`space-y-6 py-3 px-3 rounded-lg ${selected ? "bg-white border" : "bg-muted"}`} data-comment={true} onClick={(e) => {
+        <div className={`flex flex-col gap-3 py-3 px-3 rounded-lg ${selected ? "bg-white border" : "bg-muted"}`} data-comment={true} onClick={(e) => {
             if (!selected) {
                 onSelect(activity)
             }
         }}>
             {/* Existing comments */}
-            {commentThread?.commentMessages?.map((message: any) => (
-                <CommentMessageItem
+            {commentThread?.commentMessages?.map((message: any, index: number) => {
+                const count = commentThread?.commentMessages.length;
+
+                let lineClamp : number | undefined;
+
+                if (!selected) {
+                    if (count === 1) {
+                        lineClamp = 6
+                    }
+                    else {
+                        lineClamp = 3;
+                        if (count >= 3 && index != 0 && index != count - 1) {
+
+                            if (index === 1) {
+                                return (
+                                    <div className="flex items-center my-2">
+                                        <hr className="flex-grow border-gray-300" />
+                                        <span className="mx-2 text-xs text-muted-foreground px-2 rounded select-none">
+                                            {count - 2} more comment{(count - 2) > 1 ? "s" : ""}
+                                        </span>
+                                        <hr className="flex-grow border-gray-300" />
+                                    </div>
+                                )
+                            }
+                            return null
+                        }
+                    }
+                }
+
+                console.log('lineClamp', lineClamp)
+
+                return <CommentMessageItem
                     key={message.id}
                     message={message}
                     userId={userId}
@@ -297,8 +327,9 @@ function CommentThread({ commentThread, activity, userId, selected = false, user
                     isEditing={currentlyEditedItemId === message.id}
                     onRequestEdit={() => setCurrentlyEditedItemId(message.id)}
                     onCancelEdit={() => setCurrentlyEditedItemId(null)}
+                    lineClamp={lineClamp}
                 />
-            ))}
+            })}
 
             {selected && <>
                 { isNewThread && <CommentMessageHeader title={users.find((user) => user.id === userId)?.name || "You"} />}
@@ -375,7 +406,7 @@ function CommentMessageHeader({ title, subtitle, actions }: { title: string, sub
 
 
 // New subcomponent for comment message item with edit logic
-function CommentMessageItem({ message, userId, activityId, user, isEditing, onRequestEdit, onCancelEdit }: { message: any, userId: string | null, fetcher: any, activityId: string, user: any, isEditing: boolean, onRequestEdit: () => void, onCancelEdit: () => void }) {
+function CommentMessageItem({ message, userId, activityId, user, isEditing, onRequestEdit, onCancelEdit, lineClamp }: { message: any, userId: string | null, fetcher: any, activityId: string, user: any, isEditing: boolean, onRequestEdit: () => void, onCancelEdit: () => void, lineClamp?: number }) {
     const fetcher = useFetcher();
     const isOwn = userId && message.userId === userId;
     const subtitle = new Date(message.createdAt).toLocaleString('en-US', {
@@ -451,7 +482,7 @@ function CommentMessageItem({ message, userId, activityId, user, isEditing, onRe
                         )}
                     </fetcher.Form>
                 ) : (
-                    <div dangerouslySetInnerHTML={{ __html: highlightMentions(message.content) }} />
+                    <div dangerouslySetInnerHTML={{ __html: highlightMentions(message.content) }} className={`${lineClamp ? `line-clamp-${lineClamp}` : ""}`} />
                 )}
             </div>
         </div>
