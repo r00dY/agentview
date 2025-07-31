@@ -378,7 +378,13 @@ function CommentMessageHeader({ title, subtitle, actions }: { title: string, sub
 function CommentMessageItem({ message, userId, activityId, user, isEditing, onRequestEdit, onCancelEdit }: { message: any, userId: string | null, fetcher: any, activityId: string, user: any, isEditing: boolean, onRequestEdit: () => void, onCancelEdit: () => void }) {
     const fetcher = useFetcher();
     const isOwn = userId && message.userId === userId;
-    const subtitle = new Date(message.createdAt).toLocaleString() + (message.updatedAt && message.updatedAt !== message.createdAt ? " · Edited" : "")
+    const subtitle = new Date(message.createdAt).toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    }) + (message.updatedAt && message.updatedAt !== message.createdAt ? " · Edited" : "")
     
     useFetcherSuccess(fetcher, () => {
         onCancelEdit();
@@ -680,15 +686,12 @@ function ThreadPage() {
     const [isNewCommentActive, setIsNewCommentActive] = useState<boolean>(false)
 
     function setSelectedActivity(activity: any) {
-        console.trace("setSelectedActivity stack trace");
-
         setIsNewCommentActive(false)
         _setSelectedActivity(activity)
     }
 
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
-            console.log('handleClickOutside', e.target)
             const target = e.target as Element | null;
 
             if (!target) return;
@@ -696,12 +699,8 @@ function ThreadPage() {
             const isClickingItem = target.closest('[data-item]');
             const isClickingComment = target.closest('[data-comment]');
 
-            console.log('isClickingItem', isClickingItem)
-            console.log('isClickingComment', isClickingComment)
-
             // Deselect if clicking outside both item and comment areas
             if (!isClickingItem && !isClickingComment) {
-                console.log('WESZŁO')
                 setSelectedActivity(null);
             }
         };
@@ -709,8 +708,6 @@ function ThreadPage() {
         document.addEventListener('click', handleClickOutside);
         return () => document.removeEventListener('click', handleClickOutside);
     }, []);
-
-    console.log('selectedActivity', selectedActivity)
 
     return <>
         <Header>
