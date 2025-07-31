@@ -314,7 +314,7 @@ function CommentThread({ commentThread, activity, userId, selected = false, user
                             className="min-h-[10px] resize-none mb-0"
                             required
                             onFocus={() => setIsFocused(true)}
-                            // onBlur={() => setIsFocused(false)}
+                            // onBlur={() => setIsFocused(false)} // IMPORTANT: DO NOT THINK OF ADDING THIS ON BLUR HERE. The problem is that when you hit in other place than input, onBlur would be called immediately (before mouseup). This might hide the buttons, make the comment bounding box smaller, and mouseup can happen OUTSIDE of the box (this happens for example when you click "Cancel" which is at the bottom.). This triggers unwanted deselection of the comment.
                             onChange={(e) => setValue(e.target.value)}
                             value={value}
                         />
