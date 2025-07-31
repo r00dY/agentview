@@ -270,12 +270,12 @@ export async function action({ request, params }: Route.ActionArgs) {
 function CommentThread({ commentThread, activity, userId, selected = false, users, onSelect }: { commentThread: any, activity: any, userId: string | null, selected: boolean, users: any[], onSelect: (activity: any) => void }) {
     const fetcher = useFetcher();
     
-    console.log('COMMENT THREAD', activity.id, selected);
-    
     const commentCount = commentThread?.commentMessages?.length || 0;
 
     return (
-        <div className={`space-y-6 p-4 rounded-lg ${selected ? "bg-white border" : "bg-muted"}`} data-comment onClick={() => onSelect(activity)}>
+        <div className={`space-y-6 p-4 rounded-lg ${selected ? "bg-white border" : "bg-muted"}`} data-comment onClick={(e) => {
+            onSelect(activity)
+        }}>
             {/* Existing comments */}
             {commentThread?.commentMessages?.map((message: any) => (
                 <CommentMessageItem
@@ -293,26 +293,27 @@ function CommentThread({ commentThread, activity, userId, selected = false, user
            { selected && <fetcher.Form method="post" className="space-y-2">
                 <Textarea
                     name="content"
-                    placeholder="Add a comment..."
-                    className="min-h-[80px]"
+                    placeholder="Comment or tag other, using @"
+                    className="min-h-[10px] resize-none"
                     required
                 />
+
                 <input type="hidden" name="activityId" value={activity.id} />
-                <div className="flex gap-2">
+                <div className="flex gap-2 justify-end">
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => { e.stopPropagation(); onSelect(null) }}
+                    >
+                        Cancel
+                    </Button>
                     <Button
                         type="submit"
                         size="sm"
                         disabled={fetcher.state !== 'idle'}
                     >
-                        {fetcher.state !== 'idle' ? 'Posting...' : 'Post Comment'}
-                    </Button>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        // onClick={() => setIsExpanded(false)}
-                    >
-                        Cancel
+                        {fetcher.state !== 'idle' ? 'Posting...' : 'Comment'}
                     </Button>
                 </div>
                 {fetcher.data?.error && (
@@ -448,11 +449,11 @@ function ActivityView({ activity, onSelect, selected = false, onNewComment = () 
 
             <ActivityMessage activity={activity} isWhite={activity.role === "user"} selected={selected} onClick={() => onSelect(activity)}/>
 
-            { selected && !activity.commentThread && <div className="absolute top-2 -right-[16px]">
+            {/* { selected && !activity.commentThread && <div className="absolute top-2 -right-[16px]">
                 <Button variant="outline" size="icon" onClick={onNewComment}>
                     <MessageCirclePlusIcon className="w-[32px] h-[32px]" />
                 </Button>
-            </div>}
+            </div>} */}
             </div>
         </div>
     </div>
@@ -662,8 +663,6 @@ function ThreadPage() {
         _setSelectedActivity(activity)
     }
 
-
-
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
           if (!(e.target instanceof Element) || (!e.target.closest('[data-item]') && !e.target.closest('[data-comment]'))) {
@@ -674,10 +673,9 @@ function ThreadPage() {
         document.addEventListener('click', handleClickOutside);
         return () => document.removeEventListener('click', handleClickOutside);
     }, []);
-    
-    // console.log('selectedActivity', selectedActivity)
-    // console.log('isNewCommentActive', isNewCommentActive)
 
+    console.log('selectedActivity', selectedActivity)
+    
     return <>
         <Header>
             <HeaderTitle title={`Thread`} />
@@ -688,14 +686,6 @@ function ThreadPage() {
                 <ThreadDetails thread={thread} />
 
                 <ItemsWithCommentsLayout items={thread.activities.map((activity) => {
-                    //                         console.log('isNewCommentActive', isNewCommentActive)
-
-                    // console.log('!', (activity.commentThread || (selectedActivity?.id === activity.id && isNewCommentActive)))
-                    // if (selectedActivity === activity) {
-                    //     console.log('---------')
-                    //     console.log('selectedActivity', selectedActivity)
-                    //     console.log('isNewCommentActive', isNewCommentActive)
-                    // }
                     return {
                         id: activity.id,
                         itemComponent: <ActivityView 
@@ -704,7 +694,15 @@ function ThreadPage() {
                             selected={selectedActivity === activity}
                             onNewComment={() => { console.log('onNewComment'); setIsNewCommentActive(true) }}
                         />,
-                        commentsComponent: (/*activity.commentThread || */(selectedActivity?.id === activity.id && isNewCommentActive)) ? <CommentThread commentThread={activity.commentThread} activity={activity} userId={loaderData.userId} selected={selectedActivity?.id === activity.id} users={users} onSelect={setSelectedActivity} /> : undefined
+                        commentsComponent: (activity.commentThread || (selectedActivity?.id === activity.id/* && isNewCommentActive*/)) ? 
+                            <CommentThread 
+                                commentThread={activity.commentThread} 
+                                activity={activity} 
+                                userId={loaderData.userId}
+                                selected={selectedActivity?.id === activity.id}
+                                users={users}
+                                onSelect={(a) => setSelectedActivity(a)} 
+                            /> : undefined
                     }})} selectedItemId={selectedActivity?.id} 
                 />
 
