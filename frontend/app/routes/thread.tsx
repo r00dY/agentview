@@ -265,7 +265,7 @@ function CommentThread({ commentThread, activityId, userId, selected = false }: 
     const commentCount = commentThread?.commentMessages?.length || 0;
 
     return (
-        <div className="space-y-3">
+        <div className="space-y-3" data-comment>
             {/* Existing comments */}
             {commentThread?.commentMessages?.map((message: any) => (
                 <CommentMessageItem
@@ -396,7 +396,7 @@ export default function ThreadPageWrapper() {
 
 
 function ActivityView({ activity, onSelect, selected = false }: { activity: any, onSelect: (activity: any) => void, selected: boolean }) {
-    return <div key={activity.id} className="relative">
+    return <div key={activity.id} className="relative" data-item>
 
         {activity.role === "user" && (<div className="pl-[10%] relative flex flex-col justify-end">
             {activity.type === "message" && (<div className={`border bg-muted p-3 rounded-lg hover:border-gray-300 ${selected ? "border-gray-300" : ""}`} onClick={() => onSelect(activity)}>
@@ -622,6 +622,17 @@ function ThreadPage() {
 
     console.log(thread.activities)
 
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+          if (!(e.target instanceof Element) || (!e.target.closest('[data-item]') && !e.target.closest('[data-comment]'))) {
+            setSelectedActivity(null); // Deselect
+          }
+        };
+      
+        document.addEventListener('click', handleClickOutside);
+        return () => document.removeEventListener('click', handleClickOutside);
+    }, []);
+
     return <>
         <Header>
             <HeaderTitle title={`Thread`} />
@@ -636,7 +647,7 @@ function ThreadPage() {
                 <ItemsWithCommentsLayout items={thread.activities.map((activity) => ({
                     id: activity.id,
                     itemComponent: <ActivityView activity={activity} onSelect={setSelectedActivity} selected={selectedActivity === activity} />,
-                    commentsComponent: activity.commentThread ? <CommentThread commentThread={activity.commentThread} activityId={activity.id} userId={loaderData.userId} selected={selectedActivity === activity} /> : undefined
+                    commentsComponent: (activity.commentThread || selectedActivity === activity) ? <CommentThread commentThread={activity.commentThread} activityId={activity.id} userId={loaderData.userId} selected={selectedActivity === activity} /> : undefined
                     // commentsComponent: activity === selectedActivity ? <div className="h-[300px] bg-red-100 p-2">hey</div> : undefined
                 }))} selectedItemId={selectedActivity?.id} />
 
