@@ -23,6 +23,7 @@ export function ItemsWithCommentsLayout({ items, selectedItemId }: ItemsWithComm
     const commentRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
     const containerRef = useRef<HTMLDivElement>(null);
     const bottomSpacerRef = useRef<HTMLDivElement>(null);
+    
     // Calculate and apply comment positions
     const updateCommentPositions = useCallback(() => {
         if (items.filter(item => item.commentsComponent !== undefined).length === 0) return; // no comments
