@@ -272,10 +272,10 @@ function CommentThread({ commentThread, activity, userId, selected = false, user
 
     const commentCount = commentThread?.commentMessages?.length || 0;
 
-    const hasComments = commentThread?.commentMessages?.length > 0;
+    const isNewComment = !(commentThread?.commentMessages?.length > 0);
 
     return (
-        <div className={`space-y-6 p-4 rounded-lg ${selected ? "bg-white border" : "bg-muted"}`} data-comment onClick={(e) => {
+        <div className={`space-y-6 py-4 px-3 rounded-lg ${selected ? "bg-white border" : "bg-muted"}`} data-comment onClick={(e) => {
             onSelect(activity)
         }}>
             {/* Existing comments */}
@@ -291,13 +291,12 @@ function CommentThread({ commentThread, activity, userId, selected = false, user
                 />
             ))}
 
-            {!hasComments && (
-                <div className="space-y-4">
-                    <CommentMessageHeader title={users.find((user) => user.id === userId)?.name || "You"} />
+            { selected && <div className="space-y-4">
+                    { isNewComment && <CommentMessageHeader title={users.find((user) => user.id === userId)?.name || "You"} /> }
                     <fetcher.Form method="post" className="space-y-2">
                         <Textarea
                             name="content"
-                            placeholder="Comment or tag other, using @"
+                            placeholder={(isNewComment ? "Comment" : "Reply") + " or tag other, using @"}
                             className="min-h-[10px] resize-none"
                             required
                         />
@@ -324,8 +323,7 @@ function CommentThread({ commentThread, activity, userId, selected = false, user
                             <div className="text-sm text-red-500">{fetcher.data.error}</div>
                         )}
                     </fetcher.Form>
-                </div>
-            )}
+                </div> }
 
 
            
