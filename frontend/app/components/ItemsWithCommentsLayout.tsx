@@ -23,7 +23,7 @@ export function ItemsWithCommentsLayout({ items, selectedItemId }: ItemsWithComm
     const commentRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
     const containerRef = useRef<HTMLDivElement>(null);
     const bottomSpacerRef = useRef<HTMLDivElement>(null);
-    
+
     // Calculate and apply comment positions
     const updateCommentPositions = useCallback(() => {
         if (items.filter(item => item.commentsComponent !== undefined).length === 0) return; // no comments
@@ -100,9 +100,10 @@ export function ItemsWithCommentsLayout({ items, selectedItemId }: ItemsWithComm
             lastBottom = top + commentHeights[item.id];
             commentTops[item.id] = top;
         });
-        
+
         Object.keys(commentTops).forEach((itemId) => {
-            commentRefs.current[parseInt(itemId)]!.style.top = `${commentTops[parseInt(itemId)]}px`;
+            commentRefs.current[itemId]!.style.top = `${commentTops[itemId]}px`;
+            commentRefs.current[itemId]!.style.visibility = 'visible';
         });
 
         const containerHeight = containerRect.height - bottomSpacerRef.current!.getBoundingClientRect().height;
@@ -165,7 +166,8 @@ export function ItemsWithCommentsLayout({ items, selectedItemId }: ItemsWithComm
                         <div 
                             key={item.id}
                             ref={(el) => { commentRefs.current[item.id] = el; }}    
-                            style={{display: 'grid', position: 'absolute', transition: 'top 0.35s cubic-bezier(0.16, 1, 0.3, 1)'}}
+                            className="invisible"
+                            style={{position: 'absolute', transition: 'top 0.35s cubic-bezier(0.16, 1, 0.3, 1)', width: "100%"}}
                         >
                             {item.commentsComponent}
                         </div>
