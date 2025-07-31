@@ -64,15 +64,22 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     }
 
     // Get current user
-    let userId = null;
-    try {
-        const session = await auth.api.getSession({ headers: request.headers });
-        userId = session?.user?.id || null;
-    } catch { }
+
+    const session = await auth.api.getSession({ headers: request.headers });
+    const userId = session?.user?.id || null;
+
+    const users = await db.query.user.findMany({
+        columns: {
+            id: true,
+            email: true,
+            name: true,
+        }
+    })
 
     return data({
         thread: threadData,
         userId,
+        users
     });
 }
 
@@ -259,13 +266,13 @@ export async function action({ request, params }: Route.ActionArgs) {
     }
 }
 
-function CommentThread({ commentThread, activityId, userId, selected = false }: { commentThread: any, activityId: string, userId: string | null, selected: boolean }) {
+function CommentThread({ commentThread, activityId, userId, selected = false, users }: { commentThread: any, activityId: string, userId: string | null, selected: boolean, users: any[] }) {
     const fetcher = useFetcher();
 
     const commentCount = commentThread?.commentMessages?.length || 0;
 
     return (
-        <div className="space-y-3" data-comment>
+        <div className="space-y-3">
             {/* Existing comments */}
             {commentThread?.commentMessages?.map((message: any) => (
                 <CommentMessageItem
@@ -274,6 +281,7 @@ function CommentThread({ commentThread, activityId, userId, selected = false }: 
                     userId={userId}
                     fetcher={fetcher}
                     activityId={activityId}
+                    user={users.find((user) => user.id === message.userId)}
                 />
             ))}
 
@@ -312,18 +320,13 @@ function CommentThread({ commentThread, activityId, userId, selected = false }: 
 }
 
 // New subcomponent for comment message item with edit logic
-function CommentMessageItem({ message, userId, activityId }: { message: any, userId: string | null, fetcher: any, activityId: string }) {
+function CommentMessageItem({ message, userId, activityId, user }: { message: any, userId: string | null, fetcher: any, activityId: string, user: any }) {
     const [isEditing, setIsEditing] = useState(false);
     const fetcher = useFetcher();
 
-    if (isEditing) {
-        console.log('fetcher state', fetcher.state)
-    }
-
     const isOwn = userId && message.userId === userId;
 
-    useFetcherSuccess(fetcher, (data) => {
-        console.log('fetcher success', data)
+    useFetcherSuccess(fetcher, () => {
         setIsEditing(false)
     })
 
@@ -358,7 +361,7 @@ function CommentMessageItem({ message, userId, activityId }: { message: any, use
             <div className="flex items-start gap-2">
                 <div className="flex-1">
                     <div className="text-sm font-medium text-muted-foreground">
-                        {message.userId}
+                        {user.name}
                     </div>
                     <div className="text-sm mt-1">
                         <div dangerouslySetInnerHTML={{ __html: highlightMentions(message.content) }} />
@@ -396,7 +399,7 @@ export default function ThreadPageWrapper() {
 
 
 function ActivityView({ activity, onSelect, selected = false }: { activity: any, onSelect: (activity: any) => void, selected: boolean }) {
-    return <div key={activity.id} className="relative" data-item>
+    return <div key={activity.id} className="relative">
 
         {activity.role === "user" && (<div className="pl-[10%] relative flex flex-col justify-end">
             {activity.type === "message" && (<div className={`border bg-muted p-3 rounded-lg hover:border-gray-300 ${selected ? "border-gray-300" : ""}`} onClick={() => onSelect(activity)}>
@@ -412,13 +415,6 @@ function ActivityView({ activity, onSelect, selected = false }: { activity: any,
             {activity.type !== "message" && (<div className="border p-3 rounded-lg italic text-muted-foreground">no view</div>)}
         </div>)}
 
-        {/* <div className="mt-2">
-            <CommentThread 
-                commentThread={activity.commentThread} 
-                activityId={activity.id} 
-                userId={loaderData.userId}
-            />
-        </div> */}
     </div>
 }
 
@@ -511,6 +507,9 @@ function ThreadPage() {
     const [thread, setThread] = useState(loaderData.thread)
     const [formError, setFormError] = useState<string | null>(null)
     const [isStreaming, setStreaming] = useState(false)
+
+    const users = loaderData.users
+    console.log('users', users)
 
     // temporary 
     useEffect(() => {
@@ -647,7 +646,7 @@ function ThreadPage() {
                 <ItemsWithCommentsLayout items={thread.activities.map((activity) => ({
                     id: activity.id,
                     itemComponent: <ActivityView activity={activity} onSelect={setSelectedActivity} selected={selectedActivity === activity} />,
-                    commentsComponent: (activity.commentThread || selectedActivity === activity) ? <CommentThread commentThread={activity.commentThread} activityId={activity.id} userId={loaderData.userId} selected={selectedActivity === activity} /> : undefined
+                    commentsComponent: (activity.commentThread || selectedActivity === activity) ? <CommentThread commentThread={activity.commentThread} activityId={activity.id} userId={loaderData.userId} selected={selectedActivity === activity} users={users} /> : undefined
                     // commentsComponent: activity === selectedActivity ? <div className="h-[300px] bg-red-100 p-2">hey</div> : undefined
                 }))} selectedItemId={selectedActivity?.id} />
 
