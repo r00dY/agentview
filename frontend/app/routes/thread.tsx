@@ -266,13 +266,13 @@ export async function action({ request, params }: Route.ActionArgs) {
     }
 }
 
-function CommentThread({ commentThread, activityId, userId, selected = false, users }: { commentThread: any, activityId: string, userId: string | null, selected: boolean, users: any[] }) {
+function CommentThread({ commentThread, activity, userId, selected = false, users, onSelect }: { commentThread: any, activity: any, userId: string | null, selected: boolean, users: any[], onSelect: (activity: any) => void }) {
     const fetcher = useFetcher();
 
     const commentCount = commentThread?.commentMessages?.length || 0;
 
     return (
-        <div className="space-y-4 border p-3 rounded-lg" data-comment>
+        <div className={`space-y-6 p-4 rounded-lg ${selected ? "bg-white shadow-lg border" : "bg-muted"}`} data-comment onClick={() => onSelect(activity)}>
             {/* Existing comments */}
             {commentThread?.commentMessages?.map((message: any) => (
                 <CommentMessageItem
@@ -280,7 +280,7 @@ function CommentThread({ commentThread, activityId, userId, selected = false, us
                     message={message}
                     userId={userId}
                     fetcher={fetcher}
-                    activityId={activityId}
+                    activityId={activity.id}
                     user={users.find((user) => user.id === message.userId)}
                 />
             ))}
@@ -293,7 +293,7 @@ function CommentThread({ commentThread, activityId, userId, selected = false, us
                     className="min-h-[80px]"
                     required
                 />
-                <input type="hidden" name="activityId" value={activityId} />
+                <input type="hidden" name="activityId" value={activity.id} />
                 <div className="flex gap-2">
                     <Button
                         type="submit"
@@ -666,7 +666,7 @@ function ThreadPage() {
                 <ItemsWithCommentsLayout items={thread.activities.map((activity) => ({
                     id: activity.id,
                     itemComponent: <ActivityView activity={activity} onSelect={(a) => setSelectedActivity(a)} selected={selectedActivity === activity} />,
-                    commentsComponent: (activity.commentThread || selectedActivity === activity) ? <CommentThread commentThread={activity.commentThread} activityId={activity.id} userId={loaderData.userId} selected={selectedActivity === activity} users={users} /> : undefined
+                    commentsComponent: (activity.commentThread || selectedActivity === activity) ? <CommentThread commentThread={activity.commentThread} activity={activity} userId={loaderData.userId} selected={selectedActivity === activity} users={users} onSelect={setSelectedActivity} /> : undefined
                     // commentsComponent: activity === selectedActivity ? <div className="h-[300px] bg-red-100 p-2">hey</div> : undefined
                 }))} selectedItemId={selectedActivity?.id} />
 
