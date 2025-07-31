@@ -4,6 +4,8 @@ import { useState, useRef, useEffect, useCallback } from "react";
 
 const gap = 8;
 
+
+
 export type ItemsWithCommentsLayoutProps = {
     items: {
         id: string;
@@ -21,13 +23,13 @@ export function ItemsWithCommentsLayout({ items, selectedItemId }: ItemsWithComm
     const commentRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
     const containerRef = useRef<HTMLDivElement>(null);
     const bottomSpacerRef = useRef<HTMLDivElement>(null);
-
-
     // Calculate and apply comment positions
     const updateCommentPositions = useCallback(() => {
         if (items.filter(item => item.commentsComponent !== undefined).length === 0) return; // no comments
 
-        console.log('udpating comment positions')
+        if (!containerRef.current) {
+            return
+        }
 
         const containerRect = containerRef.current!.getBoundingClientRect();
 
@@ -102,7 +104,6 @@ export function ItemsWithCommentsLayout({ items, selectedItemId }: ItemsWithComm
             commentRefs.current[parseInt(itemId)]!.style.top = `${commentTops[parseInt(itemId)]}px`;
         });
 
-
         const containerHeight = containerRect.height - bottomSpacerRef.current!.getBoundingClientRect().height;
 
         if (lastBottom > containerHeight) {
@@ -114,9 +115,28 @@ export function ItemsWithCommentsLayout({ items, selectedItemId }: ItemsWithComm
         
     }, [selectedItemId]);
 
+    const allElements = [
+        ...Object.values(itemRefs.current).filter(x => x !== null),
+        ...Object.values(commentRefs.current).filter(x => x !== null)
+    ];
+
+    useEffect(() => {
+        const observer = new ResizeObserver(() => {
+            updateCommentPositions();
+        });
+
+        for (const el of allElements) {
+            observer.observe(el);
+        }
+
+        return () => {
+            observer.disconnect();
+        }
+    })
+
     // Update positions when selection changes or component mounts
     useEffect(() => {
-        updateCommentPositions();
+        updateCommentPositions()
     }, [updateCommentPositions]);
 
     return (
