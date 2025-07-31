@@ -15,6 +15,7 @@ import { extractMentions } from "~/lib/utils";
 import { TextEditor } from "~/components/wysiwyg/TextEditor";
 import { ItemsWithCommentsLayoutTest } from "~/components/ItemsWithCommentsLayoutTest";
 import { ItemsWithCommentsLayout } from "~/components/ItemsWithCommentsLayout";
+import { MessageCirclePlus, MessageCirclePlusIcon, Trash2Icon } from "lucide-react";
 
 /**
  * Thread page with comment functionality including mentions.
@@ -268,7 +269,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 function CommentThread({ commentThread, activity, userId, selected = false, users, onSelect }: { commentThread: any, activity: any, userId: string | null, selected: boolean, users: any[], onSelect: (activity: any) => void }) {
     const fetcher = useFetcher();
-
+    
+    console.log('COMMENT THREAD', activity.id, selected);
+    
     const commentCount = commentThread?.commentMessages?.length || 0;
 
     return (
@@ -282,6 +285,7 @@ function CommentThread({ commentThread, activity, userId, selected = false, user
                     fetcher={fetcher}
                     activityId={activity.id}
                     user={users.find((user) => user.id === message.userId)}
+                    users={users}
                 />
             ))}
 
@@ -320,7 +324,7 @@ function CommentThread({ commentThread, activity, userId, selected = false, user
 }
 
 // New subcomponent for comment message item with edit logic
-function CommentMessageItem({ message, userId, activityId, user }: { message: any, userId: string | null, fetcher: any, activityId: string, user: any }) {
+function CommentMessageItem({ message, userId, activityId, user, users }: { message: any, userId: string | null, fetcher: any, activityId: string, user: any, users: any[] }) {
     const [isEditing, setIsEditing] = useState(false);
     const [editValue, setEditValue] = useState(message.content);
     const fetcher = useFetcher();
@@ -379,6 +383,19 @@ function CommentMessageItem({ message, userId, activityId, user }: { message: an
             <div className="text-sm mt-2">
                 {isEditing ? (
                     <fetcher.Form method="post" className="space-y-2" onSubmit={() => {}}>
+                        {/* <TextEditor
+                            mentionItems={users.map(user => ({
+                                id: user.id,
+                                label: user.name
+                            }))}
+                            name="content"
+                            defaultValue={editValue}
+                            // onChange={e => setEditValue(e.target.value)}
+                            className="min-h-[60px]"
+                            // required
+                        /> */}
+
+
                         <Textarea
                             name="content"
                             value={editValue}
@@ -418,24 +435,26 @@ export default function ThreadPageWrapper() {
     return <ThreadPage key={loaderData.thread.id} />
 }
 
+function ActivityMessage({ activity, isWhite = false, selected = false, onClick = () => {} }: { activity: any, isWhite?: boolean, selected?: boolean, onClick?: () => void }) {
+    return <div className={`border p-3 rounded-lg hover:border-gray-300 ${isWhite ? "bg-white" : "bg-muted"} ${selected ? "border-gray-300" : ""}`} onClick={onClick}>
+        <div dangerouslySetInnerHTML={{ __html: (activity.content as unknown as string) }}></div>
+    </div>
+}
 
-function ActivityView({ activity, onSelect, selected = false }: { activity: any, onSelect: (activity: any) => void, selected: boolean }) {
+function ActivityView({ activity, onSelect, selected = false, onNewComment = () => {} }: { activity: any, onSelect: (activity: any) => void, selected: boolean, onNewComment: () => void }) {
     return <div key={activity.id} className="relative" data-item>
+        <div className={`relative flex flex-col ${activity.role === "user" ? "pl-[10%] justify-end" : "pr-[10%] justify-start"}`}>
+            <div className="relative">
 
-        {activity.role === "user" && (<div className="pl-[10%] relative flex flex-col justify-end">
-            {activity.type === "message" && (<div className={`border bg-muted p-3 rounded-lg hover:border-gray-300 ${selected ? "border-gray-300" : ""}`} onClick={() => onSelect(activity)}>
-                <div dangerouslySetInnerHTML={{ __html: (activity.content as unknown as string) }}></div>
-            </div>)}
-            {activity.type !== "message" && (<div className="border bg-muted p-3 rounded-lg italic text-muted-foreground">no view</div>)}
-        </div>)}
+            <ActivityMessage activity={activity} isWhite={activity.role === "user"} selected={selected} onClick={() => onSelect(activity)}/>
 
-        {activity.role !== "user" && (<div className="pr-[10%] relative flex flex-col justify-start">
-            {activity.type === "message" && (<div className={`border p-3 rounded-lg hover:border-gray-300 ${selected ? "border-gray-300" : ""}`} onClick={() => onSelect(activity)}>
-                <div dangerouslySetInnerHTML={{ __html: (activity.content as unknown as string) }}></div>
-            </div>)}
-            {activity.type !== "message" && (<div className="border p-3 rounded-lg italic text-muted-foreground">no view</div>)}
-        </div>)}
-
+            { selected && !activity.commentThread && <div className="absolute top-2 -right-[16px]">
+                <Button variant="outline" size="icon" onClick={onNewComment}>
+                    <MessageCirclePlusIcon className="w-[32px] h-[32px]" />
+                </Button>
+            </div>}
+            </div>
+        </div>
     </div>
 }
 
@@ -635,7 +654,13 @@ function ThreadPage() {
         })
     }
 
-    const [selectedActivity, setSelectedActivity] = useState<any | null>(null)
+    const [selectedActivity, _setSelectedActivity] = useState<any | null>(null)
+    const [isNewCommentActive, setIsNewCommentActive] = useState<boolean>(false)
+
+    function setSelectedActivity(activity: any) {
+        setIsNewCommentActive(false)
+        _setSelectedActivity(activity)
+    }
 
 
 
@@ -650,7 +675,8 @@ function ThreadPage() {
         return () => document.removeEventListener('click', handleClickOutside);
     }, []);
     
-    console.log('selectedActivity', selectedActivity)
+    // console.log('selectedActivity', selectedActivity)
+    // console.log('isNewCommentActive', isNewCommentActive)
 
     return <>
         <Header>
@@ -661,18 +687,26 @@ function ThreadPage() {
             <div className=" p-6 max-w-4xl space-y-6">
                 <ThreadDetails thread={thread} />
 
-                {/* <ItemsWithCommentsLayoutTest /> */}
+                <ItemsWithCommentsLayout items={thread.activities.map((activity) => {
+                    //                         console.log('isNewCommentActive', isNewCommentActive)
 
-                <ItemsWithCommentsLayout items={thread.activities.map((activity) => ({
-                    id: activity.id,
-                    itemComponent: <ActivityView activity={activity} onSelect={(a) => setSelectedActivity(a)} selected={selectedActivity === activity} />,
-                    commentsComponent: (activity.commentThread || selectedActivity === activity) ? <CommentThread commentThread={activity.commentThread} activity={activity} userId={loaderData.userId} selected={selectedActivity === activity} users={users} onSelect={setSelectedActivity} /> : undefined
-                    // commentsComponent: activity === selectedActivity ? <div className="h-[300px] bg-red-100 p-2">hey</div> : undefined
-                }))} selectedItemId={selectedActivity?.id} />
-
-                {/* <div className="space-y-6 mt-12">
-            {thread.activities.map((activity) => <ActivityView activity={activity} />)}
-        </div> */}
+                    // console.log('!', (activity.commentThread || (selectedActivity?.id === activity.id && isNewCommentActive)))
+                    // if (selectedActivity === activity) {
+                    //     console.log('---------')
+                    //     console.log('selectedActivity', selectedActivity)
+                    //     console.log('isNewCommentActive', isNewCommentActive)
+                    // }
+                    return {
+                        id: activity.id,
+                        itemComponent: <ActivityView 
+                            activity={activity}
+                            onSelect={(a) => setSelectedActivity(a)}
+                            selected={selectedActivity === activity}
+                            onNewComment={() => { console.log('onNewComment'); setIsNewCommentActive(true) }}
+                        />,
+                        commentsComponent: (/*activity.commentThread || */(selectedActivity?.id === activity.id && isNewCommentActive)) ? <CommentThread commentThread={activity.commentThread} activity={activity} userId={loaderData.userId} selected={selectedActivity?.id === activity.id} users={users} onSelect={setSelectedActivity} /> : undefined
+                    }})} selectedItemId={selectedActivity?.id} 
+                />
 
                 <div>
                     {thread.state === 'in_progress' && <div>in progress...</div>}

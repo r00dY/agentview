@@ -26,7 +26,7 @@ export function ItemsWithCommentsLayout({ items, selectedItemId }: ItemsWithComm
 
     // Calculate and apply comment positions
     const updateCommentPositions = useCallback(() => {
-        if (items.filter(item => item.commentsComponent !== undefined).length === 0) return; // no comments
+        if (items.filter(item => item.commentsComponent !== undefined && item.commentsComponent !== null).length === 0) return; // no comments
 
         if (!containerRef.current) {
             return
@@ -115,7 +115,7 @@ export function ItemsWithCommentsLayout({ items, selectedItemId }: ItemsWithComm
             bottomSpacerRef.current!.style.height = '0px';
         }
         
-    }, [selectedItemId]);
+    }, [selectedItemId, items]);
 
     const allElements = [
         ...Object.values(itemRefs.current).filter(x => x !== null),
