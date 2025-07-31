@@ -269,8 +269,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 function CommentThread({ commentThread, activity, userId, selected = false, users, onSelect }: { commentThread: any, activity: any, userId: string | null, selected: boolean, users: any[], onSelect: (activity: any) => void }) {
     const fetcher = useFetcher();
-    
+
     const commentCount = commentThread?.commentMessages?.length || 0;
+
+    const hasComments = commentThread?.commentMessages?.length > 0;
 
     return (
         <div className={`space-y-6 p-4 rounded-lg ${selected ? "bg-white border" : "bg-muted"}`} data-comment onClick={(e) => {
@@ -289,40 +291,71 @@ function CommentThread({ commentThread, activity, userId, selected = false, user
                 />
             ))}
 
-            {/* New comment form */}
-           { selected && <fetcher.Form method="post" className="space-y-2">
-                <Textarea
-                    name="content"
-                    placeholder="Comment or tag other, using @"
-                    className="min-h-[10px] resize-none"
-                    required
-                />
+            {!hasComments && (
+                <div className="space-y-4">
+                    <CommentMessageHeader title={users.find((user) => user.id === userId)?.name || "You"} />
+                    <fetcher.Form method="post" className="space-y-2">
+                        <Textarea
+                            name="content"
+                            placeholder="Comment or tag other, using @"
+                            className="min-h-[10px] resize-none"
+                            required
+                        />
 
-                <input type="hidden" name="activityId" value={activity.id} />
-                <div className="flex gap-2 justify-end">
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => { e.stopPropagation(); onSelect(null) }}
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        type="submit"
-                        size="sm"
-                        disabled={fetcher.state !== 'idle'}
-                    >
-                        {fetcher.state !== 'idle' ? 'Posting...' : 'Comment'}
-                    </Button>
+                        <input type="hidden" name="activityId" value={activity.id} />
+                        <div className="flex gap-2 justify-end">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => { e.stopPropagation(); onSelect(null) }}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="submit"
+                                size="sm"
+                                disabled={fetcher.state !== 'idle'}
+                            >
+                                {fetcher.state !== 'idle' ? 'Posting...' : 'Comment'}
+                            </Button>
+                        </div>
+                        {fetcher.data?.error && (
+                            <div className="text-sm text-red-500">{fetcher.data.error}</div>
+                        )}
+                    </fetcher.Form>
                 </div>
-                {fetcher.data?.error && (
-                    <div className="text-sm text-red-500">{fetcher.data.error}</div>
-                )}
-            </fetcher.Form> }
+            )}
+
+
+           
         </div>
     );
 }
+
+function CommentMessageHeader({ title, subtitle, actions }: { title: string, subtitle?: string, actions?: React.ReactNode }) {
+    return <div className="flex items-center gap-2">
+        {/* Thumbnail */}
+        <div
+            className="w-8 h-8 rounded-full bg-gray-300 flex-shrink-0"
+            style={{ width: 32, height: 32 }}
+        />
+        <div className="flex-1">
+            <div className="flex items-start justify-between">
+                <div>
+                    <div className="text-sm font-medium ">
+                        {title}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                        {subtitle}
+                    </div>
+                </div>
+                {actions}
+            </div>
+        </div>
+    </div>
+}
+
 
 // New subcomponent for comment message item with edit logic
 function CommentMessageItem({ message, userId, activityId, user, users }: { message: any, userId: string | null, fetcher: any, activityId: string, user: any, users: any[] }) {
@@ -342,48 +375,31 @@ function CommentMessageItem({ message, userId, activityId, user, users }: { mess
         setIsEditing(false);
     });
 
+
+    const subtitle = new Date(message.createdAt).toLocaleString() + (message.updatedAt && message.updatedAt !== message.createdAt ? " · Edited" : "")
+
     return (
         <div className="">
-            <div className="flex items-center gap-2">
-                {/* Thumbnail */}
-                <div
-                    className="w-8 h-8 rounded-full bg-gray-300 flex-shrink-0"
-                    style={{ width: 32, height: 32 }}
-                />
-                <div className="flex-1">
-                    <div className="flex items-start justify-between">
-                        <div>
-                            <div className="text-sm font-medium ">
-                                {user.name}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                                {new Date(message.createdAt).toLocaleString()}
-                                {message.updatedAt && message.updatedAt !== message.createdAt && (
-                                    <>
-                                        {" · "}
-                                        Edited
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                        {isOwn && (
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="xs"
-                                className="ml-2 text-xs"
-                                onClick={() => setIsEditing(true)}
-                            >
-                                Edit
-                            </Button>
-                        )}
-                    </div>
-                </div>
-            </div>
+
+            <CommentMessageHeader title={user.name} subtitle={subtitle} actions={
+                isOwn && (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        className="ml-2 text-xs"
+                        onClick={() => setIsEditing(true)}
+                    >
+                        Edit
+                    </Button>
+                )
+            } />
+
+
             {/* Comment content */}
             <div className="text-sm mt-2">
                 {isEditing ? (
-                    <fetcher.Form method="post" className="space-y-2" onSubmit={() => {}}>
+                    <fetcher.Form method="post" className="space-y-2" onSubmit={() => { }}>
                         {/* <TextEditor
                             mentionItems={users.map(user => ({
                                 id: user.id,
@@ -436,20 +452,20 @@ export default function ThreadPageWrapper() {
     return <ThreadPage key={loaderData.thread.id} />
 }
 
-function ActivityMessage({ activity, isWhite = false, selected = false, onClick = () => {} }: { activity: any, isWhite?: boolean, selected?: boolean, onClick?: () => void }) {
+function ActivityMessage({ activity, isWhite = false, selected = false, onClick = () => { } }: { activity: any, isWhite?: boolean, selected?: boolean, onClick?: () => void }) {
     return <div className={`border p-3 rounded-lg hover:border-gray-300 ${isWhite ? "bg-white" : "bg-muted"} ${selected ? "border-gray-300" : ""}`} onClick={onClick}>
         <div dangerouslySetInnerHTML={{ __html: (activity.content as unknown as string) }}></div>
     </div>
 }
 
-function ActivityView({ activity, onSelect, selected = false, onNewComment = () => {} }: { activity: any, onSelect: (activity: any) => void, selected: boolean, onNewComment: () => void }) {
+function ActivityView({ activity, onSelect, selected = false, onNewComment = () => { } }: { activity: any, onSelect: (activity: any) => void, selected: boolean, onNewComment: () => void }) {
     return <div key={activity.id} className="relative" data-item>
         <div className={`relative flex flex-col ${activity.role === "user" ? "pl-[10%] justify-end" : "pr-[10%] justify-start"}`}>
             <div className="relative">
 
-            <ActivityMessage activity={activity} isWhite={activity.role === "user"} selected={selected} onClick={() => onSelect(activity)}/>
+                <ActivityMessage activity={activity} isWhite={activity.role === "user"} selected={selected} onClick={() => onSelect(activity)} />
 
-            {/* { selected && !activity.commentThread && <div className="absolute top-2 -right-[16px]">
+                {/* { selected && !activity.commentThread && <div className="absolute top-2 -right-[16px]">
                 <Button variant="outline" size="icon" onClick={onNewComment}>
                     <MessageCirclePlusIcon className="w-[32px] h-[32px]" />
                 </Button>
@@ -538,7 +554,7 @@ function TextEditorDemo() {
     ]
 
     return <div>
-        <TextEditor mentionItems={ITEMS} placeholder="Add a comment..." defaultValue={"Hello @[user_id:7]!\n\nWhat do you think about @[user_id:3] and @[user_id:2]?\n\nCheers"}/>
+        <TextEditor mentionItems={ITEMS} placeholder="Add a comment..." defaultValue={"Hello @[user_id:7]!\n\nWhat do you think about @[user_id:3] and @[user_id:2]?\n\nCheers"} />
     </div>
 }
 
@@ -665,17 +681,17 @@ function ThreadPage() {
 
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
-          if (!(e.target instanceof Element) || (!e.target.closest('[data-item]') && !e.target.closest('[data-comment]'))) {
-            setSelectedActivity(null); // Deselect
-          }
+            if (!(e.target instanceof Element) || (!e.target.closest('[data-item]') && !e.target.closest('[data-comment]'))) {
+                setSelectedActivity(null); // Deselect
+            }
         };
-      
+
         document.addEventListener('click', handleClickOutside);
         return () => document.removeEventListener('click', handleClickOutside);
     }, []);
 
     console.log('selectedActivity', selectedActivity)
-    
+
     return <>
         <Header>
             <HeaderTitle title={`Thread`} />
@@ -688,22 +704,23 @@ function ThreadPage() {
                 <ItemsWithCommentsLayout items={thread.activities.map((activity) => {
                     return {
                         id: activity.id,
-                        itemComponent: <ActivityView 
+                        itemComponent: <ActivityView
                             activity={activity}
                             onSelect={(a) => setSelectedActivity(a)}
                             selected={selectedActivity === activity}
                             onNewComment={() => { console.log('onNewComment'); setIsNewCommentActive(true) }}
                         />,
-                        commentsComponent: (activity.commentThread || (selectedActivity?.id === activity.id/* && isNewCommentActive*/)) ? 
-                            <CommentThread 
-                                commentThread={activity.commentThread} 
-                                activity={activity} 
+                        commentsComponent: (activity.commentThread || (selectedActivity?.id === activity.id/* && isNewCommentActive*/)) ?
+                            <CommentThread
+                                commentThread={activity.commentThread}
+                                activity={activity}
                                 userId={loaderData.userId}
                                 selected={selectedActivity?.id === activity.id}
                                 users={users}
-                                onSelect={(a) => setSelectedActivity(a)} 
+                                onSelect={(a) => setSelectedActivity(a)}
                             /> : undefined
-                    }})} selectedItemId={selectedActivity?.id} 
+                    }
+                })} selectedItemId={selectedActivity?.id}
                 />
 
                 <div>
