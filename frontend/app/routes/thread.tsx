@@ -272,7 +272,7 @@ function CommentThread({ commentThread, activityId, userId, selected = false, us
     const commentCount = commentThread?.commentMessages?.length || 0;
 
     return (
-        <div className="space-y-3">
+        <div className="space-y-4 border p-3 rounded-lg" data-comment>
             {/* Existing comments */}
             {commentThread?.commentMessages?.map((message: any) => (
                 <CommentMessageItem
@@ -322,70 +322,91 @@ function CommentThread({ commentThread, activityId, userId, selected = false, us
 // New subcomponent for comment message item with edit logic
 function CommentMessageItem({ message, userId, activityId, user }: { message: any, userId: string | null, fetcher: any, activityId: string, user: any }) {
     const [isEditing, setIsEditing] = useState(false);
+    const [editValue, setEditValue] = useState(message.content);
     const fetcher = useFetcher();
 
     const isOwn = userId && message.userId === userId;
 
-    useFetcherSuccess(fetcher, () => {
-        setIsEditing(false)
-    })
+    useEffect(() => {
+        if (!isEditing) {
+            setEditValue(message.content);
+        }
+    }, [isEditing, message.content]);
 
-    if (isEditing) {
-        return (
-            <fetcher.Form method="post" className="space-y-2">
-                <Textarea
-                    name="content"
-                    defaultValue={message.content}
-                    className="min-h-[60px]"
-                    required
-                />
-                <input type="hidden" name="editCommentMessageId" value={message.id} />
-                <input type="hidden" name="activityId" value={activityId} />
-                <div className="flex gap-2">
-                    <Button type="submit" size="sm" disabled={fetcher.state !== 'idle'}>
-                        {fetcher.state !== 'idle' ? 'Saving...' : 'Save'}
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" onClick={() => setIsEditing(false)}>
-                        Cancel
-                    </Button>
-                </div>
-                {fetcher.data?.error && (
-                    <div className="text-sm text-red-500">{fetcher.data.error}</div>
-                )}
-            </fetcher.Form>
-        );
-    }
+    useFetcherSuccess(fetcher, () => {
+        setIsEditing(false);
+    });
 
     return (
-        <div className="bg-muted/50 p-3 rounded-lg">
-            <div className="flex items-start gap-2">
+        <div className="">
+            <div className="flex items-center gap-2">
+                {/* Thumbnail */}
+                <div
+                    className="w-8 h-8 rounded-full bg-gray-300 flex-shrink-0"
+                    style={{ width: 32, height: 32 }}
+                />
                 <div className="flex-1">
-                    <div className="text-sm font-medium text-muted-foreground">
-                        {user.name}
-                    </div>
-                    <div className="text-sm mt-1">
-                        <div dangerouslySetInnerHTML={{ __html: highlightMentions(message.content) }} />
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                        {new Date(message.createdAt).toLocaleString()}
-                        {message.updatedAt && message.updatedAt !== message.createdAt && (
-                            <>
-                                {" · "}
-                                Edited
-                            </>
+                    <div className="flex items-start justify-between">
+                        <div>
+                            <div className="text-sm font-medium ">
+                                {user.name}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                                {new Date(message.createdAt).toLocaleString()}
+                                {message.updatedAt && message.updatedAt !== message.createdAt && (
+                                    <>
+                                        {" · "}
+                                        Edited
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                        {isOwn && (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="xs"
+                                className="ml-2 text-xs"
+                                onClick={() => setIsEditing(true)}
+                            >
+                                Edit
+                            </Button>
                         )}
                     </div>
                 </div>
-                {isOwn && (
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="xs"
-                        className="ml-2 text-xs"
-                        onClick={() => setIsEditing(true)}
-                    >
-                        Edit
-                    </Button>
+            </div>
+            {/* Comment content */}
+            <div className="text-sm mt-2">
+                {isEditing ? (
+                    <fetcher.Form method="post" className="space-y-2" onSubmit={() => {}}>
+                        <Textarea
+                            name="content"
+                            value={editValue}
+                            onChange={e => setEditValue(e.target.value)}
+                            className="min-h-[60px]"
+                            required
+                        />
+                        <input type="hidden" name="editCommentMessageId" value={message.id} />
+                        <input type="hidden" name="activityId" value={activityId} />
+                        <div className="flex gap-2 mt-1">
+                            <Button type="submit" size="sm" disabled={fetcher.state !== 'idle'}>
+                                {fetcher.state !== 'idle' ? 'Saving...' : 'Save'}
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setIsEditing(false)}
+                            >
+                                Cancel
+                            </Button>
+                        </div>
+                        {fetcher.data?.error && (
+                            <div className="text-sm text-red-500">{fetcher.data.error}</div>
+                        )}
+                    </fetcher.Form>
+                ) : (
+                    <div dangerouslySetInnerHTML={{ __html: highlightMentions(message.content) }} />
                 )}
             </div>
         </div>
@@ -399,7 +420,7 @@ export default function ThreadPageWrapper() {
 
 
 function ActivityView({ activity, onSelect, selected = false }: { activity: any, onSelect: (activity: any) => void, selected: boolean }) {
-    return <div key={activity.id} className="relative">
+    return <div key={activity.id} className="relative" data-item>
 
         {activity.role === "user" && (<div className="pl-[10%] relative flex flex-col justify-end">
             {activity.type === "message" && (<div className={`border bg-muted p-3 rounded-lg hover:border-gray-300 ${selected ? "border-gray-300" : ""}`} onClick={() => onSelect(activity)}>
@@ -509,7 +530,6 @@ function ThreadPage() {
     const [isStreaming, setStreaming] = useState(false)
 
     const users = loaderData.users
-    console.log('users', users)
 
     // temporary 
     useEffect(() => {
@@ -617,9 +637,7 @@ function ThreadPage() {
 
     const [selectedActivity, setSelectedActivity] = useState<any | null>(null)
 
-    console.log('selectedActivity', selectedActivity)
 
-    console.log(thread.activities)
 
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
@@ -631,6 +649,8 @@ function ThreadPage() {
         document.addEventListener('click', handleClickOutside);
         return () => document.removeEventListener('click', handleClickOutside);
     }, []);
+    
+    console.log('selectedActivity', selectedActivity)
 
     return <>
         <Header>
@@ -645,7 +665,7 @@ function ThreadPage() {
 
                 <ItemsWithCommentsLayout items={thread.activities.map((activity) => ({
                     id: activity.id,
-                    itemComponent: <ActivityView activity={activity} onSelect={setSelectedActivity} selected={selectedActivity === activity} />,
+                    itemComponent: <ActivityView activity={activity} onSelect={(a) => setSelectedActivity(a)} selected={selectedActivity === activity} />,
                     commentsComponent: (activity.commentThread || selectedActivity === activity) ? <CommentThread commentThread={activity.commentThread} activityId={activity.id} userId={loaderData.userId} selected={selectedActivity === activity} users={users} /> : undefined
                     // commentsComponent: activity === selectedActivity ? <div className="h-[300px] bg-red-100 p-2">hey</div> : undefined
                 }))} selectedItemId={selectedActivity?.id} />
