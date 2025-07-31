@@ -411,7 +411,7 @@ function CommentMessageItem({ message, userId, activityId, user, isEditing, onRe
             {/* Comment content */}
             <div className="text-sm mt-2">
                 {isEditing ? (
-                    <fetcher.Form method="post" className="space-y-2" onSubmit={() => { }}>
+                    <fetcher.Form method="post" className="space-y-2">
                         {/* <TextEditor
                             mentionItems={users.map(user => ({
                                 id: user.id,
