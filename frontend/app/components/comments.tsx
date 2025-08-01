@@ -3,6 +3,13 @@ import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
 import { useEffect, useRef, useState } from "react";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu"
+import { EllipsisVerticalIcon, PencilIcon } from "lucide-react";
 
 
 /**
@@ -51,6 +58,12 @@ export function CommentThread({ threadId, commentThread, activity, userId, selec
         formRef.current?.reset();
     });
 
+    useEffect(() => {
+        if (!selected) {
+            setCurrentlyEditedItemId(null);
+        }
+    }, [selected])
+
     return (
         <div className={`flex flex-col gap-3 py-3 px-3 rounded-lg ${selected ? "bg-white border" : "bg-muted"}`} data-comment={true} onClick={(e) => {
             if (!selected) {
@@ -61,7 +74,7 @@ export function CommentThread({ threadId, commentThread, activity, userId, selec
             {commentThread?.commentMessages?.map((message: any, index: number) => {
                 const count = commentThread?.commentMessages.length;
 
-                let lineClamp : number | undefined;
+                let lineClamp: number | undefined;
 
                 if (!selected) {
                     if (count === 1) {
@@ -103,9 +116,9 @@ export function CommentThread({ threadId, commentThread, activity, userId, selec
             })}
 
             {selected && <>
-                { isNewThread && <CommentMessageHeader title={users.find((user) => user.id === userId)?.name || "You"} />}
+                {isNewThread && <CommentMessageHeader title={users.find((user) => user.id === userId)?.name || "You"} />}
 
-                { (isNewThread || currentlyEditedItemId === "new" || currentlyEditedItemId === null) && <fetcher.Form method="post" action={`/threads/${threadId}/comments`} className="space-y-2" ref={formRef}>
+                {(isNewThread || currentlyEditedItemId === "new" || currentlyEditedItemId === null) && <fetcher.Form method="post" action={`/threads/${threadId}/comments`} className="space-y-2" ref={formRef}>
                     <Textarea
                         name="content"
                         placeholder={(isNewThread ? "Comment" : "Reply") + " or tag other, using @"}
@@ -143,7 +156,7 @@ export function CommentThread({ threadId, commentThread, activity, userId, selec
                     {fetcher.data?.error && (
                         <div className="text-sm text-red-500">{fetcher.data.error}</div>
                     )}
-                </fetcher.Form> }
+                </fetcher.Form>}
             </>}
 
 
@@ -187,7 +200,7 @@ export function CommentMessageItem({ message, userId, activityId, threadId, user
         hour: '2-digit',
         minute: '2-digit'
     }) + (message.updatedAt && message.updatedAt !== message.createdAt ? " · Edited" : "")
-    
+
     useFetcherSuccess(fetcher, () => {
         onCancelEdit();
     });
@@ -196,16 +209,30 @@ export function CommentMessageItem({ message, userId, activityId, threadId, user
         <div className="">
 
             <CommentMessageHeader title={user.name} subtitle={subtitle} actions={
-                isOwn && (
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="xs"
-                        className="ml-2 text-xs"
-                        onClick={() => onRequestEdit()}
-                    >
-                        Edit
-                    </Button>
+                isOwn && (<DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button size="icon" variant="ghost">
+                            <EllipsisVerticalIcon className="w-4 h-4" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-32" align="start">
+                        <DropdownMenuItem onClick={() => onRequestEdit()}>
+                            Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem>
+                            Delete
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+                    // <Button
+                    //     type="button"
+                    //     variant="ghost"
+                    //     size="xs"
+                    //     className="ml-2 text-xs"
+                    //     onClick={() => onRequestEdit()}
+                    // >
+                    //     Edit
+                    // </Button>
                 )
             } />
 
