@@ -54,65 +54,68 @@ export function CommentThread({ threadId, commentThread, activity, userId, selec
     }, []);
 
     return (
-        <div className={`flex flex-col gap-6 py-3 px-3 rounded-lg ${selected ? "bg-white border" : "bg-muted"}`} data-comment={true} onClick={(e) => {
+        <div className={`py-3 px-3 rounded-lg ${selected ? "bg-white border" : "bg-muted"}`} data-comment={true} onClick={(e) => {
             if (!selected) {
                 onSelect(activity)
             }
         }}>
-            {/* Existing comments */}
-            {visibleMessages.map((message: any, index: number) => {
-                const count = visibleMessages.length;
+            <div className="flex flex-col gap-6">
+                {visibleMessages.map((message: any, index: number) => {
+                    const count = visibleMessages.length;
 
-                let lineClamp: number | undefined;
+                    let lineClamp: number | undefined;
 
-                if (message.deletedAt) {
-                    return null
-                }
-
-                if (!selected) {
-                    if (count === 1) {
-                        lineClamp = 6
+                    if (message.deletedAt) {
+                        return null
                     }
-                    else {
-                        lineClamp = 3;
-                        if (count >= 3 && index != 0 && index != count - 1) {
 
-                            if (index === 1) {
-                                return (
-                                    <div className="flex items-center my-2">
-                                        <hr className="flex-grow border-gray-300" />
-                                        <span className="mx-2 text-xs text-muted-foreground px-2 rounded select-none">
-                                            {count - 2} more comment{(count - 2) > 1 ? "s" : ""}
-                                        </span>
-                                        <hr className="flex-grow border-gray-300" />
-                                    </div>
-                                )
+                    if (!selected) {
+                        if (count === 1) {
+                            lineClamp = 6
+                        }
+                        else {
+                            lineClamp = 3;
+                            if (count >= 3 && index != 0 && index != count - 1) {
+
+                                if (index === 1) {
+                                    return (
+                                        <div className="flex items-center my-2">
+                                            <hr className="flex-grow border-gray-300" />
+                                            <span className="mx-2 text-xs text-muted-foreground px-2 rounded select-none">
+                                                {count - 2} more comment{(count - 2) > 1 ? "s" : ""}
+                                            </span>
+                                            <hr className="flex-grow border-gray-300" />
+                                        </div>
+                                    )
+                                }
+                                return null
                             }
-                            return null
                         }
                     }
-                }
 
-                return <CommentMessageItem
-                    key={message.id}
-                    message={message}
-                    userId={userId}
-                    fetcher={fetcher}
-                    activityId={activity.id}
-                    threadId={threadId}
-                    user={users.find((user) => user.id === message.userId)}
-                    isEditing={currentlyEditedItemId === message.id}
-                    onRequestEdit={() => setCurrentlyEditedItemId(message.id)}
-                    onCancelEdit={() => setCurrentlyEditedItemId(null)}
-                    lineClamp={lineClamp}
-                    users={users}
-                />
-            })}
+                    return <CommentMessageItem
+                        key={message.id}
+                        message={message}
+                        userId={userId}
+                        fetcher={fetcher}
+                        activityId={activity.id}
+                        threadId={threadId}
+                        user={users.find((user) => user.id === message.userId)}
+                        isEditing={currentlyEditedItemId === message.id}
+                        onRequestEdit={() => setCurrentlyEditedItemId(message.id)}
+                        onCancelEdit={() => setCurrentlyEditedItemId(null)}
+                        lineClamp={lineClamp}
+                        users={users}
+                    />
+                })}
 
-            {selected && <>
+            </div>
+
+
+            {selected && <div className="">
                 {hasZeroVisisbleComments && <CommentMessageHeader title={users.find((user) => user.id === userId)?.name || "You"} />}
 
-                {(hasZeroVisisbleComments || currentlyEditedItemId === "new" || currentlyEditedItemId === null) && <fetcher.Form method="post" action={`/threads/${threadId}/comments`} className="space-y-2" ref={formRef}>
+                {(hasZeroVisisbleComments || currentlyEditedItemId === "new" || currentlyEditedItemId === null) && <fetcher.Form method="post" action={`/threads/${threadId}/comments`} className="mt-4" ref={formRef}>
                     <TextEditor
                         mentionItems={users.map(user => ({
                             id: user.id,
@@ -121,7 +124,6 @@ export function CommentThread({ threadId, commentThread, activity, userId, selec
                         name="content"
                         placeholder={(hasZeroVisisbleComments ? "Comment" : "Reply") + " or tag other, using @"}
                         className="min-h-[10px] resize-none mb-0"
-                        // required
                         onFocus={() => {
                             setCurrentlyEditedItemId("new");
                         }}
@@ -134,7 +136,6 @@ export function CommentThread({ threadId, commentThread, activity, userId, selec
                             variant="ghost"
                             size="sm"
                             onClick={(e) => {
-                                // e.stopPropagation();
                                 setCurrentlyEditedItemId(null);
 
                                 if (hasZeroVisisbleComments) {
@@ -156,7 +157,7 @@ export function CommentThread({ threadId, commentThread, activity, userId, selec
                         <div className="text-sm text-red-500">{fetcher.data.error}</div>
                     )}
                 </fetcher.Form>}
-            </>}
+            </div>}
 
 
 
