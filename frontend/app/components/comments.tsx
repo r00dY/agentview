@@ -209,8 +209,6 @@ export function CommentMessageItem({ message, userId, activityId, threadId, user
         onCancelEdit();
     });
 
-    console.log(compressionLevel === "high" ? "line-clamp-6" : compressionLevel === "medium" ? "line-clamp-3" : "")
-
     return (
         <div className={`${isDeleted ? 'opacity-60' : ''}`}>
 
