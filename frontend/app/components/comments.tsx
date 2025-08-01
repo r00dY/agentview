@@ -131,16 +131,6 @@ export function CommentThread({ threadId, commentThread, activity, userId, selec
                 {hasZeroVisisbleComments && <CommentMessageHeader title={users.find((user) => user.id === userId)?.name || "You"} />}
 
                 {(hasZeroVisisbleComments || currentlyEditedItemId === "new" || currentlyEditedItemId === null) && <fetcher.Form method="post" action={`/threads/${threadId}/comments`} className="space-y-2" ref={formRef}>
-                    {/* <Textarea
-                        name="content"
-                        placeholder={(hasZeroVisisbleComments ? "Comment" : "Reply") + " or tag other, using @"}
-                        className="min-h-[10px] resize-none mb-0"
-                        required
-                        onFocus={() => {
-                            setCurrentlyEditedItemId("new");
-                        }}
-                    /> */}
-
                     <TextEditor
                         mentionItems={users.map(user => ({
                             id: user.id,
@@ -269,25 +259,23 @@ export function CommentMessageItem({ message, userId, activityId, threadId, user
             <div className="text-sm mt-2">
                 {isEditing ? (
                     <fetcher.Form method="post" action={`/threads/${threadId}/comments`} className="space-y-2">
-                        {/* <TextEditor
-                            mentionItems={users.map(user => ({
-                                id: user.id,
-                                label: user.name
-                            }))}
-                            name="content"
-                            defaultValue={editValue}
-                            // onChange={e => setEditValue(e.target.value)}
-                            className="min-h-[60px]"
-                            // required
-                        /> */}
 
-
-                        <Textarea
+                    <TextEditor
+                        mentionItems={users.map(user => ({
+                            id: user.id,
+                            label: user.name
+                        }))}
+                        name="content"
+                        placeholder={"Edit or tag others, using @"}
+                        defaultValue={message.content}
+                        className="min-h-[10px] resize-none mb-0"
+                    />
+                        {/* <Textarea
                             name="content"
                             defaultValue={message.content}
                             className="min-h-[60px]"
                             required
-                        />
+                        /> */}
                         <input type="hidden" name="editCommentMessageId" value={message.id} />
                         <input type="hidden" name="activityId" value={activityId} />
                         <div className="flex gap-2 mt-1">
