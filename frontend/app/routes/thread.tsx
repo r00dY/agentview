@@ -54,13 +54,13 @@ export default function ThreadPageWrapper() {
 }
 
 function ActivityMessage({ activity, isWhite = false, selected = false, onClick = () => { } }: { activity: any, isWhite?: boolean, selected?: boolean, onClick?: () => void }) {
-    return <div className={`border p-3 rounded-lg hover:border-gray-300 ${isWhite ? "bg-white" : "bg-muted"} ${selected ? "border-gray-300" : ""}`} onClick={onClick}>
+    return <div className={`border p-3 rounded-lg hover:border-gray-300 ${isWhite ? "bg-white" : "bg-muted"} ${selected ? "border-gray-300" : ""}`} onClick={onClick} data-item={true}>
         <div dangerouslySetInnerHTML={{ __html: (activity.content as unknown as string) }}></div>
     </div>
 }
 
 function ActivityView({ activity, onSelect, selected = false, onNewComment = () => { } }: { activity: any, onSelect: (activity: any) => void, selected: boolean, onNewComment: () => void }) {
-    return <div key={activity.id} className="relative" data-item={true}>
+    return <div key={activity.id} className="relative">
         <div className={`relative flex flex-col ${activity.role === "user" ? "pl-[10%] justify-end" : "pr-[10%] justify-start"}`}>
             <div className="relative">
 
@@ -279,26 +279,6 @@ function ThreadPage() {
         setIsNewCommentActive(false)
         _setSelectedActivity(activity)
     }
-
-    // useEffect(() => {
-    //     const handlePointerDownOutside = (e: PointerEvent) => {
-    //         const target = e.target as Element | null;
-
-    //         if (!target) return;
-
-    //         const isClickingItem = target.closest('[data-item]');
-    //         const isClickingComment = target.closest('[data-comment]');
-    //         const isClickingPortal = target.closest('[data-radix-popper-content-wrapper]')
-
-    //         // Deselect if clicking outside both item and comment areas
-    //         if (!isClickingItem && !isClickingComment && !isClickingPortal) {
-    //             setSelectedActivity(null);
-    //         }
-    //     };
-
-    //     document.addEventListener('pointerdown', handlePointerDownOutside);
-    //     return () => document.removeEventListener('pointerdown', handlePointerDownOutside);
-    // }, []);
 
     return <>
         <Header>
