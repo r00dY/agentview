@@ -6,9 +6,11 @@ import Text from '@tiptap/extension-text'
 import Mention, { type MentionNodeAttrs } from '@tiptap/extension-mention'
 import { UndoRedo, Placeholder} from '@tiptap/extensions'
 import { computePosition, flip, shift, offset } from '@floating-ui/dom'
-import { posToDOMRect, ReactRenderer } from '@tiptap/react'
 import { cn } from '~/lib/utils'
 import { type SuggestionProps } from '@tiptap/suggestion'
+
+// export const MENTION_STYLES = 'bg-cyan-50 text-cyan-800 px-1 py-0.5 rounded-md'
+export const MENTION_STYLES = 'text-cyan-700'
 
 export const MentionList = forwardRef((props: SuggestionProps<MentionNodeAttrs, any>, ref) => {
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -100,6 +102,10 @@ export const MentionList = forwardRef((props: SuggestionProps<MentionNodeAttrs, 
     </div>)
 })
 
+export type TextEditorMentionItem = { id: string, label: string }
+
+
+
 
 // Function to convert text back to JSON structure
 export function textToJson(text: string, mentionItems: TextEditorMentionItem[]): any {
@@ -135,7 +141,7 @@ export function textToJson(text: string, mentionItems: TextEditorMentionItem[]):
           
           if (mentionEnd !== -1) {
             const mentionText = line.substring(mentionStart, mentionEnd)
-            const userIdMatch = mentionText.match(/user_id:(\d+)/)
+            const userIdMatch = mentionText.match(/user_id:([^\]]+)/)
             
             if (userIdMatch) {
               const userId = userIdMatch[1]
@@ -187,7 +193,52 @@ export function textToJson(text: string, mentionItems: TextEditorMentionItem[]):
   }
 }
 
-export type TextEditorMentionItem = { id: string, label: string }
+
+export function textToElements(text: string, mentionItems: TextEditorMentionItem[]): React.ReactElement[] {
+  // Use textToJSON first to get the structured data
+  const jsonDoc = textToJson(text, mentionItems)
+  const elements: React.ReactElement[] = []
+  
+  // Process each paragraph in the document
+  for (let i = 0; i < jsonDoc.content.length; i++) {
+    const paragraph = jsonDoc.content[i]
+    
+    if (paragraph.type === 'paragraph') {
+      const paragraphElements: React.ReactElement[] = []
+      
+      // If paragraph has content, process each content item
+      if (paragraph.content) {
+        for (const contentItem of paragraph.content) {
+          if (contentItem.type === 'text') {
+            paragraphElements.push(
+              <span key={`text-${i}-${paragraphElements.length}`}>
+                {contentItem.text}
+              </span>
+            )
+          } else if (contentItem.type === 'mention') {
+            const mentionItem = mentionItems.find(item => item.id === contentItem.attrs.id)
+            paragraphElements.push(
+              <span key={`mention-${i}-${paragraphElements.length}`} className={MENTION_STYLES}>
+                {mentionItem ? `@${mentionItem.label}` : `@[user_id:${contentItem.attrs.id}]`}
+              </span>
+            )
+          }
+        }
+      }
+      
+      // Add paragraph elements
+      elements.push(...paragraphElements)
+      
+      // Add <br/> after each paragraph (except the last one)
+      if (i < jsonDoc.content.length - 1) {
+        elements.push(<br key={`br-${i}`} />)
+      }
+    }
+  }
+
+  return elements
+}
+
 
 export type TextEditorProps = {
   defaultValue?: string
@@ -207,7 +258,7 @@ export function TextEditor({ placeholder = 'Add a comment...', mentionItems = []
     { mentionListProps && <MentionList {...mentionListProps} ref={mentionListRef} /> }
 
     <input type="hidden" name={name} value={value} />
-    
+
     <EditorProvider extensions={[
         Document, 
         Paragraph, 
@@ -218,7 +269,7 @@ export function TextEditor({ placeholder = 'Add a comment...', mentionItems = []
         }),
         Mention.configure({
             HTMLAttributes: {
-              class: 'bg-cyan-50 text-cyan-800 px-1 py-0.5 rounded-md',
+              class: MENTION_STYLES,
             },
             renderText({ node }) {
               return `${node.attrs.mentionSuggestionChar}[user_id:${node.attrs.id}]`

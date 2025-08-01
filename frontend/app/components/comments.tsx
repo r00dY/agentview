@@ -10,42 +10,25 @@ import {
     DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
 import { EllipsisVerticalIcon, PencilIcon } from "lucide-react";
-import { TextEditor } from "./wysiwyg/TextEditor";
+import { TextEditor, textToElements } from "./wysiwyg/TextEditor";
 
+// function highlightMentions(content: string) {
+//     return content.replace(/@\[([^\]]+)\]/g, (match, inside) => {
+//         const colonIndex = inside.indexOf(':');
+//         if (colonIndex === -1) {
+//             return match; // Don't highlight invalid format
+//         }
 
-/**
- * Thread page with comment functionality including mentions.
- * 
- * Mention Format: @[property:value] where property is currently only 'user_id'
- * Examples:
- * - "Hello @[user_id:user123] how are you?"
- * - "Thanks @[user_id:admin456] for the help!"
- * 
- * Features:
- * - Extract mentions from comment content with validation
- * - Store mentions in comment_mentions table
- * - Handle mentions during edits (keep existing, add new, remove old)
- * - Visual highlighting of mentions in the UI
- * - Throws error for invalid @[...] format
- */
-// Helper function to highlight mentions in content
-function highlightMentions(content: string) {
-    return content.replace(/@\[([^\]]+)\]/g, (match, inside) => {
-        const colonIndex = inside.indexOf(':');
-        if (colonIndex === -1) {
-            return match; // Don't highlight invalid format
-        }
+//         const property = inside.substring(0, colonIndex).trim();
+//         const value = inside.substring(colonIndex + 1).trim();
 
-        const property = inside.substring(0, colonIndex).trim();
-        const value = inside.substring(colonIndex + 1).trim();
+//         if (property === 'user_id' && value) {
+//             return `<span class="${MENTION_STYLES}">@${value}</span>`;
+//         }
 
-        if (property === 'user_id' && value) {
-            return `<span class="bg-blue-100 text-blue-800 px-1 py-0.5 rounded text-xs font-medium">@${value}</span>`;
-        }
-
-        return match; // Don't highlight unsupported properties
-    });
-}
+//         return match; // Don't highlight unsupported properties
+//     });
+// }
 
 export function CommentThread({ threadId, commentThread, activity, userId, selected = false, users, onSelect }: { threadId: string, commentThread: any, activity: any, userId: string | null, selected: boolean, users: any[], onSelect: (activity: any) => void }) {
     const fetcher = useFetcher();
@@ -139,6 +122,7 @@ export function CommentThread({ threadId, commentThread, activity, userId, selec
                     onRequestEdit={() => setCurrentlyEditedItemId(message.id)}
                     onCancelEdit={() => setCurrentlyEditedItemId(null)}
                     lineClamp={lineClamp}
+                    users={users}
                 />
             })}
 
@@ -232,7 +216,7 @@ export function CommentMessageHeader({ title, subtitle, actions }: { title: stri
 
 
 // New subcomponent for comment message item with edit logic
-export function CommentMessageItem({ message, userId, activityId, threadId, user, isEditing, onRequestEdit, onCancelEdit, lineClamp }: { message: any, userId: string | null, fetcher: any, activityId: string, threadId: string, user: any, isEditing: boolean, onRequestEdit: () => void, onCancelEdit: () => void, lineClamp?: number }) {
+export function CommentMessageItem({ message, userId, activityId, threadId, user, users, isEditing, onRequestEdit, onCancelEdit, lineClamp }: { message: any, userId: string | null, fetcher: any, activityId: string, threadId: string, user: any, users: any[], isEditing: boolean, onRequestEdit: () => void, onCancelEdit: () => void, lineClamp?: number }) {
     const isDeleted = message.deletedAt;
     const fetcher = useFetcher();
     const isOwn = userId && message.userId === userId;
@@ -327,7 +311,12 @@ export function CommentMessageItem({ message, userId, activityId, threadId, user
                         This comment was deleted
                     </div>
                 ) : (
-                    <div dangerouslySetInnerHTML={{ __html: highlightMentions(message.content) }} className={`${lineClamp ? `line-clamp-${lineClamp}` : ""}`} />
+                    <div className={`${lineClamp ? `line-clamp-${lineClamp}` : ""}`}>
+                        {textToElements(message.content, users.map((user: any) => ({
+                            id: user.id,
+                            label: user.name
+                        })))}
+                        </div>
                 )}
             </div>
         </div>
