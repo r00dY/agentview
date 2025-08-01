@@ -231,24 +231,13 @@ export function CommentMessageItem({ message, userId, activityId, threadId, user
 
             <CommentMessageHeader title={user.name} subtitle={subtitle} actions={
                 isOwn && (<DropdownMenu>
-                    <DropdownMenuTrigger asChild onPointerDown={(e) => {
-                        // console.log('dropdown', e)
-                        // e.stopPropagation();
-                    }}>
-                        <Button size="icon" variant="ghost" onPointerDownCapture={(e) => {
-                            // console.log('dropdown2', e)
-                            // e.stopPropagation();
-                        }}
-                        
-                        
-                        >
+                    <DropdownMenuTrigger asChild>
+                        <Button size="icon" variant="ghost">
                             <EllipsisVerticalIcon className="w-4 h-4" />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent className="w-32" align="start">
                         <DropdownMenuItem onClick={(e) => {
-                            console.log('edit', e)
-                            // e.stopPropagation();
                             onRequestEdit()
                         }}>
                             Edit
@@ -258,18 +247,8 @@ export function CommentMessageItem({ message, userId, activityId, threadId, user
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
-                    // <Button
-                    //     type="button"
-                    //     variant="ghost"
-                    //     size="xs"
-                    //     className="ml-2 text-xs"
-                    //     onClick={() => onRequestEdit()}
-                    // >
-                    //     Edit
-                    // </Button>
                 )
             } />
-
 
             {/* Comment content */}
             <div className="text-sm mt-2">
