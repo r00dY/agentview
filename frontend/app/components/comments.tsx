@@ -136,6 +136,7 @@ export function CommentThread({ threadId, commentThread, activity, userId, selec
                             variant="ghost"
                             size="sm"
                             onClick={(e) => {
+                                // e.stopPropagation();
                                 setCurrentlyEditedItemId(null);
 
                                 if (isNewThread) {
@@ -210,13 +211,23 @@ export function CommentMessageItem({ message, userId, activityId, threadId, user
 
             <CommentMessageHeader title={user.name} subtitle={subtitle} actions={
                 isOwn && (<DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button size="icon" variant="ghost">
+                    <DropdownMenuTrigger asChild onClick={(e) => {
+                        console.log('dropdown', e)
+                        // e.stopPropagation();
+                    }}>
+                        <Button size="icon" variant="ghost" onClick={(e) => {
+                            console.log('dropdown2', e)
+                            // e.stopPropagation();
+                        }}>
                             <EllipsisVerticalIcon className="w-4 h-4" />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent className="w-32" align="start">
-                        <DropdownMenuItem onClick={() => onRequestEdit()}>
+                        <DropdownMenuItem onClick={(e) => {
+                            console.log('edit', e)
+                            // e.stopPropagation();
+                            onRequestEdit()
+                        }}>
                             Edit
                         </DropdownMenuItem>
                         <DropdownMenuItem>
