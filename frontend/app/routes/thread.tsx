@@ -59,7 +59,7 @@ function ActivityMessage({ activity, isWhite = false, selected = false, onClick 
     </div>
 }
 
-function ActivityView({ activity, onSelect, selected = false, onNewComment = () => { } }: { activity: any, onSelect: (activity: any) => void, selected: boolean, onNewComment: () => void }) {
+function ActivityView({ activity, onSelect, selected = false }: { activity: any, onSelect: (activity: any) => void, selected: boolean }) {
     return <div key={activity.id} className="relative">
         <div className={`relative flex flex-col ${activity.role === "user" ? "pl-[10%] justify-end" : "pr-[10%] justify-start"}`}>
             <div className="relative">
@@ -272,13 +272,7 @@ function ThreadPage() {
         })
     }
 
-    const [selectedActivity, _setSelectedActivity] = useState<any | null>(null)
-    const [isNewCommentActive, setIsNewCommentActive] = useState<boolean>(false)
-
-    function setSelectedActivity(activity: any) {
-        setIsNewCommentActive(false)
-        _setSelectedActivity(activity)
-    }
+    const [selectedActivity, setSelectedActivity] = useState<any | null>(null)
 
     return <>
         <Header>
@@ -290,15 +284,17 @@ function ThreadPage() {
                 <ThreadDetails thread={thread} />
 
                 <ItemsWithCommentsLayout items={thread.activities.map((activity) => {
+
+                    const hasComments = activity.commentThread && activity.commentThread.commentMessages.filter((m: any) => !m.deletedAt).length > 0
+
                     return {
                         id: activity.id,
                         itemComponent: <ActivityView
                             activity={activity}
                             onSelect={(a) => setSelectedActivity(a)}
                             selected={selectedActivity === activity}
-                            onNewComment={() => { console.log('onNewComment'); setIsNewCommentActive(true) }}
                         />,
-                        commentsComponent: (activity.commentThread || (selectedActivity?.id === activity.id/* && isNewCommentActive*/)) ?
+                        commentsComponent: (hasComments || (selectedActivity?.id === activity.id/* && isNewCommentActive*/)) ?
                             <CommentThread
                                 commentThread={activity.commentThread}
                                 activity={activity}

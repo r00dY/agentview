@@ -48,7 +48,10 @@ function highlightMentions(content: string) {
 
 export function CommentThread({ threadId, commentThread, activity, userId, selected = false, users, onSelect }: { threadId: string, commentThread: any, activity: any, userId: string | null, selected: boolean, users: any[], onSelect: (activity: any) => void }) {
     const fetcher = useFetcher();
-    const isNewThread = !(commentThread?.commentMessages?.length > 0);
+    // const isNewThread = !(commentThread?.commentMessages?.length > 0);
+
+    const visibleMessages = activity.commentThread?.commentMessages.filter((m: any) => !m.deletedAt) ?? []
+    const hasZeroVisisbleComments = visibleMessages.length === 0
 
     const formRef = useRef<HTMLFormElement>(null);
     const [currentlyEditedItemId, setCurrentlyEditedItemId] = useState<string | null>(null); // "new" for new comment, comment id for edits
@@ -91,10 +94,14 @@ export function CommentThread({ threadId, commentThread, activity, userId, selec
             }
         }}>
             {/* Existing comments */}
-            {commentThread?.commentMessages?.map((message: any, index: number) => {
-                const count = commentThread?.commentMessages.length;
+            {visibleMessages.map((message: any, index: number) => {
+                const count = visibleMessages.length;
 
                 let lineClamp: number | undefined;
+
+                if (message.deletedAt) {
+                    return null
+                }
 
                 if (!selected) {
                     if (count === 1) {
@@ -136,12 +143,12 @@ export function CommentThread({ threadId, commentThread, activity, userId, selec
             })}
 
             {selected && <>
-                {isNewThread && <CommentMessageHeader title={users.find((user) => user.id === userId)?.name || "You"} />}
+                {hasZeroVisisbleComments && <CommentMessageHeader title={users.find((user) => user.id === userId)?.name || "You"} />}
 
-                {(isNewThread || currentlyEditedItemId === "new" || currentlyEditedItemId === null) && <fetcher.Form method="post" action={`/threads/${threadId}/comments`} className="space-y-2" ref={formRef}>
+                {(hasZeroVisisbleComments || currentlyEditedItemId === "new" || currentlyEditedItemId === null) && <fetcher.Form method="post" action={`/threads/${threadId}/comments`} className="space-y-2" ref={formRef}>
                     <Textarea
                         name="content"
-                        placeholder={(isNewThread ? "Comment" : "Reply") + " or tag other, using @"}
+                        placeholder={(hasZeroVisisbleComments ? "Comment" : "Reply") + " or tag other, using @"}
                         className="min-h-[10px] resize-none mb-0"
                         required
                         onFocus={() => {
@@ -150,7 +157,7 @@ export function CommentThread({ threadId, commentThread, activity, userId, selec
                     />
 
                     <input type="hidden" name="activityId" value={activity.id} />
-                    <div className={`gap-2 justify-end mt-2 ${(currentlyEditedItemId === "new" || isNewThread) ? "flex" : "hidden"}`}>
+                    <div className={`gap-2 justify-end mt-2 ${(currentlyEditedItemId === "new" || hasZeroVisisbleComments) ? "flex" : "hidden"}`}>
                         <Button
                             type="reset"
                             variant="ghost"
@@ -159,7 +166,7 @@ export function CommentThread({ threadId, commentThread, activity, userId, selec
                                 // e.stopPropagation();
                                 setCurrentlyEditedItemId(null);
 
-                                if (isNewThread) {
+                                if (hasZeroVisisbleComments) {
                                     onSelect(null)
                                 }
                             }}
@@ -212,6 +219,7 @@ export function CommentMessageHeader({ title, subtitle, actions }: { title: stri
 
 // New subcomponent for comment message item with edit logic
 export function CommentMessageItem({ message, userId, activityId, threadId, user, isEditing, onRequestEdit, onCancelEdit, lineClamp }: { message: any, userId: string | null, fetcher: any, activityId: string, threadId: string, user: any, isEditing: boolean, onRequestEdit: () => void, onCancelEdit: () => void, lineClamp?: number }) {
+    const isDeleted = message.deletedAt;
     const fetcher = useFetcher();
     const isOwn = userId && message.userId === userId;
     const subtitle = new Date(message.createdAt).toLocaleString('en-US', {
@@ -220,17 +228,17 @@ export function CommentMessageItem({ message, userId, activityId, threadId, user
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit'
-    }) + (message.updatedAt && message.updatedAt !== message.createdAt ? " · Edited" : "")
+    }) + (message.updatedAt && message.updatedAt !== message.createdAt ? " · Edited" : "") + (isDeleted ? " · Deleted" : "")
 
     useFetcherSuccess(fetcher, () => {
         onCancelEdit();
     });
 
     return (
-        <div className="">
+        <div className={`${isDeleted ? 'opacity-60' : ''}`}>
 
             <CommentMessageHeader title={user.name} subtitle={subtitle} actions={
-                isOwn && (<DropdownMenu>
+                isOwn && !isDeleted && (<DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button size="icon" variant="ghost">
                             <EllipsisVerticalIcon className="w-4 h-4" />
@@ -242,7 +250,15 @@ export function CommentMessageItem({ message, userId, activityId, threadId, user
                         }}>
                             Edit
                         </DropdownMenuItem>
-                        <DropdownMenuItem>
+                        <DropdownMenuItem onClick={(e) => {
+                            e.preventDefault();
+                            if (confirm('Are you sure you want to delete this comment?')) {
+                                const formData = new FormData();
+                                formData.append('deleteCommentMessageId', message.id);
+                                formData.append('activityId', activityId);
+                                fetcher.submit(formData, { method: 'post', action: `/threads/${threadId}/comments` });
+                            }
+                        }}>
                             Delete
                         </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -292,6 +308,10 @@ export function CommentMessageItem({ message, userId, activityId, threadId, user
                             <div className="text-sm text-red-500">{fetcher.data.error}</div>
                         )}
                     </fetcher.Form>
+                ) : isDeleted ? (
+                    <div className="text-muted-foreground italic">
+                        This comment was deleted
+                    </div>
                 ) : (
                     <div dangerouslySetInnerHTML={{ __html: highlightMentions(message.content) }} className={`${lineClamp ? `line-clamp-${lineClamp}` : ""}`} />
                 )}

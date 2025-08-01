@@ -78,6 +78,9 @@ export const commentMessages = pgTable('comment_messages', {
   content: text('content').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  // Soft delete fields
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  deletedBy: text('deleted_by').references(() => user.id, { onDelete: 'set null' }),
 });
 
 // User mentions within comment messages

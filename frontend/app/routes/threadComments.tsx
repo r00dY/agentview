@@ -1,7 +1,7 @@
 import type { Route } from "./+types/threadComments";
 import { db } from "~/lib/db.server";
 import { commentThreads, commentMessages, commentMessageEdits, commentMentions } from "~/db/schema";
-import { eq, inArray, and } from "drizzle-orm";
+import { eq, inArray, and, isNull } from "drizzle-orm";
 import { auth } from "~/lib/auth.server";
 import { extractMentions } from "~/lib/utils";
 
@@ -10,6 +10,7 @@ export async function action({ request, params }: Route.ActionArgs) {
     const content = formData.get("content");
     const activityId = formData.get("activityId");
     const editCommentMessageId = formData.get("editCommentMessageId");
+    const deleteCommentMessageId = formData.get("deleteCommentMessageId");
 
     // Editing a comment message
     if (editCommentMessageId && typeof editCommentMessageId === 'string') {
@@ -110,6 +111,45 @@ export async function action({ request, params }: Route.ActionArgs) {
         }
     }
 
+    // Deleting a comment message
+    if (deleteCommentMessageId && typeof deleteCommentMessageId === 'string') {
+        try {
+            // Get current user
+            const session = await auth.api.getSession({ headers: request.headers });
+            if (!session) {
+                return { error: "Authentication required" };
+            }
+
+            // Find the comment message
+            const [message] = await db
+                .select()
+                .from(commentMessages)
+                .where(eq(commentMessages.id, deleteCommentMessageId));
+
+            if (!message) {
+                return { error: "Comment message not found" };
+            }
+
+            // Check if user can delete this comment (own comment or admin)
+            if (message.userId !== session.user.id) {
+                return { error: "You can only delete your own comments." };
+            }
+
+            // Soft delete the comment
+            await db.update(commentMessages)
+                .set({ 
+                    deletedAt: new Date(),
+                    deletedBy: session.user.id
+                })
+                .where(eq(commentMessages.id, deleteCommentMessageId));
+
+            return { status: 'success', data: null };
+        } catch (error) {
+            console.error('Error deleting comment:', error);
+            return { error: "Failed to delete comment" };
+        }
+    }
+
     if (!content || typeof content !== 'string') {
         return { error: "Comment content is required" };
     }
@@ -130,6 +170,7 @@ export async function action({ request, params }: Route.ActionArgs) {
             where: eq(commentThreads.activityId, activityId),
             with: {
                 commentMessages: {
+                    where: isNull(commentMessages.deletedAt), // Only include non-deleted comments
                     orderBy: (commentMessages, { asc }) => [asc(commentMessages.createdAt)]
                 }
             }
