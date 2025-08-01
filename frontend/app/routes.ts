@@ -16,6 +16,7 @@ export default [
             index("routes/threadsIndex.tsx"),
             route("new", "routes/threadNew.tsx"),
             route(":id", "routes/thread.tsx"),
+            route(":id/comments", "routes/threadComments.tsx"),
         ]),
     ]),
     route("login", "routes/login.tsx"),
