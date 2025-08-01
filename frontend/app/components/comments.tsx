@@ -80,7 +80,7 @@ export function CommentThread({ threadId, activity, userId, selected = false, us
 
                                 if (index === 1) {
                                     return (
-                                        <div className="flex items-center my-2">
+                                        <div className="flex items-center my-2" key="separator">
                                             <hr className="flex-grow border-gray-300" />
                                             <span className="mx-2 text-xs text-muted-foreground px-2 rounded select-none">
                                                 {count - 2} more comment{(count - 2) > 1 ? "s" : ""}

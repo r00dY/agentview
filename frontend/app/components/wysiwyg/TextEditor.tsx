@@ -211,7 +211,7 @@ export function textToElements(text: string, mentionItems: TextEditorMentionItem
       if (paragraph.content) {
         for (const contentItem of paragraph.content) {
           if (contentItem.type === 'text') {
-            paragraphElements.push(<Linkify options={{target: "_blank", className: "text-cyan-700 underline hover:text-cyan-500"}}>{contentItem.text}</Linkify>)
+            paragraphElements.push(<Linkify options={{target: "_blank", className: "text-cyan-700 underline hover:text-cyan-500"}} key={`text-${i}-${paragraphElements.length}`}>{contentItem.text}</Linkify>)
           } else if (contentItem.type === 'mention') {
             const mentionItem = mentionItems.find(item => item.id === contentItem.attrs.id)
             paragraphElements.push(
