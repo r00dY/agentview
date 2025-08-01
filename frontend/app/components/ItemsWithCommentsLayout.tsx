@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 
 // Global variable with hardcoded items
 
-const gap = 8;
+const gap = 16;
 
 
 

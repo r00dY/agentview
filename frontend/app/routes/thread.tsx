@@ -1,4 +1,4 @@
-import { redirect, useLoaderData, useFetcher, Outlet, Link, Form, data, useParams } from "react-router";
+import { redirect, useLoaderData, useFetcher, Outlet, Link, Form, data, useParams, useSearchParams } from "react-router";
 import type { Route } from "./+types/thread";
 import { Button } from "~/components/ui/button";
 import { Header, HeaderTitle } from "~/components/header";
@@ -132,6 +132,19 @@ function ThreadPage() {
 
     const users = loaderData.users
 
+    const [searchParams, setSearchParams] = useSearchParams();
+    const selectedActivityId = thread.activities.find((a: any) => a.id === searchParams.get('activityId'))?.id ?? null;
+    const setSelectedActivityId = (id: string | null) => {
+        setSearchParams((searchParams) => {
+            if (id) {
+                searchParams.set("activityId", id);
+            } else {
+                searchParams.delete("activityId");
+            }
+            return searchParams;
+        });
+    }
+
     // temporary 
     useEffect(() => {
         if (!isStreaming) {
@@ -236,7 +249,7 @@ function ThreadPage() {
         })
     }
 
-    const [selectedActivity, setSelectedActivity] = useState<any | null>(null)
+    // const [selectedActivity, setSelectedActivity] = useState<any | null>(null)
 
     return <>
         <Header>
@@ -255,21 +268,21 @@ function ThreadPage() {
                         id: activity.id,
                         itemComponent: <ActivityView
                             activity={activity}
-                            onSelect={(a) => setSelectedActivity(a)}
-                            selected={selectedActivity === activity}
+                            onSelect={(a) => setSelectedActivityId(a.id)}
+                            selected={selectedActivityId === activity.id}
                         />,
-                        commentsComponent: (hasComments || (selectedActivity?.id === activity.id/* && isNewCommentActive*/)) ?
+                        commentsComponent: (hasComments || (selectedActivityId === activity.id/* && isNewCommentActive*/)) ?
                             <CommentThread
                                 commentThread={activity.commentThread}
                                 activity={activity}
                                 userId={loaderData.userId}
-                                selected={selectedActivity?.id === activity.id}
+                                selected={selectedActivityId === activity.id}
                                 users={users}
-                                onSelect={(a) => setSelectedActivity(a)}
+                                onSelect={(a) => setSelectedActivityId(a.id)}
                                 threadId={thread.id}
                             /> : undefined
                     }
-                })} selectedItemId={selectedActivity?.id}
+                })} selectedItemId={selectedActivityId}
                 />
 
                 <div>
