@@ -60,7 +60,7 @@ export function CommentThread({ threadId, activity, userId, selected = false, us
                 onSelect(activity)
             }
         }}>
-            <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-7">
                 {visibleMessages.map((message: any, index: number) => {
                     const count = visibleMessages.length;
 
