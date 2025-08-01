@@ -60,11 +60,11 @@ export function CommentThread({ threadId, activity, userId, selected = false, us
                 onSelect(activity)
             }
         }}>
-            <div className="flex flex-col gap-7">
+            <div className="flex flex-col gap-6">
                 {visibleMessages.map((message: any, index: number) => {
                     const count = visibleMessages.length;
 
-                    let lineClamp: number | undefined;
+                    let compressionLevel: MessageCompressionLevel = "none";
 
                     if (message.deletedAt) {
                         return null
@@ -72,15 +72,15 @@ export function CommentThread({ threadId, activity, userId, selected = false, us
 
                     if (!selected) {
                         if (count === 1) {
-                            lineClamp = 6
+                            compressionLevel = "high"
                         }
                         else {
-                            lineClamp = 3;
+                            compressionLevel = "medium";
                             if (count >= 3 && index != 0 && index != count - 1) {
 
                                 if (index === 1) {
                                     return (
-                                        <div className="flex items-center my-2" key="separator">
+                                        <div className="flex items-center" key="separator">
                                             <hr className="flex-grow border-gray-300" />
                                             <span className="mx-2 text-xs text-muted-foreground px-2 rounded select-none">
                                                 {count - 2} more comment{(count - 2) > 1 ? "s" : ""}
@@ -105,7 +105,7 @@ export function CommentThread({ threadId, activity, userId, selected = false, us
                         isEditing={currentlyEditedItemId === message.id}
                         onRequestEdit={() => setCurrentlyEditedItemId(message.id)}
                         onCancelEdit={() => setCurrentlyEditedItemId(null)}
-                        lineClamp={lineClamp}
+                        compressionLevel={compressionLevel}
                         users={users}
                     />
                 })}
@@ -190,8 +190,10 @@ export function CommentMessageHeader({ title, subtitle, actions }: { title: stri
 }
 
 
+type MessageCompressionLevel = "none" | "medium" | "high";
+
 // New subcomponent for comment message item with edit logic
-export function CommentMessageItem({ message, userId, activityId, threadId, user, users, isEditing, onRequestEdit, onCancelEdit, lineClamp }: { message: any, userId: string | null, fetcher: any, activityId: string, threadId: string, user: any, users: any[], isEditing: boolean, onRequestEdit: () => void, onCancelEdit: () => void, lineClamp?: number }) {
+export function CommentMessageItem({ message, userId, activityId, threadId, user, users, isEditing, onRequestEdit, onCancelEdit, compressionLevel = "none" }: { message: any, userId: string | null, fetcher: any, activityId: string, threadId: string, user: any, users: any[], isEditing: boolean, onRequestEdit: () => void, onCancelEdit: () => void, compressionLevel?: MessageCompressionLevel }) {
     const isDeleted = message.deletedAt;
     const fetcher = useFetcher();
     const isOwn = userId && message.userId === userId;
@@ -206,6 +208,8 @@ export function CommentMessageItem({ message, userId, activityId, threadId, user
     useFetcherSuccess(fetcher, () => {
         onCancelEdit();
     });
+
+    console.log(compressionLevel === "high" ? "line-clamp-6" : compressionLevel === "medium" ? "line-clamp-3" : "")
 
     return (
         <div className={`${isDeleted ? 'opacity-60' : ''}`}>
@@ -238,6 +242,7 @@ export function CommentMessageItem({ message, userId, activityId, threadId, user
                 </DropdownMenu>
                 )
             } />
+            
 
             {/* Comment content */}
             <div className="text-sm mt-2">
@@ -278,7 +283,7 @@ export function CommentMessageItem({ message, userId, activityId, threadId, user
                         This comment was deleted
                     </div>
                 ) : (
-                    <div className={`${lineClamp ? `line-clamp-${lineClamp}` : ""}`}>
+                    <div className={`gówno ${compressionLevel === "high" ? "line-clamp-6" : compressionLevel === "medium" ? "line-clamp-3" : ""}`}>
                         {textToElements(message.content, users.map((user: any) => ({
                             id: user.id,
                             label: user.name
