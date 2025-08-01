@@ -154,6 +154,8 @@ export function ItemsWithCommentsLayout({ items, selectedItemId }: ItemsWithComm
                     </div>
                 ))}
 
+                <div className="h-[300px]" /> {/* TODO: safe area that prevents bottom of page to jump too much when bottom comment section is resized */}
+
                 <div ref={bottomSpacerRef}/>
             </div>
             <div ref={containerRef} className="w-[300px] flex-none relative overflow-hidden">

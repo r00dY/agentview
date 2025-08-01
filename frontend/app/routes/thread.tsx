@@ -273,7 +273,6 @@ function ThreadPage() {
                         />,
                         commentsComponent: (hasComments || (selectedActivityId === activity.id/* && isNewCommentActive*/)) ?
                             <CommentThread
-                                commentThread={activity.commentThread}
                                 activity={activity}
                                 userId={loaderData.userId}
                                 selected={selectedActivityId === activity.id}

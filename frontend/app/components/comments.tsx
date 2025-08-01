@@ -12,7 +12,7 @@ import { EllipsisVerticalIcon, PencilIcon } from "lucide-react";
 import { TextEditor, textToElements } from "./wysiwyg/TextEditor";
 
 
-export function CommentThread({ threadId, commentThread, activity, userId, selected = false, users, onSelect }: { threadId: string, commentThread: any, activity: any, userId: string | null, selected: boolean, users: any[], onSelect: (activity: any) => void }) {
+export function CommentThread({ threadId, activity, userId, selected = false, users, onSelect }: { threadId: string, activity: any, userId: string | null, selected: boolean, users: any[], onSelect: (activity: any) => void }) {
     const fetcher = useFetcher();
 
     const visibleMessages = activity.commentThread?.commentMessages.filter((m: any) => !m.deletedAt) ?? []
