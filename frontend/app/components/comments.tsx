@@ -1,6 +1,5 @@
 import { useFetcher } from "react-router";
 import { Button } from "~/components/ui/button";
-import { Textarea } from "~/components/ui/textarea";
 import { useEffect, useRef, useState } from "react";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
 import {
@@ -12,23 +11,6 @@ import {
 import { EllipsisVerticalIcon, PencilIcon } from "lucide-react";
 import { TextEditor, textToElements } from "./wysiwyg/TextEditor";
 
-// function highlightMentions(content: string) {
-//     return content.replace(/@\[([^\]]+)\]/g, (match, inside) => {
-//         const colonIndex = inside.indexOf(':');
-//         if (colonIndex === -1) {
-//             return match; // Don't highlight invalid format
-//         }
-
-//         const property = inside.substring(0, colonIndex).trim();
-//         const value = inside.substring(colonIndex + 1).trim();
-
-//         if (property === 'user_id' && value) {
-//             return `<span class="${MENTION_STYLES}">@${value}</span>`;
-//         }
-
-//         return match; // Don't highlight unsupported properties
-//     });
-// }
 
 export function CommentThread({ threadId, commentThread, activity, userId, selected = false, users, onSelect }: { threadId: string, commentThread: any, activity: any, userId: string | null, selected: boolean, users: any[], onSelect: (activity: any) => void }) {
     const fetcher = useFetcher();
@@ -142,7 +124,7 @@ export function CommentThread({ threadId, commentThread, activity, userId, selec
                         // required
                         onFocus={() => {
                             setCurrentlyEditedItemId("new");
-                        }} 
+                        }}
                     />
 
                     <input type="hidden" name="activityId" value={activity.id} />
@@ -260,22 +242,16 @@ export function CommentMessageItem({ message, userId, activityId, threadId, user
                 {isEditing ? (
                     <fetcher.Form method="post" action={`/threads/${threadId}/comments`} className="space-y-2">
 
-                    <TextEditor
-                        mentionItems={users.map(user => ({
-                            id: user.id,
-                            label: user.name
-                        }))}
-                        name="content"
-                        placeholder={"Edit or tag others, using @"}
-                        defaultValue={message.content}
-                        className="min-h-[10px] resize-none mb-0"
-                    />
-                        {/* <Textarea
+                        <TextEditor
+                            mentionItems={users.map(user => ({
+                                id: user.id,
+                                label: user.name
+                            }))}
                             name="content"
+                            placeholder={"Edit or tag others, using @"}
                             defaultValue={message.content}
-                            className="min-h-[60px]"
-                            required
-                        /> */}
+                            className="min-h-[10px] resize-none mb-0"
+                        />
                         <input type="hidden" name="editCommentMessageId" value={message.id} />
                         <input type="hidden" name="activityId" value={activityId} />
                         <div className="flex gap-2 mt-1">
@@ -305,7 +281,7 @@ export function CommentMessageItem({ message, userId, activityId, threadId, user
                             id: user.id,
                             label: user.name
                         })))}
-                        </div>
+                    </div>
                 )}
             </div>
         </div>
