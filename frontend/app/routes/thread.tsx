@@ -133,8 +133,8 @@ function ThreadPage() {
     const users = loaderData.users
 
     const [searchParams, setSearchParams] = useSearchParams();
-    const selectedActivityId = thread.activities.find((a: any) => a.id === searchParams.get('activityId'))?.id ?? null;
-    const setSelectedActivityId = (id: string | null) => {
+    const selectedActivityId = thread.activities.find((a: any) => a.id === searchParams.get('activityId'))?.id ?? undefined;
+    const setSelectedActivityId = (id: string | undefined) => {
         setSearchParams((searchParams) => {
             if (id) {
                 searchParams.set("activityId", id);
@@ -142,7 +142,7 @@ function ThreadPage() {
                 searchParams.delete("activityId");
             }
             return searchParams;
-        });
+        }, { replace: true });
     }
 
     // temporary 
@@ -268,7 +268,7 @@ function ThreadPage() {
                         id: activity.id,
                         itemComponent: <ActivityView
                             activity={activity}
-                            onSelect={(a) => setSelectedActivityId(a.id)}
+                            onSelect={(a) => setSelectedActivityId(a?.id)}
                             selected={selectedActivityId === activity.id}
                         />,
                         commentsComponent: (hasComments || (selectedActivityId === activity.id/* && isNewCommentActive*/)) ?
@@ -278,7 +278,7 @@ function ThreadPage() {
                                 userId={loaderData.userId}
                                 selected={selectedActivityId === activity.id}
                                 users={users}
-                                onSelect={(a) => setSelectedActivityId(a.id)}
+                                onSelect={(a) => setSelectedActivityId(a?.id)}
                                 threadId={thread.id}
                             /> : undefined
                     }
