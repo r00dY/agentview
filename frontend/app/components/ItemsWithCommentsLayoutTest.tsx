@@ -100,14 +100,15 @@ export function ItemsWithCommentsLayoutTest() {
     }));
 
     useEffect(() => {
-        const handleClickOutside = (e: MouseEvent) => {
-          if (!(e.target instanceof Element) || (!e.target.closest('[data-item]') && !e.target.closest('[data-comment]'))) {
-            setSelectedItem(null); // Deselect
-          }
+        const handlePointerDownOutside = (e: PointerEvent) => {
+            console.log('pointerdown', e)
+            if (!(e.target instanceof Element) || (!e.target.closest('[data-item]') && !e.target.closest('[data-comment]'))) {
+                setSelectedItem(null); // Deselect
+            }
         };
-      
-        document.addEventListener('click', handleClickOutside);
-        return () => document.removeEventListener('click', handleClickOutside);
+
+        document.addEventListener('pointerdown', handlePointerDownOutside);
+        return () => document.removeEventListener('pointerdown', handlePointerDownOutside);
     }, []);
 
 

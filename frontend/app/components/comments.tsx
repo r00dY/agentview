@@ -64,6 +64,26 @@ export function CommentThread({ threadId, commentThread, activity, userId, selec
         }
     }, [selected])
 
+    useEffect(() => {
+        const handlePointerDownOutside = (e: PointerEvent) => {
+            const target = e.target as Element | null;
+
+            if (!target) return;
+
+            const isClickingItem = target.closest('[data-item]');
+            const isClickingComment = target.closest('[data-comment]');
+            const isClickingPortal = target.closest('[data-radix-popper-content-wrapper]')
+
+            // Deselect if clicking outside both item and comment areas
+            if (!isClickingItem && !isClickingComment && !isClickingPortal) {
+                onSelect(null);
+            }
+        };
+
+        document.addEventListener('pointerdown', handlePointerDownOutside);
+        return () => document.removeEventListener('pointerdown', handlePointerDownOutside);
+    }, []);
+
     return (
         <div className={`flex flex-col gap-3 py-3 px-3 rounded-lg ${selected ? "bg-white border" : "bg-muted"}`} data-comment={true} onClick={(e) => {
             if (!selected) {
@@ -211,14 +231,17 @@ export function CommentMessageItem({ message, userId, activityId, threadId, user
 
             <CommentMessageHeader title={user.name} subtitle={subtitle} actions={
                 isOwn && (<DropdownMenu>
-                    <DropdownMenuTrigger asChild onClick={(e) => {
-                        console.log('dropdown', e)
+                    <DropdownMenuTrigger asChild onPointerDown={(e) => {
+                        // console.log('dropdown', e)
                         // e.stopPropagation();
                     }}>
-                        <Button size="icon" variant="ghost" onClick={(e) => {
-                            console.log('dropdown2', e)
+                        <Button size="icon" variant="ghost" onPointerDownCapture={(e) => {
+                            // console.log('dropdown2', e)
                             // e.stopPropagation();
-                        }}>
+                        }}
+                        
+                        
+                        >
                             <EllipsisVerticalIcon className="w-4 h-4" />
                         </Button>
                     </DropdownMenuTrigger>

@@ -280,24 +280,25 @@ function ThreadPage() {
         _setSelectedActivity(activity)
     }
 
-    useEffect(() => {
-        const handleClickOutside = (e: MouseEvent) => {
-            const target = e.target as Element | null;
+    // useEffect(() => {
+    //     const handlePointerDownOutside = (e: PointerEvent) => {
+    //         const target = e.target as Element | null;
 
-            if (!target) return;
+    //         if (!target) return;
 
-            const isClickingItem = target.closest('[data-item]');
-            const isClickingComment = target.closest('[data-comment]');
+    //         const isClickingItem = target.closest('[data-item]');
+    //         const isClickingComment = target.closest('[data-comment]');
+    //         const isClickingPortal = target.closest('[data-radix-popper-content-wrapper]')
 
-            // Deselect if clicking outside both item and comment areas
-            if (!isClickingItem && !isClickingComment) {
-                setSelectedActivity(null);
-            }
-        };
+    //         // Deselect if clicking outside both item and comment areas
+    //         if (!isClickingItem && !isClickingComment && !isClickingPortal) {
+    //             setSelectedActivity(null);
+    //         }
+    //     };
 
-        document.addEventListener('click', handleClickOutside);
-        return () => document.removeEventListener('click', handleClickOutside);
-    }, []);
+    //     document.addEventListener('pointerdown', handlePointerDownOutside);
+    //     return () => document.removeEventListener('pointerdown', handlePointerDownOutside);
+    // }, []);
 
     return <>
         <Header>
