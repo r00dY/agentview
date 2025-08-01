@@ -8,6 +8,7 @@ import { UndoRedo, Placeholder} from '@tiptap/extensions'
 import { computePosition, flip, shift, offset } from '@floating-ui/dom'
 import { cn } from '~/lib/utils'
 import { type SuggestionProps } from '@tiptap/suggestion'
+import Linkify from "linkify-react";
 
 // export const MENTION_STYLES = 'bg-cyan-50 text-cyan-800 px-1 py-0.5 rounded-md'
 export const MENTION_STYLES = 'text-cyan-700'
@@ -210,11 +211,11 @@ export function textToElements(text: string, mentionItems: TextEditorMentionItem
       if (paragraph.content) {
         for (const contentItem of paragraph.content) {
           if (contentItem.type === 'text') {
-            paragraphElements.push(
-              <span key={`text-${i}-${paragraphElements.length}`}>
-                {contentItem.text}
-              </span>
-            )
+            paragraphElements.push(<Linkify options={{target: "_blank", className: "text-cyan-700 underline hover:text-cyan-500"}}>{contentItem.text}</Linkify>)
+            //   <span key={`text-${i}-${paragraphElements.length}`}>
+            //     {contentItem.text}
+            //   </span>
+            // )
           } else if (contentItem.type === 'mention') {
             const mentionItem = mentionItems.find(item => item.id === contentItem.attrs.id)
             paragraphElements.push(
