@@ -10,6 +10,7 @@ import {
     DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
 import { EllipsisVerticalIcon, PencilIcon } from "lucide-react";
+import { TextEditor } from "./wysiwyg/TextEditor";
 
 
 /**
@@ -48,7 +49,6 @@ function highlightMentions(content: string) {
 
 export function CommentThread({ threadId, commentThread, activity, userId, selected = false, users, onSelect }: { threadId: string, commentThread: any, activity: any, userId: string | null, selected: boolean, users: any[], onSelect: (activity: any) => void }) {
     const fetcher = useFetcher();
-    // const isNewThread = !(commentThread?.commentMessages?.length > 0);
 
     const visibleMessages = activity.commentThread?.commentMessages.filter((m: any) => !m.deletedAt) ?? []
     const hasZeroVisisbleComments = visibleMessages.length === 0
@@ -88,7 +88,7 @@ export function CommentThread({ threadId, commentThread, activity, userId, selec
     }, []);
 
     return (
-        <div className={`flex flex-col gap-3 py-3 px-3 rounded-lg ${selected ? "bg-white border" : "bg-muted"}`} data-comment={true} onClick={(e) => {
+        <div className={`flex flex-col gap-6 py-3 px-3 rounded-lg ${selected ? "bg-white border" : "bg-muted"}`} data-comment={true} onClick={(e) => {
             if (!selected) {
                 onSelect(activity)
             }
@@ -146,11 +146,25 @@ export function CommentThread({ threadId, commentThread, activity, userId, selec
                 {hasZeroVisisbleComments && <CommentMessageHeader title={users.find((user) => user.id === userId)?.name || "You"} />}
 
                 {(hasZeroVisisbleComments || currentlyEditedItemId === "new" || currentlyEditedItemId === null) && <fetcher.Form method="post" action={`/threads/${threadId}/comments`} className="space-y-2" ref={formRef}>
-                    <Textarea
+                    {/* <Textarea
                         name="content"
                         placeholder={(hasZeroVisisbleComments ? "Comment" : "Reply") + " or tag other, using @"}
                         className="min-h-[10px] resize-none mb-0"
                         required
+                        onFocus={() => {
+                            setCurrentlyEditedItemId("new");
+                        }}
+                    /> */}
+
+                    <TextEditor
+                        mentionItems={users.map(user => ({
+                            id: user.id,
+                            label: user.name
+                        }))}
+                        name="content"
+                        placeholder={(hasZeroVisisbleComments ? "Comment" : "Reply") + " or tag other, using @"}
+                        className="min-h-[10px] resize-none mb-0"
+                        // required
                         onFocus={() => {
                             setCurrentlyEditedItemId("new");
                         }}

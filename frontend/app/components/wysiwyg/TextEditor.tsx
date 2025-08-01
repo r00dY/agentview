@@ -195,9 +195,10 @@ export type TextEditorProps = {
   name?: string
   mentionItems: TextEditorMentionItem[],
   className?: string
+  onFocus?: () => void
 }
 
-export function TextEditor({ placeholder = 'Add a comment...', mentionItems = [], defaultValue = '', name = 'text-editor', className }: TextEditorProps) {
+export function TextEditor({ placeholder = 'Add a comment...', mentionItems = [], defaultValue = '', name = 'text-editor', className, onFocus }: TextEditorProps) {
   const [value, setValue] = useState(() => textToJson(defaultValue, mentionItems))
   const [mentionListProps, setMentionListProps] = useState<SuggestionProps<MentionNodeAttrs, any> | null>(null)
   const mentionListRef = useRef<HTMLDivElement>(null)
@@ -206,6 +207,7 @@ export function TextEditor({ placeholder = 'Add a comment...', mentionItems = []
     { mentionListProps && <MentionList {...mentionListProps} ref={mentionListRef} /> }
 
     <input type="hidden" name={name} value={value} />
+    
     <EditorProvider extensions={[
         Document, 
         Paragraph, 
@@ -276,6 +278,7 @@ export function TextEditor({ placeholder = 'Add a comment...', mentionItems = []
         onUpdate={({ editor }) => {
           setValue(editor.getText({ blockSeparator: "\n"}))
         }}
+        onFocus={onFocus}
         editorProps={{
           attributes: {
             class: cn('border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 field-sizing-content min-h-16 w-full rounded-md border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm', className),
