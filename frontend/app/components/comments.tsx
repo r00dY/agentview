@@ -41,6 +41,7 @@ export function CommentThread({ threadId, commentThread, activity, userId, selec
 
     useFetcherSuccess(fetcher, () => {
         setCurrentlyEditedItemId(null);
+        console.log('resetting form')
         formRef.current?.reset();
     });
 
@@ -151,7 +152,7 @@ export function CommentThread({ threadId, commentThread, activity, userId, selec
                         // required
                         onFocus={() => {
                             setCurrentlyEditedItemId("new");
-                        }}
+                        }} 
                     />
 
                     <input type="hidden" name="activityId" value={activity.id} />

@@ -8,7 +8,6 @@ import { useEffect, useState } from "react";
 import { parseSSE } from "~/lib/parseSSE";
 import { db } from "~/lib/db.server";
 import { auth } from "~/lib/auth.server";
-import { TextEditor } from "~/components/wysiwyg/TextEditor";
 import { ItemsWithCommentsLayout } from "~/components/ItemsWithCommentsLayout";
 import { CommentThread } from "~/components/comments";
 
@@ -122,41 +121,6 @@ function ThreadDetails({ thread }: { thread: any }) {
             </div>
         </CardContent>
     </Card>
-}
-
-function TextEditorDemo() {
-
-    const ITEMS = [
-        { id: '1', label: 'Lea Thompson' },
-        { id: '2', label: 'Cyndi Lauper' },
-        { id: '3', label: 'Tom Cruise' },
-        { id: '4', label: 'Madonna' },
-        { id: '5', label: 'Jerry Hall' },
-        { id: '6', label: 'Joan Collins' },
-        { id: '7', label: 'Winona Ryder' },
-        { id: '8', label: 'Christina Applegate' },
-        { id: '9', label: 'Alyssa Milano' },
-        { id: '10', label: 'Molly Ringwald' },
-        { id: '11', label: 'Ally Sheedy' },
-        { id: '12', label: 'Debbie Harry' },
-        { id: '13', label: 'Olivia Newton-John' },
-        { id: '14', label: 'Elton John' },
-        { id: '15', label: 'Michael J. Fox' },
-        { id: '16', label: 'Axl Rose' },
-        { id: '17', label: 'Emilio Estevez' },
-        { id: '18', label: 'Ralph Macchio' },
-        { id: '19', label: 'Rob Lowe' },
-        { id: '20', label: 'Jennifer Grey' },
-        { id: '21', label: 'Mickey Rourke' },
-        { id: '22', label: 'John Cusack' },
-        { id: '23', label: 'Matthew Broderick' },
-        { id: '24', label: 'Justine Bateman' },
-        { id: '25', label: 'Lisa Bonet' },
-    ]
-
-    return <div>
-        <TextEditor mentionItems={ITEMS} placeholder="Add a comment..." defaultValue={"Hello @[user_id:7]!\n\nWhat do you think about @[user_id:3] and @[user_id:2]?\n\nCheers"} />
-    </div>
 }
 
 function ThreadPage() {
