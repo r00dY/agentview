@@ -1,10 +1,8 @@
-Agent View is an open-source scaffolding (UI studio + middleware) for conversational agents.
+Agent View is an open-source UI and middleware layer for building, debugging, and managing your own conversational agents. Framework-agnostic and fully customizable.
 
 ### You own the AI part
 
-Agent View doesn't have any opinion on the AI part of your agent. You provide the stateless endpoint with intelligence that can be built in any framework (LangGraph, CrewAI, Agents SDK, vanilla, etc) or programming language you prefer.
-
-In short, we want AI Engineers be in control of intelligence. 
+Agent View stays out of your AI logic. You provide the stateless endpoint with intelligence that can be built in any framework (LangGraph, CrewAI, Agents SDK, vanilla, etc) or programming language you prefer. Agent View keeps AI Engineers in control of the intelligence layer.
 
 ### Agent View handles the rest
 
@@ -12,12 +10,13 @@ Agent View takes your stateless endpoint and builts everything you need around i
 
 #### UI Studio
 
-- Conversation viewer 
-- Collaborative discussion on agent outputs (Google Docs-style) + scoring - great for working with domain experts
-- Users and permissions management
-- Easy management of prompts, knowledge bases
-- Version management
-- "Dev mode" for testing and playing around with agent
+- View and debug conversations
+- Comment collaboratively on agent outputs (Google Docs-style)
+- Score outputs with teammates or domain experts
+- Manage users, permissions, and teams
+- Edit prompts and knowledge bases easily
+- Track agent versions
+- Test in "dev mode" without writing code
 
 UI Studio is built with React and provides almost framework-level customisability. Every conversation item can have its custom view, you can add new screens, and override anything.
 
@@ -33,16 +32,21 @@ Agent View provides a server that handles a lot of stuff you probably don't want
 
 ## Why?
 
-### The Future is Conversational
+Let's start what I believe in:
 
-Every business will have a conversational agent. AI is making conversation the primary interface again.
+- AI will make conversation the primary interface (again)
+- Every business will have a conversational agent. 
+- The conversational agents and how they behave will be of a **strategic** importance.
 
-### Two Paths to Build One
+For now, most of the conversational agents are done by SaaS (Fin, Decagon Sierra and 100 others). However, SaaS has a big problem:
+- vendor lock-in + black box, you actually don't have control
+- they have no "secret sauce", building agents is not **that hard**, it's mostly good prompts, tools + evals. It requires more services and less products.
 
-**SaaS Route**: Fin, Decagon, Sierra, and 100 others. It's a red ocean of undifferentiated tools with vendor lock-in and black-box solutions. Plus, there's no real "secret sauce" - building AI agents is becoming commoditized.
+I'm product engineer turned AI engineer and built conversational agents for a couple of comapnies. I discvered I spent more time on a good scaffolding than on building agent itself. So well... AgentView! :)
 
-**Custom Code Route**: Full ownership over a strategic asset. But here's the catch - you don't just build the agent. You need the entire scaffolding: conversation management, user permissions, integrations, versioning, and more.
+## Project status
 
-### Agent View Solves the Scaffolding Problem
+⚠️ Still cooking!
 
-We give you the complete infrastructure around your AI endpoint. You focus on the intelligence, we handle everything else.
+Agent View is under active development. It’s not ready for prime time yet, but we’re sharing early to get feedback and build with the community.
+
