@@ -1,3 +1,15 @@
+<div align="center">
+  <a href="https://nextjs.org">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/logo_light.svg" height="50  ">
+      <img alt="Next.js logo" src="docs/logo.svg" height="50">
+    </picture>
+  </a>
+  <br/><br/>
+  <!-- <h1>agentview</h1> -->
+
+</div>
+
 Agent View is an open-source UI and middleware layer for building, debugging, and managing your own conversational agents. Framework-agnostic and fully customizable.
 
 ### You own the AI part

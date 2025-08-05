@@ -29,68 +29,68 @@ export function ChangePasswordDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
 
-      <changePasswordFetcher.Form
+        <changePasswordFetcher.Form
           action="/change-password"
           method="post"
           className="space-y-4"
         >
 
-        <DialogHeader>
-          <DialogTitle>Change Password</DialogTitle>
-        </DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Change Password</DialogTitle>
+          </DialogHeader>
 
-<DialogBody className="space-y-4 mb-4">
-          {/* General error alert */}
-          {actionData?.status === "error" && actionData.error && changePasswordFetcher.state === 'idle' && (
-            <Alert variant="destructive">
-              <AlertCircleIcon />
-              <AlertTitle>Password change failed.</AlertTitle>
-              <AlertDescription>{actionData.error}</AlertDescription>
-            </Alert>
-          )}
-
-          <div className="space-y-2">
-            <Label htmlFor="current-password">Current Password</Label>
-            <Input
-              id="current-password"
-              type="password"
-              name="currentPassword"
-              autoFocus
-            />
-            {actionData?.status === "error" && actionData?.fieldErrors?.currentPassword && changePasswordFetcher.state === 'idle' && (
-              <p id="current-password-error" className="text-sm text-destructive">
-                {actionData.fieldErrors.currentPassword}
-              </p>
+          <DialogBody className="space-y-4 mb-4">
+            {/* General error alert */}
+            {actionData?.status === "error" && actionData.error && changePasswordFetcher.state === 'idle' && (
+              <Alert variant="destructive">
+                <AlertCircleIcon />
+                <AlertTitle>Password change failed.</AlertTitle>
+                <AlertDescription>{actionData.error}</AlertDescription>
+              </Alert>
             )}
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="new-password">New Password</Label>
-            <Input
-              id="new-password"
-              type="password"
-              name="newPassword"
-            />
-            {actionData?.status === "error" && actionData?.fieldErrors?.newPassword && changePasswordFetcher.state === 'idle' && (
-              <p id="new-password-error" className="text-sm text-destructive">
-                {actionData.fieldErrors.newPassword}
-              </p>
-            )}
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="current-password">Current Password</Label>
+              <Input
+                id="current-password"
+                type="password"
+                name="currentPassword"
+                autoFocus
+              />
+              {actionData?.status === "error" && actionData?.fieldErrors?.currentPassword && changePasswordFetcher.state === 'idle' && (
+                <p id="current-password-error" className="text-sm text-destructive">
+                  {actionData.fieldErrors.currentPassword}
+                </p>
+              )}
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="confirm-password">Confirm New Password</Label>
-            <Input
-              id="confirm-password"
-              type="password"
-              name="confirmPassword"
-            />
-            {actionData?.status === "error" && actionData?.fieldErrors?.confirmPassword && changePasswordFetcher.state === 'idle' && (
-              <p id="confirm-password-error" className="text-sm text-destructive">
-                {actionData.fieldErrors.confirmPassword}
-              </p>
-            )}
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-password">New Password</Label>
+              <Input
+                id="new-password"
+                type="password"
+                name="newPassword"
+              />
+              {actionData?.status === "error" && actionData?.fieldErrors?.newPassword && changePasswordFetcher.state === 'idle' && (
+                <p id="new-password-error" className="text-sm text-destructive">
+                  {actionData.fieldErrors.newPassword}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Confirm New Password</Label>
+              <Input
+                id="confirm-password"
+                type="password"
+                name="confirmPassword"
+              />
+              {actionData?.status === "error" && actionData?.fieldErrors?.confirmPassword && changePasswordFetcher.state === 'idle' && (
+                <p id="confirm-password-error" className="text-sm text-destructive">
+                  {actionData.fieldErrors.confirmPassword}
+                </p>
+              )}
+            </div>
           </DialogBody>
           <DialogFooter>
             <Button
