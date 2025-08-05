@@ -1,8 +1,8 @@
 <div align="center">
   <a href="https://nextjs.org">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="docs/logo_light.svg" height="50  ">
-      <img alt="Next.js logo" src="docs/logo.svg" height="50">
+      <source media="(prefers-color-scheme: dark)" srcset="docs/logo_light.svg" height="40">
+      <img alt="Next.js logo" src="docs/logo.svg" height="40">
     </picture>
   </a>
   <br/><br/>
