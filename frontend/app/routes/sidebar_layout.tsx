@@ -51,6 +51,51 @@ export async function loader({request}: Route.LoaderArgs) {
   };
 }
 
+function Logo() {
+
+  // We'll use React state and effect to animate the content inside the root div.
+  // We'll wrap the content in a div and apply a translateY style that updates every 1s.
+
+  const [offset, setOffset] = React.useState(12);
+
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setOffset((prev) => prev + 12);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
+
+  return <div className="h-[24px] w-[24px] bg-transparent overflow-hidden relative padding-[1px]">
+      <div className={`flex flex-col gap-[2px] absolute left-[0px] w-full transition-all duration-300`} style={{ top: `-${offset}px` }}>
+        <div className="w-[19px] h-[10px] bg-black rounded-[2px] self-end"></div>
+        <div className="w-[19px] h-[10px] bg-black rounded-[2px]"></div>
+        <div className="w-[19px] h-[10px] bg-black rounded-[2px] self-end"></div>
+        <div className="w-[19px] h-[10px] bg-black rounded-[2px]"></div>
+        <div className="w-[19px] h-[10px] bg-black rounded-[2px] self-end"></div>
+        <div className="w-[19px] h-[10px] bg-black rounded-[2px]"></div>
+        <div className="w-[19px] h-[10px] bg-black rounded-[2px] self-end"></div>
+        <div className="w-[19px] h-[10px] bg-black rounded-[2px]"></div>
+        <div className="w-[19px] h-[10px] bg-black rounded-[2px] self-end"></div>
+        <div className="w-[19px] h-[10px] bg-black rounded-[2px]"></div>
+        <div className="w-[19px] h-[10px] bg-black rounded-[2px] self-end"></div>
+        <div className="w-[19px] h-[10px] bg-black rounded-[2px]"></div>
+        <div className="w-[19px] h-[10px] bg-black rounded-[2px] self-end"></div>
+        <div className="w-[19px] h-[10px] bg-black rounded-[2px]"></div>
+        <div className="w-[19px] h-[10px] bg-black rounded-[2px] self-end"></div>
+        <div className="w-[19px] h-[10px] bg-black rounded-[2px]"></div>
+        <div className="w-[19px] h-[10px] bg-black rounded-[2px] self-end"></div>
+        <div className="w-[19px] h-[10px] bg-black rounded-[2px]"></div>
+        <div className="w-[19px] h-[10px] bg-black rounded-[2px] self-end"></div>
+        <div className="w-[19px] h-[10px] bg-black rounded-[2px]"></div>
+        <div className="w-[19px] h-[10px] bg-black rounded-[2px] self-end"></div>
+        <div className="w-[19px] h-[10px] bg-black rounded-[2px]"></div>
+        <div className="w-[19px] h-[10px] bg-black rounded-[2px] self-end"></div>
+        <div className="w-[19px] h-[10px] bg-black rounded-[2px]"></div>
+      </div>
+  </div>
+}
+
 export default function Layout() {
   const { user, showEmails } = useLoaderData<typeof loader>()
   const logoutFetcher = useFetcher()
@@ -63,6 +108,7 @@ export default function Layout() {
       <div className="flex h-screen bg-background w-full">
         <Sidebar className="border-r">
           <SidebarHeader className="px-3 py-2">
+            {/* <Logo /><br/> */}
 
             <div className="text-md font-medium">agentview.</div>
 
