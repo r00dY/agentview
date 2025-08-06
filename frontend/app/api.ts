@@ -8,7 +8,7 @@ import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { swaggerUI } from '@hono/swagger-ui'
 import { db } from './lib/db.server'
 import { client, thread, activity, run } from './db/schema'
-import { user } from './db/auth-schema'
+import { users } from './db/auth-schema'
 import { asc, eq, ne } from 'drizzle-orm'
 import { response_data, response_error, body } from './lib/hono_utils'
 import { config } from './agentview.config'
@@ -104,12 +104,12 @@ const usersGETRoute = createRoute({
 })
 
 app.openapi(usersGETRoute, async (c) => {
-  const users = await db.select({
-    id: user.id,
-    name: user.name,
-  }).from(user);
+  const userRows = await db.select({
+    id: users.id,
+    name: users.name,
+  }).from(users);
 
-  return c.json(users, 200);
+  return c.json(userRows, 200);
 })
 
 /* --------- THREADS --------- */

@@ -1,7 +1,6 @@
-import { integer, pgTable, text, timestamp, uuid, varchar, jsonb } from "drizzle-orm/pg-core";
-import { user, session, account, verification } from "./auth-schema";
-import type { Database } from "lucide-react";
-import { asc, relations } from "drizzle-orm";
+import { pgTable, text, timestamp, uuid, varchar, jsonb } from "drizzle-orm/pg-core";
+import { users } from "./auth-schema";
+import { relations } from "drizzle-orm";
 
 export const invitations = pgTable("invitation", {
   id: text('id').primaryKey(),
@@ -10,12 +9,12 @@ export const invitations = pgTable("invitation", {
   expires_at: timestamp().notNull(),
   created_at: timestamp().notNull(),
   status: varchar({ length: 255 }).notNull(),
-  invited_by: text('invited_by').references(() => user.id, { onDelete: 'cascade' })
+  invited_by: text('invited_by').references(() => users.id, { onDelete: 'cascade' })
 });
 
 export const email = pgTable("email", {
   id: text('id').primaryKey(),
-  user_id: text('user_id').references(() => user.id),
+  user_id: text('user_id').references(() => users.id),
   to: varchar({ length: 255 }).notNull(),
   subject: varchar({ length: 255 }),
   body: text('body'),
@@ -74,20 +73,20 @@ export const commentThreads = pgTable('comment_threads', {
 export const commentMessages = pgTable('comment_messages', {
   id: uuid('id').primaryKey().defaultRandom(),
   commentThreadId: uuid('comment_thread_id').notNull().references(() => commentThreads.id, { onDelete: 'cascade' }),
-  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   content: text('content').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
   // Soft delete fields
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
-  deletedBy: text('deleted_by').references(() => user.id, { onDelete: 'set null' }),
+  deletedBy: text('deleted_by').references(() => users.id, { onDelete: 'set null' }),
 });
 
 // User mentions within comment messages
 export const commentMentions = pgTable('comment_mentions', {
   id: uuid('id').primaryKey().defaultRandom(),
   commentMessageId: uuid('comment_message_id').notNull().references(() => commentMessages.id, { onDelete: 'cascade' }),
-  mentionedUserId: text('mentioned_user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  mentionedUserId: text('mentioned_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
 });
 

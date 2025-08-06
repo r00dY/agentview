@@ -33,7 +33,6 @@ export function CommentThread({ threadId, activity, userId, selected = false, us
         }
     }, [selected])
 
-
     useEffect(() => {
         const handlePointerDownOutside = (e: PointerEvent) => {
             const target = e.target as Element | null;

@@ -1,17 +1,17 @@
 import { db } from "./db.server";
-import { user } from "~/db/auth-schema";
+import { users } from "~/db/auth-schema";
 import { eq, and, ne } from "drizzle-orm";
 
 export async function areThereRemainingAdmins(userId: string): Promise<boolean> {
   try {
     // Query for admin users excluding the specified user ID
     const remainingAdmins = await db
-      .select({ id: user.id })
-      .from(user)
+      .select({ id: users.id })
+      .from(users)
       .where(
         and(
-          eq(user.role, "admin"),
-          ne(user.id, userId)
+          eq(users.role, "admin"),
+          ne(users.id, userId)
         )
       )
       .limit(1);

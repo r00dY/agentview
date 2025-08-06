@@ -55,7 +55,7 @@ export async function createInvitation(email: string, role: string, invitedById:
   }
 
   // Check if user already exists
-  const existingUser = await db.query.user.findFirst({
+  const existingUser = await db.query.users.findFirst({
     where: (u, { eq }) => eq(u.email, email),
   });
 

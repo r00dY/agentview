@@ -1,3 +1,4 @@
+import React from "react";
 import {
   Form,
     Link,
@@ -26,8 +27,6 @@ import {
 import type { Route } from "./+types/sidebar_layout";
 import { auth } from "~/lib/auth.server";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
-
-import React from "react";
 import { EditProfileDialog } from "~/components/EditProfileDialog";
 import { ChangePasswordDialog } from "~/components/ChangePasswordDialog";
 
@@ -37,12 +36,17 @@ export async function loader({request}: Route.LoaderArgs) {
   const session = await auth.api.getSession({
     headers: request.headers,
   });
-  
+
   const url = new URL(request.url);
   const relativeUrl = url.pathname + url.search + url.hash;
 
   if (!session) {
-    return redirect('/login?redirect=' + encodeURIComponent(relativeUrl));
+    if (relativeUrl !== '/') {
+      return redirect('/login?redirect=' + encodeURIComponent(relativeUrl));
+    }
+    else {
+      return redirect('/login');
+    }
   }
 
   return {
@@ -52,10 +56,6 @@ export async function loader({request}: Route.LoaderArgs) {
 }
 
 function Logo() {
-
-  // We'll use React state and effect to animate the content inside the root div.
-  // We'll wrap the content in a div and apply a translateY style that updates every 1s.
-
   const [offset, setOffset] = React.useState(12);
 
   React.useEffect(() => {

@@ -30,7 +30,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     const session = await auth.api.getSession({ headers: request.headers });
     const userId = session?.user?.id || null;
 
-    const users = await db.query.user.findMany({
+    const users = await db.query.users.findMany({
         columns: {
             id: true,
             email: true,

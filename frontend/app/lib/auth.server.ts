@@ -3,33 +3,31 @@ import { createAuthMiddleware, APIError } from "better-auth/api";
 import { admin } from "better-auth/plugins"
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "./db.server";
-import { user, session, account, verification } from "~/db/auth-schema";
+import { users } from "~/db/auth-schema";
 import { getValidInvitation, acceptInvitation, getInvitation } from "./invitations.server";
 import { eq } from "drizzle-orm";
 import { areThereRemainingAdmins } from "./areThereRemainingAdmins";
+import { getUsersCount } from "./users.server";
  
 export const auth = betterAuth({
     database: drizzleAdapter(db, {
         provider: "pg",
-        schema: {
-            user,
-            session,
-            account,
-            verification
-        }
+        // schema: {
+        //     user,
+        //     session,
+        //     account,
+        //     verification
+        // },
+        usePlural: true
     }),
-    emailAndPassword: {    
+    emailAndPassword: {
         enabled: true
     },
     plugins: [
         admin()
     ],
-
     hooks: {
         before: createAuthMiddleware(async (ctx) => {
-            // console.log("BEFORE", ctx.path, ctx.body)
-            // /admin/set-role { userId: '1WCE15ZTEdqLPLZnTdu3TGD2tsOLNfBu', role: 'admin' }
-
             if (ctx.path === "/admin/set-role") {
                 if (ctx.body?.role !== "admin") {
                     if (!await areThereRemainingAdmins(ctx.body?.userId)) {
@@ -48,6 +46,12 @@ export const auth = betterAuth({
                 }
             }
             else if (ctx.path === "/sign-up/email") {
+
+                // first admin
+                if (await getUsersCount() === 0) {
+                    return;
+                }
+
                 try {
                     const invitation = await getValidInvitation(ctx.body?.invitationId)
     
@@ -68,26 +72,36 @@ export const auth = betterAuth({
                         message: "Invalid invitation.",
                     });
                 }
-
             }
-
-            
         }),
         after: createAuthMiddleware(async (ctx) => {
-
             if (ctx.path === "/sign-up/email") {
-                // I have no idea how to use better-auth "internals" to update this role, api.admin.setRole seems to be available only when I'm logged as admin user, but here it's basically "system"
-                
-                // accept invitation and update user role to the role from invitation
-                await acceptInvitation(ctx.body?.invitationId)
-                const invitation = await getInvitation(ctx.body?.invitationId)
+                const usersCount = await getUsersCount()
 
-                await db.update(user).set({
-                    role: invitation.role
-                }).where(eq(user.email, ctx.body.email))
+                if (usersCount === 0) {
+                    throw new APIError("BAD_REQUEST", {
+                        message: "Unreachable.",
+                    });
+                }
+                else if (usersCount === 1) {
+                    await db.update(users).set({
+                        role: "admin"
+                    }).where(eq(users.email, ctx.body.email))
+                }
+                else {
+                    // I have no idea how to use better-auth "internals" to update this role, api.admin.setRole seems to be available only when I'm logged as admin user, but here it's basically "system"
+                    
+                    // accept invitation and update user role to the role from invitation
+                    await acceptInvitation(ctx.body?.invitationId)
+                    const invitation = await getInvitation(ctx.body?.invitationId)
+
+                    await db.update(users).set({
+                        role: invitation.role
+                    }).where(eq(users.email, ctx.body.email))
+
+                }
+
             }
-
-            
         })
     },
 })

@@ -19,6 +19,8 @@ services:
       - "5433:80"   # Expose pgAdmin on localhost:5433
     depends_on:
       - postgres-db
+    volumes:
+      - ./docker/pg-admin/servers.json:/pgadmin4/servers.json
 
 volumes:
   pgdata:
