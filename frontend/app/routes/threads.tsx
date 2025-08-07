@@ -75,7 +75,7 @@ export default function Threads() {
     <div className="basis-[335px] flex-shrink-0 flex-grow-0 border-r flex flex-col ">
 
       <Header className="px-3">
-        <HeaderTitle title={`Threads`} />
+        <HeaderTitle title={`${list === "real" ? "Threads" : list === "simulated_private" ? "Test Threads" : "Test Threads" }`} />
         { list !== "real" && <div>
           <Button variant="outline" size="sm" asChild><Link to={`/threads/new?list=${list}`}><PlusIcon />New thread</Link></Button>
         </div>}
