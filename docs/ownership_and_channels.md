@@ -54,3 +54,17 @@ It should be absolutely possible to create new simulation environments (threads 
 Quesiton: should it be copy-paste or should it keep `previous_x` (client, message etc).
 
 1. Keeping previous messages shared means that you can't comment them in new simulation (shared).
+
+## User interface
+
+How to display threads? What's the default sidebar content?
+
+The main primitive to watch for here is **thread**. There are different axes along which we could split threads:
+- public / private
+- real / simulations
+- channel X/Y/Z
+- tags... (automatically set by LLM rankers)
+
+I believe there's only one line that is FORCED which is "simulated" vs "real". Real should be seaprate tab at the top, simulated should be in "Dev" group or sth. Also, the simulated ones could be "Your tests" vs "Shared".
+
+We could also think how to split them by "Agent" (there might be multiple agents).
