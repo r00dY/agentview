@@ -1,13 +1,17 @@
-import { redirect, useLoaderData, useFetcher, Outlet, Link, Form, useActionData } from "react-router";
+import { redirect, Form, useActionData } from "react-router";
 import type { Route } from "./+types/threadNew";
 import { Header, HeaderTitle } from "~/components/header";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Alert, AlertDescription } from "~/components/ui/alert";
+import { auth } from "~/lib/auth.server";
+import { db } from "~/lib/db.server";
+import { client } from "~/db/schema";
+import { getThreadsList } from "~/lib/utils";
 
 export async function action({ request, params }: Route.ActionArgs) {
+  const list =  getThreadsList(request);
     const formData = await request.formData();
     const product_id = formData.get("product_id");
 
@@ -16,22 +20,34 @@ export async function action({ request, params }: Route.ActionArgs) {
     }
 
     try {
-        // First, create a client
-        const clientResponse = await fetch(`http://localhost:2138/clients`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({}),
-        });
+        const session = await auth.api.getSession({
+            headers: request.headers,
+          });
 
-        const clientData = await clientResponse.json();
+        const userId = session!.user.id;
 
-        if (!clientResponse.ok) {
-            return { error: clientData };
-        }
+        const [newClient] = await db.insert(client).values({
+          simulated_by: userId,
+        }).returning();
 
-        const client_id = clientData.id;
+        // // First, create a client
+        // const clientResponse = await fetch(`http://localhost:2138/clients`, {
+        //     method: 'POST',
+        //     headers: {
+        //         'Content-Type': 'application/json',
+        //     },
+        //     body: JSON.stringify({}),
+        // });
+
+        // const clientData = await clientResponse.json();
+
+        // if (!clientResponse.ok) {
+        //     return { error: clientData };
+        // }
+
+        // const client_id = clientData.id;
+
+        const client_id = newClient.id;
 
         // Then create the thread with the new client_id
         const threadResponse = await fetch(`http://localhost:2138/threads`, {
@@ -55,7 +71,7 @@ export async function action({ request, params }: Route.ActionArgs) {
         }
 
         // Redirect to the new thread
-        return redirect(`/threads/${threadData.id}`);
+        return redirect(`/threads/${threadData.id}?list=${list}`);
 
     } catch (error) {
         console.error(error);

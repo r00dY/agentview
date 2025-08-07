@@ -5,26 +5,70 @@ import { db } from "~/lib/db.server";
 import { Button } from "~/components/ui/button";
 import { PlusIcon } from "lucide-react";
 import { Header, HeaderTitle } from "~/components/header";
+import { getThreadsList } from "~/lib/utils";
+import { thread } from "~/db/schema";
+import { auth } from "~/lib/auth.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
+  const list =  getThreadsList(request);
   const userLocale = request.headers.get('accept-language')?.split(',')[0] || 'en-US';
+
+  const session = await auth.api.getSession({
+    headers: request.headers,
+  });
+
+  const userId = session!.user.id;
 
   const threadRows = await db.query.thread.findMany({
     with: {
-      activities: true
+      activities: {
+        orderBy: (activity, { desc }) => [desc(activity.created_at)],
+      },
+      client: {
+        with: {
+          simulatedBy: true
+        }
+        // where: (client, { eq, isNull, not }) => isNull(client.simulated_by)
+        // with: {
+        //   simulatedBy: true,
+        // }
+        
+      }
+      // client: {
+      //   where: (client, { eq, isNull, not }) =>
+      //     type === "real"
+      //       ? isNull(client.simulated_by)
+      //       : eq(client.simulated_by, userId)
+      // }
     },
     orderBy: (thread, { desc }) => [desc(thread.updated_at)]
+    // where: (thread, { isNull }) => isNull(thread.client.simulatedBy)
+    // where: (thread, { eq, isNull, not }) =>
+    //   type === "real"
+    //     ? isNull(thread.client.simulatedBy.id)
+    //     : eq(thread.client.simulatedBy.id, userId)
+    // where: (client, { eq }) => eq(client.simulated_by, type)
+  })
+
+  const threadRowsFiltered = threadRows.filter(thread => {
+    if (list === "real") {
+      return thread.client.simulatedBy === null;
+    } else if (list === "simulated_private") {
+      return thread.client.simulatedBy !== null && thread.client.simulatedBy.id === userId;
+    } else if (list === "simulated_shared") {
+      return thread.client.simulatedBy !== null && thread.client.is_shared;
+    }
   })
   
   return {
-    threads: threadRows,
+    threads: threadRowsFiltered,
     userLocale: userLocale,
+    list
   }
 }
 
-
 export default function Threads() {
-  const { threads, userLocale } = useLoaderData<typeof loader>();
+  const { threads, userLocale, list } = useLoaderData<typeof loader>();
 
   return <div className="flex flex-row items-stretch h-full">
 
@@ -32,15 +76,15 @@ export default function Threads() {
 
       <Header className="px-3">
         <HeaderTitle title={`Threads`} />
-        <div>
-          <Button variant="outline" size="sm" asChild><Link to="/threads/new"><PlusIcon />New thread</Link></Button>
-        </div>
+        { list !== "real" && <div>
+          <Button variant="outline" size="sm" asChild><Link to={`/threads/new?list=${list}`}><PlusIcon />New thread</Link></Button>
+        </div>}
       </Header>
 
       <div className="flex-1 overflow-y-auto">
-        {threads.map((thread) => (
+        {threads.length > 0 &&threads.map((thread) => (
           <div key={thread.id}>
-            <NavLink to={`/threads/${thread.id}`}>
+            <NavLink to={`/threads/${thread.id}?list=${list}`}>
               {({ isActive }) => (
               <div className={`p-3 border-b hover:bg-gray-50 transition-colors duration-50 ${isActive ? 'bg-gray-100' : ''}`}>
                 <div className="flex flex-col gap-1">
@@ -57,6 +101,7 @@ export default function Threads() {
             </NavLink>
           </div>
         ))}
+        { threads.length === 0 && <div className="px-3 py-4 text-muted-foreground">No threads available.</div>}
       </div>
 
     </div>

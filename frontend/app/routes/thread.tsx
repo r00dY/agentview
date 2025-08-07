@@ -87,7 +87,7 @@ function ThreadDetails({ thread }: { thread: any }) {
                     <p className="text-sm font-mono">{thread.id}</p>
                 </div>
                 <div>
-                    <label className="text-sm font-medium text-muted-foreground">Type</label>
+                    <label className="text-sm font-medium text-muted-foreground">Agent</label>
                     <p className="text-sm">{thread.type}</p>
                 </div>
                 <div>
@@ -104,6 +104,13 @@ function ThreadDetails({ thread }: { thread: any }) {
                             hour: '2-digit',
                             minute: '2-digit'
                         })}
+                    </p>
+                </div>
+                <div>
+                    <label className="text-sm font-medium text-muted-foreground">Type</label>
+                    <p className="text-sm">
+                        { thread.client.simulatedBy ? "Simulated by " + thread.client.simulatedBy.name : "Real"}
+                        {/* {thread.client.simulated_by ? "Simulated" : "Real"} */}
                     </p>
                 </div>
                 {thread.metadata && (

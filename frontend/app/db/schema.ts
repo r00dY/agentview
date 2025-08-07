@@ -129,10 +129,6 @@ export const threadRelations = relations(thread, ({ many, one }) => ({
 
 export const clientRelations = relations(client, ({ many, one }) => ({
   threads: many(thread),
-  simulator: one(users, {
-    fields: [client.simulated_by],
-    references: [users.id],
-  }),
   simulatedBy: one(users, {
     fields: [client.simulated_by],
     references: [users.id],

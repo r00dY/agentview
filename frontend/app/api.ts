@@ -154,6 +154,11 @@ async function fetchThreadWithLastRun(thread_id: string) {
   const threadRow = await db.query.thread.findFirst({
     where: eq(thread.id, thread_id),
     with: {
+      client: {
+        with: {
+          simulatedBy: true
+        }
+      },
       activities: {
         with: {
           run: true,

@@ -131,7 +131,19 @@ export default function Layout() {
                     <SidebarMenuButton asChild>
                       <Link to="/threads">
                         <MessageCircle className="mr-2 h-4 w-4" />
-                        <span>Conversations</span>
+                        <span>Convos, Real</span>
+                      </Link>
+                    </SidebarMenuButton>
+                    <SidebarMenuButton asChild>
+                      <Link to="/threads?list=simulated_private">
+                        <MessageCircle className="mr-2 h-4 w-4" />
+                        <span>Convos, sim mine</span>
+                      </Link>
+                    </SidebarMenuButton>
+                    <SidebarMenuButton asChild>
+                      <Link to="/threads?list=simulated_shared">
+                        <MessageCircle className="mr-2 h-4 w-4" />
+                        <span>Convos, sim public</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
