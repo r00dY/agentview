@@ -76,6 +76,7 @@ function ActivityView({ activity, onSelect, selected = false }: { activity: any,
 }
 
 function ThreadDetails({ thread }: { thread: any }) {
+    console.log('thread', thread)
     return <Card>
         <CardHeader>
             <CardTitle>Thread Details</CardTitle>
@@ -301,7 +302,7 @@ function ThreadPage() {
         </div>
 
 
-        <Card>
+        { thread.client.simulatedBy?.id === loaderData.userId && <Card>
             <CardHeader>
                 <CardTitle>New Activity</CardTitle>
             </CardHeader>
@@ -319,6 +320,6 @@ function ThreadPage() {
                 {formError && <div className="text-red-500">{formError}</div>}
 
             </CardContent>
-        </Card>
+        </Card> }
     </>
 }
