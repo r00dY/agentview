@@ -6,8 +6,8 @@ export const invitations = pgTable("invitation", {
   id: text('id').primaryKey(),
   email: varchar({ length: 255 }).notNull(),
   role: varchar({ length: 255 }).notNull(),
-  expires_at: timestamp().notNull(),
-  created_at: timestamp().notNull(),
+  expires_at: timestamp("expires_at", { withTimezone: true }).notNull(),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   status: varchar({ length: 255 }).notNull(),
   invited_by: text('invited_by').references(() => users.id, { onDelete: 'cascade' })
 });
@@ -23,20 +23,20 @@ export const email = pgTable("email", {
   cc: varchar({ length: 255 }),
   bcc: varchar({ length: 255 }),
   reply_to: varchar({ length: 255 }),
-  created_at: timestamp().notNull().defaultNow(),
-  updated_at: timestamp().notNull().defaultNow(),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const client = pgTable("client", {
   id: uuid("id").primaryKey().defaultRandom(),
-  created_at: timestamp().notNull().defaultNow(),
-  updated_at: timestamp().notNull().defaultNow(),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const thread = pgTable("thread", {
   id: uuid("id").primaryKey().defaultRandom(),
-  created_at: timestamp().notNull().defaultNow(),
-  updated_at: timestamp().notNull().defaultNow(),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   metadata: jsonb("data"),
   client_id: uuid("client_id").notNull().references(() => client.id, { onDelete: 'cascade' }),
   type: varchar({ length: 255 }).notNull(),
@@ -44,8 +44,8 @@ export const thread = pgTable("thread", {
 
 export const activity = pgTable("activity", {
   id: uuid("id").primaryKey().defaultRandom(),
-  created_at: timestamp().notNull().defaultNow(),
-  updated_at: timestamp().notNull().defaultNow(),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   content: jsonb("content"),
   thread_id: uuid("thread_id").notNull().references(() => thread.id, { onDelete: 'cascade' }),
   run_id: uuid("run_id").references(() => run.id, { onDelete: 'set null' }),
@@ -55,8 +55,8 @@ export const activity = pgTable("activity", {
 
 export const run = pgTable("run", {
   id: uuid("id").primaryKey().defaultRandom(),
-  created_at: timestamp().notNull().defaultNow(),
-  finished_at: timestamp(),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  finished_at: timestamp("finished_at", { withTimezone: true }),
   thread_id: uuid("thread_id").notNull().references(() => thread.id, { onDelete: 'cascade' }),
   state: varchar({ length: 255 }).notNull(),
 });
