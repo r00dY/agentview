@@ -41,7 +41,9 @@ Anyway, let's keep it future-proof and keep activity bound to the channel. It me
 
 Actually matching of message -> thread is an important concept! Each time the new message pops in to the "inbox", it might come from some channel, but it's not *that* obvious which thread (or even client :O) should it be assigned to (for the above reasons). The message usually contains certain hints: "In-Reply-To" in email (or custom headers), Slack channel, etc etc. So there's a very important element in our system:
 
+```
 f(message) => (client, thread)
+```
 
 It's basically the function that maps the input message into client and thread. (null, null) is possible (new client / thread) or (existing_client_id, null) -> new thread. (null, xxx) is impossible, threads always have clients. It's probably channel-dependent.
 
