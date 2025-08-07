@@ -247,7 +247,6 @@ app.openapi(threadsPOSTRoute, async (c) => {
   return c.json(await fetchThreadWithLastRun(newThread.id), 201);
 })
 
-
 // Thread GET
 const threadGETRoute = createRoute({
   method: 'get',
