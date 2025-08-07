@@ -76,7 +76,6 @@ function ActivityView({ activity, onSelect, selected = false }: { activity: any,
 }
 
 function ThreadDetails({ thread }: { thread: any }) {
-    console.log('thread', thread)
     return <Card>
         <CardHeader>
             <CardTitle>Thread Details</CardTitle>
