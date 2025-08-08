@@ -9,7 +9,7 @@ import {
     useNavigate
   } from "react-router";
   
-  import { LogOut, PlusCircle, ShoppingBag, User2, ShoppingBasket, Gauge, ChevronUp, User, Edit, Lock, Users, Mail, MessageCircle } from "lucide-react"
+  import { LogOut, Gauge, ChevronUp, User, Edit, Lock, Users, Mail, MessageCircle } from "lucide-react"
   import {
     SidebarProvider,
     Sidebar,
