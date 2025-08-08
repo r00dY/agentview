@@ -23,12 +23,16 @@ import {
     SidebarGroup,
     SidebarGroupLabel,
     SidebarGroupContent,
+    SidebarMenuSub,
+    SidebarMenuSubItem,
   } from "../components/ui/sidebar"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "~/components/ui/collapsible"
 import type { Route } from "./+types/sidebar_layout";
 import { auth } from "~/lib/auth.server";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
 import { EditProfileDialog } from "~/components/EditProfileDialog";
 import { ChangePasswordDialog } from "~/components/ChangePasswordDialog";
+
 
 
 
@@ -124,54 +128,51 @@ export default function Layout() {
 
           <SidebarContent>
             <SidebarGroup>
-              <SidebarGroupLabel>Users</SidebarGroupLabel>
+              <SidebarGroupLabel>Production</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
                   <SidebarMenuItem>
                     <SidebarMenuButton asChild>
                       <Link to="/threads">
                         <MessageCircle className="mr-2 h-4 w-4" />
-                        <span>Convos, Real</span>
+                        <span>Sessions</span>
                       </Link>
                     </SidebarMenuButton>
+
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            <SidebarGroup>
+              <SidebarGroupLabel>Dev</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
                     <SidebarMenuButton asChild>
                       <Link to="/threads?list=simulated_private">
-                        <MessageCircle className="mr-2 h-4 w-4" />
-                        <span>Convos, sim mine</span>
+                        <User className="mr-2 h-4 w-4" />
+                        <span>My Sessions</span>
                       </Link>
                     </SidebarMenuButton>
                     <SidebarMenuButton asChild>
                       <Link to="/threads?list=simulated_shared">
-                        <MessageCircle className="mr-2 h-4 w-4" />
-                        <span>Convos, sim public</span>
+                        <Users className="mr-2 h-4 w-4" />
+                        <span>Shared Sessions</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                  {/* <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
-                      <Link to="/users">
-                        <User2 className="mr-2 h-4 w-4" />
-                        <span>User Profiles</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem> */}
-                  {/* <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
-                      <Link to="/products">
-                        <ShoppingBag className="mr-2 h-4 w-4" />
-                        <span>Products</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem> */}
+                  
+                  
 
-                  <SidebarMenuItem>
+                  {/* <SidebarMenuItem>
                     <SidebarMenuButton asChild>
                       <Link to="/evals">
                         <Gauge className="mr-2 h-4 w-4" />
                         <span>Evaluations</span>
                       </Link>
                     </SidebarMenuButton>
-                  </SidebarMenuItem>
+                  </SidebarMenuItem> */}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
