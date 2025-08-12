@@ -37,7 +37,7 @@ export async function clientAction({
   const password = formData.get('password') as string || '';
 
   // Validation
-  const fieldErrors: FormActionDataError['error']['fieldErrors'] = {};
+  const fieldErrors: Record<string, string> = {};
   
   if (!email) {
     fieldErrors.email = 'Email is required';
@@ -94,7 +94,7 @@ export default function LoginPage() {
         <CardContent>
           <Form className="flex flex-col gap-4" method="post">
             {/* General error alert */}
-            {actionData?.status === "error" && (
+            {actionData?.status === "error" && actionData.error && (
               <Alert variant="destructive">
                 <AlertCircleIcon />
                 <AlertTitle>Login failed.</AlertTitle>

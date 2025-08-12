@@ -1,28 +1,27 @@
 import type { Route } from "./+types/login";
-import { auth } from "~/.server/auth";
 import { APIError } from "better-auth/api";
+import { authClient } from "~/lib/auth-client";
 
-export async function action({
+export async function clientAction({
   request,
 }: Route.ActionArgs) {
 
-  await auth.api.signOut({
-    headers: request.headers,
-  });
-
   try {
-    await auth.api.signOut({
-        headers: request.headers,
-      });
+    const { data, error } = await authClient.signOut();
+
+    if (error) {
+      return { status: "error", error };
+    }
 
     return {
-        success: true
+        status: "success",
+        data: null
     }
     
   } catch (error) {
     if (error instanceof APIError) {
-      return { error: error.message };
+      return { status: "error", error: { message: error.message } };
     }
-    return { error: 'An unexpected error occurred. Please try again.' };
+    return { status: "error", error: { message: 'An unexpected error occurred. Please try again.' } };
   }
 }
