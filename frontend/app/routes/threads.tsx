@@ -6,8 +6,8 @@ import { Button } from "~/components/ui/button";
 import { PlusIcon } from "lucide-react";
 import { Header, HeaderTitle } from "~/components/header";
 import { getThreadsList } from "~/lib/utils";
-import { thread } from "~/db/schema";
-import { auth } from "~/lib/auth.server";
+import { thread } from "~/.server/db/schema";
+import { auth } from "~/.server/auth";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const list =  getThreadsList(request);

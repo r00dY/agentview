@@ -6,15 +6,16 @@ import { streamSSE } from 'hono/streaming'
 
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { swaggerUI } from '@hono/swagger-ui'
-import { db } from './lib/db.server'
+import { db } from './db'
 import { client, thread, activity, run } from './db/schema'
 import { users } from './db/auth-schema'
 import { asc, eq, ne } from 'drizzle-orm'
-import { response_data, response_error, body } from './lib/hono_utils'
-import { config } from './agentview.config'
-import { isUUID } from './lib/isUUID'
-import { isAsyncIterable } from './lib/utils'
-
+import { response_data, response_error, body } from '../lib/hono_utils'
+import { config } from '../agentview.config'
+import { isUUID } from '../lib/isUUID'
+import { isAsyncIterable } from '../lib/utils'
+import { auth } from './auth'
+import { getRootUrl } from './getRootUrl'
 
 
 export const app = new OpenAPIHono({
@@ -29,7 +30,17 @@ export const app = new OpenAPIHono({
     }
   }
 })
-app.use('*', cors())
+
+app.use('/api/*', cors({
+  origin: getRootUrl(),
+  credentials: true,
+}))
+
+/* --------- AUTH --------- */
+
+app.on(["POST", "GET"], "/api/auth/*", (c) => {
+	return auth.handler(c.req.raw);
+});
 
 
 /* --------- CLIENTS --------- */
@@ -667,10 +678,6 @@ app.openapi(activityWatchRoute, async (c) => {
 
 //   return c.json(threadRow, 200);
 // })
-
-
-
-
 
 
 

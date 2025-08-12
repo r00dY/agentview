@@ -1,5 +1,5 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { users, sessions, accounts, verifications } from "~/db/auth-schema";
+import { users, sessions, accounts, verifications } from "~/.server/db/auth-schema";
 import {
   invitations,
   email,
@@ -18,7 +18,7 @@ import {
   channels,
   channelsRelations,
   clientRelations
-} from "~/db/schema";
+} from "~/.server/db/schema";
 
 export const db = drizzle(process.env.DATABASE_URL!, {
   schema: {

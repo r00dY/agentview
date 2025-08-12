@@ -1,5 +1,5 @@
 import type { Route } from "./+types/change-password";
-import { auth } from "~/lib/auth.server";
+import { auth } from "~/.server/auth";
 import { APIError } from "better-auth/api";
 import type { FormActionData, FormActionDataError } from "~/lib/FormActionData";
 import { data } from "react-router";

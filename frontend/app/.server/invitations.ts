@@ -1,7 +1,7 @@
-import { db } from "./db.server";
-import { invitations as invitationTable } from "~/db/schema";
+import { db } from "./db";
+import { invitations as invitationTable } from "./db/schema";
 import { eq } from "drizzle-orm";
-import { addEmail } from "./email.server";
+import { addEmail } from "./email";
 
 export async function getInvitation(invitationId: string) {
   const invitationRows = await db.select().from(invitationTable).where(eq(invitationTable.id, invitationId));

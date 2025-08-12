@@ -5,9 +5,9 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Alert, AlertDescription } from "~/components/ui/alert";
-import { auth } from "~/lib/auth.server";
+import { auth } from "~/.server/auth";
 import { db } from "~/lib/db.server";
-import { client } from "~/db/schema";
+import { client } from "~/.server/db/schema";
 import { getThreadsList } from "~/lib/utils";
 
 export async function action({ request, params }: Route.ActionArgs) {

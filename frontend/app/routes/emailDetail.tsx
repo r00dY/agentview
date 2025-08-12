@@ -1,7 +1,7 @@
 import { redirect, useLoaderData, Link, data } from "react-router";
 import type { Route } from "./+types/emailDetail";
 import { db } from "~/lib/db.server";
-import { email } from "../db/schema";
+import { email } from "../.server/db/schema";
 import { eq } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";

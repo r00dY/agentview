@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { auth } from "~/lib/auth.server";
+import { auth } from "./auth";
 
 // Get CLI arguments
 const args = process.argv.slice(2);

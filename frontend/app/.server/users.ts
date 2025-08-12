@@ -1,5 +1,5 @@
-import { db } from "./db.server";
-import { users } from "~/db/auth-schema";
+import { db } from "./db";
+import { users } from "./db/auth-schema";
 import { count } from "drizzle-orm";
 
 export async function getUsersCount() {

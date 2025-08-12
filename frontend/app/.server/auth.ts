@@ -2,14 +2,16 @@ import { betterAuth } from "better-auth";
 import { createAuthMiddleware, APIError } from "better-auth/api";
 import { admin } from "better-auth/plugins"
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { db } from "./db.server";
-import { users } from "~/db/auth-schema";
-import { getValidInvitation, acceptInvitation, getInvitation } from "./invitations.server";
+import { db } from "./db";
+import { users } from "~/.server/db/auth-schema";
+import { getValidInvitation, acceptInvitation, getInvitation } from "./invitations";
 import { eq } from "drizzle-orm";
 import { areThereRemainingAdmins } from "./areThereRemainingAdmins";
-import { getUsersCount } from "./users.server";
+import { getUsersCount } from "./users";
+import { getRootUrl } from "./getRootUrl";
  
 export const auth = betterAuth({
+    trustedOrigins: [getRootUrl()],
     database: drizzleAdapter(db, {
         provider: "pg",
         // schema: {

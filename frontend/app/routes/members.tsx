@@ -1,6 +1,6 @@
 import { redirect, useLoaderData, useFetcher, Outlet, Link } from "react-router";
 import type { Route } from "./+types/members";
-import { auth } from "~/lib/auth.server";
+import { auth } from "~/.server/auth";
 import {
   Table,
   TableHeader,
@@ -11,7 +11,7 @@ import {
 } from "~/components/ui/table";
 import { Button } from "~/components/ui/button";
 import { Plus } from "lucide-react";
-import { cancelInvitation, getPendingInvitations } from "~/lib/invitations.server";
+import { cancelInvitation, getPendingInvitations } from "~/.server/invitations";
 import { Badge } from "~/components/ui/badge";
 import { Header, HeaderTitle } from "~/components/header";
 

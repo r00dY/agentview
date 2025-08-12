@@ -1,5 +1,5 @@
 import type { Route } from "./+types/login";
-import { auth } from "~/lib/auth.server";
+import { auth } from "~/.server/auth";
 import { APIError } from "better-auth/api";
 
 export async function action({

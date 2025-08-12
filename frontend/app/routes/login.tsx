@@ -3,12 +3,12 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import type { Route } from "./+types/login";
-import { auth } from "~/lib/auth.server";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { AlertCircleIcon } from "lucide-react";
 import { APIError } from "better-auth/api";
 import { type FormActionData, type FormActionDataError } from "~/lib/FormActionData";
+import { authClient } from "~/lib/auth-client";
 
 function redirectUrl(request: Request) {
   const url = new URL(request.url);
@@ -19,18 +19,16 @@ function redirectUrl(request: Request) {
   return '/';
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
-  const session = await auth.api.getSession({
-    headers: request.headers,
-  });
-  
-  if (session) {
+export async function clientLoader({ request }: Route.LoaderArgs) {
+  const { data, error } = await authClient.getSession()
+
+  if (data) {
     return redirect(redirectUrl(request));
   }
-} 
+}
 
 
-export async function action({
+export async function clientAction({
   request,
   params
 }: Route.ActionArgs) {
@@ -39,7 +37,7 @@ export async function action({
   const password = formData.get('password') as string || '';
 
   // Validation
-  const fieldErrors: FormActionDataError['fieldErrors'] = {};
+  const fieldErrors: FormActionDataError['error']['fieldErrors'] = {};
   
   if (!email) {
     fieldErrors.email = 'Email is required';
@@ -48,30 +46,44 @@ export async function action({
   }
 
   if (Object.keys(fieldErrors).length > 0) {
-    return { status: "error", fieldErrors };
+    return { error: {
+      message: "Validation error",
+      fieldErrors
+    } };
   }
 
   try {
-    const { headers } = await auth.api.signInEmail({
-        returnHeaders: true,
-        body: {
-            email,
-            password,
-        },
+    const { data, error } = await authClient.signIn.email({
+        email,
+        password,
     });
 
-    return redirect(redirectUrl(request), { headers });
+    console.log('data', data)
+    console.log('error', error)
+
+    if (error) {
+      return { status: "error", error };
+    }
+
+    return redirect(redirectUrl(request));
     
   } catch (error) {
+
     if (error instanceof APIError) {
-      return { status: "error", error: error.message };
+      return { status: "error", error: {
+        message: error.message
+      } };
     }
-    return { status: "error", error: 'An unexpected error occurred. Please try again.' };
+
+    return { status: "error", error: {
+      message: "Unexpected error",
+      data: String(error)
+    } };
   }
 }
 
 export default function LoginPage() {
-  const actionData = useActionData<typeof action>() as FormActionData | undefined;
+  const actionData = useActionData<typeof clientAction>() as FormActionData | undefined;
 
   return (
     <div className="container mx-auto p-4 max-w-md mt-16">
@@ -82,11 +94,11 @@ export default function LoginPage() {
         <CardContent>
           <Form className="flex flex-col gap-4" method="post">
             {/* General error alert */}
-            {actionData?.status === "error" && actionData.error && (
+            {actionData?.status === "error" && (
               <Alert variant="destructive">
                 <AlertCircleIcon />
                 <AlertTitle>Login failed.</AlertTitle>
-                <AlertDescription>{actionData.error}</AlertDescription>
+                <AlertDescription>{actionData.error.message}</AlertDescription>
               </Alert>
             )}
 
@@ -104,9 +116,9 @@ export default function LoginPage() {
                 // aria-invalid={actionData?.status === "error" && actionData?.fieldErrors?.email ? "true" : "false"}
                 // aria-describedby={actionData?.status === "error" && actionData?.fieldErrors?.email ? "email-error" : undefined}
               />
-              {actionData?.status === "error" && actionData?.fieldErrors?.email && (
+              {actionData?.status === "error" && actionData?.error.fieldErrors?.email && (
                 <p id="email-error" className="text-sm text-destructive">
-                  {actionData.fieldErrors.email}
+                  {actionData.error.fieldErrors.email}
                 </p>
               )}
             </div>
@@ -125,9 +137,9 @@ export default function LoginPage() {
                 // aria-invalid={actionData?.fieldErrors?.password ? "true" : "false"}
                 // aria-describedby={actionData?.fieldErrors?.password ? "password-error" : undefined}
               />
-              {actionData?.status === "error" && actionData?.fieldErrors?.password && (
+              {actionData?.status === "error" && actionData?.error.fieldErrors?.password && (
                 <p id="password-error" className="text-sm text-destructive">
-                  {actionData.fieldErrors.password}
+                  {actionData.error.fieldErrors.password}
                 </p>
               )}
             </div>

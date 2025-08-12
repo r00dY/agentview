@@ -1,7 +1,7 @@
 import { redirect, useLoaderData, Link } from "react-router";
 import type { Route } from "./+types/emails";
 import { db } from "~/lib/db.server";
-import { email } from "../db/schema";
+import { email } from "../.server/db/schema";
 import { desc, eq } from "drizzle-orm";
 import {
   Table,

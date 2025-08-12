@@ -7,7 +7,7 @@ import { Textarea } from "~/components/ui/textarea";
 import { useEffect, useState } from "react";
 import { parseSSE } from "~/lib/parseSSE";
 import { db } from "~/lib/db.server";
-import { auth } from "~/lib/auth.server";
+import { auth } from "~/.server/auth";
 import { ItemsWithCommentsLayout } from "~/components/ItemsWithCommentsLayout";
 import { CommentThread } from "~/components/comments";
 

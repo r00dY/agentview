@@ -1,5 +1,5 @@
-import { db } from "./db.server";
-import { users } from "~/db/auth-schema";
+import { db } from "./db";
+import { users } from "~/.server/db/auth-schema";
 import { eq, and, ne } from "drizzle-orm";
 
 export async function areThereRemainingAdmins(userId: string): Promise<boolean> {

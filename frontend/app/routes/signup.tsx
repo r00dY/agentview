@@ -3,12 +3,12 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import type { Route } from "./+types/signup";
-import { auth } from "~/lib/auth.server";
+import { auth } from "~/.server/auth";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { AlertCircleIcon } from "lucide-react";
 import { type FormActionData, type FormActionDataError } from "~/lib/FormActionData";
-import { getValidInvitation } from "~/lib/invitations.server";
+import { getValidInvitation } from "~/.server/invitations";
 
 
 export async function loader({ request }: Route.LoaderArgs) {

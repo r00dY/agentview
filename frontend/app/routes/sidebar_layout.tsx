@@ -1,15 +1,13 @@
 import React from "react";
 import {
-  Form,
     Link,
     Outlet,
     redirect,
     useFetcher,
     useLoaderData,
-    useNavigate
   } from "react-router";
   
-  import { LogOut, Gauge, ChevronUp, User, Edit, Lock, Users, Mail, MessageCircle } from "lucide-react"
+  import { LogOut, ChevronUp, User, Edit, Lock, Users, Mail, MessageCircle } from "lucide-react"
   import {
     SidebarProvider,
     Sidebar,
@@ -23,28 +21,26 @@ import {
     SidebarGroup,
     SidebarGroupLabel,
     SidebarGroupContent,
-    SidebarMenuSub,
-    SidebarMenuSubItem,
   } from "../components/ui/sidebar"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "~/components/ui/collapsible"
 import type { Route } from "./+types/sidebar_layout";
-import { auth } from "~/lib/auth.server";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
 import { EditProfileDialog } from "~/components/EditProfileDialog";
 import { ChangePasswordDialog } from "~/components/ChangePasswordDialog";
+import { authClient } from "~/lib/auth-client";
 
 
 
 
-export async function loader({request}: Route.LoaderArgs) {
-  const session = await auth.api.getSession({
-    headers: request.headers,
-  });
+
+export async function clientLoader({request}: Route.ClientLoaderArgs) {
+  console.log(import.meta.env)
+
+  const session = await authClient.getSession()
 
   const url = new URL(request.url);
   const relativeUrl = url.pathname + url.search + url.hash;
 
-  if (!session) {
+  if (!session.data) {
     if (relativeUrl !== '/') {
       return redirect('/login?redirect=' + encodeURIComponent(relativeUrl));
     }
@@ -54,7 +50,7 @@ export async function loader({request}: Route.LoaderArgs) {
   }
 
   return {
-    user: session.user,
+    session: session.data,
     showEmails: true
   };
 }
@@ -101,11 +97,13 @@ function Logo() {
 }
 
 export default function Layout() {
-  const { user, showEmails } = useLoaderData<typeof loader>()
+  const { session, showEmails } = useLoaderData<typeof clientLoader>()
   const logoutFetcher = useFetcher()
 
   const [editProfileOpen, setEditProfileOpen] = React.useState(false)
   const [changePasswordOpen, setChangePasswordOpen] = React.useState(false)
+  
+  const user = session.user
 
   return (
     <SidebarProvider>

@@ -1,8 +1,8 @@
 import type { Route } from "./+types/threadComments";
 import { db } from "~/lib/db.server";
-import { commentThreads, commentMessages, commentMessageEdits, commentMentions } from "~/db/schema";
+import { commentThreads, commentMessages, commentMessageEdits, commentMentions } from "~/.server/db/schema";
 import { eq, inArray, and, isNull } from "drizzle-orm";
-import { auth } from "~/lib/auth.server";
+import { auth } from "~/.server/auth";
 import { extractMentions } from "~/lib/utils";
 
 export async function action({ request, params }: Route.ActionArgs) {
