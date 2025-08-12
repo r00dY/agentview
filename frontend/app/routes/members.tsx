@@ -1,6 +1,5 @@
-import { redirect, useLoaderData, useFetcher, Outlet, Link } from "react-router";
+import { redirect, useLoaderData, useFetcher, Outlet, Link, data } from "react-router";
 import type { Route } from "./+types/members";
-import { auth } from "~/.server/auth";
 import {
   Table,
   TableHeader,
@@ -14,31 +13,40 @@ import { Plus } from "lucide-react";
 import { cancelInvitation, getPendingInvitations } from "~/.server/invitations";
 import { Badge } from "~/components/ui/badge";
 import { Header, HeaderTitle } from "~/components/header";
+import { authClient } from "~/lib/auth-client";
 
-export async function loader({ request }: Route.LoaderArgs) {
-  const users = await auth.api.listUsers({
-    headers: request.headers,
+export async function clientLoader({ request }: Route.ClientLoaderArgs) {
+  const response = await authClient.admin.listUsers({
     query: {
       limit: 100,
     },
   });
 
+  if (response.error) {
+    throw data(response.error.message, {
+      status: 400,
+    });
+  }
+  
+
   const invitations = await getPendingInvitations()
 
-  return { users: users.users, invitations };
+  return { users: response.data.users, invitations };
 }
 
-export async function action({ request }: Route.ActionArgs) {
-  const session = await auth.api.getSession({ headers: request.headers });
-  if (!session) return redirect("/login");
+export async function clientAction({ request }: Route.ClientActionArgs) {
+  const session = await authClient.getSession();
+  if (session.error || !session.data) return redirect("/login");
 
   const formData = await request.formData();
   const _action = formData.get("_action");
 
-  if (session.user.role !== "admin") {
+  if (session.data.user.role !== "admin") {
     return {
       status: "error",
-      error: "Not authorized.",
+      error: {
+        message: "Not authorized.",
+      }
     }
   }
 
@@ -119,7 +127,7 @@ export async function action({ request }: Route.ActionArgs) {
 
 
 export default function MembersPage() {
-  const { users, invitations } = useLoaderData<typeof loader>();
+  const { users, invitations } = useLoaderData<typeof clientLoader>();
   const fetcher = useFetcher();
 
   return <div>
