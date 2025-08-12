@@ -45,7 +45,7 @@ export function ChangePasswordDialog({
               <Alert variant="destructive">
                 <AlertCircleIcon />
                 <AlertTitle>Password change failed.</AlertTitle>
-                <AlertDescription>{actionData.error}</AlertDescription>
+                <AlertDescription>{actionData.error.message}</AlertDescription>
               </Alert>
             )}
 
@@ -57,9 +57,9 @@ export function ChangePasswordDialog({
                 name="currentPassword"
                 autoFocus
               />
-              {actionData?.status === "error" && actionData?.fieldErrors?.currentPassword && changePasswordFetcher.state === 'idle' && (
+              {actionData?.status === "error" && actionData?.error.fieldErrors?.currentPassword && changePasswordFetcher.state === 'idle' && (
                 <p id="current-password-error" className="text-sm text-destructive">
-                  {actionData.fieldErrors.currentPassword}
+                  {actionData.error.fieldErrors.currentPassword}
                 </p>
               )}
             </div>
@@ -71,9 +71,9 @@ export function ChangePasswordDialog({
                 type="password"
                 name="newPassword"
               />
-              {actionData?.status === "error" && actionData?.fieldErrors?.newPassword && changePasswordFetcher.state === 'idle' && (
+              {actionData?.status === "error" && actionData?.error.fieldErrors?.newPassword && changePasswordFetcher.state === 'idle' && (
                 <p id="new-password-error" className="text-sm text-destructive">
-                  {actionData.fieldErrors.newPassword}
+                  {actionData.error.fieldErrors.newPassword}
                 </p>
               )}
             </div>
@@ -85,9 +85,9 @@ export function ChangePasswordDialog({
                 type="password"
                 name="confirmPassword"
               />
-              {actionData?.status === "error" && actionData?.fieldErrors?.confirmPassword && changePasswordFetcher.state === 'idle' && (
+              {actionData?.status === "error" && actionData?.error.fieldErrors?.confirmPassword && changePasswordFetcher.state === 'idle' && (
                 <p id="confirm-password-error" className="text-sm text-destructive">
-                  {actionData.fieldErrors.confirmPassword}
+                  {actionData.error.fieldErrors.confirmPassword}
                 </p>
               )}
             </div>

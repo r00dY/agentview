@@ -1,23 +1,14 @@
 import type { Route } from "./+types/user";
-import { auth } from "~/.server/auth";
 import { APIError } from "better-auth/api";
 import type { FormActionData, FormActionDataError } from "~/lib/FormActionData";
 import { data } from "react-router";
+import { authClient } from "~/lib/auth-client";
 
-export async function action({
+export async function clientAction({
   request,
 }: Route.ActionArgs) {
 
-  const fieldErrors: FormActionDataError['fieldErrors'] = {};
-
-  // Get the current session to verify the user is logged in
-  const session = await auth.api.getSession({
-    headers: request.headers,
-  });
-
-  if (!session) {
-    return { error: 'You must be logged in to update your profile.' };
-  }
+  const fieldErrors: FormActionDataError['error']['fieldErrors'] = {};
 
   // Parse form data
   const formData = await request.formData();
@@ -35,27 +26,20 @@ export async function action({
   }
 
   try {
-    await auth.api.updateUser({
-      headers: request.headers,
-      body: {
-        name: name.trim(),
-      },
+    const { data, error } = await authClient.updateUser({
+      name: name.trim(),
     });
-
-    return data({ status: "success" }, {
-      status: 200,
-    })
-    
-  } catch (error) {
-    console.error('Error updating user:', error);
-    if (error instanceof APIError) {
-      return data({ status: "error", error: error.message }, {
-        status: 400,
-      })
+    if (error) {
+      return { status: "error", error };
     }
 
-    return data({ status: "error", error: 'An unexpected error occurred. Please try again.' }, {
-      status: 400,
-    })
+    return { status: "success", data };
+    
+  } catch (error) {
+    if (error instanceof APIError) {
+      return { status: "error", error: { message: error.message } };
+    }
+
+    return { status: "error", error: { message: 'An unexpected error occurred. Please try again.' } };
   }
 }

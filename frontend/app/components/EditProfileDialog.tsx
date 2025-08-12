@@ -58,7 +58,7 @@ export function EditProfileDialog({
             <Alert variant="destructive">
               <AlertCircleIcon />
               <AlertTitle>Update failed.</AlertTitle>
-              <AlertDescription>{actionData.error}</AlertDescription>
+              <AlertDescription>{actionData.error.message}</AlertDescription>
             </Alert>
           )}
 
@@ -82,9 +82,9 @@ export function EditProfileDialog({
               onChange={e => setName(e.target.value)}
               autoFocus
             />
-            {actionData?.status === "error" && actionData?.fieldErrors?.name && editFetcher.state === 'idle' && (
+            {actionData?.status === "error" && actionData?.error.fieldErrors?.name && editFetcher.state === 'idle' && (
               <p id="name-error" className="text-sm text-destructive">
-                {actionData.fieldErrors.name}
+                {actionData.error.fieldErrors.name}
               </p>
             )}
           </div>
