@@ -17,7 +17,7 @@ import { isUUID } from '../lib/isUUID'
 import { isAsyncIterable } from '../lib/utils'
 import { auth } from './auth'
 import { getRootUrl } from './getRootUrl'
-import { createInvitation, cancelInvitation, getPendingInvitations } from './invitations'
+import { createInvitation, cancelInvitation, getPendingInvitations, getValidInvitation } from './invitations'
 
 
 
@@ -255,6 +255,32 @@ app.openapi(invitationDELETERoute, async (c) => {
   }
 })
 
+// Invitation validation
+const invitationValidateRoute = createRoute({
+  method: 'get',
+  path: '/api/invitations/{invitationId}',
+  request: {
+    params: z.object({
+      invitationId: z.string(),
+    }),
+  },
+  responses: {
+    200: response_data(InvitationSchema),
+    400: response_error(),
+  },
+})
+
+app.openapi(invitationValidateRoute, async (c) => {
+  const { invitationId } = c.req.param()
+
+  try {
+    const invitation = await getValidInvitation(invitationId);
+    return c.json(invitation, 200);
+  } catch (error: any) {
+    return errorToResponse(c, error);
+  }
+})
+
 /* --------- THREADS --------- */
 
 const ActivitySchema = z.object({
@@ -439,7 +465,7 @@ const activitiesPOSTRoute = createRoute({
     body: body(ActivityCreateSchema)
   },
   responses: {
-    201: response_data(z.array(ActivitySchema)),
+    201: response_data(ThreadSchema),
     400: response_error(),
     404: response_error()
   },
@@ -637,7 +663,7 @@ app.openapi(activitiesPOSTRoute, async (c) => {
 
   })();
 
-  return c.json(await fetchThreadWithLastRun(thread_id), 200);
+  return c.json(await fetchThreadWithLastRun(thread_id), 201);
 })
 
 

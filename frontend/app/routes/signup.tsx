@@ -1,22 +1,20 @@
-import { redirect, Form, useActionData, useLoaderData } from "react-router";
+import { redirect, Form, useActionData, useLoaderData, data } from "react-router";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import type { Route } from "./+types/signup";
-import { auth } from "~/.server/auth";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { AlertCircleIcon } from "lucide-react";
 import { type FormActionData, type FormActionDataError } from "~/lib/FormActionData";
-import { getValidInvitation } from "~/.server/invitations";
+import { authClient } from "~/lib/auth-client";
+import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
 
 
-export async function loader({ request }: Route.LoaderArgs) {
-  const session = await auth.api.getSession({
-    headers: request.headers,
-  });
+export async function clientLoader({ request }: Route.ClientLoaderArgs) {
+  const session = await authClient.getSession();
   
-  if (session) {
+  if (session.data) {
     return redirect('/');
   }
 
@@ -26,30 +24,36 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (!invitationId) {
     return {
       invitationId: null,
-      error: "You must have an invitation to sign up."
+      error: {
+        message: "You must have an invitation to sign up."
+      }
     }
   }
 
-  // FIXME: I don't know how in better-auth to get invitation data (or make any operations) *as system* (without login). So talkibg directly to db.
-  try {
-    const invitationRow = await getValidInvitation(invitationId);
+  const response = await fetch(`${getAPIBaseUrl()}/api/invitations/${invitationId}`, {
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
 
-    return {
-      invitation: invitationRow
-    }
+  const responseBody = await response.json();
 
-  } catch (error) {
+  if (!response.ok) {
     return {
-      invitation: null,
-      error: error instanceof Error ? error.message : "An unexpected error occurred."
+      error: responseBody
     }
+  }
+
+  return {
+    invitation: responseBody
   }
 }
 
-export async function action({
+export async function clientAction({
   request,
   params
-}: Route.ActionArgs) {
+}: Route.ClientActionArgs) {
   const url = new URL(request.url);
   const invitationId = url.searchParams.get('invitationId');
 
@@ -58,49 +62,49 @@ export async function action({
   }
 
   try {
-    const invitation = await getValidInvitation(invitationId);
-
     const formData = await request.formData();
     const name = formData.get('name') as string || '';
-    const email = invitation.email;
+    const email = formData.get('email') as string || '';
     const password = formData.get('password') as string || '';
     const confirmPassword = formData.get('confirmPassword') as string || '';
 
     if (name.trim() === '') {
-      return { status: "error", fieldErrors: { name: "Name is required." } };
+      return { status: "error", error: { message: "Validation error", fieldErrors: { name: "Name is required." } } };
     }
 
     if (password !== confirmPassword) {
       return { 
         status: "error", 
-        fieldErrors: { confirmPassword: "Passwords do not match." } 
+        error: { message: "Validation error", fieldErrors: { confirmPassword: "Passwords do not match." } } 
       };
     }
 
-    const { headers } = await auth.api.signUpEmail({
-      returnHeaders: true,
-      body: {
-        email,
-        password,
-        name: name.trim(),
-        invitationId
-      },
-    });
+    const { data, error } = await authClient.signUp.email({
+      email,
+      password,
+      name: name.trim(),
+       // @ts-ignore
+      invitationId
+    })
 
-    return redirect('/', { headers });
+    if (error) {
+      return { status: "error", error };
+    }
+
+    return redirect('/');
 
   } catch (error) {
     if (error instanceof Error) {
-      return { status: "error", error: error.message };
+      return { status: "error", error: { message: error.message } };
     }
-    return { status: "error", error: "An unexpected error occurred." };
+    return { status: "error", error: { message: "An unexpected error occurred." } };
   }
 
 }
 
 export default function SignupPage() {
-  const actionData = useActionData<typeof action>() as FormActionData | undefined;
-  const { invitation, error } = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof clientAction>() as FormActionData | undefined;
+  const { invitation, error } = useLoaderData<typeof clientLoader>();
 
   return (
     <div className="container mx-auto p-4 max-w-md mt-16">
@@ -113,7 +117,7 @@ export default function SignupPage() {
           <Alert variant="destructive">
             <AlertCircleIcon />
             {/* <AlertTitle>Invitation not found</AlertTitle> */}
-            <AlertDescription>{ error }</AlertDescription>
+            <AlertDescription>{ error.message }</AlertDescription>
           </Alert>
         </CardContent> }
         
@@ -121,12 +125,13 @@ export default function SignupPage() {
           <Form className="flex flex-col gap-4" method="post">
 
             <input type="hidden" name="invitationId" value={invitation.id} />
+            <input type="hidden" name="email" value={invitation.email} />
 
             {actionData?.status === "error" && actionData.error && (
               <Alert variant="destructive">
                 <AlertCircleIcon />
                 <AlertTitle>Signup failed.</AlertTitle>
-                <AlertDescription>{actionData.error}</AlertDescription>
+                <AlertDescription>{actionData.error.message}</AlertDescription>
               </Alert>
             )}
 
@@ -142,9 +147,9 @@ export default function SignupPage() {
                 placeholder="Enter your full name"
                 required
               />
-              {actionData?.status === "error" && actionData?.fieldErrors?.name && (
+              {actionData?.status === "error" && actionData?.error?.fieldErrors?.name && (
                 <p id="name-error" className="text-sm text-destructive">
-                  {actionData.fieldErrors.name}
+                  {actionData.error.fieldErrors.name}
                 </p>
               )}
             </div>
@@ -180,9 +185,9 @@ export default function SignupPage() {
                 placeholder="Enter your password"
                 required
               />
-              {actionData?.status === "error" && actionData?.fieldErrors?.password && (
+              {actionData?.status === "error" && actionData?.error?.fieldErrors?.password && (
                 <p id="password-error" className="text-sm text-destructive">
-                  {actionData.fieldErrors.password}
+                  {actionData.error.fieldErrors.password}
                 </p>
               )}
             </div>
@@ -199,9 +204,9 @@ export default function SignupPage() {
                 placeholder="Confirm your password"
                 required
               />
-              {actionData?.status === "error" && actionData?.fieldErrors?.confirmPassword && (
+              {actionData?.status === "error" && actionData?.error?.fieldErrors?.confirmPassword && (
                 <p id="confirmPassword-error" className="text-sm text-destructive">
-                  {actionData.fieldErrors.confirmPassword}
+                  {actionData.error.fieldErrors.confirmPassword}
                 </p>
               )}
             </div>
