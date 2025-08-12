@@ -1,8 +1,9 @@
 import { createAuthClient } from "better-auth/react"
 import { adminClient } from "better-auth/client/plugins"
+import { getAPIBaseUrl } from "./getAPIBaseUrl"
 
 export const authClient = createAuthClient({
-    baseURL: import.meta.env.VITE_AGENTVIEW_API_BASE_URL + '/api/auth', // The base URL of your auth server,
+    baseURL: getAPIBaseUrl() + '/api/auth', // The base URL of your auth server,
     plugins: [
         adminClient()
     ]

@@ -1,44 +1,46 @@
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import type { Route } from "./+types/home";
-import { useFetcher, useNavigate } from "react-router";
-import { auth } from "~/.server/auth";
-import { redirect } from "react-router";
-import { createInvitation } from "~/.server/invitations";
+import { redirect, useFetcher, useNavigate } from "react-router";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { AlertCircleIcon } from "lucide-react";
 import { Label } from "~/components/ui/label";
 import { Input } from "~/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { Button } from "~/components/ui/button";
+import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
+import { data } from "react-router";
 
-
-
-export async function action({ request }: Route.ActionArgs) {
-  const session = await auth.api.getSession({ headers: request.headers });
-  if (!session) return redirect("/login");
-
+export async function clientAction({ request }: Route.ClientActionArgs) {
   const formData = await request.formData();
   const email = formData.get("email") as string;
   const role = formData.get("role") as string;
 
-  try {
-    await createInvitation(email, role, session.user.id)
-    return redirect("/members");
+  const response = await fetch(`${getAPIBaseUrl()}/api/invitations`, {
+    method: "POST",
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, role }),
+  });
 
-  } catch (error) {
-    if (error instanceof Error) {
-      return {
-        status: "error",
-        error: error.message,
-      }
+  const data = await response.json();
+
+  if (!response.ok) {
+    return {
+      status: "error",
+      error: data
     }
   }
+
+  return redirect('/members');
 }
+
 
 export default function InvitationNew() {
   const fetcher = useFetcher();
   const navigate = useNavigate();
-  
+
   return <div className="bg-red-500">
     <Dialog open={true} onOpenChange={() => { navigate(-1) }}>
     <DialogContent>
@@ -52,11 +54,11 @@ export default function InvitationNew() {
           <input type="hidden" name="_action" value="inviteMember" />
           
           {/* General error alert */}
-          {fetcher.data?.status === "error" && fetcher.data.error && (
+          {fetcher.data?.status === "error" && (
             <Alert variant="destructive">
               <AlertCircleIcon />
               <AlertTitle>Invitation failed.</AlertTitle>
-              <AlertDescription>{fetcher.data.error}</AlertDescription>
+              <AlertDescription>{fetcher.data.error.message}</AlertDescription>
             </Alert>
           )}
           
@@ -70,11 +72,6 @@ export default function InvitationNew() {
               autoComplete="off"
               required
             />
-            {fetcher.data?.status === "error" && fetcher.data?.fieldErrors?.email && (
-              <p id="email-error" className="text-sm text-destructive">
-                {fetcher.data.fieldErrors.email}
-              </p>
-            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="inviteMemberRole">Role</Label>
@@ -87,11 +84,6 @@ export default function InvitationNew() {
                 <SelectItem value={"admin"}>Admin</SelectItem>
               </SelectContent>
             </Select>
-            {fetcher.data?.status === "error" && fetcher.data?.fieldErrors?.role && (
-              <p id="role-error" className="text-sm text-destructive">
-                {fetcher.data.fieldErrors.role}
-              </p>
-            )}
           </div>
           </DialogBody>
           <DialogFooter>

@@ -3,19 +3,22 @@ import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { streamSSE } from 'hono/streaming'
+import { APIError } from "better-auth/api";
 
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { swaggerUI } from '@hono/swagger-ui'
 import { db } from './db'
-import { client, thread, activity, run } from './db/schema'
+import { client, thread, activity, run, email } from './db/schema'
 import { users } from './db/auth-schema'
-import { asc, eq, ne } from 'drizzle-orm'
+import { asc, eq, ne, desc } from 'drizzle-orm'
 import { response_data, response_error, body } from '../lib/hono_utils'
 import { config } from '../agentview.config'
 import { isUUID } from '../lib/isUUID'
 import { isAsyncIterable } from '../lib/utils'
 import { auth } from './auth'
 import { getRootUrl } from './getRootUrl'
+import { createInvitation, cancelInvitation, getPendingInvitations } from './invitations'
+
 
 
 export const app = new OpenAPIHono({
@@ -121,6 +124,135 @@ app.openapi(usersGETRoute, async (c) => {
   }).from(users);
 
   return c.json(userRows, 200);
+})
+
+/* --------- INVITATIONS --------- */
+
+async function getSessionAndValidateAdmin(c: any) {
+  const session = await auth.api.getSession({ headers: c.req.raw.headers })
+
+  if (!session) {
+    throw new APIError(401, { message: "Unauthorized" });
+  }
+
+  if (session.user.role !== "admin") {
+    throw new APIError(401, { message: "Unauthorized" });
+  }
+
+  return session;
+}
+
+function errorToResponse(c: any, error: any) {
+  if (error instanceof APIError) {
+    return c.json(error.body, error.statusCode);
+  }
+  else if (error instanceof Error) {
+    return c.json({ message: error.message }, 400);
+  }
+  else {
+    return c.json({ message: "Unexpected error" }, 400);
+  }
+}
+
+const InvitationSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  role: z.string(),
+  expires_at: z.date(),
+  created_at: z.date(),
+  status: z.string(),
+  invited_by: z.string().nullable(),
+})
+
+const InvitationCreateSchema = z.object({
+  email: z.string().email(),
+  role: z.enum(['admin', 'user']),
+})
+
+// Invitations POST (create invitation)
+const invitationsPOSTRoute = createRoute({
+  method: 'post',
+  path: '/api/invitations',
+  request: {
+    body: body(InvitationCreateSchema)
+  },
+  responses: {
+    201: response_data(InvitationSchema),
+    400: response_error(),
+  },
+})
+
+
+app.openapi(invitationsPOSTRoute, async (c) => {
+  const body = await c.req.json()
+  
+  try {
+    const session = await getSessionAndValidateAdmin(c);
+
+    await createInvitation(body.email, body.role, session.user.id);
+    
+    // Get the created invitation to return it
+    const pendingInvitations = await getPendingInvitations();
+    const createdInvitation = pendingInvitations.find(inv => inv.email === body.email);
+    
+    if (!createdInvitation) {
+      return c.json({ message: "Failed to create invitation" }, 400);
+    }
+
+    return c.json(createdInvitation, 201);
+  } catch (error) {
+    return errorToResponse(c, error);
+  }
+})
+
+// Invitations GET (get pending invitations)
+const invitationsGETRoute = createRoute({
+  method: 'get',
+  path: '/api/invitations',
+  responses: {
+    200: response_data(z.array(InvitationSchema)),
+    400: response_error(),
+  },
+})
+
+app.openapi(invitationsGETRoute, async (c) => {
+  try {
+    await getSessionAndValidateAdmin(c);
+
+    const pendingInvitations = await getPendingInvitations();
+    return c.json(pendingInvitations, 200);
+
+  } catch (error: any) {
+    return errorToResponse(c, error);
+  }
+})
+
+// Invitation DELETE (cancel invitation)
+const invitationDELETERoute = createRoute({
+  method: 'delete',
+  path: '/api/invitations/{id}',
+  request: {
+    params: z.object({
+      id: z.string(),
+    }),
+  },
+  responses: {
+    200: response_data(z.object({})),
+    400: response_error(),
+    404: response_error(),
+  },
+})
+
+app.openapi(invitationDELETERoute, async (c) => {
+  const { id } = c.req.param()
+
+  try {
+    await getSessionAndValidateAdmin(c);
+    await cancelInvitation(id);
+    return c.json({}, 200);
+  } catch (error: any) {
+    return errorToResponse(c, error);
+  }
 })
 
 /* --------- THREADS --------- */
@@ -650,6 +782,10 @@ app.openapi(activityWatchRoute, async (c) => {
   });
 });
 
+
+
+
+
 /* --------- COMMENTS --------- */
 
 // // Thread GET
@@ -679,8 +815,48 @@ app.openapi(activityWatchRoute, async (c) => {
 //   return c.json(threadRow, 200);
 // })
 
+/* --------- EMAILS --------- */
 
+// Emails GET
+const emailsGETRoute = createRoute({
+  method: 'get',
+  path: '/api/dev/emails',
+  responses: {
+    200: response_data(z.any()),
+  },
+})
 
+app.openapi(emailsGETRoute, async (c) => {
+  const emails = await db
+    .select({
+      id: email.id,
+      to: email.to,
+      subject: email.subject,
+      from: email.from,
+      created_at: email.created_at,
+    })
+    .from(email)
+    .orderBy(desc(email.created_at))
+    .limit(100);
+
+  return c.json(emails, 200);
+})
+
+/* --------- EMAIL DETAIL --------- */
+
+const emailDetailGETRoute = createRoute({
+  method: 'get',
+  path: '/api/dev/emails/{id}',
+  responses: {
+    200: response_data(z.any()),
+  },
+})
+
+app.openapi(emailDetailGETRoute, async (c) => {
+  const { id } = c.req.param()
+  const emailRow = await db.query.email.findFirst({ where: eq(email.id, id) })
+  return c.json(emailRow, 200)
+})
 
 
 // The OpenAPI documentation will be available at /doc

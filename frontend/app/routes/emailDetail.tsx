@@ -1,31 +1,34 @@
 import { redirect, useLoaderData, Link, data } from "react-router";
 import type { Route } from "./+types/emailDetail";
-import { db } from "~/lib/db.server";
-import { email } from "../.server/db/schema";
-import { eq } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { Button } from "~/components/ui/button";
-import { ArrowLeft } from "lucide-react";
-import { Header, HeaderTitle } from "~/components/Header";
+import { Header, HeaderTitle } from "~/components/header";
+import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
 
-export async function loader({ request, params }: Route.LoaderArgs) {
+export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
+
+  const response = await fetch(`${getAPIBaseUrl()}/api/dev/emails/${params.id}`, {
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
   // Get the specific email
-  const emailRows = await db
-    .select()
-    .from(email)
-    .where(eq(email.id, params.id));
+  const emailData = await response.json();
 
-  if (emailRows.length === 0) {
+  console.log(emailData)
+
+  if (!response.ok) {
     throw data(null, { status: 404 });
   }
-
-  const emailData = emailRows[0];
 
   return { email: emailData };
 }
 
 export default function EmailDetail() {
-  const { email: emailData } = useLoaderData<typeof loader>();
+  const { email: emailData } = useLoaderData<typeof clientLoader>();
+
+  console.log(emailData)
 
   return <div>
 

@@ -5,7 +5,8 @@ export default [
         index("routes/home.tsx"),
         route("user", "routes/user.tsx"),
         route("members", "routes/members.tsx", [
-            route("invite", "routes/membersInvite.tsx"),
+            route("invitations/new", "routes/membersInvite.tsx"),
+            route("invitations/:invitationId/cancel", "routes/membersInviteCancel.tsx"),
             route(":userId/edit", "routes/membersEdit.tsx"),
             route(":userId/delete", "routes/membersDelete.tsx"),
         ]),

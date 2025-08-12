@@ -10,10 +10,11 @@ import {
 } from "~/components/ui/table";
 import { Button } from "~/components/ui/button";
 import { Plus } from "lucide-react";
-import { cancelInvitation, getPendingInvitations } from "~/.server/invitations";
 import { Badge } from "~/components/ui/badge";
 import { Header, HeaderTitle } from "~/components/header";
 import { authClient } from "~/lib/auth-client";
+import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
+
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const response = await authClient.admin.listUsers({
@@ -28,102 +29,24 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     });
   }
   
+  // Fetch invitations via API
+  const invitationsResponse = await fetch(`${getAPIBaseUrl()}/api/invitations`, {
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
 
-  const invitations = await getPendingInvitations()
+  if (!invitationsResponse.ok) {
+    throw data('Failed to fetch invitations', {
+      status: invitationsResponse.status, // TODO: standardised error handling from clientLoaders!!! 
+    });
+  }
+
+  const invitations: any[] = await invitationsResponse.json(); // TODO: types
 
   return { users: response.data.users, invitations };
 }
-
-export async function clientAction({ request }: Route.ClientActionArgs) {
-  const session = await authClient.getSession();
-  if (session.error || !session.data) return redirect("/login");
-
-  const formData = await request.formData();
-  const _action = formData.get("_action");
-
-  if (session.data.user.role !== "admin") {
-    return {
-      status: "error",
-      error: {
-        message: "Not authorized.",
-      }
-    }
-  }
-
-  try {
-    switch (_action) {
-      // case "inviteMember": {
-      //   const email = formData.get("email") as string;
-      //   const role = formData.get("role") as Role;
-
-      //   try {
-      //     await createInvitation(email, role, session.user.id)
-      //     return {
-      //       status: "success"
-      //     }
-      //   } catch (error) {
-      //     if (error instanceof Error) {
-      //       return {
-      //         status: "error",
-      //         error: error.message,
-      //       }
-      //     }
-      //   }
-      // }
-
-      // case "updateRole": {
-      //   const userId = formData.get("userId") as string;
-      //   const role = formData.get("role") as Role;
-
-      //     try {
-      //       await auth.api.setRole({
-      //         headers: request.headers,
-      //         body: { userId, role },
-      //       });
-
-      //       return {
-      //         status: "success"
-      //       }
-            
-      //     } catch (error) {
-      //       if (error instanceof APIError) {
-      //         return {
-      //           status: "error",
-      //           error: error.message,
-      //         }
-      //       }
-      //       return {
-      //         status: "error",
-      //         error: "Unexpected error",
-      //       }
-      //     }
-      // }
-
-
-
-      case "cancelInvite": {
-        const invitationId = formData.get("invitationId") as string;
-
-        try {
-          await cancelInvitation(invitationId)
-        }
-        catch (error) {
-          return {
-            status: "error",
-            error: "Unexpected error",
-          }
-        }
-      }
-      // Resend invite not implemented yet
-      default:
-        break;
-    }
-    return redirect("/members");
-  } catch (error: any) {
-    return { error: (error as any)?.message ?? "Unexpected error" };
-  }
-}
-
 
 
 export default function MembersPage() {
@@ -143,7 +66,7 @@ export default function MembersPage() {
         <div className="flex justify-end mb-3">
 
         <Button asChild size="sm">
-          <Link to="invite">
+          <Link to="invitations/new">
             <Plus className="w-4 h-4" />
             Invite Member
           </Link>
@@ -186,9 +109,7 @@ export default function MembersPage() {
 
                 </TableCell>
                 <TableCell>
-                    <fetcher.Form method="post">
-                      <input type="hidden" name="_action" value="cancelInvite" />
-                      <input type="hidden" name="invitationId" value={invitation.id} />
+                    <fetcher.Form method="delete" action={`/members/invitations/${invitation.id}/cancel`}>
                       <Button 
                         type="submit" 
                         variant="outline" 

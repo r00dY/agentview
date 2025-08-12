@@ -1,8 +1,5 @@
-import { redirect, useLoaderData, Link } from "react-router";
+import { redirect, useLoaderData, Link, data } from "react-router";
 import type { Route } from "./+types/emails";
-import { db } from "~/lib/db.server";
-import { email } from "../.server/db/schema";
-import { desc, eq } from "drizzle-orm";
 import {
   Table,
   TableHeader,
@@ -12,26 +9,26 @@ import {
   TableCell,
 } from "~/components/ui/table";
 import { Header, HeaderTitle } from "~/components/header";
+import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
 
-export async function loader({ request }: Route.LoaderArgs) {
-  // Get last 100 emails, sorted newest to oldest
-  const emails = await db
-    .select({
-      id: email.id,
-      to: email.to,
-      subject: email.subject,
-      from: email.from,
-      created_at: email.created_at,
-    })
-    .from(email)
-    .orderBy(desc(email.created_at))
-    .limit(100);
-
-  return { emails };
+export async function clientLoader({ request }: Route.ClientLoaderArgs) {
+  const response = await fetch(`${getAPIBaseUrl()}/api/dev/emails`, {
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+  
+  if (!response.ok) {
+    throw data('Failed to fetch emails', {
+      status: response.status, // TODO: standardised error handling from clientLoaders!!! 
+    });
+  }
+  return { emails: await response.json() };
 }
 
 export default function Emails() {
-  const { emails } = useLoaderData<typeof loader>();
+  const { emails } = useLoaderData<typeof clientLoader>();
 
   return <div>
 
@@ -50,7 +47,7 @@ export default function Emails() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {emails.map((email) => (
+              {emails.map((email: any) => (
                 <TableRow key={email.id}>
                   <TableCell>
                     <Link 
