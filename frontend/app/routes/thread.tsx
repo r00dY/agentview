@@ -213,7 +213,7 @@ function ThreadPage() {
 
         if (message) {
             try {
-                const response = await apiFetch(`/threads/${thread.id}/activities`, {
+                const response = await apiFetch(`/api/threads/${thread.id}/activities`, {
                     method: 'POST',
                     body: {
                         input: {

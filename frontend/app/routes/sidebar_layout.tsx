@@ -50,46 +50,6 @@ export async function clientLoader({request}: Route.ClientLoaderArgs) {
   };
 }
 
-function Logo() {
-  const [offset, setOffset] = React.useState(12);
-
-  React.useEffect(() => {
-    const interval = setInterval(() => {
-      setOffset((prev) => prev + 12);
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
-
-
-  return <div className="h-[24px] w-[24px] bg-transparent overflow-hidden relative padding-[1px]">
-      <div className={`flex flex-col gap-[2px] absolute left-[0px] w-full transition-all duration-300`} style={{ top: `-${offset}px` }}>
-        <div className="w-[19px] h-[10px] bg-black rounded-[2px] self-end"></div>
-        <div className="w-[19px] h-[10px] bg-black rounded-[2px]"></div>
-        <div className="w-[19px] h-[10px] bg-black rounded-[2px] self-end"></div>
-        <div className="w-[19px] h-[10px] bg-black rounded-[2px]"></div>
-        <div className="w-[19px] h-[10px] bg-black rounded-[2px] self-end"></div>
-        <div className="w-[19px] h-[10px] bg-black rounded-[2px]"></div>
-        <div className="w-[19px] h-[10px] bg-black rounded-[2px] self-end"></div>
-        <div className="w-[19px] h-[10px] bg-black rounded-[2px]"></div>
-        <div className="w-[19px] h-[10px] bg-black rounded-[2px] self-end"></div>
-        <div className="w-[19px] h-[10px] bg-black rounded-[2px]"></div>
-        <div className="w-[19px] h-[10px] bg-black rounded-[2px] self-end"></div>
-        <div className="w-[19px] h-[10px] bg-black rounded-[2px]"></div>
-        <div className="w-[19px] h-[10px] bg-black rounded-[2px] self-end"></div>
-        <div className="w-[19px] h-[10px] bg-black rounded-[2px]"></div>
-        <div className="w-[19px] h-[10px] bg-black rounded-[2px] self-end"></div>
-        <div className="w-[19px] h-[10px] bg-black rounded-[2px]"></div>
-        <div className="w-[19px] h-[10px] bg-black rounded-[2px] self-end"></div>
-        <div className="w-[19px] h-[10px] bg-black rounded-[2px]"></div>
-        <div className="w-[19px] h-[10px] bg-black rounded-[2px] self-end"></div>
-        <div className="w-[19px] h-[10px] bg-black rounded-[2px]"></div>
-        <div className="w-[19px] h-[10px] bg-black rounded-[2px] self-end"></div>
-        <div className="w-[19px] h-[10px] bg-black rounded-[2px]"></div>
-        <div className="w-[19px] h-[10px] bg-black rounded-[2px] self-end"></div>
-        <div className="w-[19px] h-[10px] bg-black rounded-[2px]"></div>
-      </div>
-  </div>
-}
 
 export default function Layout() {
   const { session, showEmails } = useLoaderData<typeof clientLoader>()
@@ -104,10 +64,8 @@ export default function Layout() {
     <SidebarProvider>
       <div className="flex h-screen bg-background w-full">
         <Sidebar className="border-r">
-          <SidebarHeader className="px-3 py-2">
-            {/* <Logo /><br/> */}
-
-            <div className="text-md font-medium">agentview.</div>
+          <SidebarHeader className="px-3 py-3">
+            <img src="/public/logo.svg" alt="AgentView Logo" className="max-w-[100px]" />
 
             {/* <Button variant={"outline"} className="w-full justify-start gap-2 mt-5" asChild>
 
