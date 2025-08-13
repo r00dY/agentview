@@ -9,7 +9,6 @@ import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { swaggerUI } from '@hono/swagger-ui'
 import { db } from './db'
 import { client, thread, activity, run, email, commentThreads, commentMessages, commentMessageEdits, commentMentions } from './db/schema'
-import { users } from './db/auth-schema'
 import { asc, eq, ne, desc, and, inArray, isNull } from 'drizzle-orm'
 import { response_data, response_error, body } from '../lib/hono_utils'
 import { config } from '../agentview.config'
@@ -73,7 +72,7 @@ app.openapi(apiClientsPOSTRoute, async (c) => {
     if (!session) {
       return c.json({ message: "Authentication required" }, 401);
     }
-    
+
     const [newClient] = await db.insert(client).values({
       simulated_by: session.user.id,
     }).returning();
