@@ -54,22 +54,6 @@ const ClientSchema = z.object({
   updated_at: z.date(),
 })
 
-// Clients POST
-const clientsPOSTRoute = createRoute({
-  method: 'post',
-  path: '/api/clients',
-  request: {
-    body: body(z.object({}))
-  },
-  responses: {
-    201: response_data(ClientSchema)
-  },
-})
-
-app.openapi(clientsPOSTRoute, async (c) => {
-  const [newClient] = await db.insert(client).values({}).returning();
-  return c.json(newClient, 201);
-})
 
 // API Clients POST
 const apiClientsPOSTRoute = createRoute({
@@ -89,7 +73,7 @@ app.openapi(apiClientsPOSTRoute, async (c) => {
     if (!session) {
       return c.json({ message: "Authentication required" }, 401);
     }
-
+    
     const [newClient] = await db.insert(client).values({
       simulated_by: session.user.id,
     }).returning();

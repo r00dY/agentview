@@ -10,7 +10,7 @@ import { apiFetch } from "~/lib/apiFetch";
 import { getThreadsList } from "~/lib/utils";
 import { type ActionResponse } from "~/lib/errors";
 
-export async function clientAction({ request, params }: Route.ClientActionArgs): Promise<ActionResponse> {
+export async function clientAction({ request, params }: Route.ClientActionArgs): Promise<ActionResponse | Response> {
   const list = getThreadsList(request);
   const formData = await request.formData();
   const product_id = formData.get("product_id");
@@ -48,7 +48,7 @@ export async function clientAction({ request, params }: Route.ClientActionArgs):
   }
 
   // Redirect to the new thread
-  return { ok: true, data: redirect(`/threads/${threadResponse.data.id}?list=${list}`) };
+  return redirect(`/threads/${threadResponse.data.id}?list=${list}`);
 
 }
 
