@@ -1,230 +1,65 @@
 import type { Route } from "./+types/threadComments";
-import { db } from "~/lib/db.server";
-import { commentThreads, commentMessages, commentMessageEdits, commentMentions } from "~/.server/db/schema";
-import { eq, inArray, and, isNull } from "drizzle-orm";
-import { auth } from "~/.server/auth";
-import { extractMentions } from "~/lib/utils";
+import { apiFetch } from "~/lib/apiFetch";
+import { type ActionResponse } from "~/lib/errors";
 
-export async function action({ request, params }: Route.ActionArgs) {
+export async function clientAction({ request, params }: Route.ClientActionArgs): Promise<ActionResponse> {
     const formData = await request.formData();
     const content = formData.get("content");
     const activityId = formData.get("activityId");
     const editCommentMessageId = formData.get("editCommentMessageId");
     const deleteCommentMessageId = formData.get("deleteCommentMessageId");
 
-    // Editing a comment message
-    if (editCommentMessageId && typeof editCommentMessageId === 'string') {
-        if (!content || typeof content !== 'string') {
-            return { error: "Comment content is required" };
-        }
-        try {
-            // Get current user
-            const session = await auth.api.getSession({ headers: request.headers });
-            if (!session) {
-                return { error: "Authentication required" };
-            }
-            // Find the comment message
-            const [message] = await db
-                .select()
-                .from(commentMessages)
-                .where(eq(commentMessages.id, editCommentMessageId));
-            if (!message) {
-                return { error: "Comment message not found" };
-            }
-            if (message.userId !== session.user.id) {
-                return { error: "You can only edit your own comments." };
-            }
-
-            // Extract mentions from new content
-            let newMentions, previousMentions;
-            let newUserMentions: string[] = [], previousUserMentions: string[] = [];
-
-            try {
-                newMentions = extractMentions(content);
-                previousMentions = extractMentions(message.content);
-                newUserMentions = newMentions.user_id || [];
-                previousUserMentions = previousMentions.user_id || [];
-            } catch (error) {
-                return { error: `Invalid mention format: ${(error as Error).message}` };
-            }
-
-            // Store previous content in edit history
-            await db.insert(commentMessageEdits).values({
-                commentMessageId: editCommentMessageId,
-                previousContent: message.content,
+    try {
+        // Creating a new comment
+        if (content && activityId && !editCommentMessageId && !deleteCommentMessageId) {
+            const response = await apiFetch('/api/comments', {
+                method: 'POST',
+                body: {
+                    content: content as string,
+                    activityId: activityId as string,
+                }
             });
 
-            // Update the comment message
-            await db.update(commentMessages)
-                .set({ content, updatedAt: new Date() })
-                .where(eq(commentMessages.id, editCommentMessageId));
-
-            // Handle mentions for edits
-            if (newUserMentions.length > 0 || previousUserMentions.length > 0) {
-                // Get existing mentions for this message
-                const existingMentions = await db
-                    .select()
-                    .from(commentMentions)
-                    .where(eq(commentMentions.commentMessageId, editCommentMessageId));
-
-                const existingMentionedUserIds = existingMentions.map(m => m.mentionedUserId);
-
-                // Find mentions to keep (existed before and still exist)
-                const mentionsToKeep = newUserMentions.filter(mention =>
-                    previousUserMentions.includes(mention) && existingMentionedUserIds.includes(mention)
-                );
-
-                // Find new mentions to add
-                const newMentionsToAdd = newUserMentions.filter(mention =>
-                    !existingMentionedUserIds.includes(mention)
-                );
-
-                // Find mentions to remove (existed before but not in new content)
-                const mentionsToRemove = existingMentionedUserIds.filter(mention =>
-                    !newUserMentions.includes(mention)
-                );
-
-                // Remove mentions that are no longer present
-                if (mentionsToRemove.length > 0) {
-                    await db.delete(commentMentions)
-                        .where(and(
-                            eq(commentMentions.commentMessageId, editCommentMessageId),
-                            inArray(commentMentions.mentionedUserId, mentionsToRemove)
-                        ));
-                }
-
-                // Add new mentions
-                if (newMentionsToAdd.length > 0) {
-                    await db.insert(commentMentions).values(
-                        newMentionsToAdd.map(mentionedUserId => ({
-                            commentMessageId: editCommentMessageId,
-                            mentionedUserId,
-                        }))
-                    );
-                }
+            if (!response.ok) {
+                return { ok: false, error: response.error };
             }
 
-            return { status: 'success', data: null };
-        } catch (error) {
-            console.error('Error editing comment:', error);
-            return { error: "Failed to edit comment" };
-        }
-    }
-
-    // Deleting a comment message
-    if (deleteCommentMessageId && typeof deleteCommentMessageId === 'string') {
-        try {
-            // Get current user
-            const session = await auth.api.getSession({ headers: request.headers });
-            if (!session) {
-                return { error: "Authentication required" };
-            }
-
-            // Find the comment message
-            const [message] = await db
-                .select()
-                .from(commentMessages)
-                .where(eq(commentMessages.id, deleteCommentMessageId));
-
-            if (!message) {
-                return { error: "Comment message not found" };
-            }
-
-            // Check if user can delete this comment (own comment or admin)
-            if (message.userId !== session.user.id) {
-                return { error: "You can only delete your own comments." };
-            }
-
-            // Soft delete the comment
-            await db.update(commentMessages)
-                .set({ 
-                    deletedAt: new Date(),
-                    deletedBy: session.user.id
-                })
-                .where(eq(commentMessages.id, deleteCommentMessageId));
-
-            return { status: 'success', data: null };
-        } catch (error) {
-            console.error('Error deleting comment:', error);
-            return { error: "Failed to delete comment" };
-        }
-    }
-
-    if (!content || typeof content !== 'string') {
-        return { error: "Comment content is required" };
-    }
-
-    if (!activityId || typeof activityId !== 'string') {
-        return { error: "Activity ID is required" };
-    }
-
-    try {
-        // Get current user
-        const session = await auth.api.getSession({ headers: request.headers });
-        if (!session) {
-            return { error: "Authentication required" };
+            return { ok: true, data: response.data };
         }
 
-        // Check if comment thread exists for this activity
-        let commentThread = await db.query.commentThreads.findFirst({
-            where: eq(commentThreads.activityId, activityId),
-            with: {
-                commentMessages: {
-                    where: isNull(commentMessages.deletedAt), // Only include non-deleted comments
-                    orderBy: (commentMessages, { asc }) => [asc(commentMessages.createdAt)]
+        // Editing a comment
+        if (content && editCommentMessageId && !deleteCommentMessageId) {
+            const response = await apiFetch(`/api/comments/${editCommentMessageId}`, {
+                method: 'PUT',
+                body: {
+                    content: content as string,
                 }
-            }
-        });
+            });
 
-        const newMessage = await db.transaction(async (tx) => {
-
-            // If no comment thread exists, create one
-            if (!commentThread) {
-                const [newThread] = await tx.insert(commentThreads).values({
-                    activityId: activityId,
-                }).returning();
-
-                commentThread = {
-                    ...newThread,
-                    commentMessages: []
-                };
+            if (!response.ok) {
+                return { ok: false, error: response.error };
             }
 
-            // Create the comment message
-            const [newMessage] = await tx.insert(commentMessages).values({
-                commentThreadId: commentThread!.id,
-                userId: session.user.id,
-                content: content,
-            }).returning();
+            return { ok: true, data: response.data };
+        }
 
-            // Handle mentions for new comments
-            let mentions;
-            let userMentions: string[] = [];
+        // Deleting a comment
+        if (deleteCommentMessageId && !editCommentMessageId) {
+            const response = await apiFetch(`/api/comments/${deleteCommentMessageId}`, {
+                method: 'DELETE',
+            });
 
-            try {
-                mentions = extractMentions(content);
-                userMentions = mentions.user_id || [];
-            } catch (error) {
-                throw new Error(`Invalid mention format: ${(error as Error).message}`);
+            if (!response.ok) {
+                return { ok: false, error: response.error };
             }
 
-            if (userMentions.length > 0) {
-                await tx.insert(commentMentions).values(
-                    userMentions.map(mentionedUserId => ({
-                        commentMessageId: newMessage.id,
-                        mentionedUserId,
-                    }))
-                );
-            }
+            return { ok: true, data: response.data };
+        }
 
-            return newMessage;
-        })
-
-        // Return success
-        return { status: 'success', data: { message: newMessage } };
+        return { ok: false, error: { message: "Invalid request parameters" } };
 
     } catch (error) {
-        console.error('Error creating comment:', error);
-        return { error: "Failed to create comment: " + error.message };
+        console.error('Error handling comment:', error);
+        return { ok: false, error: { message: "Failed to handle comment" } };
     }
 }

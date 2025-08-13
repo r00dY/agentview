@@ -3,7 +3,7 @@
 import type { Route } from "./+types/threadsIndex";
 // import { getThreadTypes } from "~/lib/utils";
 
-export async function loader({request}: Route.LoaderArgs) {
+export async function clientLoader({request}: Route.ClientLoaderArgs) {
   // const type =  getThreadTypes(request);
 
   // const threadRows = await db.query.thread.findMany({

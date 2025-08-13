@@ -5,82 +5,55 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Alert, AlertDescription } from "~/components/ui/alert";
-import { auth } from "~/.server/auth";
-import { db } from "~/lib/db.server";
-import { client } from "~/.server/db/schema";
+import { authClient } from "~/lib/auth-client";
+import { apiFetch } from "~/lib/apiFetch";
 import { getThreadsList } from "~/lib/utils";
+import { type ActionResponse } from "~/lib/errors";
 
-export async function action({ request, params }: Route.ActionArgs) {
-  const list =  getThreadsList(request);
-    const formData = await request.formData();
-    const product_id = formData.get("product_id");
+export async function clientAction({ request, params }: Route.ClientActionArgs): Promise<ActionResponse> {
+  const list = getThreadsList(request);
+  const formData = await request.formData();
+  const product_id = formData.get("product_id");
 
-    if (!product_id || typeof product_id !== 'string') {
-        return { error: "Product ID is required" };
+  if (!product_id || typeof product_id !== 'string') {
+    return { ok: false, error: { message: "Product ID is required" } };
+  }
+
+  // Create a client first
+  const clientResponse = await apiFetch('/api/clients', {
+    method: 'POST',
+    body: {}
+  });
+
+  if (!clientResponse.ok) {
+    return { ok: false, error: clientResponse.error };
+  }
+
+  const client_id = clientResponse.data.id;
+
+  // Then create the thread with the new client_id
+  const threadResponse = await apiFetch('/api/threads', {
+    method: 'POST',
+    body: {
+      type: "pdp_chat",
+      client_id: client_id,
+      metadata: {
+        product_id: product_id
+      }
     }
+  });
 
-    try {
-        const session = await auth.api.getSession({
-            headers: request.headers,
-          });
+  if (!threadResponse.ok) {
+    return { ok: false, error: threadResponse.error };
+  }
 
-        const userId = session!.user.id;
+  // Redirect to the new thread
+  return { ok: true, data: redirect(`/threads/${threadResponse.data.id}?list=${list}`) };
 
-        const [newClient] = await db.insert(client).values({
-          simulated_by: userId,
-        }).returning();
-
-        // // First, create a client
-        // const clientResponse = await fetch(`http://localhost:2138/clients`, {
-        //     method: 'POST',
-        //     headers: {
-        //         'Content-Type': 'application/json',
-        //     },
-        //     body: JSON.stringify({}),
-        // });
-
-        // const clientData = await clientResponse.json();
-
-        // if (!clientResponse.ok) {
-        //     return { error: clientData };
-        // }
-
-        // const client_id = clientData.id;
-
-        const client_id = newClient.id;
-
-        // Then create the thread with the new client_id
-        const threadResponse = await fetch(`http://localhost:2138/threads`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                type: "pdp_chat",
-                client_id: client_id,
-                metadata: {
-                    product_id: product_id
-                }
-            }),
-        });
-
-        const threadData = await threadResponse.json();
-
-        if (!threadResponse.ok) {
-            return { error: threadData || "Failed to create thread" };
-        }
-
-        // Redirect to the new thread
-        return redirect(`/threads/${threadData.id}?list=${list}`);
-
-    } catch (error) {
-        console.error(error);
-        return { error: "Failed to create thread" };
-    }
 }
 
 export default function ThreadNew() {
-  const actionData = useActionData<typeof action>();
+  const actionData = useActionData<typeof clientAction>();
     
   return <>
     <Header>
@@ -91,9 +64,9 @@ export default function ThreadNew() {
       <div className="p-6 max-w-4xl space-y-6">
 
           <Form method="post" className="space-y-4">
-            {actionData?.error && (
+            {actionData && !actionData.ok && (
               <Alert variant="destructive">
-                <AlertDescription>{actionData.error}</AlertDescription>
+                <AlertDescription>{actionData.error.message}</AlertDescription>
               </Alert>
             )}
             

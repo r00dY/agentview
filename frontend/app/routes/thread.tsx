@@ -6,49 +6,43 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Textarea } from "~/components/ui/textarea";
 import { useEffect, useState } from "react";
 import { parseSSE } from "~/lib/parseSSE";
-import { db } from "~/lib/db.server";
-import { auth } from "~/.server/auth";
+import { authClient } from "~/lib/auth-client";
+import { apiFetch } from "~/lib/apiFetch";
 import { ItemsWithCommentsLayout } from "~/components/ItemsWithCommentsLayout";
 import { CommentThread } from "~/components/comments";
 
 
-export async function loader({ request, params }: Route.LoaderArgs) {
-    const response = await fetch(`http://localhost:2138/threads/${params.id}`, {
-        headers: {
-            'Content-Type': 'application/json',
-        }
-    });
-
-    const threadData = await response.json()
+export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
+    const response = await apiFetch(`/api/threads/${params.id}`);
 
     if (!response.ok) {
-        throw data(threadData, { status: 400 })
+        throw data(response.error, { status: response.status })
     }
 
     // Get current user
+    const session = await authClient.getSession();
+    const userId = session.data!.user!.id;
 
-    const session = await auth.api.getSession({ headers: request.headers });
-    const userId = session?.user?.id || null;
+    // Get users for comments
+    const usersResponse = await apiFetch('/api/members');
 
-    const users = await db.query.users.findMany({
-        columns: {
-            id: true,
-            email: true,
-            name: true,
-        }
-    })
+    if (!usersResponse.ok) {
+        throw data(usersResponse.error, {
+            status: usersResponse.status,
+        });
+    }
 
-    return data({
-        thread: threadData,
+    return {
+        thread: response.data,
         userId,
-        users
-    });
+        users: usersResponse.data
+    };
 }
 
 
 
 export default function ThreadPageWrapper() {
-    const loaderData = useLoaderData<typeof loader>();
+    const loaderData = useLoaderData<typeof clientLoader>();
     return <ThreadPage key={loaderData.thread.id} />
 }
 
@@ -131,7 +125,7 @@ function ThreadDetails({ thread }: { thread: any }) {
 }
 
 function ThreadPage() {
-    const loaderData = useLoaderData<typeof loader>();
+    const loaderData = useLoaderData<typeof clientLoader>();
 
     const [thread, setThread] = useState(loaderData.thread)
     const [formError, setFormError] = useState<string | null>(null)
@@ -176,8 +170,8 @@ function ThreadPage() {
 
                     for await (const event of parseSSE(response)) {
                         if (event.event === 'activity') {
-                            setThread(prevThread => {
-                                const existingIdx = prevThread.activities.findIndex(a => a.id === event.data.id);
+                            setThread((prevThread: any) => {
+                                const existingIdx = prevThread.activities.findIndex((a: any) => a.id === event.data.id);
                                 if (existingIdx === -1) {
                                     // New activity, append
                                     return { ...prevThread, activities: [...prevThread.activities, event.data] };
@@ -194,7 +188,7 @@ function ThreadPage() {
                             });
                         }
                         else if (event.event === 'thread.state') {
-                            setThread(thread => ({ ...thread, state: event.data.state }))
+                            setThread((thread: any) => ({ ...thread, state: event.data.state }))
                         }
                     }
 
@@ -219,29 +213,24 @@ function ThreadPage() {
 
         if (message) {
             try {
-                const response = await fetch(`http://localhost:2138/threads/${thread.id}/activities`, {
+                const response = await apiFetch(`/threads/${thread.id}/activities`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
+                    body: {
                         input: {
                             type: "message",
                             role: "user",
                             content: message
                         }
-                    })
+                    }
                 });
 
-                const payload = await response.json()
-
                 if (!response.ok) {
-                    console.error(payload)
+                    console.error(response.error)
                     setFormError('response not ok') // FIXME: error format fucked up (Zod)
                 }
                 else {
                     console.log('activity pushed successfully')
-                    setThread(payload)
+                    setThread(response.data)
                 }
             } catch (error) {
                 console.error(error)
@@ -251,7 +240,7 @@ function ThreadPage() {
     }
 
     const handleCancel = async () => {
-        await fetch(`http://localhost:2138/threads/${thread.id}/cancel`, {
+        await apiFetch(`/threads/${thread.id}/cancel`, {
             method: 'POST',
         })
     }
@@ -267,7 +256,7 @@ function ThreadPage() {
             <div className=" p-6 max-w-4xl space-y-6">
                 <ThreadDetails thread={thread} />
 
-                <ItemsWithCommentsLayout items={thread.activities.map((activity) => {
+                <ItemsWithCommentsLayout items={thread.activities.map((activity: any) => {
 
                     const hasComments = activity.commentThread && activity.commentThread.commentMessages.filter((m: any) => !m.deletedAt).length > 0
 
