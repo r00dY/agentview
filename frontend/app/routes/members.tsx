@@ -40,9 +40,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     });
   }
 
-  const invitations: any[] = invitationsResponse.data; // TODO: types
-
-  return { users: usersResponse.data.users, invitations: invitationsResponse.data };
+  return { users: usersResponse.data.users, invitations: invitationsResponse.data as any[] };
 }
 
 
