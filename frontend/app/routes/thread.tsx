@@ -10,6 +10,7 @@ import { authClient } from "~/lib/auth-client";
 import { apiFetch } from "~/lib/apiFetch";
 import { ItemsWithCommentsLayout } from "~/components/ItemsWithCommentsLayout";
 import { CommentThread } from "~/components/comments";
+import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
 
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
@@ -170,7 +171,7 @@ function ThreadPage() {
                 try {
                     const query = thread.activities.length > 0 ? `?last_activity_id=${thread.activities[thread.activities.length - 1].id}` : ''
 
-                    const response = await fetch(`http://localhost:2138/threads/${thread.id}/watch${query}`, {
+                    const response = await fetch(`${getAPIBaseUrl()}/api/threads/${thread.id}/watch${query}`, {
                         headers: {
                             'Content-Type': 'application/json',
                         }
