@@ -3,38 +3,26 @@ import type { Route } from "./+types/emailDetail";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Header, HeaderTitle } from "~/components/header";
 import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
+import { apiFetch } from "~/lib/apiFetch";
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
-
-  const response = await fetch(`${getAPIBaseUrl()}/api/dev/emails/${params.id}`, {
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
-
-  // Get the specific email
-  const emailData = await response.json();
-
-  console.log(emailData)
+  const response = await apiFetch(`/api/dev/emails/${params.id}`);
 
   if (!response.ok) {
     throw data(null, { status: 404 });
   }
 
-  return { email: emailData };
+  return { email: response.data };
 }
 
 export default function EmailDetail() {
-  const { email: emailData } = useLoaderData<typeof clientLoader>();
-
-  console.log(emailData)
+  const { email } = useLoaderData<typeof clientLoader>();
 
   return <div>
 
-<Header>
-            <HeaderTitle title="Email" />
-        </Header>
+    <Header>
+      <HeaderTitle title="Email" />
+    </Header>
     <div className="p-6 max-w-6xl">
 
 
@@ -44,20 +32,20 @@ export default function EmailDetail() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium text-muted-foreground">To</label>
-              <p className="text-sm font-medium">{emailData.to}</p>
+              <p className="text-sm font-medium">{email.to}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">From</label>
-              <p className="text-sm">{emailData.from}</p>
+              <p className="text-sm">{email.from}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Subject</label>
-              <p className="text-sm">{emailData.subject || '(No subject)'}</p>
+              <p className="text-sm">{email.subject || '(No subject)'}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Date</label>
               <p className="text-sm">
-                {new Date(emailData.created_at).toLocaleDateString('en-US', {
+                {new Date(email.created_at).toLocaleDateString('en-US', {
                   year: 'numeric',
                   month: 'long',
                   day: 'numeric',
@@ -66,22 +54,22 @@ export default function EmailDetail() {
                 })}
               </p>
             </div>
-            {emailData.cc && (
+            {email.cc && (
               <div>
                 <label className="text-sm font-medium text-muted-foreground">CC</label>
-                <p>{emailData.cc}</p>
+                <p>{email.cc}</p>
               </div>
             )}
-            {emailData.bcc && (
+            {email.bcc && (
               <div>
                 <label className="text-sm font-medium text-muted-foreground">BCC</label>
-                <p>{emailData.bcc}</p>
+                <p>{email.bcc}</p>
               </div>
             )}
-            {emailData.reply_to && (
+            {email.reply_to && (
               <div>
                 <label className="text-sm font-medium text-muted-foreground">Reply To</label>
-                <p>{emailData.reply_to}</p>
+                <p>{email.reply_to}</p>
               </div>
             )}
           </div>
@@ -89,14 +77,14 @@ export default function EmailDetail() {
           <div className="mt-6">
             <label className="text-sm font-medium text-muted-foreground">Content</label>
             <div className="mt-2 border rounded-md p-4 bg-white">
-              {emailData.body ? (
-                <div 
-                  dangerouslySetInnerHTML={{ __html: emailData.body }}
+              {email.body ? (
+                <div
+                  dangerouslySetInnerHTML={{ __html: email.body }}
                   className="prose prose-sm max-w-none"
                 />
-              ) : emailData.text ? (
+              ) : email.text ? (
                 <div className="whitespace-pre-wrap text-sm">
-                  {emailData.text}
+                  {email.text}
                 </div>
               ) : (
                 <div className="text-muted-foreground italic">
@@ -108,5 +96,5 @@ export default function EmailDetail() {
         </CardContent>
       </Card>
     </div>
-    </div>
+  </div>
 } 

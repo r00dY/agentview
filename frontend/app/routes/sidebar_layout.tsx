@@ -29,12 +29,7 @@ import { ChangePasswordDialog } from "~/components/ChangePasswordDialog";
 import { authClient } from "~/lib/auth-client";
 
 
-
-
-
 export async function clientLoader({request}: Route.ClientLoaderArgs) {
-  console.log(import.meta.env)
-
   const session = await authClient.getSession()
 
   const url = new URL(request.url);

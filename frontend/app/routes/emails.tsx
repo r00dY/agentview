@@ -9,22 +9,17 @@ import {
   TableCell,
 } from "~/components/ui/table";
 import { Header, HeaderTitle } from "~/components/header";
-import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
+import { apiFetch } from "~/lib/apiFetch";
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
-  const response = await fetch(`${getAPIBaseUrl()}/api/dev/emails`, {
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
+  const response = await apiFetch(`/api/dev/emails`);
   
   if (!response.ok) {
     throw data('Failed to fetch emails', {
       status: response.status, // TODO: standardised error handling from clientLoaders!!! 
     });
   }
-  return { emails: await response.json() };
+  return { emails: response.data };
 }
 
 export default function Emails() {

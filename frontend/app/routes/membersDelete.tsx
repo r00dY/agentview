@@ -1,62 +1,46 @@
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import type { Route } from "./+types/membersDelete";
-import { redirect, useFetcher, useLoaderData, useNavigate } from "react-router";
+import { data, redirect, useFetcher, useLoaderData, useNavigate } from "react-router";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { AlertCircleIcon } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
+import { apiFetch } from "~/lib/apiFetch";
+import type { ActionResponse } from "~/lib/errors";
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
-  const response = await fetch(`${getAPIBaseUrl()}/api/members`, {
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+  const response = await apiFetch(`/api/members`, {
   });
 
   if (!response.ok) {
     throw new Error('Failed to fetch members');
   }
 
-  const users = await response.json();
-  const user = users.find((user: any) => user.id === params.userId);
+  const user = response.data.find((user: any) => user.id === params.userId);
 
   if (!user) {
-    throw new Error("User not found");
+    throw data({ message: "User not found" }, { status: 404 });
   }
 
   return { user }
 }
 
-export async function clientAction({ request }: Route.ClientActionArgs) {
+export async function clientAction({ request }: Route.ClientActionArgs): Promise<Response | ActionResponse> {
   const formData = await request.formData();
   const userId = formData.get("userId") as string;
 
-  try {
-    const response = await fetch(`${getAPIBaseUrl()}/api/members/${userId}`, {
-      method: 'DELETE',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+  const response = await apiFetch(`/api/members/${userId}`, {
+    method: 'DELETE',
+  });
 
-    if (!response.ok) {
-      const error = await response.json();
-      return {
-        status: "error",
-        error
-      }
-    }
-
-    return redirect("/members");
-    
-  } catch (error: any) {
+  if (!response.ok) {
     return {
-      status: "error",
-      error: error.message || "Unexpected error",
+      ok: false,
+      error: response.error,
     }
   }
+
+  return redirect("/members");
 }
 
 export default function MembersDelete() {
@@ -68,6 +52,7 @@ export default function MembersDelete() {
     <div>
       <Dialog open={true} onOpenChange={() => { navigate(-1) }}>
         <DialogContent>
+          
         <fetcher.Form method="post">
 
           <DialogHeader>

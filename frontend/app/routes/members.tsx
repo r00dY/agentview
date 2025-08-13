@@ -14,38 +14,35 @@ import { Badge } from "~/components/ui/badge";
 import { Header, HeaderTitle } from "~/components/header";
 import { authClient } from "~/lib/auth-client";
 import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
+import { apiFetch } from "~/lib/apiFetch";
 
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
-  const response = await authClient.admin.listUsers({
+  const usersResponse = await authClient.admin.listUsers({
     query: {
       limit: 100,
     },
   });
 
-  if (response.error) {
-    throw data(response.error.message, {
+  if (usersResponse.error) {
+    throw data(usersResponse.error.message, {
       status: 400,
     });
   }
   
-  // Fetch invitations via API
-  const invitationsResponse = await fetch(`${getAPIBaseUrl()}/api/invitations`, {
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
+  const invitationsResponse = await apiFetch(`/api/invitations`);
 
   if (!invitationsResponse.ok) {
-    throw data('Failed to fetch invitations', {
-      status: invitationsResponse.status, // TODO: standardised error handling from clientLoaders!!! 
+    throw data({
+      message: 'Failed to fetch invitations',
+    }, {
+      status: invitationsResponse.status,
     });
   }
 
-  const invitations: any[] = await invitationsResponse.json(); // TODO: types
+  const invitations: any[] = invitationsResponse.data; // TODO: types
 
-  return { users: response.data.users, invitations };
+  return { users: usersResponse.data.users, invitations: invitationsResponse.data };
 }
 
 

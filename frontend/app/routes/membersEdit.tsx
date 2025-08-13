@@ -7,22 +7,18 @@ import { Label } from "~/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { Button } from "~/components/ui/button";
 import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
+import { apiFetch } from "~/lib/apiFetch";
+import type { ActionResponse } from "~/lib/errors";
 
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
-  const response = await fetch(`${getAPIBaseUrl()}/api/members`, {
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
+  const response = await apiFetch(`/api/members`);
 
   if (!response.ok) {
     throw new Error('Failed to fetch members');
   }
 
-  const users = await response.json();
-  const user = users.find((user: any) => user.id === params.userId);
+  const user = response.data.find((user: any) => user.id === params.userId);
 
   if (!user) {
     throw new Error("User not found");
@@ -31,41 +27,28 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   return { user }
 }
 
-export async function clientAction({ request }: Route.ClientActionArgs) {
+export async function clientAction({ request }: Route.ClientActionArgs): Promise<ActionResponse | Response> {
   const formData = await request.formData();
   const userId = formData.get("userId") as string;
   const role = formData.get("role") as "admin" | "user";
 
-  try {
-    const response = await fetch(`${getAPIBaseUrl()}/api/members/${userId}`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ role }),
-    });
+  const response = await apiFetch(`/api/members/${userId}`, {
+    method: 'POST',
+    body: { role },
+  });
 
-    if (!response.ok) {
-      const error = await response.json();
-      return {
-        status: "error",
-        error
-      }
-    }
-
-    return redirect("/members");
-    
-  } catch (error: any) {
+  if (!response.ok) {
     return {
-      status: "error",
-      error: { message: error.message || "Unexpected error" },
+      ok: false,
+      error: response.error,
     }
   }
+
+  return redirect("/members");
 }
 
 export default function MembersEdit() {
-  const fetcher = useFetcher();
+  const fetcher = useFetcher<ActionResponse>();
   const navigate = useNavigate();
   const { user } = useLoaderData<typeof clientLoader>();
   
@@ -85,11 +68,11 @@ export default function MembersEdit() {
             <input type="hidden" name="userId" value={user.id} />
             
             {/* General error alert */}
-            {fetcher.data?.status === "error" && fetcher.data.error && fetcher.state === 'idle' && (
+            {fetcher.data?.ok === false && fetcher.data.error && fetcher.state === 'idle' && (
               <Alert variant="destructive">
                 <AlertCircleIcon />
                 <AlertTitle>Role update failed.</AlertTitle>
-                <AlertDescription>{fetcher.data.error}</AlertDescription>
+                <AlertDescription>{fetcher.data.error.message}</AlertDescription>
               </Alert>
             )}
             
