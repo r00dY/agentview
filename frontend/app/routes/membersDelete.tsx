@@ -9,8 +9,7 @@ import { apiFetch } from "~/lib/apiFetch";
 import type { ActionResponse } from "~/lib/errors";
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
-  const response = await apiFetch(`/api/members`, {
-  });
+  const response = await apiFetch(`/api/members`);
 
   if (!response.ok) {
     throw new Error('Failed to fetch members');

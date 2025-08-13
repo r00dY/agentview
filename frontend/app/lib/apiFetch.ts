@@ -14,8 +14,8 @@ type APIErrorResponse = Response & {
 type APIResponse<T> = APISuccessResponse<T> | APIErrorResponse;
 
 type APIOptions = {
-    method: RequestInit['method'];
-    body: any
+    method?: RequestInit['method'];
+    body?: any
 }
 
 export async function apiFetch<T = any>(url: string, options: APIOptions = { method: 'GET', body: undefined }): Promise<APIResponse<T>> {

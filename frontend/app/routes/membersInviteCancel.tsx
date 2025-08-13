@@ -1,25 +1,23 @@
 import { data } from "react-router";
 import type { Route } from "./+types/membersInviteCancel";
 import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
+import { apiFetch } from "~/lib/apiFetch";
 
 
 export async function clientAction({ params }: Route.ClientActionArgs) {
-  const response = await fetch(`${getAPIBaseUrl()}/api/invitations/${params.invitationId}`, {
+  const response = await apiFetch(`/api/invitations/${params.invitationId}`, {
     method: "DELETE",
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-    },
   });
 
   if (!response.ok) {
-    throw data('Failed to fetch invitations', {
-      status: response.status, // TODO: standardised error handling from clientLoaders!!! 
-    });
+    return {
+      ok: false,
+      error: response.error,
+    }
   }
 
   return {
-    status: "success",
+    ok: true,
     data: null
   }
 }

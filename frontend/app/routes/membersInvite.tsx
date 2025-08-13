@@ -7,29 +7,23 @@ import { Label } from "~/components/ui/label";
 import { Input } from "~/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { Button } from "~/components/ui/button";
-import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
-import { data } from "react-router";
+import { apiFetch } from "~/lib/apiFetch";
+import type { ActionResponse } from "~/lib/errors";
 
 export async function clientAction({ request }: Route.ClientActionArgs) {
   const formData = await request.formData();
   const email = formData.get("email") as string;
   const role = formData.get("role") as string;
 
-  const response = await fetch(`${getAPIBaseUrl()}/api/invitations`, {
+  const response = await apiFetch(`/api/invitations`, {
     method: "POST",
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ email, role }),
+    body: { email, role },
   });
-
-  const data = await response.json();
 
   if (!response.ok) {
     return {
-      status: "error",
-      error: data
+      ok: false,
+      error: response.error,
     }
   }
 
@@ -38,7 +32,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
 
 
 export default function InvitationNew() {
-  const fetcher = useFetcher();
+  const fetcher = useFetcher<ActionResponse>();
   const navigate = useNavigate();
 
   return <div className="bg-red-500">
@@ -54,7 +48,7 @@ export default function InvitationNew() {
           <input type="hidden" name="_action" value="inviteMember" />
           
           {/* General error alert */}
-          {fetcher.data?.status === "error" && (
+          {fetcher.data?.ok === false && (
             <Alert variant="destructive">
               <AlertCircleIcon />
               <AlertTitle>Invitation failed.</AlertTitle>

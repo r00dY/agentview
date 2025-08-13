@@ -9,9 +9,10 @@ import { AlertCircleIcon } from "lucide-react";
 import { betterAuthErrorToBaseError, type ActionResponse } from "~/lib/errors";
 import { authClient } from "~/lib/auth-client";
 import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
+import { apiFetch } from "~/lib/apiFetch";
 
 
-export async function clientLoader({ request }: Route.ClientLoaderArgs) {
+export async function clientLoader({ request }: Route.ClientLoaderArgs): Promise<ActionResponse | Response> {
   const session = await authClient.getSession();
   
   if (session.data) {
@@ -23,30 +24,25 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     
   if (!invitationId) {
     return {
-      invitationId: null,
+      ok: false,
       error: {
         message: "You must have an invitation to sign up."
       }
     }
   }
 
-  const response = await fetch(`${getAPIBaseUrl()}/api/invitations/${invitationId}`, {
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
-
-  const responseBody = await response.json();
+  const response = await apiFetch(`/api/invitations/${invitationId}`);
 
   if (!response.ok) {
     return {
-      error: responseBody
+      ok: false,
+      error: response.error,
     }
   }
 
   return {
-    invitation: responseBody
+    ok: true,
+    data: response.data,
   }
 }
 
@@ -95,7 +91,7 @@ export async function clientAction({
 
 export default function SignupPage() {
   const actionData = useActionData<typeof clientAction>();
-  const { invitation, error } = useLoaderData<typeof clientLoader>();
+  const loaderData = useLoaderData<typeof clientLoader>();
 
   return (
     <div className="container mx-auto p-4 max-w-md mt-16">
@@ -104,19 +100,18 @@ export default function SignupPage() {
           <CardTitle className="text-center">Sign Up</CardTitle>
         </CardHeader>
 
-        { error && <CardContent>
+        { !loaderData.ok && <CardContent>
           <Alert variant="destructive">
             <AlertCircleIcon />
-            {/* <AlertTitle>Invitation not found</AlertTitle> */}
-            <AlertDescription>{ error.message }</AlertDescription>
+            <AlertDescription>{ loaderData.error.message }</AlertDescription>
           </Alert>
         </CardContent> }
         
-        { invitation && !error && <CardContent>
+        { loaderData.ok && <CardContent>
           <Form className="flex flex-col gap-4" method="post">
 
-            <input type="hidden" name="invitationId" value={invitation.id} />
-            <input type="hidden" name="email" value={invitation.email} />
+            <input type="hidden" name="invitationId" value={loaderData.data.id} />
+            <input type="hidden" name="email" value={loaderData.data.email} />
 
             {actionData?.ok === false && (
               <Alert variant="destructive">
