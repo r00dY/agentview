@@ -53,7 +53,6 @@ export default function MembersDelete() {
         <DialogContent>
           
         <fetcher.Form method="post">
-
           <DialogHeader>
             <DialogTitle>Delete User</DialogTitle>
           </DialogHeader>
@@ -62,8 +61,8 @@ export default function MembersDelete() {
             <input type="hidden" name="userId" value={user.id} />
             
             {/* General error alert */}
-            {fetcher.data?.status === "error" && fetcher.data.error && fetcher.state === 'idle' && (
-              <Alert variant="destructive">
+            {fetcher.data?.ok === false && fetcher.data.error && fetcher.state === 'idle' && (
+              <Alert variant="destructive" className="mb-4">
                 <AlertCircleIcon />
                 <AlertTitle>User deletion failed.</AlertTitle>
                 <AlertDescription>{fetcher.data.error.message}</AlertDescription>
