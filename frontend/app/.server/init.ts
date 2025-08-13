@@ -1,5 +1,14 @@
 import "dotenv/config";
 import { auth } from "./auth";
+import { db } from "./db";
+import { users } from "./db/auth-schema";
+import { eq } from "drizzle-orm";
+
+const user = await db.query.users.findFirst({
+  where: eq(users.email, 'admin@example.com'),
+})
+
+console.log('user', user)
 
 // Get CLI arguments
 const args = process.argv.slice(2);

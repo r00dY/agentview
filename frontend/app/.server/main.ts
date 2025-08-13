@@ -126,7 +126,7 @@ app.openapi(usersGETRoute, async (c) => {
   return c.json(userRows, 200);
 })
 
-/* --------- INVITATIONS --------- */
+/* --------- MEMBERS --------- */
 
 async function getSessionAndValidateAdmin(c: any) {
   const session = await auth.api.getSession({ headers: c.req.raw.headers })
@@ -141,6 +141,117 @@ async function getSessionAndValidateAdmin(c: any) {
 
   return session;
 }
+
+const MemberSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  name: z.string().nullable(),
+  role: z.string(),
+  created_at: z.date(),
+})
+
+const MemberUpdateSchema = z.object({
+  role: z.enum(['admin', 'user']),
+})
+
+// Members GET (list all users)
+const membersGETRoute = createRoute({
+  method: 'get',
+  path: '/api/members',
+  responses: {
+    200: response_data(z.array(MemberSchema)),
+    401: response_error(),
+  },
+})
+
+app.openapi(membersGETRoute, async (c) => {
+  try {
+    await getSessionAndValidateAdmin(c);
+    
+    const users = await auth.api.listUsers({
+      headers: c.req.raw.headers,
+      query: {
+        limit: 100,
+      },
+    });
+
+    return c.json(users.users, 200);
+  } catch (error: any) {
+    return errorToResponse(c, error);
+  }
+})
+
+// Member POST (update role)
+const memberPOSTRoute = createRoute({
+  method: 'post',
+  path: '/api/members/{memberId}',
+  request: {
+    params: z.object({
+      memberId: z.string(),
+    }),
+    body: body(MemberUpdateSchema)
+  },
+  responses: {
+    200: response_data(z.object({})),
+    400: response_error(),
+    401: response_error(),
+    404: response_error(),
+  },
+})
+
+app.openapi(memberPOSTRoute, async (c) => {
+  const { memberId } = c.req.param()
+  const body = await c.req.json()
+  
+  try {
+    await getSessionAndValidateAdmin(c);
+
+    await auth.api.setRole({
+      headers: c.req.raw.headers,
+      body: { userId: memberId, role: body.role },
+    });
+
+    return c.json({}, 200);
+  } catch (error: any) {
+    return errorToResponse(c, error);
+  }
+})
+
+// Member DELETE (delete user)
+const memberDELETERoute = createRoute({
+  method: 'delete',
+  path: '/api/members/{memberId}',
+  request: {
+    params: z.object({
+      memberId: z.string(),
+    }),
+  },
+  responses: {
+    200: response_data(z.object({})),
+    400: response_error(),
+    401: response_error(),
+    404: response_error(),
+  },
+})
+
+app.openapi(memberDELETERoute, async (c) => {
+  const { memberId } = c.req.param()
+  
+  try {
+    await getSessionAndValidateAdmin(c);
+
+    await auth.api.removeUser({
+      headers: c.req.raw.headers,
+      body: { userId: memberId },
+    });
+
+    return c.json({}, 200);
+  } catch (error: any) {
+    return errorToResponse(c, error);
+  }
+})
+
+/* --------- INVITATIONS --------- */
 
 function errorToResponse(c: any, error: any) {
   if (error instanceof APIError) {

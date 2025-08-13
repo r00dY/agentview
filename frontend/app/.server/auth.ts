@@ -54,6 +54,8 @@ export const auth = betterAuth({
                     return;
                 }
 
+                console.log('ctx.body', ctx.body)
+
                 try {
                     const invitation = await getValidInvitation(ctx.body?.invitationId)
     
