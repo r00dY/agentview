@@ -6,8 +6,8 @@ import { Input } from "~/components/ui/input";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { AlertCircleIcon } from "lucide-react";
 import { useFetcher } from "react-router";
-import type { FormActionData } from "~/lib/FormActionData";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
+import type { ActionResponse } from "~/lib/errors";
 
 interface ChangePasswordDialogProps {
   open: boolean;
@@ -18,8 +18,8 @@ export function ChangePasswordDialog({
   open,
   onOpenChange,
 }: ChangePasswordDialogProps) {
-  const changePasswordFetcher = useFetcher<FormActionData>();
-  const actionData = changePasswordFetcher.data as FormActionData | undefined;
+  const changePasswordFetcher = useFetcher<ActionResponse>();
+  const actionData = changePasswordFetcher.data;
 
   useFetcherSuccess(changePasswordFetcher, () => {
     onOpenChange(false);
@@ -41,7 +41,7 @@ export function ChangePasswordDialog({
 
           <DialogBody className="space-y-4 mb-4">
             {/* General error alert */}
-            {actionData?.status === "error" && actionData.error && changePasswordFetcher.state === 'idle' && (
+            {changePasswordFetcher.state === 'idle' && actionData?.ok === false && (
               <Alert variant="destructive">
                 <AlertCircleIcon />
                 <AlertTitle>Password change failed.</AlertTitle>
@@ -57,7 +57,7 @@ export function ChangePasswordDialog({
                 name="currentPassword"
                 autoFocus
               />
-              {actionData?.status === "error" && actionData?.error.fieldErrors?.currentPassword && changePasswordFetcher.state === 'idle' && (
+              {changePasswordFetcher.state === 'idle' && actionData?.ok === false && actionData?.error.fieldErrors?.currentPassword && (
                 <p id="current-password-error" className="text-sm text-destructive">
                   {actionData.error.fieldErrors.currentPassword}
                 </p>
@@ -71,7 +71,7 @@ export function ChangePasswordDialog({
                 type="password"
                 name="newPassword"
               />
-              {actionData?.status === "error" && actionData?.error.fieldErrors?.newPassword && changePasswordFetcher.state === 'idle' && (
+              {changePasswordFetcher.state === 'idle' && actionData?.ok === false && actionData?.error.fieldErrors?.newPassword && (
                 <p id="new-password-error" className="text-sm text-destructive">
                   {actionData.error.fieldErrors.newPassword}
                 </p>
@@ -85,7 +85,7 @@ export function ChangePasswordDialog({
                 type="password"
                 name="confirmPassword"
               />
-              {actionData?.status === "error" && actionData?.error.fieldErrors?.confirmPassword && changePasswordFetcher.state === 'idle' && (
+              {changePasswordFetcher.state === 'idle' && actionData?.ok === false && actionData?.error.fieldErrors?.confirmPassword && (
                 <p id="confirm-password-error" className="text-sm text-destructive">
                   {actionData.error.fieldErrors.confirmPassword}
                 </p>

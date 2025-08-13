@@ -1,14 +1,14 @@
 import type { Route } from "./+types/change-password";
 import { APIError } from "better-auth/api";
-import type { FormActionData, FormActionDataError } from "~/lib/FormActionData";
 import { data } from "react-router";  
 import { authClient } from "~/lib/auth-client";
+import { type ActionResponse, betterAuthErrorToBaseError } from "~/lib/errors";
 
 export async function clientAction({
   request,
-}: Route.ActionArgs) {
+}: Route.ActionArgs): Promise<ActionResponse> {
 
-  const fieldErrors: FormActionDataError['error']['fieldErrors'] = {};
+  const fieldErrors: Record<string, string> = {};
 
   // Parse form data
   const formData = await request.formData();
@@ -36,26 +36,17 @@ export async function clientAction({
   }
 
   if (Object.keys(fieldErrors).length > 0) {
-    return { status: "error", error: { message: "Validation error", fieldErrors } };
+    return { ok: false, error: { message: "Validation error", fieldErrors } };
   }
 
-  try {
-    const { data, error } = await authClient.changePassword({
-      currentPassword: currentPassword.trim(),
-      newPassword: newPassword.trim(),
-    });
-    if (error) {
-      return { status: "error", error };
-    }
+  const { data, error } = await authClient.changePassword({
+    currentPassword: currentPassword.trim(),
+    newPassword: newPassword.trim(),
+  });
 
-    return { status: "success", data };
-    
-  } catch (error) {
-    console.error('Error changing password:', error);
-    if (error instanceof APIError) {
-      return { status: "error", error: { message: error.message } };
-    }
-
-    return { status: "error", error: { message: 'An unexpected error occurred. Please try again.' } };
+  if (error) {
+    return { ok: false, error: betterAuthErrorToBaseError(error) };
   }
-} 
+
+  return { ok: true, data };
+}

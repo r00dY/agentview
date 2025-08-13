@@ -1,4 +1,4 @@
-import type { AgentViewConfig } from "./lib/types";
+import type { AgentViewConfig } from "./lib/errors";
 import { z } from 'zod';
 import OpenAI from "openai";
 
