@@ -25,3 +25,19 @@ export async function clientAction({
     return { status: "error", error: { message: 'An unexpected error occurred. Please try again.' } };
   }
 }
+
+type SuccessResponse = {
+  data: any
+}
+
+type ErrorResponse = {
+  error: {
+    message: string,
+    [key: string]: any
+  }
+}
+
+type Response = SuccessResponse | ErrorResponse
+
+const a : Response = { data: "dupa" }
+

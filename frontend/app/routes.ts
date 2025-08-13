@@ -19,10 +19,11 @@ export default [
             route(":id", "routes/thread.tsx"),
             route(":id/comments", "routes/threadComments.tsx"),
         ]),
+
+        route("logout", "routes/logout.tsx"),
+        route("change-password", "routes/change-password.tsx"),
     ]),
     route("login", "routes/login.tsx"),
     route("signup", "routes/signup.tsx"),
-    route("logout", "routes/logout.tsx"),
-    route("change-password", "routes/change-password.tsx"),
 
 ] satisfies RouteConfig;
