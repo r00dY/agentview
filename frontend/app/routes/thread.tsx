@@ -39,13 +39,6 @@ export async function clientLoader({ request, params }: Route.ClientLoaderArgs) 
     };
 }
 
-
-
-export default function ThreadPageWrapper() {
-    const loaderData = useLoaderData<typeof clientLoader>();
-    return <ThreadPage key={loaderData.thread.id} />
-}
-
 function ActivityMessage({ activity, isWhite = false, selected = false, onClick = () => { } }: { activity: any, isWhite?: boolean, selected?: boolean, onClick?: () => void }) {
     return <div className={`border p-3 rounded-lg hover:border-gray-300 ${isWhite ? "bg-white" : "bg-muted"} ${selected ? "border-gray-300" : ""}`} onClick={onClick} data-item={true}>
         <div dangerouslySetInnerHTML={{ __html: (activity.content as unknown as string) }}></div>
@@ -124,6 +117,12 @@ function ThreadDetails({ thread }: { thread: any }) {
     </Card>
 }
 
+
+export default function ThreadPageWrapper() {
+    const loaderData = useLoaderData<typeof clientLoader>();
+    return <ThreadPage key={loaderData.thread.id} />
+}
+
 function ThreadPage() {
     const loaderData = useLoaderData<typeof clientLoader>();
 
@@ -135,8 +134,19 @@ function ThreadPage() {
 
     const [searchParams, setSearchParams] = useSearchParams();
     const selectedActivityId = thread.activities.find((a: any) => a.id === searchParams.get('activityId'))?.id ?? undefined;
+
     const setSelectedActivityId = (id: string | undefined) => {
+        if (id === selectedActivityId) {
+            return // prevents unnecessary revalidation of the page
+        }
+
         setSearchParams((searchParams) => {
+            const currentActivityId = searchParams.get('activityId') ?? undefined;
+
+            if (currentActivityId === id) {
+                return searchParams;
+            }
+
             if (id) {
                 searchParams.set("activityId", id);
             } else {
@@ -240,12 +250,10 @@ function ThreadPage() {
     }
 
     const handleCancel = async () => {
-        await apiFetch(`/threads/${thread.id}/cancel`, {
+        await apiFetch(`/api/threads/${thread.id}/cancel`, {
             method: 'POST',
         })
     }
-
-    // const [selectedActivity, setSelectedActivity] = useState<any | null>(null)
 
     return <>
         <Header>
@@ -264,7 +272,7 @@ function ThreadPage() {
                         id: activity.id,
                         itemComponent: <ActivityView
                             activity={activity}
-                            onSelect={(a) => setSelectedActivityId(a?.id)}
+                            onSelect={(a) => { setSelectedActivityId(a?.id) }}
                             selected={selectedActivityId === activity.id}
                         />,
                         commentsComponent: (hasComments || (selectedActivityId === activity.id/* && isNewCommentActive*/)) ?
@@ -273,7 +281,7 @@ function ThreadPage() {
                                 userId={loaderData.userId}
                                 selected={selectedActivityId === activity.id}
                                 users={users}
-                                onSelect={(a) => setSelectedActivityId(a?.id)}
+                                onSelect={(a) => { setSelectedActivityId(a?.id) }}
                                 threadId={thread.id}
                             /> : undefined
                     }
@@ -299,14 +307,12 @@ function ThreadPage() {
                     <Textarea name="message" placeholder="Reply here..." />
                     <Button type="submit" disabled={thread.state === 'in_progress'}>Send</Button>
 
-
                     {thread.state === 'in_progress' && <Button type="button" onClick={() => {
                         handleCancel()
                     }}>Cancel</Button>}
                 </form>
 
                 {formError && <div className="text-red-500">{formError}</div>}
-
             </CardContent>
         </Card> }
     </>
