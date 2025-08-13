@@ -6,7 +6,7 @@ import type { Route } from "./+types/signup";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { AlertCircleIcon } from "lucide-react";
-import { type FormActionData, type FormActionDataError } from "~/lib/FormActionData";
+import { betterAuthErrorToBaseError, type ActionResponse } from "~/lib/errors";
 import { authClient } from "~/lib/auth-client";
 import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
 
@@ -20,7 +20,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 
   const url = new URL(request.url);
   const invitationId = url.searchParams.get('invitationId');
-
+    
   if (!invitationId) {
     return {
       invitationId: null,
@@ -58,52 +58,43 @@ export async function clientAction({
   const invitationId = url.searchParams.get('invitationId');
 
   if (!invitationId) {
-    return { status: "error", error: "Invitation not provided." };
+    return { ok: false, error: { message: "Invitation not provided." } };
   }
 
-  try {
-    const formData = await request.formData();
-    const name = formData.get('name') as string || '';
-    const email = formData.get('email') as string || '';
-    const password = formData.get('password') as string || '';
-    const confirmPassword = formData.get('confirmPassword') as string || '';
+  const formData = await request.formData();
+  const name = formData.get('name') as string || '';
+  const email = formData.get('email') as string || '';
+  const password = formData.get('password') as string || '';
+  const confirmPassword = formData.get('confirmPassword') as string || '';
 
-    if (name.trim() === '') {
-      return { status: "error", error: { message: "Validation error", fieldErrors: { name: "Name is required." } } };
-    }
-
-    if (password !== confirmPassword) {
-      return { 
-        status: "error", 
-        error: { message: "Validation error", fieldErrors: { confirmPassword: "Passwords do not match." } } 
-      };
-    }
-
-    const { data, error } = await authClient.signUp.email({
-      email,
-      password,
-      name: name.trim(),
-       // @ts-ignore
-      invitationId
-    })
-
-    if (error) {
-      return { status: "error", error };
-    }
-
-    return redirect('/');
-
-  } catch (error) {
-    if (error instanceof Error) {
-      return { status: "error", error: { message: error.message } };
-    }
-    return { status: "error", error: { message: "An unexpected error occurred." } };
+  if (name.trim() === '') {
+    return { ok: false, error: { message: "Validation error", fieldErrors: { name: "Name is required." } } };
   }
 
+  if (password !== confirmPassword) {
+    return { 
+      ok: false, 
+      error: { message: "Validation error", fieldErrors: { confirmPassword: "Passwords do not match." } } 
+    };
+  }
+
+  const { data, error } = await authClient.signUp.email({
+    email,
+    password,
+    name: name.trim(),
+      // @ts-ignore
+    invitationId
+  })
+
+  if (error) {
+    return { ok: false, error: betterAuthErrorToBaseError(error) };
+  }
+
+  return redirect('/');
 }
 
 export default function SignupPage() {
-  const actionData = useActionData<typeof clientAction>() as FormActionData | undefined;
+  const actionData = useActionData<typeof clientAction>();
   const { invitation, error } = useLoaderData<typeof clientLoader>();
 
   return (
@@ -127,7 +118,7 @@ export default function SignupPage() {
             <input type="hidden" name="invitationId" value={invitation.id} />
             <input type="hidden" name="email" value={invitation.email} />
 
-            {actionData?.status === "error" && actionData.error && (
+            {actionData?.ok === false && (
               <Alert variant="destructive">
                 <AlertCircleIcon />
                 <AlertTitle>Signup failed.</AlertTitle>
@@ -147,7 +138,7 @@ export default function SignupPage() {
                 placeholder="Enter your full name"
                 required
               />
-              {actionData?.status === "error" && actionData?.error?.fieldErrors?.name && (
+              {actionData?.ok === false && actionData?.error?.fieldErrors?.name && (
                 <p id="name-error" className="text-sm text-destructive">
                   {actionData.error.fieldErrors.name}
                 </p>
@@ -185,7 +176,7 @@ export default function SignupPage() {
                 placeholder="Enter your password"
                 required
               />
-              {actionData?.status === "error" && actionData?.error?.fieldErrors?.password && (
+              {actionData?.ok === false && actionData?.error?.fieldErrors?.password && (
                 <p id="password-error" className="text-sm text-destructive">
                   {actionData.error.fieldErrors.password}
                 </p>
@@ -204,7 +195,7 @@ export default function SignupPage() {
                 placeholder="Confirm your password"
                 required
               />
-              {actionData?.status === "error" && actionData?.error?.fieldErrors?.confirmPassword && (
+              {actionData?.ok === false && actionData?.error?.fieldErrors?.confirmPassword && (
                 <p id="confirmPassword-error" className="text-sm text-destructive">
                   {actionData.error.fieldErrors.confirmPassword}
                 </p>

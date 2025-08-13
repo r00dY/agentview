@@ -1,14 +1,12 @@
 import type { Route } from "./+types/user";
-import { APIError } from "better-auth/api";
-import type { FormActionData, FormActionDataError } from "~/lib/FormActionData";
-import { data } from "react-router";
+import { type ActionResponse, betterAuthErrorToBaseError } from "~/lib/errors";
 import { authClient } from "~/lib/auth-client";
 
 export async function clientAction({
   request,
-}: Route.ActionArgs) {
+}: Route.ActionArgs): Promise<ActionResponse> {
 
-  const fieldErrors: FormActionDataError['error']['fieldErrors'] = {};
+  const fieldErrors: Record<string, string> = {};
 
   // Parse form data
   const formData = await request.formData();
@@ -20,26 +18,15 @@ export async function clientAction({
   }
 
   if (Object.keys(fieldErrors).length > 0) {
-    return data({ status: "error", fieldErrors }, {
-      status: 400,
-    })
+    return { ok: false, error: { message: "Validation error", fieldErrors } };
   }
 
-  try {
-    const { data, error } = await authClient.updateUser({
-      name: name.trim(),
-    });
-    if (error) {
-      return { status: "error", error };
-    }
-
-    return { status: "success", data };
-    
-  } catch (error) {
-    if (error instanceof APIError) {
-      return { status: "error", error: { message: error.message } };
-    }
-
-    return { status: "error", error: { message: 'An unexpected error occurred. Please try again.' } };
+  const { data, error } = await authClient.updateUser({
+    name: name.trim(),
+  });
+  if (error) {
+    return { ok: false, error: betterAuthErrorToBaseError(error) };
   }
+
+  return { ok: true, data };
 }

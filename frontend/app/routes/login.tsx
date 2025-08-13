@@ -7,7 +7,7 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { AlertCircleIcon } from "lucide-react";
 import { APIError } from "better-auth/api";
-import { type FormActionData, type FormActionDataError } from "~/lib/FormActionData";
+import { betterAuthErrorToBaseError, type ActionResponse } from "~/lib/errors";
 import { authClient } from "~/lib/auth-client";
 
 function redirectUrl(request: Request) {
@@ -31,7 +31,7 @@ export async function clientLoader({ request }: Route.LoaderArgs) {
 export async function clientAction({
   request,
   params
-}: Route.ActionArgs) {
+}: Route.ActionArgs): Promise<ActionResponse> {
   const formData = await request.formData();
   const email = formData.get('email') as string || '';
   const password = formData.get('password') as string || '';
@@ -46,44 +46,23 @@ export async function clientAction({
   }
 
   if (Object.keys(fieldErrors).length > 0) {
-    return { error: {
-      message: "Validation error",
-      fieldErrors
-    } };
+    return { ok: false, error: { message: "Validation error", fieldErrors } };
   }
 
-  try {
-    const { data, error } = await authClient.signIn.email({
-        email,
-        password,
-    });
+  const { error } = await authClient.signIn.email({
+      email,
+      password,
+  });
 
-    console.log('data', data)
-    console.log('error', error)
-
-    if (error) {
-      return { status: "error", error };
-    }
-
-    return redirect(redirectUrl(request));
-    
-  } catch (error) {
-
-    if (error instanceof APIError) {
-      return { status: "error", error: {
-        message: error.message
-      } };
-    }
-
-    return { status: "error", error: {
-      message: "Unexpected error",
-      data: String(error)
-    } };
+  if (error) {
+    return { ok: false, error: betterAuthErrorToBaseError(error) };
   }
+
+  return { ok: true, data: redirect(redirectUrl(request)) };
 }
 
 export default function LoginPage() {
-  const actionData = useActionData<typeof clientAction>() as FormActionData | undefined;
+  const actionData = useActionData<typeof clientAction>();
 
   return (
     <div className="container mx-auto p-4 max-w-md mt-16">
@@ -94,7 +73,7 @@ export default function LoginPage() {
         <CardContent>
           <Form className="flex flex-col gap-4" method="post">
             {/* General error alert */}
-            {actionData?.status === "error" && actionData.error && (
+            {actionData?.ok === false && (
               <Alert variant="destructive">
                 <AlertCircleIcon />
                 <AlertTitle>Login failed.</AlertTitle>
@@ -116,7 +95,7 @@ export default function LoginPage() {
                 // aria-invalid={actionData?.status === "error" && actionData?.fieldErrors?.email ? "true" : "false"}
                 // aria-describedby={actionData?.status === "error" && actionData?.fieldErrors?.email ? "email-error" : undefined}
               />
-              {actionData?.status === "error" && actionData?.error.fieldErrors?.email && (
+              {actionData?.ok === false && actionData?.error.fieldErrors?.email && (
                 <p id="email-error" className="text-sm text-destructive">
                   {actionData.error.fieldErrors.email}
                 </p>
@@ -137,7 +116,7 @@ export default function LoginPage() {
                 // aria-invalid={actionData?.fieldErrors?.password ? "true" : "false"}
                 // aria-describedby={actionData?.fieldErrors?.password ? "password-error" : undefined}
               />
-              {actionData?.status === "error" && actionData?.error.fieldErrors?.password && (
+              {actionData?.ok === false && actionData?.error.fieldErrors?.password && (
                 <p id="password-error" className="text-sm text-destructive">
                   {actionData.error.fieldErrors.password}
                 </p>

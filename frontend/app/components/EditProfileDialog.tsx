@@ -6,7 +6,7 @@ import { Input } from "~/components/ui/input";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { AlertCircleIcon } from "lucide-react";
 import { useFetcher } from "react-router";
-import type { FormActionData } from "~/lib/FormActionData";
+import type { ActionResponse } from "~/lib/errors";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
 
 interface EditProfileDialogProps {
@@ -30,8 +30,8 @@ export function EditProfileDialog({
     setName(user.name);
   }, [user.name, open]);
 
-  const editFetcher = useFetcher<FormActionData>();
-  const actionData = editFetcher.data as FormActionData | undefined;
+  const editFetcher = useFetcher<ActionResponse>();
+  const actionData = editFetcher.data;
 
   useFetcherSuccess(editFetcher, () => {
     onOpenChange(false);
@@ -54,7 +54,7 @@ export function EditProfileDialog({
 
         <DialogBody className="space-y-4">
           {/* General error alert */}
-          {actionData?.status === "error" && actionData.error && editFetcher.state === 'idle' && (
+          {editFetcher.state === 'idle' && actionData?.ok === false && (
             <Alert variant="destructive">
               <AlertCircleIcon />
               <AlertTitle>Update failed.</AlertTitle>
@@ -82,7 +82,7 @@ export function EditProfileDialog({
               onChange={e => setName(e.target.value)}
               autoFocus
             />
-            {actionData?.status === "error" && actionData?.error.fieldErrors?.name && editFetcher.state === 'idle' && (
+            {editFetcher.state === 'idle' && actionData?.ok === false && actionData?.error.fieldErrors?.name && (
               <p id="name-error" className="text-sm text-destructive">
                 {actionData.error.fieldErrors.name}
               </p>
