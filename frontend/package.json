@@ -6,7 +6,8 @@
     "build": "react-router build",
     "dev": "react-router dev",
     "start": "react-router-serve ./build/server/index.js",
-    "typecheck": "react-router typegen && tsc"
+    "typecheck": "react-router typegen && tsc",
+    "init": "tsx scripts/init.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.16.0",
