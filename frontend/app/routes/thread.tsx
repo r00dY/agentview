@@ -11,10 +11,12 @@ import { apiFetch } from "~/lib/apiFetch";
 import { ItemsWithCommentsLayout } from "~/components/ItemsWithCommentsLayout";
 import { CommentThread } from "~/components/comments";
 import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
-
+import { getLastRun, getAllActivities } from "~/lib/threadUtils";
+import { ThreadSchema } from "~/apiTypes";
+import * as z from "zod";
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
-    const response = await apiFetch(`/api/threads/${params.id}`);
+    const response = await apiFetch<z.infer<typeof ThreadSchema>>(`/api/threads/${params.id}`);
 
     if (!response.ok) {
         throw data(response.error, { status: response.status })
@@ -134,7 +136,9 @@ function ThreadPage() {
     const users = loaderData.users
 
     const [searchParams, setSearchParams] = useSearchParams();
-    const selectedActivityId = thread.activities.find((a: any) => a.id === searchParams.get('activityId'))?.id ?? undefined;
+    const activities = getAllActivities(thread)
+    const lastRun = getLastRun(thread)
+    const selectedActivityId = activities.find((a: any) => a.id === searchParams.get('activityId'))?.id ?? undefined;
 
     const setSelectedActivityId = (id: string | undefined) => {
         if (id === selectedActivityId) {
@@ -165,11 +169,11 @@ function ThreadPage() {
     }, [loaderData.thread])
 
     useEffect(() => {
-        if (thread.lastRun?.state === 'in_progress') {
+        if (lastRun?.state === 'in_progress') {
 
             (async () => {
                 try {
-                    const query = thread.activities.length > 0 ? `?last_activity_id=${thread.activities[thread.activities.length - 1].id}` : ''
+                    const query = activities.length > 0 ? `?last_activity_id=${activities[activities.length - 1].id}` : ''
 
                     const response = await fetch(`${getAPIBaseUrl()}/api/threads/${thread.id}/watch${query}`, {
                         headers: {
@@ -181,17 +185,18 @@ function ThreadPage() {
 
                     for await (const event of parseSSE(response)) {
                         if (event.event === 'activity') {
-                            setThread((prevThread: any) => {
-                                const existingIdx = prevThread.activities.findIndex((a: any) => a.id === event.data.id);
+                            setThread((prevThread) => {
+                                const prevActivities = getAllActivities(prevThread)
+                                const existingIdx = prevActivities.findIndex((a: any) => a.id === event.data.id);
                                 if (existingIdx === -1) {
                                     // New activity, append
-                                    return { ...prevThread, activities: [...prevThread.activities, event.data] };
+                                    return { ...prevThread, activities: [...prevActivities, event.data] };
                                 } else {
                                     // Existing activity, replace and remove all after
                                     return {
                                         ...prevThread,
                                         activities: [
-                                            ...prevThread.activities.slice(0, existingIdx),
+                                            ...prevActivities.slice(0, existingIdx),
                                             event.data
                                         ]
                                     };
@@ -201,10 +206,18 @@ function ThreadPage() {
                         else if (event.event === 'thread.run') {
                             console.log('thread.run')
                             console.log(event.data)
-                            setThread((thread: any) => ({ ...thread, lastRun: {
-                                ...thread.lastRun,
-                                ...event.data
-                            } }))
+                            
+                            setThread((thread: any) => {
+                                const lastRun = getLastRun(thread);
+                                if (!lastRun) { throw new Error("Last run not found") };
+
+                                const runs = thread.runs.map((run: any) =>
+                                    run.id === lastRun.id
+                                        ? { ...run, ...event.data }
+                                        : run
+                                );
+                                return { ...thread, runs };
+                            });
                         }
                     }
 
@@ -216,7 +229,7 @@ function ThreadPage() {
             })()
         }
 
-    }, [thread.lastRun?.state])
+    }, [lastRun?.state])
 
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -270,7 +283,7 @@ function ThreadPage() {
             <div className=" p-6 max-w-4xl space-y-6">
                 <ThreadDetails thread={thread} />
 
-                <ItemsWithCommentsLayout items={thread.activities.map((activity: any) => {
+                <ItemsWithCommentsLayout items={activities.map((activity: any) => {
 
                     const hasComments = activity.commentThread && activity.commentThread.commentMessages.filter((m: any) => !m.deletedAt).length > 0
 
@@ -295,16 +308,15 @@ function ThreadPage() {
                 />
 
                 <div>
-                    {thread.lastRun?.state === 'in_progress' && <div>in progress...</div>}
-                    {thread.lastRun?.state === 'failed' && <div>
+                    {lastRun?.state === 'in_progress' && <div>in progress...</div>}
+                    {lastRun?.state === 'failed' && <div>
                         <div>failed</div>
-                        <div>{thread.lastRun?.fail_reason?.message}</div>
+                        <div>{lastRun?.fail_reason?.message}</div>
                     </div>}
                 </div>
             </div>
 
         </div>
-
 
         { thread.client.simulatedBy?.id === loaderData.userId && <Card>
             <CardHeader>
@@ -313,9 +325,9 @@ function ThreadPage() {
             <CardContent>
                 <form method="post" onSubmit={handleSubmit}>
                     <Textarea name="message" placeholder="Reply here..." />
-                    <Button type="submit" disabled={thread.lastRun?.state === 'in_progress'}>Send</Button>
+                    <Button type="submit" disabled={lastRun?.state === 'in_progress'}>Send</Button>
 
-                    {thread.lastRun?.state === 'in_progress' && <Button type="button" onClick={() => {
+                    {lastRun?.state === 'in_progress' && <Button type="button" onClick={() => {
                         handleCancel()
                     }}>Cancel</Button>}
                 </form>

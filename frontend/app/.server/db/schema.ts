@@ -95,8 +95,8 @@ export const run = pgTable("run", {
 export const commentThreads = pgTable('comment_threads', {
   id: uuid('id').primaryKey().defaultRandom(),
   activityId: uuid('activity_id').notNull().references(() => activity.id, { onDelete: 'cascade' }),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 // Comment messages within threads
@@ -105,8 +105,8 @@ export const commentMessages = pgTable('comment_messages', {
   commentThreadId: uuid('comment_thread_id').notNull().references(() => commentThreads.id, { onDelete: 'cascade' }),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   content: text('content').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   // Soft delete fields
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
   deletedBy: text('deleted_by').references(() => users.id, { onDelete: 'set null' }),
@@ -117,7 +117,7 @@ export const commentMentions = pgTable('comment_mentions', {
   id: uuid('id').primaryKey().defaultRandom(),
   commentMessageId: uuid('comment_message_id').notNull().references(() => commentMessages.id, { onDelete: 'cascade' }),
   mentionedUserId: text('mentioned_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
 
 
@@ -126,7 +126,7 @@ export const commentMessageEdits = pgTable('comment_message_edits', {
   id: uuid('id').primaryKey().defaultRandom(),
   commentMessageId: uuid('comment_message_id').notNull().references(() => commentMessages.id, { onDelete: 'cascade' }),
   previousContent: text('previous_content').notNull(),
-  editedAt: timestamp('edited_at', { withTimezone: true }).defaultNow(),
+  editedAt: timestamp('edited_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 

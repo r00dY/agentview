@@ -17,8 +17,9 @@ import { isAsyncIterable } from '../lib/utils'
 import { auth } from './auth'
 import { getRootUrl } from './getRootUrl'
 import { createInvitation, cancelInvitation, getPendingInvitations, getValidInvitation } from './invitations'
-import { getLastRun } from '~/lib/threadUtils'
-
+import { getAllActivities, getLastRun } from '~/lib/threadUtils'
+import { ClientSchema, ActivitySchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, CommentMessageSchema, CommentThreadSchema } from '~/apiTypes'
+import { fetchThread, fetchThreads } from './threads'
 
 
 export const app = new OpenAPIHono({
@@ -47,13 +48,6 @@ app.on(["POST", "GET"], "/api/auth/*", (c) => {
 
 
 /* --------- CLIENTS --------- */
-
-const ClientSchema = z.object({
-  id: z.string(),
-  created_at: z.date(),
-  updated_at: z.date(),
-})
-
 
 // API Clients POST
 const apiClientsPOSTRoute = createRoute({
@@ -118,119 +112,6 @@ app.openapi(clientGETRoute, async (c) => {
 
 /* --------- THREADS --------- */
 
-const ActivitySchema = z.object({
-  id: z.string(),
-  created_at: z.date(),
-  updated_at: z.date(),
-  content: z.any(),
-  thread_id: z.string(),
-  type: z.string(),
-  role: z.string(),
-  commentThread: z.any(),
-})
-
-const ActivityCreateSchema = z.object({
-  input: ActivitySchema.pick({
-    type: true,
-    role: true,
-    content: true,
-  })
-})
-
-const ThreadSchema = z.object({
-  id: z.string(),
-  created_at: z.date(),
-  updated_at: z.date(),
-  metadata: z.any(),
-  client_id: z.string(),
-  type: z.string(),
-  activities: z.array(ActivitySchema),
-  run: z.any().optional()
-})
-
-const ThreadCreateSchema = ThreadSchema.pick({
-  client_id: true,
-  type: true,
-  metadata: true,
-})
-
-async function fetchThreads(thread_id?: string) {
-  const threadRows = await db.query.thread.findMany({
-    where: thread_id ? eq(thread.id, thread_id) : undefined,
-    with: {
-      client: {
-        with: {
-          simulatedBy: true
-        }
-      },
-      runs: {
-        orderBy: (run, { asc }) => [asc(run.created_at)],
-        with: {
-          version: true,
-          activities: {
-            orderBy: (activity, { asc }) => [asc(activity.created_at)],
-            with: {
-              commentThread: {
-                with: {
-                  commentMessages: {
-                    orderBy: (commentMessages, { asc }) => [asc(commentMessages.createdAt)]
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-      // activities: {
-      //   with: {
-      //     run: true,
-      //     commentThread: {
-      //       with: {
-      //         commentMessages: {
-      //           orderBy: (commentMessages, { asc }) => [asc(commentMessages.createdAt)]
-      //         }
-      //       }
-      //     }
-      //   },
-      //   orderBy: (activity, { asc }) => [asc(activity.created_at)]
-      // },
-      // runs: {
-      //   orderBy: (run, { desc }) => [desc(run.created_at)],
-      //   limit: 1
-      // },
-    }
-  });
-
-  // if (threadRows.length === 0) {
-  //   return undefined
-  // }
-
-  return threadRows.map((threadRow) => ({
-    ...threadRow,
-    runs: threadRow.runs.filter((run, index) => run.state === 'completed' || index === threadRow.runs.length - 1), // last run & completed ones
-  }))  
-
-  // const threadRow = threadRows[0]
-
-  // const lastRun = threadRow?.runs[0]
-
-  // if (!lastRun) {
-
-  // if (!threadRow) {
-  //   return undefined
-  // }
-
-  // return {
-  //   ...threadRow,
-  //   activities: threadRow.activities.filter((a) => a.run_id === lastRun?.id || a.run?.state === 'completed'),
-  //   lastRun,
-  //   // state: threadState
-  // }
-}
-
-async function fetchThread(thread_id: string) {
-  return (await fetchThreads(thread_id))[0]
-}
 
 
 // Threads GET (list all threads with filtering)
@@ -375,7 +256,9 @@ const activitiesPOSTRoute = createRoute({
     params: z.object({
       thread_id: z.string(),
     }),
-    body: body(ActivityCreateSchema)
+    body: body(z.object({
+      input: ActivityCreateSchema
+    }))
   },
   responses: {
     201: response_data(ThreadSchema),
@@ -468,7 +351,7 @@ app.openapi(activitiesPOSTRoute, async (c) => {
         metadata: threadRow.metadata,
         client_id: threadRow.client_id,
         type: threadRow.type,
-        activities: [...threadRow.activities, userActivity]
+        activities: [...getAllActivities(threadRow), userActivity]
       }
     }
 
@@ -519,7 +402,6 @@ app.openapi(activitiesPOSTRoute, async (c) => {
 
       return newActivity;
     }
-
 
     try {
       const runOutput = config.run(input)
@@ -680,7 +562,10 @@ app.openapi(threadCancelRoute, async (c) => {
   if (!threadRow) {
     return c.json({ message: 'Thread not found' }, 404);
   }
-  if (threadRow.lastRun?.state !== 'in_progress') {
+
+  const lastRun = getLastRun(threadRow)
+
+  if (lastRun?.state !== 'in_progress') {
     return c.json({ message: 'Thread is not in progress' }, 400);
   }
   // Set the run as failed
@@ -690,9 +575,9 @@ app.openapi(threadCancelRoute, async (c) => {
       finished_at: new Date(),
       fail_reason: { message: 'Run was cancelled by user' }
     })
-    .where(eq(run.id, threadRow.lastRun.id));
+    .where(eq(run.id, lastRun.id));
 
-  return c.json(await fetchThreadWithLastRun(thread_id), 200);
+  return c.json(await fetchThread(thread_id), 200);
 });
 
 // Activities POST
@@ -716,32 +601,34 @@ const activityWatchRoute = createRoute({
 app.openapi(activityWatchRoute, async (c) => {
   const { thread_id } = c.req.param()
 
-  const threadRow = await fetchThreadWithLastRun(thread_id);
+  const threadRow = await fetchThread(thread_id);
+  const lastRun = getLastRun(threadRow)
+  const activities = getAllActivities(threadRow)
 
   if (!threadRow) {
     return c.json({ message: "Thread not found" }, 404);
   }
 
-  if (threadRow.lastRun?.state !== 'in_progress') {
+  if (lastRun?.state !== 'in_progress') {
     return c.json({ message: "Thread must be in 'in_progress' state to watch" }, 400);
   }
 
   let lastActivityIndex: number;
 
   if (c.req.query().last_activity_id) {
-    lastActivityIndex = threadRow.activities.findIndex((a) => a.id === c.req.query().last_activity_id)
+    lastActivityIndex = activities.findIndex((a) => a.id === c.req.query().last_activity_id)
 
     if (lastActivityIndex === -1) {
       return c.json({ message: "Last activity id not found" }, 400);
     }
   }
   else {
-    lastActivityIndex = threadRow.activities.length - 1
+    lastActivityIndex = activities.length - 1
   }
 
   // Only include activities before lastActivityId in ignoredActivityIds
-  const ignoredActivityIds = threadRow.activities
-    .slice(0, threadRow.activities.findIndex((a) => a.id === threadRow.activities[lastActivityIndex].id))
+  const ignoredActivityIds = activities
+    .slice(0, activities.findIndex((a) => a.id === activities[lastActivityIndex].id))
     .map((a) => a.id);
 
   // 4. Start SSE stream
@@ -753,7 +640,7 @@ app.openapi(activityWatchRoute, async (c) => {
 
     // Always start with thread.state in_progress
     await stream.writeSSE({
-      data: JSON.stringify({ state: threadRow.lastRun?.state }),
+      data: JSON.stringify({ state: lastRun?.state }),
       event: 'thread.run',
     });
 
@@ -765,14 +652,14 @@ app.openapi(activityWatchRoute, async (c) => {
      * 
      */
     while (running) {
-      const threadRow = await fetchThreadWithLastRun(thread_id);
+      const threadRow = await fetchThread(thread_id);
+      const lastRun = getLastRun(threadRow)
 
-      if (!threadRow || !threadRow.lastRun) {
+      if (!threadRow || !lastRun) {
         throw new Error('unreachable');
       }
 
-      // Check for new activities by comparing count
-      const activities = threadRow?.activities;
+      const activities = getAllActivities(threadRow)
 
       for (const activity of activities) {
         if (ignoredActivityIds.includes(activity.id)) {
@@ -786,12 +673,12 @@ app.openapi(activityWatchRoute, async (c) => {
       }
 
       // End if run is no longer in_progress
-      if (threadRow.lastRun?.state !== 'in_progress') {
+      if (lastRun?.state !== 'in_progress') {
 
-        const data: { state: string, fail_reason?: any } = { state: threadRow.lastRun?.state }
+        const data: { state: string, fail_reason?: any } = { state: lastRun?.state }
 
-        if (threadRow.lastRun?.state === 'failed') {
-          data.fail_reason = threadRow.lastRun.fail_reason
+        if (lastRun?.state === 'failed') {
+          data.fail_reason = lastRun.fail_reason
         }
 
         await stream.writeSSE({
@@ -812,23 +699,6 @@ app.openapi(activityWatchRoute, async (c) => {
 
 
 /* --------- COMMENTS --------- */
-
-const CommentMessageSchema = z.object({
-  id: z.string(),
-  commentThreadId: z.string(),
-  userId: z.string(),
-  content: z.string(),
-  createdAt: z.date(),
-  updatedAt: z.date().nullable(),
-  deletedAt: z.date().nullable(),
-  deletedBy: z.string().nullable(),
-})
-
-const CommentThreadSchema = z.object({
-  id: z.string(),
-  activityId: z.string(),
-  commentMessages: z.array(CommentMessageSchema),
-})
 
 // Comments POST (create new comment)
 const commentsPOSTRoute = createRoute({
