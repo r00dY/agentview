@@ -1,4 +1,4 @@
-import type { AgentViewConfig } from "./lib/errors";
+import type { AgentViewConfig } from "./.server/types";
 import { z } from 'zod';
 import OpenAI from "openai";
 
@@ -7,7 +7,7 @@ const client = new OpenAI({
 });
 
 export const config : AgentViewConfig = {
-    email: async (payload) => {
+    email: async (payload: any) => {
         console.log(payload)
     },
     threads: [
@@ -50,6 +50,17 @@ export const config : AgentViewConfig = {
     // },
 
     run: async function* (input: any) {
+        // Emit version manifest first
+        yield {
+            type: "manifest",
+            version: "1.0.0",
+            env: "dev",
+            metadata: {
+                description: "Initial version of the agent",
+                features: ["streaming", "lorem_ipsum_responses"]
+            }
+        };
+
         const lastUserMessage = input.thread.activities[input.thread.activities.length - 1].content;
 
         for (let i = 0; i < 10; i++) {

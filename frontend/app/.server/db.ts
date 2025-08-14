@@ -17,7 +17,9 @@ import {
   commentMessagesRelations,
   channels,
   channelsRelations,
-  clientRelations
+  clientRelations,
+  versions,
+  versionsRelations
 } from "~/.server/db/schema";
 
 export const db = drizzle(process.env.DATABASE_URL!, {
@@ -43,5 +45,7 @@ export const db = drizzle(process.env.DATABASE_URL!, {
     channels,
     channelsRelations,
     clientRelations,
+    versions,
+    versionsRelations,
   }
 });

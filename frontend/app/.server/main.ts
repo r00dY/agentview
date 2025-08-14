@@ -8,7 +8,7 @@ import { APIError } from "better-auth/api";
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { swaggerUI } from '@hono/swagger-ui'
 import { db } from './db'
-import { client, thread, activity, run, email, commentThreads, commentMessages, commentMessageEdits, commentMentions } from './db/schema'
+import { client, thread, activity, run, email, commentThreads, commentMessages, commentMessageEdits, commentMentions, versions } from './db/schema'
 import { asc, eq, ne, desc, and, inArray, isNull } from 'drizzle-orm'
 import { response_data, response_error, body } from '../lib/hono_utils'
 import { config } from '../agentview.config'
@@ -17,6 +17,7 @@ import { isAsyncIterable } from '../lib/utils'
 import { auth } from './auth'
 import { getRootUrl } from './getRootUrl'
 import { createInvitation, cancelInvitation, getPendingInvitations, getValidInvitation } from './invitations'
+
 
 
 
@@ -497,26 +498,103 @@ app.openapi(activitiesPOSTRoute, async (c) => {
 
     try {
       const runOutput = config.run(input)
+      let versionId: string | null = null;
 
       if (isAsyncIterable(runOutput)) {
         console.log('is async iterable')
 
-        for await (const activityData of runOutput) {
-          await validateAndInsertActivity(activityData)
+        let firstItem = true;
+        for await (const item of runOutput) {
+          // The first yield MUST be a manifest
+          if (firstItem) {
+            if (!item || typeof item !== 'object' || !('type' in item) || item.type !== 'manifest') {
+              throw { 
+                message: "No 'manifest' was sent by the agent." 
+              };
+            }
+            
+            const versionManifest = item as { type: string; version: string; env?: string; metadata?: any };
+            console.log('Version manifest received:', versionManifest);
+            
+            // Create or find existing version
+            const [version] = await db.insert(versions).values({
+              version: versionManifest.version,
+              env: versionManifest.env || 'dev',
+              metadata: versionManifest.metadata || null,
+            }).onConflictDoUpdate({
+              target: [versions.version, versions.env],
+              set: {
+                metadata: versionManifest.metadata || null,
+              }
+            }).returning();
+            
+            versionId = version.id;
+            
+            // Update the run with version_id
+            if (userActivity.run_id) {
+              await db.update(run)
+                .set({ version_id: versionId })
+                .where(eq(run.id, userActivity.run_id));
+            }
+            
+            firstItem = false;
+            continue; // Skip this item as it's not an activity
+          }
+          
+          // This is a regular activity
+          await validateAndInsertActivity(item)
         }
 
       }
       else {
         console.log('not async iterable')
 
-        const newActivities = await runOutput;
+        const result = await runOutput;
 
-        if (!Array.isArray(newActivities)) {
-          throw { error: "Invalid response from run function, it's not an array" }
-        } else {
-          for (const activityData of newActivities) {
-            validateAndInsertActivity(activityData)
+        if (!result || typeof result !== 'object' || !('manifest' in result) || !('activities' in result)) {
+          throw { 
+            message: "Non-async iterable run function must return { manifest, activities }" 
+          };
+        }
+
+        const { manifest, activities } = result;
+
+        // Handle manifest
+        if (manifest && typeof manifest === 'object' && 'version' in manifest) {
+          const versionManifest = manifest as { version: string; env?: string; metadata?: any };
+          console.log('Version manifest received:', versionManifest);
+          
+          // Create or find existing version
+          const [version] = await db.insert(versions).values({
+            version: versionManifest.version,
+            env: versionManifest.env || 'dev',
+            metadata: versionManifest.metadata || null,
+          }).onConflictDoUpdate({
+            target: [versions.version, versions.env],
+            set: {
+              metadata: versionManifest.metadata || null,
+            }
+          }).returning();
+          
+          versionId = version.id;
+          
+          // Update the run with version_id
+          if (userActivity.run_id) {
+            await db.update(run)
+              .set({ version_id: versionId })
+              .where(eq(run.id, userActivity.run_id));
           }
+        }
+
+        // Handle activities
+        if (!Array.isArray(activities)) {
+          throw { 
+            message: "Activities must be an array" 
+          };
+        }
+
+        for (const activityData of activities) {
+          await validateAndInsertActivity(activityData)
         }
       }
 
@@ -546,6 +624,7 @@ app.openapi(activitiesPOSTRoute, async (c) => {
         .set({
           state: 'failed',
           finished_at: new Date(),
+          fail_reason: error.message ? { message: error.message } : null
           })
           .where(eq(run.id, userActivity.run_id));
       }
@@ -586,6 +665,7 @@ app.openapi(threadCancelRoute, async (c) => {
     .set({
       state: 'failed',
       finished_at: new Date(),
+      fail_reason: { message: 'Run was cancelled by user' }
     })
     .where(eq(run.id, threadRow.lastRun.id));
 
@@ -684,8 +764,15 @@ app.openapi(activityWatchRoute, async (c) => {
 
       // End if run is no longer in_progress
       if (threadRow.state !== 'in_progress') {
+
+        const data: any = { state: threadRow.state }
+
+        if (threadRow.state === 'failed') {
+          data.fail_reason = threadRow.lastRun.fail_reason
+        }
+
         await stream.writeSSE({
-          data: JSON.stringify({ state: threadRow.state }),
+          data: JSON.stringify(data),
           event: 'thread.state',
         });
         break;

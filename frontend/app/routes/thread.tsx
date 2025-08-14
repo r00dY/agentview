@@ -256,6 +256,8 @@ function ThreadPage() {
         })
     }
 
+    console.log(thread)
+
     return <>
         <Header>
             <HeaderTitle title={`Thread`} />

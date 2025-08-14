@@ -61,7 +61,7 @@ export const activity = pgTable("activity", {
   updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   content: jsonb("content"),
   thread_id: uuid("thread_id").notNull().references(() => thread.id, { onDelete: 'cascade' }),
-  run_id: uuid("run_id").references(() => run.id, { onDelete: 'set null' }),
+  run_id: uuid("run_id").notNull().references(() => run.id, { onDelete: 'set null' }),
   type: varchar({ length: 255 }).notNull(),
   role: varchar({ length: 255 }).notNull(),
 
@@ -71,12 +71,24 @@ export const activity = pgTable("activity", {
   channelActivityUnique: uniqueIndex('channel_activity_unique').on(table.channel_id, table.channel_activity_id),
 }));
 
+export const versions = pgTable("versions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  version: varchar({ length: 255 }).notNull(),
+  env: varchar({ length: 255 }).notNull().default("dev"),
+  metadata: jsonb("metadata"),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  versionEnvUnique: uniqueIndex('version_env_unique').on(table.version, table.env),
+}));
+
 export const run = pgTable("run", {
   id: uuid("id").primaryKey().defaultRandom(),
   created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   finished_at: timestamp("finished_at", { withTimezone: true }),
   thread_id: uuid("thread_id").notNull().references(() => thread.id, { onDelete: 'cascade' }),
+  version_id: uuid("version_id").references(() => versions.id, { onDelete: 'set null' }),
   state: varchar({ length: 255 }).notNull(),
+  fail_reason: jsonb("fail_reason"),
 });
 
 
@@ -139,10 +151,18 @@ export const channelsRelations = relations(channels, ({ many }) => ({
   activities: many(activity),
 }));
 
+export const versionsRelations = relations(versions, ({ many }) => ({
+  runs: many(run),
+}));
+
 export const runRelations = relations(run, ({ one, many }) => ({
   thread: one(thread, {
     fields: [run.thread_id],
     references: [thread.id],
+  }),
+  version: one(versions, {
+    fields: [run.version_id],
+    references: [versions.id],
   }),
   activities: many(activity)
 }));

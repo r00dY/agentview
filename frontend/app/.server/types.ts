@@ -13,9 +13,21 @@ export interface EmailPayload {
     contentType?: string;
   }>;
 }
+
+export interface VersionManifest {
+  type: "manifest";
+  version: string;
+  env?: "prod" | "dev" | `dev.${string}`;
+  metadata?: any;
+}
+
+export interface NonAsyncRunResult {
+  manifest: VersionManifest;
+  activities: any[];
+}
   
 export type AgentViewConfig = {
   email: (payload: EmailPayload) => Promise<void>;
   threads: any
-  run: (state: { thread: any }) => Promise<any[]> | AsyncGenerator<any, any, any>;
+  run: (state: { thread: any }) => Promise<NonAsyncRunResult> | AsyncGenerator<VersionManifest | any, any, any>;
 }
