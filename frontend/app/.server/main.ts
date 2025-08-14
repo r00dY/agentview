@@ -591,8 +591,7 @@ const runWatchRoute = createRoute({
   path: '/api/threads/{thread_id}/watch_run',
   request: {
     params: z.object({
-      thread_id: z.string(), 
-      run_id: z.string(),
+      thread_id: z.string()
     }),
     // query: z.object({
     //   last_activity_id: z.string().optional(),

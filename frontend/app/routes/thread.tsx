@@ -176,9 +176,7 @@ function ThreadPage() {
 
             (async () => {
                 try {
-                    const query = activities.length > 0 ? `?last_activity_id=${activities[activities.length - 1].id}` : ''
-
-                    const response = await fetch(`${getAPIBaseUrl()}/api/threads/${thread.id}/watch_run${query}`, {
+                    const response = await fetch(`${getAPIBaseUrl()}/api/threads/${thread.id}/watch_run`, {
                         headers: {
                             'Content-Type': 'application/json',
                         }
@@ -187,41 +185,43 @@ function ThreadPage() {
                     setStreaming(true)
 
                     for await (const event of parseSSE(response)) {
-                        if (event.event === 'activity') {
-                            setThread((prevThread) => {
-                                const prevActivities = getAllActivities(prevThread)
-                                const existingIdx = prevActivities.findIndex((a: any) => a.id === event.data.id);
-                                if (existingIdx === -1) {
-                                    // New activity, append
-                                    return { ...prevThread, activities: [...prevActivities, event.data] };
-                                } else {
-                                    // Existing activity, replace and remove all after
-                                    return {
-                                        ...prevThread,
-                                        activities: [
-                                            ...prevActivities.slice(0, existingIdx),
-                                            event.data
-                                        ]
-                                    };
+
+
+                        setThread((currentThread) => {
+                            const lastRun = getLastRun(currentThread);
+                            if (!lastRun) { throw new Error("Unreachable: Last run not found") };
+
+                            let newRun: typeof lastRun;
+                        
+                            if (event.event === 'activity') {
+                                const newActivity = event.data;
+                                const newActivityIndex = lastRun.activities.findIndex((a: any) => a.id === newActivity.id);
+    
+                                newRun = {
+                                    ...lastRun,
+                                    activities: newActivityIndex === -1 ? 
+                                        [...lastRun.activities, newActivity] : [
+                                        ...lastRun.activities.slice(0, newActivityIndex),
+                                        newActivity
+                                    ]
                                 }
-                            });
-                        }
-                        else if (event.event === 'thread.run') {
-                            console.log('thread.run')
-                            console.log(event.data)
+                            }
+                            else if (event.event === 'state') {
+                                newRun = {
+                                    ...lastRun,
+                                    ...event.data
+                                }
+                            }
 
-                            setThread((thread: any) => {
-                                const lastRun = getLastRun(thread);
-                                if (!lastRun) { throw new Error("Last run not found") };
+                            return {
+                                ...currentThread,
+                                runs: currentThread.runs.map((run: any) =>
+                                    run.id === lastRun.id ? newRun : run
+                                )
+                            }
 
-                                const runs = thread.runs.map((run: any) =>
-                                    run.id === lastRun.id
-                                        ? { ...run, ...event.data }
-                                        : run
-                                );
-                                return { ...thread, runs };
-                            });
-                        }
+                        })
+
                     }
 
                 } catch (error) {
