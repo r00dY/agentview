@@ -136,8 +136,6 @@ export default function ThreadPageWrapper() {
 function ThreadPage() {
     const loaderData = useLoaderData<typeof clientLoader>();
 
-    console.log(loaderData.thread)
-
     const [thread, setThread] = useState(loaderData.thread)
     const [formError, setFormError] = useState<string | null>(null)
     const [isStreaming, setStreaming] = useState(false)
@@ -149,8 +147,6 @@ function ThreadPage() {
     const activeActivities = getAllActivities(thread, { activeOnly: true })
     const lastRun = getLastRun(thread)
     const selectedActivityId = activities.find((a: any) => a.id === searchParams.get('activityId'))?.id ?? undefined;
-
-    console.log('thread', thread)
 
     const setSelectedActivityId = (id: string | undefined) => {
         if (id === selectedActivityId) {

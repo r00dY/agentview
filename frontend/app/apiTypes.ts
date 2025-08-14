@@ -75,7 +75,7 @@ export const RunSchema = z.object({
     state: z.string(),
     fail_reason: z.any().nullable(),
     activities: z.array(ActivitySchema),
-    version: VersionSchema,
+    version: VersionSchema.nullable(),
 })
 
 export type Run = z.infer<typeof RunSchema>

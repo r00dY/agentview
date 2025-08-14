@@ -550,7 +550,6 @@ const runCancelRoute = createRoute({
   request: {
     params: z.object({
       thread_id: z.string(), 
-      run_id: z.string(),
     }),
   },
   responses: {
