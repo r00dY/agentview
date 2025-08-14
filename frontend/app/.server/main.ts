@@ -17,7 +17,7 @@ import { isAsyncIterable } from '../lib/utils'
 import { auth } from './auth'
 import { getRootUrl } from './getRootUrl'
 import { createInvitation, cancelInvitation, getPendingInvitations, getValidInvitation } from './invitations'
-
+import { getLastRun } from '~/lib/threadUtils'
 
 
 
@@ -154,58 +154,82 @@ const ThreadCreateSchema = ThreadSchema.pick({
   metadata: true,
 })
 
-async function fetchThreadWithLastRun(thread_id: string) {
-  const threadRow = await db.query.thread.findFirst({
-    where: eq(thread.id, thread_id),
+async function fetchThreads(thread_id?: string) {
+  const threadRows = await db.query.thread.findMany({
+    where: thread_id ? eq(thread.id, thread_id) : undefined,
     with: {
       client: {
         with: {
           simulatedBy: true
         }
       },
-      activities: {
+      runs: {
+        orderBy: (run, { asc }) => [asc(run.created_at)],
         with: {
-          run: true,
-          commentThread: {
+          version: true,
+          activities: {
+            orderBy: (activity, { asc }) => [asc(activity.created_at)],
             with: {
-              commentMessages: {
-                orderBy: (commentMessages, { asc }) => [asc(commentMessages.createdAt)]
+              commentThread: {
+                with: {
+                  commentMessages: {
+                    orderBy: (commentMessages, { asc }) => [asc(commentMessages.createdAt)]
+                  }
+                }
               }
             }
           }
-          // commentThread: {
-          //   with: {
-          //     commentMessages: {
-          //       with: {
-          //         mentions: true,
-          //       }
-          //     }
-          //   }
-          // }
-        },
-        orderBy: (activity, { asc }) => [asc(activity.created_at)]
-      },
-      runs: {
-        orderBy: (run, { desc }) => [desc(run.created_at)],
-        limit: 1
-      },
+        }
+      }
+      // activities: {
+      //   with: {
+      //     run: true,
+      //     commentThread: {
+      //       with: {
+      //         commentMessages: {
+      //           orderBy: (commentMessages, { asc }) => [asc(commentMessages.createdAt)]
+      //         }
+      //       }
+      //     }
+      //   },
+      //   orderBy: (activity, { asc }) => [asc(activity.created_at)]
+      // },
+      // runs: {
+      //   orderBy: (run, { desc }) => [desc(run.created_at)],
+      //   limit: 1
+      // },
     }
   });
 
-  const lastRun = threadRow?.runs[0]
-  const lastRunState = lastRun?.state
-  // const threadState = (lastRunState === undefined || lastRunState === 'completed') ? 'idle' : lastRunState
+  // if (threadRows.length === 0) {
+  //   return undefined
+  // }
 
-  if (!threadRow) {
-    return undefined
-  }
-
-  return {
+  return threadRows.map((threadRow) => ({
     ...threadRow,
-    activities: threadRow.activities.filter((a) => a.run_id === lastRun?.id || a.run?.state === 'completed'),
-    lastRun,
-    // state: threadState
-  }
+    runs: threadRow.runs.filter((run, index) => run.state === 'completed' || index === threadRow.runs.length - 1), // last run & completed ones
+  }))  
+
+  // const threadRow = threadRows[0]
+
+  // const lastRun = threadRow?.runs[0]
+
+  // if (!lastRun) {
+
+  // if (!threadRow) {
+  //   return undefined
+  // }
+
+  // return {
+  //   ...threadRow,
+  //   activities: threadRow.activities.filter((a) => a.run_id === lastRun?.id || a.run?.state === 'completed'),
+  //   lastRun,
+  //   // state: threadState
+  // }
+}
+
+async function fetchThread(thread_id: string) {
+  return (await fetchThreads(thread_id))[0]
 }
 
 
@@ -307,7 +331,7 @@ app.openapi(threadsPOSTRoute, async (c) => {
 
   const [newThread] = await db.insert(thread).values(body).returning();
 
-  return c.json(await fetchThreadWithLastRun(newThread.id), 201);
+  return c.json(await fetchThread(newThread.id), 201);
 })
 
 // Thread GET
@@ -330,7 +354,7 @@ const threadGETRoute = createRoute({
 app.openapi(threadGETRoute, async (c) => {
   const { thread_id } = c.req.param()
 
-  const threadRow = await fetchThreadWithLastRun(thread_id);
+  const threadRow = await fetchThread(thread_id);
 
   if (!threadRow) {
     return c.json({ message: "Thread not found" }, 404);
@@ -364,7 +388,7 @@ app.openapi(activitiesPOSTRoute, async (c) => {
   const { thread_id } = c.req.param()
   const { input: { type, role, content } } = await c.req.json()
 
-  const threadRow = await fetchThreadWithLastRun(thread_id);
+  const threadRow = await fetchThread(thread_id);
 
   if (!threadRow) {
     return c.json({ message: "Thread not found" }, 404);
@@ -393,8 +417,10 @@ app.openapi(activitiesPOSTRoute, async (c) => {
     return c.json({ message: `Invalid content: ${error.message}` }, 400);
   }
 
+  const lastRun = getLastRun(threadRow)
+
   // Check thread status conditions
-  if (threadRow.lastRun?.state === 'in_progress') {
+  if (lastRun?.state === 'in_progress') {
     return c.json({ message: `Cannot add user activity when thread is in 'in_progress' state.` }, 400);
   }
 
@@ -628,7 +654,7 @@ app.openapi(activitiesPOSTRoute, async (c) => {
 
   })();
 
-  return c.json(await fetchThreadWithLastRun(thread_id), 201);
+  return c.json(await fetchThread(thread_id), 201);
 })
 
 
@@ -650,7 +676,7 @@ const threadCancelRoute = createRoute({
 
 app.openapi(threadCancelRoute, async (c) => {
   const { thread_id } = c.req.param();
-  const threadRow = await fetchThreadWithLastRun(thread_id);
+  const threadRow = await fetchThread(thread_id);
   if (!threadRow) {
     return c.json({ message: 'Thread not found' }, 404);
   }
