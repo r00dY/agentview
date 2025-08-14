@@ -12,11 +12,10 @@ import { ItemsWithCommentsLayout } from "~/components/ItemsWithCommentsLayout";
 import { CommentThread } from "~/components/comments";
 import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
 import { getLastRun, getAllActivities } from "~/lib/threadUtils";
-import { ThreadSchema } from "~/apiTypes";
-import * as z from "zod";
+import { type Thread } from "~/apiTypes";
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
-    const response = await apiFetch<z.infer<typeof ThreadSchema>>(`/api/threads/${params.id}`);
+    const response = await apiFetch<Thread>(`/api/threads/${params.id}`);
 
     if (!response.ok) {
         throw data(response.error, { status: response.status })
@@ -120,7 +119,6 @@ function ThreadDetails({ thread }: { thread: any }) {
     </Card>
 }
 
-
 export default function ThreadPageWrapper() {
     const loaderData = useLoaderData<typeof clientLoader>();
     return <ThreadPage key={loaderData.thread.id} />
@@ -128,6 +126,8 @@ export default function ThreadPageWrapper() {
 
 function ThreadPage() {
     const loaderData = useLoaderData<typeof clientLoader>();
+
+    console.log(loaderData.thread)
 
     const [thread, setThread] = useState(loaderData.thread)
     const [formError, setFormError] = useState<string | null>(null)

@@ -86,7 +86,7 @@ export const run = pgTable("run", {
   created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   finished_at: timestamp("finished_at", { withTimezone: true }),
   thread_id: uuid("thread_id").notNull().references(() => thread.id, { onDelete: 'cascade' }),
-  version_id: uuid("version_id").references(() => versions.id, { onDelete: 'set null' }),
+  version_id: uuid("version_id").references(() => versions.id), // version is nullable because when run is created, version is not yet created yet (no `run` was made)
   state: varchar({ length: 255 }).notNull(),
   fail_reason: jsonb("fail_reason"),
 });

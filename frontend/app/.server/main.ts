@@ -605,6 +605,7 @@ const runWatchRoute = createRoute({
 })
 
 
+
 // Activities Watch (SSE)
 app.openapi(runWatchRoute, async (c) => {
   const { thread_id } = c.req.param()

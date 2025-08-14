@@ -8,12 +8,22 @@ import z from 'zod'
 //     email: z.string(),
 // })
 
+export const VersionSchema = z.object({
+    id: z.string(),
+    version: z.string(),
+    env: z.string(),
+    metadata: z.any(),
+    created_at: z.date(),
+})
+
 export const ClientSchema = z.object({
     id: z.string(),
     created_at: z.date(),
     updated_at: z.date(),
     simulatedBy: z.any().nullable(),
 })
+
+export type Client = z.infer<typeof ClientSchema>
 
 export const CommentMessageSchema = z.object({
     id: z.string(),
@@ -26,11 +36,15 @@ export const CommentMessageSchema = z.object({
     deletedBy: z.string().nullable(),
 })
 
+export type CommentMessage = z.infer<typeof CommentMessageSchema>
+
 export const CommentThreadSchema = z.object({
     id: z.string(),
     activityId: z.string(),
     commentMessages: z.array(CommentMessageSchema),
 })
+
+export type CommentThread = z.infer<typeof CommentThreadSchema>
 
 
 export const ActivitySchema = z.object({
@@ -43,6 +57,8 @@ export const ActivitySchema = z.object({
     role: z.string(),
     commentThread: z.optional(CommentThreadSchema),
 })
+
+export type Activity = z.infer<typeof ActivitySchema>
 
 export const ActivityCreateSchema = ActivitySchema.pick({
     type: true,
@@ -59,7 +75,10 @@ export const RunSchema = z.object({
     state: z.string(),
     fail_reason: z.any().nullable(),
     activities: z.array(ActivitySchema),
+    version: VersionSchema,
 })
+
+export type Run = z.infer<typeof RunSchema>
 
 export const ThreadSchema = z.object({
     id: z.string(),
@@ -71,6 +90,8 @@ export const ThreadSchema = z.object({
     runs: z.array(RunSchema),
     client: ClientSchema,
 })
+
+export type Thread = z.infer<typeof ThreadSchema>
 
 export const ThreadCreateSchema = ThreadSchema.pick({
     client_id: true,
