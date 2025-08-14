@@ -53,7 +53,7 @@ export const config : AgentViewConfig = {
         // Emit version manifest first
         yield {
             type: "manifest",
-            version: "1.0.0",
+            version: "1.0.1",
             env: "dev",
             metadata: {
                 description: "Initial version of the agent",

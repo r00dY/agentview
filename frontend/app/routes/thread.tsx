@@ -11,7 +11,7 @@ import { apiFetch } from "~/lib/apiFetch";
 import { ItemsWithCommentsLayout } from "~/components/ItemsWithCommentsLayout";
 import { CommentThread } from "~/components/comments";
 import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
-import { getLastRun, getAllActivities } from "~/lib/threadUtils";
+import { getLastRun, getAllActivities, getVersions } from "~/lib/threadUtils";
 import { type Thread } from "~/apiTypes";
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
@@ -65,6 +65,8 @@ function ActivityView({ activity, onSelect, selected = false }: { activity: any,
 }
 
 function ThreadDetails({ thread }: { thread: any }) {
+    const versions = getVersions(thread)
+
     return <Card>
         <CardHeader>
             <CardTitle>Thread Details</CardTitle>
@@ -96,12 +98,23 @@ function ThreadDetails({ thread }: { thread: any }) {
                     </p>
                 </div>
                 <div>
-                    <label className="text-sm font-medium text-muted-foreground">Type</label>
+                    <label className="text-sm font-medium text-muted-foreground">Source</label>
                     <p className="text-sm">
-                        { thread.client.simulatedBy ? "Simulated by " + thread.client.simulatedBy.name : "Real"}
+                        {thread.client.simulatedBy ? "Simulated by " + thread.client.simulatedBy.name : "Real"}
                         {/* {thread.client.simulated_by ? "Simulated" : "Real"} */}
                     </p>
                 </div>
+
+                <div>
+                    <label className="text-sm font-medium text-muted-foreground">State</label>
+                    <p className="text-sm font-mono">{thread.lastRun?.state === "completed" ? "idle" : (thread.lastRun?.state ?? "idle")}</p>
+                </div>
+
+                <div>
+                    <label className="text-sm font-medium text-muted-foreground">{ versions.length > 1 ? "Versions" : "Version"}</label>
+                    <p className="text-sm font-mono">{versions.map(version => version.version + "." + version.env).join(", ")}</p>
+                </div>
+
                 {thread.metadata && (
                     <div className="md:col-span-2">
                         <label className="text-sm font-medium text-muted-foreground">Metadata</label>
@@ -110,10 +123,6 @@ function ThreadDetails({ thread }: { thread: any }) {
                         </pre>
                     </div>
                 )}
-            </div>
-            <div>
-                <label className="text-sm font-medium text-muted-foreground">State</label>
-                <p className="text-sm font-mono">{thread.lastRun?.state === "completed" ? "idle" : (thread.lastRun?.state ?? "idle")}</p>
             </div>
         </CardContent>
     </Card>
@@ -192,18 +201,18 @@ function ThreadPage() {
                             if (!lastRun) { throw new Error("Unreachable: Last run not found") };
 
                             let newRun: typeof lastRun;
-                        
+
                             if (event.event === 'activity') {
                                 const newActivity = event.data;
                                 const newActivityIndex = lastRun.activities.findIndex((a: any) => a.id === newActivity.id);
-    
+
                                 newRun = {
                                     ...lastRun,
-                                    activities: newActivityIndex === -1 ? 
+                                    activities: newActivityIndex === -1 ?
                                         [...lastRun.activities, newActivity] : [
-                                        ...lastRun.activities.slice(0, newActivityIndex),
-                                        newActivity
-                                    ]
+                                            ...lastRun.activities.slice(0, newActivityIndex),
+                                            newActivity
+                                        ]
                                 }
                             }
                             else if (event.event === 'state') {
@@ -324,7 +333,7 @@ function ThreadPage() {
 
         </div>
 
-        { thread.client.simulatedBy?.id === loaderData.userId && <Card>
+        {thread.client.simulatedBy?.id === loaderData.userId && <Card>
             <CardHeader>
                 <CardTitle>New Activity</CardTitle>
             </CardHeader>
@@ -340,6 +349,6 @@ function ThreadPage() {
 
                 {formError && <div className="text-red-500">{formError}</div>}
             </CardContent>
-        </Card> }
+        </Card>}
     </>
 }
