@@ -137,8 +137,11 @@ function ThreadPage() {
 
     const [searchParams, setSearchParams] = useSearchParams();
     const activities = getAllActivities(thread)
+    const activeActivities = getAllActivities(thread, { activeOnly: true })
     const lastRun = getLastRun(thread)
     const selectedActivityId = activities.find((a: any) => a.id === searchParams.get('activityId'))?.id ?? undefined;
+
+    console.log('thread', thread)
 
     const setSelectedActivityId = (id: string | undefined) => {
         if (id === selectedActivityId) {
@@ -175,7 +178,7 @@ function ThreadPage() {
                 try {
                     const query = activities.length > 0 ? `?last_activity_id=${activities[activities.length - 1].id}` : ''
 
-                    const response = await fetch(`${getAPIBaseUrl()}/api/threads/${thread.id}/watch${query}`, {
+                    const response = await fetch(`${getAPIBaseUrl()}/api/threads/${thread.id}/watch_run${query}`, {
                         headers: {
                             'Content-Type': 'application/json',
                         }
@@ -206,7 +209,7 @@ function ThreadPage() {
                         else if (event.event === 'thread.run') {
                             console.log('thread.run')
                             console.log(event.data)
-                            
+
                             setThread((thread: any) => {
                                 const lastRun = getLastRun(thread);
                                 if (!lastRun) { throw new Error("Last run not found") };
@@ -242,7 +245,7 @@ function ThreadPage() {
 
         if (message) {
             try {
-                const response = await apiFetch(`/api/threads/${thread.id}/activities`, {
+                const response = await apiFetch(`/api/threads/${thread.id}/runs`, {
                     method: 'POST',
                     body: {
                         input: {
@@ -259,7 +262,10 @@ function ThreadPage() {
                 }
                 else {
                     console.log('activity pushed successfully')
-                    setThread(response.data)
+                    setThread({
+                        ...thread,
+                        runs: [...thread.runs, response.data]
+                    })
                 }
             } catch (error) {
                 console.error(error)
@@ -269,7 +275,7 @@ function ThreadPage() {
     }
 
     const handleCancel = async () => {
-        await apiFetch(`/api/threads/${thread.id}/cancel`, {
+        await apiFetch(`/api/threads/${thread.id}/cancel_run`, {
             method: 'POST',
         })
     }
@@ -283,7 +289,7 @@ function ThreadPage() {
             <div className=" p-6 max-w-4xl space-y-6">
                 <ThreadDetails thread={thread} />
 
-                <ItemsWithCommentsLayout items={activities.map((activity: any) => {
+                <ItemsWithCommentsLayout items={activeActivities.map((activity: any) => {
 
                     const hasComments = activity.commentThread && activity.commentThread.commentMessages.filter((m: any) => !m.deletedAt).length > 0
 

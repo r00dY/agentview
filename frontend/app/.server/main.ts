@@ -18,7 +18,7 @@ import { auth } from './auth'
 import { getRootUrl } from './getRootUrl'
 import { createInvitation, cancelInvitation, getPendingInvitations, getValidInvitation } from './invitations'
 import { getAllActivities, getLastRun } from '~/lib/threadUtils'
-import { ClientSchema, ActivitySchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, CommentMessageSchema, CommentThreadSchema } from '~/apiTypes'
+import { ClientSchema, ActivitySchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, CommentMessageSchema, CommentThreadSchema, RunSchema } from '~/apiTypes'
 import { fetchThread, fetchThreads } from './threads'
 
 
@@ -245,13 +245,13 @@ app.openapi(threadGETRoute, async (c) => {
 })
 
 
-/* --------- ACTIVITIES --------- */
+/* --------- RUNS --------- */
 
 
-// Activities POST
-const activitiesPOSTRoute = createRoute({
+// Create run
+const runsPOSTRoute = createRoute({
   method: 'post',
-  path: '/api/threads/{thread_id}/activities',
+  path: '/api/threads/{thread_id}/runs',
   request: {
     params: z.object({
       thread_id: z.string(),
@@ -261,13 +261,13 @@ const activitiesPOSTRoute = createRoute({
     }))
   },
   responses: {
-    201: response_data(ThreadSchema),
+    201: response_data(RunSchema), // todo: this sucks I guess
     400: response_error(),
     404: response_error()
   },
 })
 
-app.openapi(activitiesPOSTRoute, async (c) => {
+app.openapi(runsPOSTRoute, async (c) => {
   const { thread_id } = c.req.param()
   const { input: { type, role, content } } = await c.req.json()
 
@@ -536,17 +536,21 @@ app.openapi(activitiesPOSTRoute, async (c) => {
 
   })();
 
-  return c.json(await fetchThread(thread_id), 201);
+  const thread = await fetchThread(thread_id);
+  const newRun = getLastRun(thread);
+
+  return c.json(newRun, 201);
 })
 
 
 // Cancel Run Endpoint
-const threadCancelRoute = createRoute({
+const runCancelRoute = createRoute({
   method: 'post',
-  path: '/api/threads/{thread_id}/cancel',
+  path: '/api/threads/{thread_id}/cancel_run',
   request: {
     params: z.object({
-      thread_id: z.string(),
+      thread_id: z.string(), 
+      run_id: z.string(),
     }),
   },
   responses: {
@@ -556,8 +560,9 @@ const threadCancelRoute = createRoute({
   },
 });
 
-app.openapi(threadCancelRoute, async (c) => {
+app.openapi(runCancelRoute, async (c) => {
   const { thread_id } = c.req.param();
+
   const threadRow = await fetchThread(thread_id);
   if (!threadRow) {
     return c.json({ message: 'Thread not found' }, 404);
@@ -566,7 +571,7 @@ app.openapi(threadCancelRoute, async (c) => {
   const lastRun = getLastRun(threadRow)
 
   if (lastRun?.state !== 'in_progress') {
-    return c.json({ message: 'Thread is not in progress' }, 400);
+    return c.json({ message: 'Run is not in progress' }, 400);
   }
   // Set the run as failed
   await db.update(run)
@@ -581,13 +586,17 @@ app.openapi(threadCancelRoute, async (c) => {
 });
 
 // Activities POST
-const activityWatchRoute = createRoute({
+const runWatchRoute = createRoute({
   method: 'get',
-  path: '/api/threads/{thread_id}/watch',
+  path: '/api/threads/{thread_id}/watch_run',
   request: {
-    query: z.object({
-      last_activity_id: z.string().optional(),
-    })
+    params: z.object({
+      thread_id: z.string(), 
+      run_id: z.string(),
+    }),
+    // query: z.object({
+    //   last_activity_id: z.string().optional(),
+    // })
   },
   responses: {
     // 201: response_data(z.array(ActivitySchema)),
@@ -598,7 +607,7 @@ const activityWatchRoute = createRoute({
 
 
 // Activities Watch (SSE)
-app.openapi(activityWatchRoute, async (c) => {
+app.openapi(runWatchRoute, async (c) => {
   const { thread_id } = c.req.param()
 
   const threadRow = await fetchThread(thread_id);
@@ -610,26 +619,27 @@ app.openapi(activityWatchRoute, async (c) => {
   }
 
   if (lastRun?.state !== 'in_progress') {
-    return c.json({ message: "Thread must be in 'in_progress' state to watch" }, 400);
+    return c.json({ message: "Thread active run must be in 'in_progress' state to watch" }, 400);
   }
 
-  let lastActivityIndex: number;
+  // let lastActivityIndex: number;
 
-  if (c.req.query().last_activity_id) {
-    lastActivityIndex = activities.findIndex((a) => a.id === c.req.query().last_activity_id)
+  // if (c.req.query().last_activity_id) {
+  //   lastActivityIndex = activities.findIndex((a) => a.id === c.req.query().last_activity_id)
 
-    if (lastActivityIndex === -1) {
-      return c.json({ message: "Last activity id not found" }, 400);
-    }
-  }
-  else {
-    lastActivityIndex = activities.length - 1
-  }
+  //   if (lastActivityIndex === -1) {
+  //     return c.json({ message: "Last activity id not found" }, 400);
+  //   }
+  // }
+  // else {
+  //   lastActivityIndex = activities.length - 1
+  // }
 
-  // Only include activities before lastActivityId in ignoredActivityIds
-  const ignoredActivityIds = activities
-    .slice(0, activities.findIndex((a) => a.id === activities[lastActivityIndex].id))
-    .map((a) => a.id);
+  // // Only include activities before lastActivityId in ignoredActivityIds
+  // const ignoredActivityIds = activities
+  //   .slice(0, activities.findIndex((a) => a.id === activities[lastActivityIndex].id))
+  //   .map((a) => a.id);
+
 
   // 4. Start SSE stream
   return streamSSE(c, async (stream) => {
@@ -641,8 +651,10 @@ app.openapi(activityWatchRoute, async (c) => {
     // Always start with thread.state in_progress
     await stream.writeSSE({
       data: JSON.stringify({ state: lastRun?.state }),
-      event: 'thread.run',
+      event: 'state',
     });
+
+    let sentActivityIds: string[] = [];
 
     /**
      * 
@@ -662,10 +674,10 @@ app.openapi(activityWatchRoute, async (c) => {
       const activities = getAllActivities(threadRow)
 
       for (const activity of activities) {
-        if (ignoredActivityIds.includes(activity.id)) {
+        if (sentActivityIds.includes(activity.id)) {
           continue;
         }
-        ignoredActivityIds.push(activity.id)
+        sentActivityIds.push(activity.id)
         await stream.writeSSE({
           data: JSON.stringify(activity),
           event: 'activity',
@@ -683,7 +695,7 @@ app.openapi(activityWatchRoute, async (c) => {
 
         await stream.writeSSE({
           data: JSON.stringify(data),
-          event: 'thread.run',
+          event: 'state',
         });
         break;
       }

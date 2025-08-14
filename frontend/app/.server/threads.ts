@@ -31,11 +31,13 @@ export async function fetchThreads(thread_id?: string) {
         }
       }
     });
+
+    return threadRows;
   
-    return threadRows.map((threadRow) => ({
-      ...threadRow,
-      runs: threadRow.runs.filter((run, index) => run.state === 'completed' || index === threadRow.runs.length - 1), // last run & completed ones
-    }))
+    // return threadRows.map((threadRow) => ({
+    //   ...threadRow,
+    //   runs: threadRow.runs.filter((run, index) => run.state === 'completed' || index === threadRow.runs.length - 1), // last run & completed ones
+    // }))
   }
   
   export async function fetchThread(thread_id: string) {
