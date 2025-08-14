@@ -63,7 +63,7 @@ export const config : AgentViewConfig = {
 
         const lastUserMessage = input.thread.activities[input.thread.activities.length - 1].content;
 
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 3; i++) {
 
             // Check if lastUserMessage matches "make_error.<number>" pattern
             const match = /^make_error\.(\d+)$/.exec(lastUserMessage);

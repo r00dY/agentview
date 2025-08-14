@@ -145,7 +145,7 @@ const ThreadSchema = z.object({
   client_id: z.string(),
   type: z.string(),
   activities: z.array(ActivitySchema),
-  state: z.string()
+  run: z.any().optional()
 })
 
 const ThreadCreateSchema = ThreadSchema.pick({
@@ -194,7 +194,7 @@ async function fetchThreadWithLastRun(thread_id: string) {
 
   const lastRun = threadRow?.runs[0]
   const lastRunState = lastRun?.state
-  const threadState = (lastRunState === undefined || lastRunState === 'completed') ? 'idle' : lastRunState
+  // const threadState = (lastRunState === undefined || lastRunState === 'completed') ? 'idle' : lastRunState
 
   if (!threadRow) {
     return undefined
@@ -203,9 +203,8 @@ async function fetchThreadWithLastRun(thread_id: string) {
   return {
     ...threadRow,
     activities: threadRow.activities.filter((a) => a.run_id === lastRun?.id || a.run?.state === 'completed'),
-    runs: undefined,
     lastRun,
-    state: threadState
+    // state: threadState
   }
 }
 
@@ -395,7 +394,7 @@ app.openapi(activitiesPOSTRoute, async (c) => {
   }
 
   // Check thread status conditions
-  if (threadRow.state === 'in_progress') {
+  if (threadRow.lastRun?.state === 'in_progress') {
     return c.json({ message: `Cannot add user activity when thread is in 'in_progress' state.` }, 400);
   }
 
@@ -610,8 +609,6 @@ app.openapi(activitiesPOSTRoute, async (c) => {
           finished_at: new Date(),
         })
         .where(eq(run.id, userActivity.run_id));
-
-
     }
     catch (error: any) {
       console.log('Catch!', error)
@@ -624,7 +621,7 @@ app.openapi(activitiesPOSTRoute, async (c) => {
         .set({
           state: 'failed',
           finished_at: new Date(),
-          fail_reason: error.message ? { message: error.message } : null
+          fail_reason: error.message ? error : { message: "Error in `run`", details: error }
           })
           .where(eq(run.id, userActivity.run_id));
       }
@@ -657,7 +654,7 @@ app.openapi(threadCancelRoute, async (c) => {
   if (!threadRow) {
     return c.json({ message: 'Thread not found' }, 404);
   }
-  if (threadRow.state !== 'in_progress' || !threadRow.lastRun) {
+  if (threadRow.lastRun?.state !== 'in_progress') {
     return c.json({ message: 'Thread is not in progress' }, 400);
   }
   // Set the run as failed
@@ -699,9 +696,9 @@ app.openapi(activityWatchRoute, async (c) => {
     return c.json({ message: "Thread not found" }, 404);
   }
 
-  // if (state !== 'in_progress') {
-  //   return c.json({ message: "Thread must be in 'in_progress' state to watch" }, 400);
-  // }
+  if (threadRow.lastRun?.state !== 'in_progress') {
+    return c.json({ message: "Thread must be in 'in_progress' state to watch" }, 400);
+  }
 
   let lastActivityIndex: number;
 
@@ -730,8 +727,8 @@ app.openapi(activityWatchRoute, async (c) => {
 
     // Always start with thread.state in_progress
     await stream.writeSSE({
-      data: JSON.stringify({ state: threadRow.state }),
-      event: 'thread.state',
+      data: JSON.stringify({ state: threadRow.lastRun?.state }),
+      event: 'thread.run',
     });
 
     /**
@@ -763,17 +760,17 @@ app.openapi(activityWatchRoute, async (c) => {
       }
 
       // End if run is no longer in_progress
-      if (threadRow.state !== 'in_progress') {
+      if (threadRow.lastRun?.state !== 'in_progress') {
 
-        const data: any = { state: threadRow.state }
+        const data: { state: string, fail_reason?: any } = { state: threadRow.lastRun?.state }
 
-        if (threadRow.state === 'failed') {
+        if (threadRow.lastRun?.state === 'failed') {
           data.fail_reason = threadRow.lastRun.fail_reason
         }
 
         await stream.writeSSE({
           data: JSON.stringify(data),
-          event: 'thread.state',
+          event: 'thread.run',
         });
         break;
       }

@@ -112,7 +112,7 @@ function ThreadDetails({ thread }: { thread: any }) {
             </div>
             <div>
                 <label className="text-sm font-medium text-muted-foreground">State</label>
-                <p className="text-sm font-mono">{thread.state}</p>
+                <p className="text-sm font-mono">{thread.lastRun?.state === "completed" ? "idle" : (thread.lastRun?.state ?? "idle")}</p>
             </div>
         </CardContent>
     </Card>
@@ -165,7 +165,7 @@ function ThreadPage() {
     }, [loaderData.thread])
 
     useEffect(() => {
-        if (thread.state === 'in_progress') {
+        if (thread.lastRun?.state === 'in_progress') {
 
             (async () => {
                 try {
@@ -198,8 +198,13 @@ function ThreadPage() {
                                 }
                             });
                         }
-                        else if (event.event === 'thread.state') {
-                            setThread((thread: any) => ({ ...thread, state: event.data.state }))
+                        else if (event.event === 'thread.run') {
+                            console.log('thread.run')
+                            console.log(event.data)
+                            setThread((thread: any) => ({ ...thread, lastRun: {
+                                ...thread.lastRun,
+                                ...event.data
+                            } }))
                         }
                     }
 
@@ -211,7 +216,7 @@ function ThreadPage() {
             })()
         }
 
-    }, [thread.state])
+    }, [thread.lastRun?.state])
 
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -256,8 +261,6 @@ function ThreadPage() {
         })
     }
 
-    console.log(thread)
-
     return <>
         <Header>
             <HeaderTitle title={`Thread`} />
@@ -292,10 +295,12 @@ function ThreadPage() {
                 />
 
                 <div>
-                    {thread.state === 'in_progress' && <div>in progress...</div>}
-                    {thread.state === 'failed' && <div>failed</div>}
+                    {thread.lastRun?.state === 'in_progress' && <div>in progress...</div>}
+                    {thread.lastRun?.state === 'failed' && <div>
+                        <div>failed</div>
+                        <div>{thread.lastRun?.fail_reason?.message}</div>
+                    </div>}
                 </div>
-
             </div>
 
         </div>
@@ -308,9 +313,9 @@ function ThreadPage() {
             <CardContent>
                 <form method="post" onSubmit={handleSubmit}>
                     <Textarea name="message" placeholder="Reply here..." />
-                    <Button type="submit" disabled={thread.state === 'in_progress'}>Send</Button>
+                    <Button type="submit" disabled={thread.lastRun?.state === 'in_progress'}>Send</Button>
 
-                    {thread.state === 'in_progress' && <Button type="button" onClick={() => {
+                    {thread.lastRun?.state === 'in_progress' && <Button type="button" onClick={() => {
                         handleCancel()
                     }}>Cancel</Button>}
                 </form>
