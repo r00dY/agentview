@@ -50,5 +50,6 @@ export interface ThreadConfig {
 export type AgentViewConfig = {
   email: (payload: EmailPayload) => Promise<void>;
   threads: ThreadConfig[],
-  run: (state: { thread: any }) => Promise<NonAsyncRunResult> | AsyncGenerator<VersionManifest | any, any, any>;
 }
+
+export type RunFunction = (state: { thread: any }) => Promise<NonAsyncRunResult> | AsyncGenerator<VersionManifest | any, any, any>;

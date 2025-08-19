@@ -20,7 +20,7 @@ import { createInvitation, cancelInvitation, getPendingInvitations, getValidInvi
 import { getAllActivities, getLastRun } from '~/lib/threadUtils'
 import { ClientSchema, ActivitySchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, CommentMessageSchema, RunSchema, ScoreSchema, ScoreCreateSchema } from '~/apiTypes'
 import { fetchThread, fetchThreads } from './threads'
-
+import { run as runFunction } from './run'
 
 export const app = new OpenAPIHono({
   defaultHook: (result, c) => {
@@ -404,7 +404,7 @@ app.openapi(runsPOSTRoute, async (c) => {
     }
 
     try {
-      const runOutput = config.run(input)
+      const runOutput = runFunction(input)
       let versionId: string | null = null;
 
       if (isAsyncIterable(runOutput)) {
@@ -1388,7 +1388,21 @@ app.get('/', (c) => c.text('Hello Agent View!'))
 
 serve({
   fetch: app.fetch,
-  port: 2139
+  port: (() => {
+    // Get the port from VITE_AGENTVIEW_API_BASE_URL
+    const url = process.env.VITE_AGENTVIEW_API_BASE_URL;
+    if (!url) throw new Error('VITE_AGENTVIEW_API_BASE_URL is not set');
+    try {
+      const parsed = new URL(url);
+      if (parsed.port) return Number(parsed.port);
+      // Default ports for http/https
+      if (parsed.protocol === 'http:') return 80;
+      if (parsed.protocol === 'https:') return 443;
+      throw new Error('No port specified in VITE_AGENTVIEW_API_BASE_URL and protocol is not http/https');
+    } catch (e) {
+      throw new Error('Invalid VITE_AGENTVIEW_API_BASE_URL: ' + e);
+    }
+  })()
 })
 
 console.log("Agent View API running...")

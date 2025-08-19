@@ -20,6 +20,9 @@ export async function fetchThreads(thread_id?: string) {
               with: {
                 commentMessages: {
                   orderBy: (commentMessages, { asc }) => [asc(commentMessages.createdAt)]
+                },
+                scores: {
+                  orderBy: (scores, { asc }) => [asc(scores.createdAt)]
                 }
               }
             }

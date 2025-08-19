@@ -18,6 +18,7 @@ export default [
             route("new", "routes/threadNew.tsx"),
             route(":id", "routes/thread.tsx"),
             route(":id/comments", "routes/threadComments.tsx"),
+            route(":id/activities/:activityId/scores", "routes/threadScores.tsx"),
         ]),
 
         route("logout", "routes/logout.tsx"),

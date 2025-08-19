@@ -8,15 +8,25 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
-import { EllipsisVerticalIcon, PencilIcon } from "lucide-react";
+import { EllipsisVerticalIcon, PencilIcon, StarIcon } from "lucide-react";
 import { TextEditor, textToElements } from "./wysiwyg/TextEditor";
-import type { Activity } from "~/apiTypes";
+import type { Activity, Thread } from "~/apiTypes";
+import { ScoreModal } from "./ScoreModal";
+import { config } from "~/agentview.config";
 
 
-export function CommentThread({ threadId, activity, userId, selected = false, users, onSelect }: { threadId: string, activity: Activity, userId: string | null, selected: boolean, users: any[], onSelect: (activity: any) => void }) {
+export function CommentThread({ thread, activity, userId, selected = false, users, onSelect }: { 
+    thread: Thread,
+    activity: Activity, 
+    userId: string | null, 
+    selected: boolean, 
+    users: any[], 
+    onSelect: (activity: any) => void,
+}) {
     const fetcher = useFetcher();
 
     const visibleMessages = activity.commentMessages.filter((m: any) => !m.deletedAt) ?? []
+    const visibleScores = activity.scores.filter((s: any) => !s.deletedAt) ?? []
     const hasZeroVisisbleComments = visibleMessages.length === 0
 
     const formRef = useRef<HTMLFormElement>(null);
@@ -61,6 +71,19 @@ export function CommentThread({ threadId, activity, userId, selected = false, us
             }
         }}>
             <div className="flex flex-col gap-6">
+                {/* Display scores */}
+                {visibleScores.map((score: any) => (
+                    <ScoreItem
+                        key={score.id}
+                        score={score}
+                        activity={activity}
+                        userId={userId}
+                        users={users}
+                        thread={thread}
+                    />
+                ))}
+
+                {/* Display comments */}
                 {visibleMessages.map((message: any, index: number) => {
                     const count = visibleMessages.length;
 
@@ -100,7 +123,7 @@ export function CommentThread({ threadId, activity, userId, selected = false, us
                         userId={userId}
                         fetcher={fetcher}
                         activityId={activity.id}
-                        threadId={threadId}
+                        thread={thread}
                         user={users.find((user) => user.id === message.userId)}
                         isEditing={currentlyEditedItemId === message.id}
                         onRequestEdit={() => setCurrentlyEditedItemId(message.id)}
@@ -116,7 +139,20 @@ export function CommentThread({ threadId, activity, userId, selected = false, us
             {selected && <div className="">
                 {hasZeroVisisbleComments && <CommentMessageHeader title={users.find((user) => user.id === userId)?.name || "You"} />}
 
-                {(hasZeroVisisbleComments || currentlyEditedItemId === "new" || currentlyEditedItemId === null) && <fetcher.Form method="post" action={`/threads/${threadId}/comments`} className="mt-4" ref={formRef}>
+                <div className="mt-4 mb-4">
+                    <ScoreModal
+                        activity={activity}
+                        thread={thread}
+                        trigger={
+                            <Button variant="outline" size="sm" className="gap-2">
+                                <StarIcon className="w-4 h-4" />
+                                Scores
+                            </Button>
+                        }
+                    />
+                </div>
+
+                {(hasZeroVisisbleComments || currentlyEditedItemId === "new" || currentlyEditedItemId === null) && <fetcher.Form method="post" action={`/threads/${thread.id}/comments`} className="mt-4" ref={formRef}>
                     <TextEditor
                         mentionItems={users.map(user => ({
                             id: user.id,
@@ -193,7 +229,7 @@ export function CommentMessageHeader({ title, subtitle, actions }: { title: stri
 type MessageCompressionLevel = "none" | "medium" | "high";
 
 // New subcomponent for comment message item with edit logic
-export function CommentMessageItem({ message, userId, activityId, threadId, user, users, isEditing, onRequestEdit, onCancelEdit, compressionLevel = "none" }: { message: any, userId: string | null, fetcher: any, activityId: string, threadId: string, user: any, users: any[], isEditing: boolean, onRequestEdit: () => void, onCancelEdit: () => void, compressionLevel?: MessageCompressionLevel }) {
+export function CommentMessageItem({ message, userId, activityId, thread, user, users, isEditing, onRequestEdit, onCancelEdit, compressionLevel = "none" }: { message: any, userId: string | null, fetcher: any, activityId: string, thread: Thread, user: any, users: any[], isEditing: boolean, onRequestEdit: () => void, onCancelEdit: () => void, compressionLevel?: MessageCompressionLevel }) {
     const isDeleted = message.deletedAt;
     const fetcher = useFetcher();
     const isOwn = userId && message.userId === userId;
@@ -231,7 +267,7 @@ export function CommentMessageItem({ message, userId, activityId, threadId, user
                                 const formData = new FormData();
                                 formData.append('deleteCommentMessageId', message.id);
                                 formData.append('activityId', activityId);
-                                fetcher.submit(formData, { method: 'post', action: `/threads/${threadId}/comments` });
+                                fetcher.submit(formData, { method: 'post', action: `/threads/${thread.id}/comments` });
                             }
                         }}>
                             Delete
@@ -245,7 +281,7 @@ export function CommentMessageItem({ message, userId, activityId, threadId, user
             {/* Comment content */}
             <div className="text-sm mt-2">
                 {isEditing ? (
-                    <fetcher.Form method="post" action={`/threads/${threadId}/comments`} className="space-y-2">
+                    <fetcher.Form method="post" action={`/threads/${thread.id}/comments`} className="space-y-2">
 
                         <TextEditor
                             mentionItems={users.map(user => ({
@@ -286,6 +322,84 @@ export function CommentMessageItem({ message, userId, activityId, threadId, user
                             id: user.id,
                             label: user.name
                         })))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// Score item component
+export function ScoreItem({ score, activity, userId, users, thread }: { 
+    score: any, 
+    activity: any, 
+    userId: string | null, 
+    users: any[], 
+    thread: Thread
+}) {
+    const fetcher = useFetcher();
+    const isOwn = userId && score.createdBy === userId;
+    const user = users.find((u) => u.id === score.createdBy);
+    const subtitle = new Date(score.createdAt).toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+
+    // Find score configuration to get the title
+    const threadConfig = config.threads.find((t: any) => t.type === thread.type);
+    const activityConfig = threadConfig?.activities.find((a: any) => 
+        a.type === activity.type && a.role === activity.role
+    );
+    const scoreConfig = activityConfig?.scores?.find((s: any) => s.name === score.name);
+    const scoreTitle = scoreConfig?.title || score.name;
+
+    return (
+        <div className="border-l-4 border-blue-500 pl-4 py-2">
+            <CommentMessageHeader 
+                title={user?.name || "Unknown User"} 
+                subtitle={`${scoreTitle} · ${subtitle}`}
+                actions={
+                    isOwn && (
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button size="icon" variant="ghost">
+                                    <EllipsisVerticalIcon className="w-4 h-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className="w-32" align="start">
+                                <DropdownMenuItem onClick={(e) => {
+                                    e.preventDefault();
+                                    if (confirm('Are you sure you want to delete this score?')) {
+                                        // TODO: Implement score deletion
+                                        console.log('Delete score:', score.id);
+                                    }
+                                }}>
+                                    Delete
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    )
+                }
+            />
+            
+            <div className="text-sm mt-2 space-y-2">
+                <div className="bg-gray-50 p-3 rounded-md">
+                    <div className="font-medium text-gray-700 mb-1">Score Value:</div>
+                    <pre className="text-xs text-gray-600 whitespace-pre-wrap">
+                        {JSON.stringify(score.value, null, 2)}
+                    </pre>
+                </div>
+                
+                {score.commentId && (
+                    <div className="text-gray-700">
+                        <div className="font-medium mb-1">Comment:</div>
+                        <div className="text-sm">
+                            {/* TODO: Display the associated comment */}
+                            Comment ID: {score.commentId}
+                        </div>
                     </div>
                 )}
             </div>

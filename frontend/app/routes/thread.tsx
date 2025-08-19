@@ -312,7 +312,7 @@ function ThreadPage() {
                                 selected={selectedActivityId === activity.id}
                                 users={users}
                                 onSelect={(a) => { setSelectedActivityId(a?.id) }}
-                                threadId={thread.id}
+                                thread={thread}
                             /> : undefined
                     }
                 })} selectedItemId={selectedActivityId}

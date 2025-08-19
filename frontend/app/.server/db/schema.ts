@@ -194,7 +194,6 @@ export const activityRelations = relations(activity, ({ one, many }) => ({
   scores: many(scores),
 }));
 
-
 export const commentMessagesRelations = relations(commentMessages, ({ one, many }) => ({
   activity: one(activity, {
     fields: [commentMessages.activityId],

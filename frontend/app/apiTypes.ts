@@ -37,6 +37,23 @@ export const CommentMessageSchema = z.object({
 
 export type CommentMessage = z.infer<typeof CommentMessageSchema>
 
+export const ScoreSchema = z.object({
+    id: z.string(),
+    activityId: z.string(),
+
+    name: z.string(),
+    value: z.any(),
+    commentId: z.string().nullable(),
+
+    createdBy: z.string(),
+    createdAt: z.date(),
+    updatedAt: z.date(),
+    deletedAt: z.date().nullable(),
+    deletedBy: z.string().nullable(),
+})
+
+export type Score = z.infer<typeof ScoreSchema>
+
 export const ActivitySchema = z.object({
     id: z.string(),
     created_at: z.date(),
@@ -46,6 +63,7 @@ export const ActivitySchema = z.object({
     type: z.string(),
     role: z.string(),
     commentMessages: z.array(CommentMessageSchema),
+    scores: z.array(ScoreSchema),
 })
 
 export type Activity = z.infer<typeof ActivitySchema>
@@ -89,23 +107,6 @@ export const ThreadCreateSchema = ThreadSchema.pick({
     metadata: true,
 })
 
-
-export const ScoreSchema = z.object({
-    id: z.string(),
-    activityId: z.string(),
-
-    name: z.string(),
-    value: z.any(),
-    commentId: z.string().nullable(),
-
-    createdBy: z.string(),
-    createdAt: z.date(),
-    updatedAt: z.date(),
-    deletedAt: z.date().nullable(),
-    deletedBy: z.string().nullable(),
-})
-
-export type Score = z.infer<typeof ScoreSchema>
 
 export const ScoreCreateSchema = ScoreSchema.pick({
     activityId: true,
