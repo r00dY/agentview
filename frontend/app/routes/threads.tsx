@@ -64,9 +64,11 @@ export default function Threads() {
 
     </div>
 
-    <div className="flex-1 flex flex-col">  
+        <Outlet />
+
+    {/* <div className="flex-1 flex flex-col">  
       <Outlet />
-    </div>
+    </div> */}
 
   </div>
 }

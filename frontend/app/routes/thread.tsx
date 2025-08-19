@@ -65,29 +65,26 @@ function ActivityView({ activity, onSelect, selected = false }: { activity: any,
 }
 
 function ThreadDetails({ thread }: { thread: any }) {
-    const versions = getVersions(thread)
+    const versions = getVersions(thread);
 
-    return <Card>
-        <CardHeader>
-            <CardTitle>Thread Details</CardTitle>
-        </CardHeader>
-        <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label className="text-sm font-medium text-muted-foreground">ID</label>
-                    <p className="text-sm font-mono">{thread.id}</p>
+    return (
+        <div className="w-full">
+            <div className="grid grid-cols-1 gap-2">
+                <div className="flex flex-row gap-4">
+                    <span className="w-32 text-sm font-medium text-muted-foreground">ID</span>
+                    <span className="text-sm font-mono">{thread.id}</span>
                 </div>
-                <div>
-                    <label className="text-sm font-medium text-muted-foreground">Agent</label>
-                    <p className="text-sm">{thread.type}</p>
+                <div className="flex flex-row gap-4">
+                    <span className="w-32 text-sm font-medium text-muted-foreground">Agent</span>
+                    <span className="text-sm">{thread.type}</span>
                 </div>
-                <div>
-                    <label className="text-sm font-medium text-muted-foreground">Client ID</label>
-                    <p className="text-sm font-mono">{thread.client_id}</p>
+                <div className="flex flex-row gap-4">
+                    <span className="w-32 text-sm font-medium text-muted-foreground">Client ID</span>
+                    <span className="text-sm font-mono">{thread.client_id}</span>
                 </div>
-                <div>
-                    <label className="text-sm font-medium text-muted-foreground">Created</label>
-                    <p className="text-sm">
+                <div className="flex flex-row gap-4">
+                    <span className="w-32 text-sm font-medium text-muted-foreground">Created</span>
+                    <span className="text-sm">
                         {new Date(thread.created_at).toLocaleDateString('en-US', {
                             year: 'numeric',
                             month: 'long',
@@ -95,37 +92,37 @@ function ThreadDetails({ thread }: { thread: any }) {
                             hour: '2-digit',
                             minute: '2-digit'
                         })}
-                    </p>
+                    </span>
                 </div>
-                <div>
-                    <label className="text-sm font-medium text-muted-foreground">Source</label>
-                    <p className="text-sm">
+                <div className="flex flex-row gap-4">
+                    <span className="w-32 text-sm font-medium text-muted-foreground">Source</span>
+                    <span className="text-sm">
                         {thread.client.simulatedBy ? "Simulated by " + thread.client.simulatedBy.name : "Real"}
-                        {/* {thread.client.simulated_by ? "Simulated" : "Real"} */}
-                    </p>
+                    </span>
                 </div>
-
-                <div>
-                    <label className="text-sm font-medium text-muted-foreground">State</label>
-                    <p className="text-sm font-mono">{thread.lastRun?.state === "completed" ? "idle" : (thread.lastRun?.state ?? "idle")}</p>
+                <div className="flex flex-row gap-4">
+                    <span className="w-32 text-sm font-medium text-muted-foreground">State</span>
+                    <span className="text-sm font-mono">{thread.lastRun?.state === "completed" ? "idle" : (thread.lastRun?.state ?? "idle")}</span>
                 </div>
-
-                <div>
-                    <label className="text-sm font-medium text-muted-foreground">{ versions.length > 1 ? "Versions" : "Version"}</label>
-                    <p className="text-sm font-mono">{versions.map(version => version.version + "." + version.env).join(", ")}</p>
+                <div className="flex flex-row gap-4">
+                    <span className="w-32 text-sm font-medium text-muted-foreground">
+                        {versions.length > 1 ? "Versions" : "Version"}
+                    </span>
+                    <span className="text-sm font-mono">
+                        {versions.map(version => (version?.version ?? "") + "." + (version?.env ?? "")).join(", ")}
+                    </span>
                 </div>
-
                 {thread.metadata && (
-                    <div className="md:col-span-2">
-                        <label className="text-sm font-medium text-muted-foreground">Metadata</label>
+                    <div className="flex flex-row gap-4 items-start">
+                        <span className="w-32 text-sm font-medium text-muted-foreground">Metadata</span>
                         <pre className="text-sm bg-muted p-2 rounded mt-1 overflow-x-auto">
                             {JSON.stringify(thread.metadata, null, 2)}
                         </pre>
                     </div>
                 )}
             </div>
-        </CardContent>
-    </Card>
+        </div>
+    );
 }
 
 export default function ThreadPageWrapper() {
@@ -285,15 +282,20 @@ function ThreadPage() {
         })
     }
 
-    return <>
+    {/* <div className="flex-1 flex flex-col">  
+      <Outlet />
+    </div> */}
+    return <div className="basis-[720px] flex-shrink-0 flex-grow-0 border-r  flex flex-col">  
         <Header>
             <HeaderTitle title={`Thread`} />
         </Header>
         <div className="flex-1 overflow-y-auto">
 
-            <div className=" p-6 max-w-4xl space-y-6">
+            <div className="p-6 border-b">
                 <ThreadDetails thread={thread} />
+            </div>
 
+            <div className="p-6">
                 <ItemsWithCommentsLayout items={activeActivities.map((activity) => {
 
                     const hasComments = activity.commentMessages.filter((m: any) => !m.deletedAt).length > 0
@@ -329,22 +331,22 @@ function ThreadPage() {
 
         </div>
 
-        {thread.client.simulatedBy?.id === loaderData.userId && <Card>
-            <CardHeader>
-                <CardTitle>New Activity</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <form method="post" onSubmit={handleSubmit}>
-                    <Textarea name="message" placeholder="Reply here..." />
-                    <Button type="submit" disabled={lastRun?.state === 'in_progress'}>Send</Button>
+        {thread.client.simulatedBy?.id === loaderData.userId && <div className="p-6 border-t">
 
-                    {lastRun?.state === 'in_progress' && <Button type="button" onClick={() => {
-                        handleCancel()
-                    }}>Cancel</Button>}
+                <form method="post" onSubmit={handleSubmit}>
+                    <Textarea name="message" placeholder="Reply here..." rows={1} className="mb-2"/>
+
+                    <div className="flex flex-row gap-2 justify-end">
+                        <Button type="submit" disabled={lastRun?.state === 'in_progress'}>Send</Button>
+
+                        {lastRun?.state === 'in_progress' && <Button type="button" onClick={() => {
+                            handleCancel()
+                        }}>Cancel</Button>}
+                    </div>
                 </form>
 
                 {formError && <div className="text-red-500">{formError}</div>}
-            </CardContent>
-        </Card>}
-    </>
+                </div>}
+
+    </div>
 }
