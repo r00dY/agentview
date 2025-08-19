@@ -154,6 +154,9 @@ function ThreadPage() {
     const lastRun = getLastRun(thread)
     // const selectedActivityId = activities.find((a: any) => a.id === searchParams.get('activityId'))?.id ?? undefined;
 
+    const threadStatus = lastRun?.state === "completed" ? "idle" : (lastRun?.state ?? "idle")
+
+    
     // const setSelectedActivityId = (id: string | undefined) => {
     //     if (id === selectedActivityId) {
     //         return // prevents unnecessary revalidation of the page
@@ -291,7 +294,6 @@ function ThreadPage() {
         })
     }
 
-    const threadStatus = lastRun?.state === "completed" ? "idle" : (lastRun?.state ?? "idle")
 
     {/* <div className="flex-1 flex flex-col">  
       <Outlet />
