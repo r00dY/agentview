@@ -14,6 +14,7 @@ import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
 import { getLastRun, getAllActivities, getVersions } from "~/lib/threadUtils";
 import { type Thread } from "~/apiTypes";
 import { getThreadsList } from "~/lib/utils";
+import PropertyList from "~/components/PropertyList";
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
     const response = await apiFetch<Thread>(`/api/threads/${params.id}`);
@@ -73,22 +74,22 @@ function ThreadDetails({ thread }: { thread: any }) {
 
     return (
         <div className="w-full">
-            <div className="grid grid-cols-1 gap-2">
-                <div className="flex flex-row gap-4">
-                    <span className="w-32 text-sm font-medium text-muted-foreground">ID</span>
-                    <span className="text-sm font-mono">{thread.id}</span>
-                </div>
-                <div className="flex flex-row gap-4">
-                    <span className="w-32 text-sm font-medium text-muted-foreground">Agent</span>
-                    <span className="text-sm">{thread.type}</span>
-                </div>
-                <div className="flex flex-row gap-4">
-                    <span className="w-32 text-sm font-medium text-muted-foreground">Client ID</span>
-                    <span className="text-sm font-mono">{thread.client_id}</span>
-                </div>
-                <div className="flex flex-row gap-4">
-                    <span className="w-32 text-sm font-medium text-muted-foreground">Created</span>
-                    <span className="text-sm">
+            <PropertyList.Root>
+                <PropertyList.Item>
+                    <PropertyList.Title>ID</PropertyList.Title>
+                    <PropertyList.TextValue isMonospace>{thread.id}</PropertyList.TextValue>
+                </PropertyList.Item>
+                <PropertyList.Item>
+                    <PropertyList.Title>Agent</PropertyList.Title>
+                    <PropertyList.TextValue>{thread.type}</PropertyList.TextValue>
+                </PropertyList.Item>
+                <PropertyList.Item>
+                    <PropertyList.Title>Client ID</PropertyList.Title>
+                    <PropertyList.TextValue isMonospace>{thread.client_id}</PropertyList.TextValue>
+                </PropertyList.Item>
+                <PropertyList.Item>
+                    <PropertyList.Title>Created</PropertyList.Title>
+                    <PropertyList.TextValue>
                         {new Date(thread.created_at).toLocaleDateString('en-US', {
                             year: 'numeric',
                             month: 'long',
@@ -96,35 +97,37 @@ function ThreadDetails({ thread }: { thread: any }) {
                             hour: '2-digit',
                             minute: '2-digit'
                         })}
-                    </span>
-                </div>
-                <div className="flex flex-row gap-4">
-                    <span className="w-32 text-sm font-medium text-muted-foreground">Source</span>
-                    <span className="text-sm">
+                    </PropertyList.TextValue>
+                </PropertyList.Item>
+                <PropertyList.Item>
+                    <PropertyList.Title>Source</PropertyList.Title>
+                    <PropertyList.TextValue>
                         {thread.client.simulatedBy ? "Simulated by " + thread.client.simulatedBy.name : "Real"}
-                    </span>
-                </div>
-                <div className="flex flex-row gap-4">
-                    <span className="w-32 text-sm font-medium text-muted-foreground">State</span>
-                    <span className="text-sm font-mono">{thread.lastRun?.state === "completed" ? "idle" : (thread.lastRun?.state ?? "idle")}</span>
-                </div>
-                <div className="flex flex-row gap-4">
-                    <span className="w-32 text-sm font-medium text-muted-foreground">
+                    </PropertyList.TextValue>
+                </PropertyList.Item>
+                <PropertyList.Item>
+                    <PropertyList.Title>State</PropertyList.Title>
+                    <PropertyList.TextValue isMonospace>
+                        {thread.lastRun?.state === "completed" ? "idle" : (thread.lastRun?.state ?? "idle")}
+                    </PropertyList.TextValue>
+                </PropertyList.Item>
+                <PropertyList.Item>
+                    <PropertyList.Title>
                         {versions.length > 1 ? "Versions" : "Version"}
-                    </span>
-                    <span className="text-sm font-mono">
+                    </PropertyList.Title>
+                    <PropertyList.TextValue isMonospace>
                         {versions.map(version => (version?.version ?? "") + "." + (version?.env ?? "")).join(", ")}
-                    </span>
-                </div>
+                    </PropertyList.TextValue>
+                </PropertyList.Item>
                 {thread.metadata && (
-                    <div className="flex flex-row gap-4 items-start">
-                        <span className="w-32 text-sm font-medium text-muted-foreground">Metadata</span>
+                    <PropertyList.Item className="items-start">
+                        <PropertyList.Title>Metadata</PropertyList.Title>
                         <pre className="text-sm bg-muted p-2 rounded mt-1 overflow-x-auto">
                             {JSON.stringify(thread.metadata, null, 2)}
                         </pre>
-                    </div>
+                    </PropertyList.Item>
                 )}
-            </div>
+            </PropertyList.Root>
         </div>
     );
 }
@@ -368,6 +371,6 @@ function ThreadPage() {
 
     </div>
 
-    <Outlet />
+    <Outlet context={{ thread }}/>
     </>
 }
