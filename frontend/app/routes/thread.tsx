@@ -14,7 +14,7 @@ import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
 import { getLastRun, getAllActivities, getVersions } from "~/lib/threadUtils";
 import { type Thread } from "~/apiTypes";
 import { getThreadsList } from "~/lib/utils";
-import PropertyList from "~/components/PropertyList";
+import { PropertyList } from "~/components/PropertyList";
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
     const response = await apiFetch<Thread>(`/api/threads/${params.id}`);
@@ -75,18 +75,18 @@ function ThreadDetails({ thread }: { thread: any }) {
     return (
         <div className="w-full">
             <PropertyList.Root>
-                <PropertyList.Item>
+                {/* <PropertyList.Item>
                     <PropertyList.Title>ID</PropertyList.Title>
                     <PropertyList.TextValue isMonospace>{thread.id}</PropertyList.TextValue>
-                </PropertyList.Item>
+                </PropertyList.Item> */}
                 <PropertyList.Item>
                     <PropertyList.Title>Agent</PropertyList.Title>
                     <PropertyList.TextValue>{thread.type}</PropertyList.TextValue>
                 </PropertyList.Item>
-                <PropertyList.Item>
+                {/* <PropertyList.Item>
                     <PropertyList.Title>Client ID</PropertyList.Title>
                     <PropertyList.TextValue isMonospace>{thread.client_id}</PropertyList.TextValue>
-                </PropertyList.Item>
+                </PropertyList.Item> */}
                 <PropertyList.Item>
                     <PropertyList.Title>Created</PropertyList.Title>
                     <PropertyList.TextValue>
@@ -105,12 +105,12 @@ function ThreadDetails({ thread }: { thread: any }) {
                         {thread.client.simulatedBy ? "Simulated by " + thread.client.simulatedBy.name : "Real"}
                     </PropertyList.TextValue>
                 </PropertyList.Item>
-                <PropertyList.Item>
+                {/* <PropertyList.Item>
                     <PropertyList.Title>State</PropertyList.Title>
                     <PropertyList.TextValue isMonospace>
                         {thread.lastRun?.state === "completed" ? "idle" : (thread.lastRun?.state ?? "idle")}
                     </PropertyList.TextValue>
-                </PropertyList.Item>
+                </PropertyList.Item> */}
                 <PropertyList.Item>
                     <PropertyList.Title>
                         {versions.length > 1 ? "Versions" : "Version"}
@@ -291,6 +291,10 @@ function ThreadPage() {
         })
     }
 
+    console.log('thread', thread)
+
+    const threadStatus = lastRun?.state === "completed" ? "idle" : (lastRun?.state ?? "idle")
+
     {/* <div className="flex-1 flex flex-col">  
       <Outlet />
     </div> */}
@@ -341,13 +345,13 @@ function ThreadPage() {
                 })} selectedItemId={selectedActivityId}
                 /> */}
 
-                <div>
+                {/* <div>
                     {lastRun?.state === 'in_progress' && <div>in progress...</div>}
                     {lastRun?.state === 'failed' && <div>
                         <div>failed</div>
                         <div>{lastRun?.fail_reason?.message}</div>
                     </div>}
-                </div>
+                </div> */}
             </div>
 
         </div>
@@ -357,16 +361,29 @@ function ThreadPage() {
                 <form method="post" onSubmit={handleSubmit}>
                     <Textarea name="message" placeholder="Reply here..." rows={1} className="mb-2"/>
 
-                    <div className="flex flex-row gap-2 justify-end">
-                        <Button type="submit" disabled={lastRun?.state === 'in_progress'}>Send</Button>
+                        <div className="flex flex-row justify-between">
+                            <div className="gap-2 text-sm text-muted-foreground">
+                                { !formError && <div>
+                                    {threadStatus === "in_progress" && <div>Running...</div>}
+                                    { threadStatus === "failed" && <div className="text-red-500">Failed: {lastRun?.fail_reason?.message ?? "Unknown reason"}</div>}
+                                    </div> }
+                                { formError && <div className="text-red-500">{formError}</div>}
+                            </div>
 
-                        {lastRun?.state === 'in_progress' && <Button type="button" onClick={() => {
-                            handleCancel()
-                        }}>Cancel</Button>}
-                    </div>
+
+                            <div className="flex flex-row gap-2 justify-end">
+                                <Button type="submit" disabled={lastRun?.state === 'in_progress'}>Send</Button>
+
+                                {lastRun?.state === 'in_progress' && <Button type="button" onClick={() => {
+                                    handleCancel()
+                                }}>Cancel</Button>}
+                            </div>
+
+
+                        </div>
                 </form>
 
-                {formError && <div className="text-red-500">{formError}</div>}
+                {/* {formError && <div className="text-red-500">{formError}</div>} */}
                 </div>}
 
     </div>

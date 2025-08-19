@@ -19,7 +19,7 @@ export const run : RunFunction = async function* (input: any) {
 
     const lastUserMessage = input.thread.activities[input.thread.activities.length - 1].content;
 
-    const NUM_MESSAGES = 1;
+    const NUM_MESSAGES = 3;
 
     for (let i = 0; i < NUM_MESSAGES; i++) {
 

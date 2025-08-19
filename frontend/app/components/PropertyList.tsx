@@ -68,12 +68,11 @@ const PropertyListTextValue: React.FC<PropertyListTextValueProps> = ({
 };
 
 // Compound component structure
-const PropertyList = Object.assign(PropertyListRoot, {
+export const PropertyList = Object.assign(PropertyListRoot, {
   Root: PropertyListRoot,
   Item: PropertyListItem,
   Title: PropertyListTitle,
   TextValue: PropertyListTextValue,
 });
 
-export default PropertyList;
 export { PropertyListRoot, PropertyListItem, PropertyListTitle, PropertyListTextValue };
