@@ -28,6 +28,7 @@ export interface NonAsyncRunResult {
   
 export type AgentViewConfig = {
   email: (payload: EmailPayload) => Promise<void>;
-  threads: any
+  threads: any,
+  scores: any,
   run: (state: { thread: any }) => Promise<NonAsyncRunResult> | AsyncGenerator<VersionManifest | any, any, any>;
 }

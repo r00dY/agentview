@@ -94,7 +94,7 @@ export const ScoreSchema = z.object({
     id: z.string(),
     activityId: z.string(),
 
-    type: z.string(),
+    name: z.string(),
     value: z.any(),
     commentId: z.string().nullable(),
 
@@ -109,7 +109,7 @@ export type Score = z.infer<typeof ScoreSchema>
 
 export const ScoreCreateSchema = ScoreSchema.pick({
     activityId: true,
-    type: true,
+    name: true,
     value: true,
     commentId: true,
 })

@@ -1008,7 +1008,7 @@ app.openapi(scoresPOSTRoute, async (c) => {
     // Create the score
     const [newScore] = await db.insert(scores).values({
       activityId: body.activityId,
-      type: body.type,
+      name: body.name,
       value: body.value,
       commentId: body.commentId,
       createdBy: session.user.id,

@@ -126,7 +126,7 @@ export const scores = pgTable('scores', {
   id: uuid('id').primaryKey().defaultRandom(),
   activityId: uuid('activity_id').notNull().references(() => activity.id, { onDelete: 'cascade' }),
 
-  type: varchar('type', { length: 255 }).notNull(),
+  name: varchar('type', { length: 255 }).notNull(),
   value: jsonb('value').notNull(),
   commentId: uuid('comment_id').references(() => commentMessages.id, { onDelete: 'set null' }),
 

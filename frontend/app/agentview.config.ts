@@ -30,6 +30,13 @@ export const config : AgentViewConfig = {
             ]
         }
     ],
+    scores: [
+        {
+            name: "general_score",
+            title: "General feeling",
+            schema: z.boolean()
+        }
+    ],
     // run: async function (input: any) {
     //     await new Promise(resolve => setTimeout(resolve, 1000));
     //     return [{
