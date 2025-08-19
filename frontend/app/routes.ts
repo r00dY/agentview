@@ -16,10 +16,12 @@ export default [
         route("threads", "routes/threads.tsx", [
             index("routes/threadsIndex.tsx"),
             route("new", "routes/threadNew.tsx"),
-            route(":id", "routes/thread.tsx"),
-            route(":id/comments", "routes/threadComments.tsx"),
-            route(":id/activities/:activityId", "routes/threadActivity.tsx"),
-            route(":id/activities/:activityId/scores", "routes/threadScores.tsx"),
+            route(":id", "routes/thread.tsx", [
+                route("comments", "routes/threadComments.tsx"),
+                route("activities/:activityId", "routes/threadActivity.tsx"),
+                route("activities/:activityId/scores", "routes/threadScores.tsx"),
+
+            ]),
         ]),
 
         route("logout", "routes/logout.tsx"),

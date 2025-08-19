@@ -7,7 +7,8 @@ export async function clientLoader({ request, params }: Route.ClientLoaderArgs) 
 
 export default function ThreadActivityPage() {
 
-    return <>
+    return  <div className="flex-1  flex flex-col">  
+
         <Header>
             <HeaderTitle title={`Activity`} />
         </Header>
@@ -18,5 +19,5 @@ export default function ThreadActivityPage() {
             </div>
 
         </div>
-    </>
+    </div>
 }

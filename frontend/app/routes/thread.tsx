@@ -1,4 +1,4 @@
-import { redirect, useLoaderData, useFetcher, Outlet, Link, Form, data, useParams, useSearchParams } from "react-router";
+import { redirect, useLoaderData, useFetcher, Outlet, Link, Form, data, useParams, useSearchParams, useNavigate } from "react-router";
 import type { Route } from "./+types/thread";
 import { Button } from "~/components/ui/button";
 import { Header, HeaderTitle } from "~/components/header";
@@ -13,6 +13,7 @@ import { CommentThread } from "~/components/comments";
 import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
 import { getLastRun, getAllActivities, getVersions } from "~/lib/threadUtils";
 import { type Thread } from "~/apiTypes";
+import { getThreadsList } from "~/lib/utils";
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
     const response = await apiFetch<Thread>(`/api/threads/${params.id}`);
@@ -34,7 +35,10 @@ export async function clientLoader({ request, params }: Route.ClientLoaderArgs) 
         });
     }
 
+    const list = getThreadsList(request)
+
     return {
+        list,
         thread: response.data,
         userId,
         users: usersResponse.data
@@ -132,39 +136,41 @@ export default function ThreadPageWrapper() {
 
 function ThreadPage() {
     const loaderData = useLoaderData<typeof clientLoader>();
+    const params = useParams();
+    const navigate = useNavigate();
 
     const [thread, setThread] = useState(loaderData.thread)
     const [formError, setFormError] = useState<string | null>(null)
     const [isStreaming, setStreaming] = useState(false)
 
-    const users = loaderData.users
+    // const users = loaderData.users
 
-    const [searchParams, setSearchParams] = useSearchParams();
-    const activities = getAllActivities(thread)
+    // const [searchParams, setSearchParams] = useSearchParams();
+    // const activities = getAllActivities(thread)
     const activeActivities = getAllActivities(thread, { activeOnly: true })
     const lastRun = getLastRun(thread)
-    const selectedActivityId = activities.find((a: any) => a.id === searchParams.get('activityId'))?.id ?? undefined;
+    // const selectedActivityId = activities.find((a: any) => a.id === searchParams.get('activityId'))?.id ?? undefined;
 
-    const setSelectedActivityId = (id: string | undefined) => {
-        if (id === selectedActivityId) {
-            return // prevents unnecessary revalidation of the page
-        }
+    // const setSelectedActivityId = (id: string | undefined) => {
+    //     if (id === selectedActivityId) {
+    //         return // prevents unnecessary revalidation of the page
+    //     }
 
-        setSearchParams((searchParams) => {
-            const currentActivityId = searchParams.get('activityId') ?? undefined;
+    //     setSearchParams((searchParams) => {
+    //         const currentActivityId = searchParams.get('activityId') ?? undefined;
 
-            if (currentActivityId === id) {
-                return searchParams;
-            }
+    //         if (currentActivityId === id) {
+    //             return searchParams;
+    //         }
 
-            if (id) {
-                searchParams.set("activityId", id);
-            } else {
-                searchParams.delete("activityId");
-            }
-            return searchParams;
-        }, { replace: true });
-    }
+    //         if (id) {
+    //             searchParams.set("activityId", id);
+    //         } else {
+    //             searchParams.delete("activityId");
+    //         }
+    //         return searchParams;
+    //     }, { replace: true });
+    // }
 
     // temporary 
     useEffect(() => {
@@ -285,7 +291,8 @@ function ThreadPage() {
     {/* <div className="flex-1 flex flex-col">  
       <Outlet />
     </div> */}
-    return <div className="basis-[720px] flex-shrink-0 flex-grow-0 border-r  flex flex-col">  
+    return <>
+    <div className="basis-[720px] flex-shrink-0 flex-grow-0 border-r  flex flex-col">  
         <Header>
             <HeaderTitle title={`Thread`} />
         </Header>
@@ -296,7 +303,18 @@ function ThreadPage() {
             </div>
 
             <div className="p-6">
-                <ItemsWithCommentsLayout items={activeActivities.map((activity) => {
+
+
+                <div className="flex flex-col gap-4">
+                    { activeActivities.map((activity) => {
+                        return <ActivityView
+                        activity={activity}
+                        onSelect={(a) => { navigate(`/threads/${thread.id}/activities/${a?.id}?list=${loaderData.list}`) }}
+                        selected={params.activityId === activity.id}
+                    />
+                    })}
+                </div>
+                {/* <ItemsWithCommentsLayout items={activeActivities.map((activity) => {
 
                     const hasComments = activity.commentMessages.filter((m: any) => !m.deletedAt).length > 0
 
@@ -307,7 +325,7 @@ function ThreadPage() {
                             onSelect={(a) => { setSelectedActivityId(a?.id) }}
                             selected={selectedActivityId === activity.id}
                         />,
-                        commentsComponent: (hasComments || (selectedActivityId === activity.id/* && isNewCommentActive*/)) ?
+                        commentsComponent: (hasComments || (selectedActivityId === activity.id)) ?
                             <CommentThread
                                 activity={activity}
                                 userId={loaderData.userId}
@@ -318,7 +336,7 @@ function ThreadPage() {
                             /> : undefined
                     }
                 })} selectedItemId={selectedActivityId}
-                />
+                /> */}
 
                 <div>
                     {lastRun?.state === 'in_progress' && <div>in progress...</div>}
@@ -349,4 +367,7 @@ function ThreadPage() {
                 </div>}
 
     </div>
+
+    <Outlet />
+    </>
 }
