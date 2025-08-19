@@ -196,6 +196,51 @@ export const activityRelations = relations(activity, ({ one, many }) => ({
 
 
 export const commentMessagesRelations = relations(commentMessages, ({ one, many }) => ({
+  activity: one(activity, {
+    fields: [commentMessages.activityId],
+    references: [activity.id],
+  }),
+  user: one(users, {
+    fields: [commentMessages.userId],
+    references: [users.id],
+  }),
   mentions: many(commentMentions),
   edits: many(commentMessageEdits),
-}))
+}));
+
+export const commentMentionsRelations = relations(commentMentions, ({ one }) => ({
+  commentMessage: one(commentMessages, {
+    fields: [commentMentions.commentMessageId],
+    references: [commentMessages.id],
+  }),
+  mentionedUser: one(users, {
+    fields: [commentMentions.mentionedUserId],
+    references: [users.id],
+  }),
+}));
+
+export const commentMessageEditsRelations = relations(commentMessageEdits, ({ one }) => ({
+  commentMessage: one(commentMessages, {
+    fields: [commentMessageEdits.commentMessageId],
+    references: [commentMessages.id],
+  }),
+}));
+
+export const scoresRelations = relations(scores, ({ one }) => ({
+  activity: one(activity, {
+    fields: [scores.activityId],
+    references: [activity.id],
+  }),
+  comment: one(commentMessages, {
+    fields: [scores.commentId],
+    references: [commentMessages.id],
+  }),
+  createdByUser: one(users, {
+    fields: [scores.createdBy],
+    references: [users.id],
+  }),
+  deletedByUser: one(users, {
+    fields: [scores.deletedBy],
+    references: [users.id],
+  }),
+}));
