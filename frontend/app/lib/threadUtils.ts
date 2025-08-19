@@ -1,4 +1,4 @@
-import { type Thread } from "../apiTypes"
+import { type Activity, type Thread } from "../apiTypes"
 import z from "zod"
 
 export function getLastRun(thread: Thread) {
@@ -10,7 +10,7 @@ export function getActiveRuns(thread: Thread) {
 }
 
 export function getAllActivities(thread: Thread, options?: { activeOnly?: boolean }) {
-  const activities: any[] = []
+  const activities: Activity[] = []
 
   const activeRuns = options?.activeOnly ? getActiveRuns(thread) : thread.runs
 

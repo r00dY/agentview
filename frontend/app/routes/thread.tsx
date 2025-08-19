@@ -294,9 +294,9 @@ function ThreadPage() {
             <div className=" p-6 max-w-4xl space-y-6">
                 <ThreadDetails thread={thread} />
 
-                <ItemsWithCommentsLayout items={activeActivities.map((activity: any) => {
+                <ItemsWithCommentsLayout items={activeActivities.map((activity) => {
 
-                    const hasComments = activity.commentThread && activity.commentThread.commentMessages.filter((m: any) => !m.deletedAt).length > 0
+                    const hasComments = activity.commentMessages.filter((m: any) => !m.deletedAt).length > 0
 
                     return {
                         id: activity.id,

@@ -18,12 +18,8 @@ export async function fetchThreads(thread_id?: string) {
             activities: {
               orderBy: (activity, { asc }) => [asc(activity.created_at)],
               with: {
-                commentThread: {
-                  with: {
-                    commentMessages: {
-                      orderBy: (commentMessages, { asc }) => [asc(commentMessages.createdAt)]
-                    }
-                  }
+                commentMessages: {
+                  orderBy: (commentMessages, { asc }) => [asc(commentMessages.createdAt)]
                 }
               }
             }

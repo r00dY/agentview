@@ -91,22 +91,15 @@ export const run = pgTable("run", {
   fail_reason: jsonb("fail_reason"),
 });
 
-
-export const commentThreads = pgTable('comment_threads', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  activityId: uuid('activity_id').notNull().references(() => activity.id, { onDelete: 'cascade' }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
-
 // Comment messages within threads
 export const commentMessages = pgTable('comment_messages', {
   id: uuid('id').primaryKey().defaultRandom(),
-  commentThreadId: uuid('comment_thread_id').notNull().references(() => commentThreads.id, { onDelete: 'cascade' }),
+  activityId: uuid('activity_id').notNull().references(() => activity.id, { onDelete: 'cascade' }),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   content: text('content').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+
   // Soft delete fields
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
   deletedBy: text('deleted_by').references(() => users.id, { onDelete: 'set null' }),
@@ -197,26 +190,12 @@ export const activityRelations = relations(activity, ({ one, many }) => ({
     fields: [activity.channel_id],
     references: [channels.id],
   }),
-  commentThread: one(commentThreads, {
-    fields: [activity.id],
-    references: [commentThreads.activityId],
-  }),
+  commentMessages: many(commentMessages),
   scores: many(scores),
 }));
 
-export const commentThreadsRelations = relations(commentThreads, ({ many }) => ({
-  commentMessages: many(commentMessages),
-}))
 
 export const commentMessagesRelations = relations(commentMessages, ({ one, many }) => ({
-  commentThread: one(commentThreads, {
-    fields: [commentMessages.commentThreadId],
-    references: [commentThreads.id],
-  }),
   mentions: many(commentMentions),
   edits: many(commentMessageEdits),
-  user: one(users, {
-    fields: [commentMessages.userId],
-    references: [users.id],
-  }),
 }))

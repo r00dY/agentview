@@ -8,7 +8,7 @@ import { APIError } from "better-auth/api";
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { swaggerUI } from '@hono/swagger-ui'
 import { db } from './db'
-import { client, thread, activity, run, email, commentThreads, commentMessages, commentMessageEdits, commentMentions, versions, scores } from './db/schema'
+import { client, thread, activity, run, email, commentMessages, commentMessageEdits, commentMentions, versions, scores } from './db/schema'
 import { asc, eq, ne, desc, and, inArray, isNull } from 'drizzle-orm'
 import { response_data, response_error, body } from '../lib/hono_utils'
 import { config } from '../agentview.config'
@@ -18,7 +18,7 @@ import { auth } from './auth'
 import { getRootUrl } from './getRootUrl'
 import { createInvitation, cancelInvitation, getPendingInvitations, getValidInvitation } from './invitations'
 import { getAllActivities, getLastRun } from '~/lib/threadUtils'
-import { ClientSchema, ActivitySchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, CommentMessageSchema, CommentThreadSchema, RunSchema, ScoreSchema, ScoreCreateSchema } from '~/apiTypes'
+import { ClientSchema, ActivitySchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, CommentMessageSchema, RunSchema, ScoreSchema, ScoreCreateSchema } from '~/apiTypes'
 import { fetchThread, fetchThreads } from './threads'
 
 
@@ -738,33 +738,11 @@ app.openapi(commentsPOSTRoute, async (c) => {
 
     const { extractMentions } = await import('../lib/utils')
 
-    // Check if comment thread exists for this activity
-    let commentThread = await db.query.commentThreads.findFirst({
-      where: eq(commentThreads.activityId, body.activityId),
-      with: {
-        commentMessages: {
-          where: isNull(commentMessages.deletedAt), // Only include non-deleted comments
-          orderBy: (commentMessages: any, { asc }: any) => [asc(commentMessages.createdAt)]
-        }
-      }
-    });
-
     const newMessage = await db.transaction(async (tx: any) => {
-      // If no comment thread exists, create one
-      if (!commentThread) {
-        const [newThread] = await tx.insert(commentThreads).values({
-          activityId: body.activityId,
-        }).returning();
-
-        commentThread = {
-          ...newThread,
-          commentMessages: []
-        };
-      }
 
       // Create the comment message
       const [newMessage] = await tx.insert(commentMessages).values({
-        commentThreadId: commentThread!.id,
+        activityId: body.activityId,
         userId: session.user.id,
         content: body.content,
       }).returning();

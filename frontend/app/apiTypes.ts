@@ -27,7 +27,6 @@ export type Client = z.infer<typeof ClientSchema>
 
 export const CommentMessageSchema = z.object({
     id: z.string(),
-    commentThreadId: z.string(),
     userId: z.string(),
     content: z.string(),
     createdAt: z.date(),
@@ -38,15 +37,6 @@ export const CommentMessageSchema = z.object({
 
 export type CommentMessage = z.infer<typeof CommentMessageSchema>
 
-export const CommentThreadSchema = z.object({
-    id: z.string(),
-    activityId: z.string(),
-    commentMessages: z.array(CommentMessageSchema),
-})
-
-export type CommentThread = z.infer<typeof CommentThreadSchema>
-
-
 export const ActivitySchema = z.object({
     id: z.string(),
     created_at: z.date(),
@@ -55,7 +45,7 @@ export const ActivitySchema = z.object({
     thread_id: z.string(),
     type: z.string(),
     role: z.string(),
-    commentThread: z.optional(CommentThreadSchema),
+    commentMessages: z.array(CommentMessageSchema),
 })
 
 export type Activity = z.infer<typeof ActivitySchema>
