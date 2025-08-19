@@ -33,10 +33,22 @@ export interface ScoreConfig {
   title?: string;
   schema: z.ZodType;
 }
+
+export interface ActivityConfig {
+  type: string;
+  role: string;
+  content: z.ZodType;
+  scores?: ScoreConfig[];
+}
+
+export interface ThreadConfig {
+  type: string;
+  metadata?: z.ZodType;
+  activities: ActivityConfig[];
+}
   
 export type AgentViewConfig = {
   email: (payload: EmailPayload) => Promise<void>;
-  threads: any,
-  scores?: ScoreConfig[],
+  threads: ThreadConfig[],
   run: (state: { thread: any }) => Promise<NonAsyncRunResult> | AsyncGenerator<VersionManifest | any, any, any>;
 }

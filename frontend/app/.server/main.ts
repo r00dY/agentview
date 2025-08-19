@@ -1005,9 +1005,34 @@ app.openapi(scoresPOSTRoute, async (c) => {
       }
     }
     
-    const scoreConfig = config.scores?.find((score: any) => score.name === body.name);
+    // Validate score name and value against config
+    // First, find the activity that this score belongs to
+    const activityRecord = await db.query.activity.findFirst({
+      where: eq(activity.id, body.activityId)
+    });
+    
+    if (!activityRecord) {
+      return c.json({ message: "Activity not found" }, 404);
+    }
+
+    // Find the thread configuration
+    const threadConfig = config.threads.find((t: any) => t.type === activityRecord.thread_id);
+    if (!threadConfig) {
+      return c.json({ message: `Thread type not found in configuration` }, 400);
+    }
+
+    // Find the activity configuration
+    const activityConfig = threadConfig.activities.find((a: any) => 
+      a.type === activityRecord.type && a.role === activityRecord.role
+    );
+    if (!activityConfig) {
+      return c.json({ message: `Activity type '${activityRecord.type}' with role '${activityRecord.role}' not found in configuration` }, 400);
+    }
+
+    // Find the score configuration for this activity
+    const scoreConfig = activityConfig.scores?.find((score: any) => score.name === body.name);
     if (!scoreConfig) {
-      return c.json({ message: `Score name '${body.name}' not found in configuration` }, 400);
+      return c.json({ message: `Score name '${body.name}' not found in configuration for activity type '${activityRecord.type}' with role '${activityRecord.role}'` }, 400);
     }
 
     // Validate value against the schema

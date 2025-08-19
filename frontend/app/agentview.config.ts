@@ -25,16 +25,21 @@ export const config : AgentViewConfig = {
                 {
                     type: "message",
                     role: "assistant",
-                    content: z.string()
+                    content: z.string(),
+                    scores: [
+                        {
+                            name: "user_satisfaction",
+                            title: "User satisfaction with question",
+                            schema: z.boolean()
+                        }
+                        // {
+                        //     name: "helpfulness",
+                        //     title: "How helpful was the response",
+                        //     schema: z.number().min(1).max(5)
+                        // }
+                    ]
                 }
             ]
-        }
-    ],
-    scores: [
-        {
-            name: "general_score",
-            title: "General feeling",
-            schema: z.boolean()
         }
     ],
     // run: async function (input: any) {
