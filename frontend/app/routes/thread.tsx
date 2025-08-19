@@ -291,8 +291,6 @@ function ThreadPage() {
         })
     }
 
-    console.log('thread', thread)
-
     const threadStatus = lastRun?.state === "completed" ? "idle" : (lastRun?.state ?? "idle")
 
     {/* <div className="flex-1 flex flex-col">  
