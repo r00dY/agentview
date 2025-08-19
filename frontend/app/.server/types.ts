@@ -1,3 +1,5 @@
+import type { z } from "zod";
+
 export interface EmailPayload {
   to: string | string[];
   subject: string;
@@ -25,10 +27,16 @@ export interface NonAsyncRunResult {
   manifest: VersionManifest;
   activities: any[];
 }
+
+export interface ScoreConfig {
+  name: string;
+  title?: string;
+  schema: z.ZodType;
+}
   
 export type AgentViewConfig = {
   email: (payload: EmailPayload) => Promise<void>;
   threads: any,
-  scores: any,
+  scores?: ScoreConfig[],
   run: (state: { thread: any }) => Promise<NonAsyncRunResult> | AsyncGenerator<VersionManifest | any, any, any>;
 }

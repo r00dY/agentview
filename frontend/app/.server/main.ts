@@ -1004,6 +1004,18 @@ app.openapi(scoresPOSTRoute, async (c) => {
         return c.json({ message: "Comment not found" }, 404);
       }
     }
+    
+    const scoreConfig = config.scores?.find((score: any) => score.name === body.name);
+    if (!scoreConfig) {
+      return c.json({ message: `Score name '${body.name}' not found in configuration` }, 400);
+    }
+
+    // Validate value against the schema
+    try {
+      scoreConfig.schema.parse(body.value);
+    } catch (error: any) {
+      return c.json({ message: `Invalid score value: ${error.message}` }, 400);
+    }
 
     // Create the score
     const [newScore] = await db.insert(scores).values({
