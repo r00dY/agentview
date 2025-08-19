@@ -99,3 +99,27 @@ export const ThreadCreateSchema = ThreadSchema.pick({
     metadata: true,
 })
 
+
+export const ScoreSchema = z.object({
+    id: z.string(),
+    activityId: z.string(),
+
+    type: z.string(),
+    value: z.any(),
+    commentId: z.string().nullable(),
+
+    createdBy: z.string(),
+    createdAt: z.date(),
+    updatedAt: z.date(),
+    deletedAt: z.date().nullable(),
+    deletedBy: z.string().nullable(),
+})
+
+export type Score = z.infer<typeof ScoreSchema>
+
+export const ScoreCreateSchema = ScoreSchema.pick({
+    activityId: true,
+    type: true,
+    value: true,
+    commentId: true,
+})

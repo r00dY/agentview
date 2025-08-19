@@ -8,7 +8,7 @@ import { APIError } from "better-auth/api";
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { swaggerUI } from '@hono/swagger-ui'
 import { db } from './db'
-import { client, thread, activity, run, email, commentThreads, commentMessages, commentMessageEdits, commentMentions, versions } from './db/schema'
+import { client, thread, activity, run, email, commentThreads, commentMessages, commentMessageEdits, commentMentions, versions, scores } from './db/schema'
 import { asc, eq, ne, desc, and, inArray, isNull } from 'drizzle-orm'
 import { response_data, response_error, body } from '../lib/hono_utils'
 import { config } from '../agentview.config'
@@ -18,7 +18,7 @@ import { auth } from './auth'
 import { getRootUrl } from './getRootUrl'
 import { createInvitation, cancelInvitation, getPendingInvitations, getValidInvitation } from './invitations'
 import { getAllActivities, getLastRun } from '~/lib/threadUtils'
-import { ClientSchema, ActivitySchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, CommentMessageSchema, CommentThreadSchema, RunSchema } from '~/apiTypes'
+import { ClientSchema, ActivitySchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, CommentMessageSchema, CommentThreadSchema, RunSchema, ScoreSchema, ScoreCreateSchema } from '~/apiTypes'
 import { fetchThread, fetchThreads } from './threads'
 
 
@@ -584,7 +584,6 @@ app.openapi(runCancelRoute, async (c) => {
   return c.json(await fetchThread(thread_id), 200);
 });
 
-// Activities POST
 const runWatchRoute = createRoute({
   method: 'get',
   path: '/api/threads/{thread_id}/watch_run',
@@ -982,6 +981,68 @@ app.openapi(commentsDELETERoute, async (c) => {
 })
 
 
+/* --------- SCORES --------- */
+
+// Scores POST (create new score)
+const scoresPOSTRoute = createRoute({
+  method: 'post',
+  path: '/api/scores',
+  request: {
+    body: body(ScoreCreateSchema)
+  },
+  responses: {
+    201: response_data(ScoreSchema),
+    400: response_error(),
+    401: response_error(),
+    404: response_error(),
+  },
+})
+
+app.openapi(scoresPOSTRoute, async (c) => {
+  const body = await c.req.json()
+  
+  try {
+    const session = await auth.api.getSession({ headers: c.req.raw.headers })
+    if (!session) {
+      return c.json({ message: "Authentication required" }, 401);
+    }
+
+    // Validate that the activity exists
+    const activityExists = await db.query.activity.findFirst({
+      where: eq(activity.id, body.activityId)
+    });
+    
+    if (!activityExists) {
+      return c.json({ message: "Activity not found" }, 404);
+    }
+
+    // Validate that the comment exists if commentId is provided
+    if (body.commentId) {
+      const commentExists = await db.query.commentMessages.findFirst({
+        where: eq(commentMessages.id, body.commentId)
+      });
+      
+      if (!commentExists) {
+        return c.json({ message: "Comment not found" }, 404);
+      }
+    }
+
+    // Create the score
+    const [newScore] = await db.insert(scores).values({
+      activityId: body.activityId,
+      type: body.type,
+      value: body.value,
+      commentId: body.commentId,
+      createdBy: session.user.id,
+    }).returning();
+
+    return c.json(newScore, 201);
+
+  } catch (error: any) {
+    console.error('Error creating score:', error);
+    return c.json({ message: "Failed to create score: " + error.message }, 400);
+  }
+})
 
 
 /* --------- MEMBERS --------- */

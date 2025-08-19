@@ -129,6 +129,23 @@ export const commentMessageEdits = pgTable('comment_message_edits', {
   editedAt: timestamp('edited_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const scores = pgTable('scores', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  activityId: uuid('activity_id').notNull().references(() => activity.id, { onDelete: 'cascade' }),
+
+  type: varchar('type', { length: 255 }).notNull(),
+  value: jsonb('value').notNull(),
+  commentId: uuid('comment_id').references(() => commentMessages.id, { onDelete: 'set null' }),
+
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  createdBy: text('created_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  
+  // Soft delete fields
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  deletedBy: text('deleted_by').references(() => users.id, { onDelete: 'set null' }),
+});
+
 
 export const threadRelations = relations(thread, ({ many, one }) => ({
   activities: many(activity),
@@ -167,7 +184,7 @@ export const runRelations = relations(run, ({ one, many }) => ({
   activities: many(activity)
 }));
 
-export const activityRelations = relations(activity, ({ one }) => ({
+export const activityRelations = relations(activity, ({ one, many }) => ({
   thread: one(thread, {
     fields: [activity.thread_id],
     references: [thread.id],
@@ -184,6 +201,7 @@ export const activityRelations = relations(activity, ({ one }) => ({
     fields: [activity.id],
     references: [commentThreads.activityId],
   }),
+  scores: many(scores),
 }));
 
 export const commentThreadsRelations = relations(commentThreads, ({ many }) => ({
@@ -197,4 +215,8 @@ export const commentMessagesRelations = relations(commentMessages, ({ one, many 
   }),
   mentions: many(commentMentions),
   edits: many(commentMessageEdits),
+  user: one(users, {
+    fields: [commentMessages.userId],
+    references: [users.id],
+  }),
 }))
