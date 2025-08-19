@@ -24,7 +24,7 @@ export const config : AgentViewConfig = {
                     scores: [
                         {
                             name: "user_satisfaction",
-                            title: "User satisfaction with question",
+                            title: "User satisfaction",
                             schema: z.boolean()
                         }
                         // {

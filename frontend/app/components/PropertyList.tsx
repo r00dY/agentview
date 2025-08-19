@@ -21,6 +21,7 @@ interface PropertyListTextValueProps {
   children: React.ReactNode;
   className?: string;
   isMonospace?: boolean;
+  isMuted?: boolean;
 }
 
 const PropertyListRoot: React.FC<PropertyListRootProps> = ({ children, className }) => {
@@ -45,7 +46,7 @@ const PropertyListTitle: React.FC<PropertyListTitleProps> = ({
   width = "w-32" 
 }) => {
   return (
-    <span className={cn("text-sm font-medium text-muted-foreground", width, className)}>
+    <span className={cn("text-sm text-muted-foreground w-[180px] flex-shrink-0 truncate", className)}>
       {children}
     </span>
   );
@@ -54,12 +55,14 @@ const PropertyListTitle: React.FC<PropertyListTitleProps> = ({
 const PropertyListTextValue: React.FC<PropertyListTextValueProps> = ({ 
   children, 
   className, 
-  isMonospace = false 
+  isMonospace = false,
+  isMuted = false
 }) => {
   return (
     <span className={cn(
       "text-sm",
       isMonospace && "font-mono",
+      isMuted && "text-muted-foreground",
       className
     )}>
       {children}
