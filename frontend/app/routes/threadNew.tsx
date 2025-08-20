@@ -55,7 +55,7 @@ export async function clientAction({ request, params }: Route.ClientActionArgs):
 export default function ThreadNew() {
   const actionData = useActionData<typeof clientAction>();
     
-  return <>
+  return <div className="flex-1">
     <Header>
       <HeaderTitle title={`New Thread`} />
     </Header>
@@ -87,5 +87,5 @@ export default function ThreadNew() {
           </Form>
       </div>
     </div>
-  </>
+  </div>
 }
