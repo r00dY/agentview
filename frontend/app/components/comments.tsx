@@ -10,19 +10,187 @@ import {
 } from "~/components/ui/dropdown-menu"
 import { EllipsisVerticalIcon, PencilIcon, StarIcon } from "lucide-react";
 import { TextEditor, textToElements } from "./wysiwyg/TextEditor";
-import type { Activity, Thread } from "~/apiTypes";
+import type { Activity, Thread, User } from "~/apiTypes";
 import { ScoreModal } from "./ScoreModal";
 import { config } from "~/agentview.config";
 
 
-export function CommentThread({ thread, activity, userId, selected = false, users, onSelect }: { 
+export type CommentThreadProps = {
+    thread: Thread,
+    activity: Activity, 
+    user: User, 
+    users: User[], 
+    collapsed?: boolean,
+    onReset?: () => void,
+}
+
+export type CommentThreadFloatingBoxProps = CommentThreadProps & {
+    selected: boolean,
+    onSelect: (activity: any) => void,
+}
+
+export type CommentThreadFloatingButtonProps = CommentThreadFloatingBoxProps & {
     thread: Thread,
     activity: Activity, 
     userId: string | null, 
-    selected: boolean, 
     users: any[], 
     onSelect: (activity: any) => void,
-}) {
+}
+
+
+export function CommentThread({ thread, activity, user, collapsed = false, users, onReset }: CommentThreadProps) {
+    const fetcher = useFetcher();
+
+    const visibleMessages = activity.commentMessages.filter((m: any) => !m.deletedAt) ?? []
+    const visibleScores = activity.scores.filter((s: any) => !s.deletedAt) ?? []
+    const hasZeroVisisbleComments = visibleMessages.length === 0
+
+    const formRef = useRef<HTMLFormElement>(null);
+    const [currentlyEditedItemId, setCurrentlyEditedItemId] = useState<string | null>(null); // "new" for new comment, comment id for edits
+
+    useFetcherSuccess(fetcher, () => {
+        setCurrentlyEditedItemId(null);
+        console.log('resetting form')
+        formRef.current?.reset();
+    });
+
+    return (<div>
+            <div className="flex flex-col gap-6">
+                {/* Display scores */}
+                {visibleScores.map((score: any) => (
+                    <ScoreItem
+                        key={score.id}
+                        score={score}
+                        activity={activity}
+                        userId={user.id}
+                        users={users}
+                        thread={thread}
+                    />
+                ))}
+
+                {/* Display comments */}
+                {visibleMessages.map((message: any, index: number) => {
+                    const count = visibleMessages.length;
+
+                    let compressionLevel: MessageCompressionLevel = "none";
+
+                    if (message.deletedAt) {
+                        return null
+                    }
+
+                    if (collapsed) {
+                        if (count === 1) {
+                            compressionLevel = "high"
+                        }
+                        else {
+                            compressionLevel = "medium";
+                            if (count >= 3 && index != 0 && index != count - 1) {
+
+                                if (index === 1) {
+                                    return (
+                                        <div className="flex items-center" key="separator">
+                                            <hr className="flex-grow border-gray-300" />
+                                            <span className="mx-2 text-xs text-muted-foreground px-2 rounded select-none">
+                                                {count - 2} more comment{(count - 2) > 1 ? "s" : ""}
+                                            </span>
+                                            <hr className="flex-grow border-gray-300" />
+                                        </div>
+                                    )
+                                }
+                                return null
+                            }
+                        }
+                    }
+
+                    return <CommentMessageItem
+                        key={message.id}
+                        message={message}
+                        userId={user.id}
+                        fetcher={fetcher}
+                        activityId={activity.id}
+                        thread={thread}
+                        user={users.find((user) => user.id === message.userId)}
+                        isEditing={currentlyEditedItemId === message.id}
+                        onRequestEdit={() => setCurrentlyEditedItemId(message.id)}
+                        onCancelEdit={() => setCurrentlyEditedItemId(null)}
+                        compressionLevel={compressionLevel}
+                        users={users}
+                    />
+                })}
+
+            </div>
+
+
+            {!collapsed && <div className="">
+                {hasZeroVisisbleComments && <CommentMessageHeader title={users.find((u) => u.id === user.id)?.name || "You"} />}
+
+                {/* <div className="mt-4 mb-4">
+                    <ScoreModal
+                        activity={activity}
+                        thread={thread}
+                        trigger={
+                            <Button variant="outline" size="sm" className="gap-2">
+                                <StarIcon className="w-4 h-4" />
+                                Scores
+                            </Button>
+                        }
+                    />
+                </div> */}
+
+                {(hasZeroVisisbleComments || currentlyEditedItemId === "new" || currentlyEditedItemId === null) && <fetcher.Form method="post" action={`/threads/${thread.id}/comments`} className="mt-4" ref={formRef}>
+                    <TextEditor
+                        mentionItems={users.map(user => ({
+                            id: user.id,
+                            label: user.name
+                        }))}
+                        name="content"
+                        placeholder={(hasZeroVisisbleComments ? "Comment" : "Reply") + " or tag other, using @"}
+                        className="min-h-[10px] resize-none mb-0"
+                        onFocus={() => {
+                            setCurrentlyEditedItemId("new");
+                        }}
+                    />
+
+                    <input type="hidden" name="activityId" value={activity.id} />
+                    <div className={`gap-2 justify-end mt-2 ${(currentlyEditedItemId === "new" || hasZeroVisisbleComments) ? "flex" : "hidden"}`}>
+                        <Button
+                            type="reset"
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                                setCurrentlyEditedItemId(null);
+
+                                if (hasZeroVisisbleComments) {
+                                    onReset?.()
+                                }
+                            }}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="submit"
+                            size="sm"
+                            disabled={fetcher.state !== 'idle'}
+                        >
+                            {fetcher.state !== 'idle' ? 'Posting...' : 'Comment'}
+                        </Button>
+                    </div>
+                    {fetcher.data?.error && (
+                        <div className="text-sm text-red-500">{fetcher.data.error}</div>
+                    )}
+                </fetcher.Form>}
+            </div>}
+
+
+        </div>
+    );
+}
+
+
+
+
+
+export function CommentThreadFloatingBox({ thread, activity, user, selected = false, users, onSelect }: CommentThreadFloatingBoxProps) {
     const fetcher = useFetcher();
 
     const visibleMessages = activity.commentMessages.filter((m: any) => !m.deletedAt) ?? []
@@ -70,137 +238,19 @@ export function CommentThread({ thread, activity, userId, selected = false, user
                 onSelect(activity)
             }
         }}>
-            <div className="flex flex-col gap-6">
-                {/* Display scores */}
-                {visibleScores.map((score: any) => (
-                    <ScoreItem
-                        key={score.id}
-                        score={score}
-                        activity={activity}
-                        userId={userId}
-                        users={users}
-                        thread={thread}
-                    />
-                ))}
-
-                {/* Display comments */}
-                {visibleMessages.map((message: any, index: number) => {
-                    const count = visibleMessages.length;
-
-                    let compressionLevel: MessageCompressionLevel = "none";
-
-                    if (message.deletedAt) {
-                        return null
-                    }
-
-                    if (!selected) {
-                        if (count === 1) {
-                            compressionLevel = "high"
-                        }
-                        else {
-                            compressionLevel = "medium";
-                            if (count >= 3 && index != 0 && index != count - 1) {
-
-                                if (index === 1) {
-                                    return (
-                                        <div className="flex items-center" key="separator">
-                                            <hr className="flex-grow border-gray-300" />
-                                            <span className="mx-2 text-xs text-muted-foreground px-2 rounded select-none">
-                                                {count - 2} more comment{(count - 2) > 1 ? "s" : ""}
-                                            </span>
-                                            <hr className="flex-grow border-gray-300" />
-                                        </div>
-                                    )
-                                }
-                                return null
-                            }
-                        }
-                    }
-
-                    return <CommentMessageItem
-                        key={message.id}
-                        message={message}
-                        userId={userId}
-                        fetcher={fetcher}
-                        activityId={activity.id}
-                        thread={thread}
-                        user={users.find((user) => user.id === message.userId)}
-                        isEditing={currentlyEditedItemId === message.id}
-                        onRequestEdit={() => setCurrentlyEditedItemId(message.id)}
-                        onCancelEdit={() => setCurrentlyEditedItemId(null)}
-                        compressionLevel={compressionLevel}
-                        users={users}
-                    />
-                })}
-
-            </div>
-
-
-            {selected && <div className="">
-                {hasZeroVisisbleComments && <CommentMessageHeader title={users.find((user) => user.id === userId)?.name || "You"} />}
-
-                <div className="mt-4 mb-4">
-                    <ScoreModal
-                        activity={activity}
-                        thread={thread}
-                        trigger={
-                            <Button variant="outline" size="sm" className="gap-2">
-                                <StarIcon className="w-4 h-4" />
-                                Scores
-                            </Button>
-                        }
-                    />
-                </div>
-
-                {(hasZeroVisisbleComments || currentlyEditedItemId === "new" || currentlyEditedItemId === null) && <fetcher.Form method="post" action={`/threads/${thread.id}/comments`} className="mt-4" ref={formRef}>
-                    <TextEditor
-                        mentionItems={users.map(user => ({
-                            id: user.id,
-                            label: user.name
-                        }))}
-                        name="content"
-                        placeholder={(hasZeroVisisbleComments ? "Comment" : "Reply") + " or tag other, using @"}
-                        className="min-h-[10px] resize-none mb-0"
-                        onFocus={() => {
-                            setCurrentlyEditedItemId("new");
-                        }}
-                    />
-
-                    <input type="hidden" name="activityId" value={activity.id} />
-                    <div className={`gap-2 justify-end mt-2 ${(currentlyEditedItemId === "new" || hasZeroVisisbleComments) ? "flex" : "hidden"}`}>
-                        <Button
-                            type="reset"
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                                setCurrentlyEditedItemId(null);
-
-                                if (hasZeroVisisbleComments) {
-                                    onSelect(null)
-                                }
-                            }}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            type="submit"
-                            size="sm"
-                            disabled={fetcher.state !== 'idle'}
-                        >
-                            {fetcher.state !== 'idle' ? 'Posting...' : 'Comment'}
-                        </Button>
-                    </div>
-                    {fetcher.data?.error && (
-                        <div className="text-sm text-red-500">{fetcher.data.error}</div>
-                    )}
-                </fetcher.Form>}
-            </div>}
-
-
-
+            <CommentThread
+                thread={thread}
+                activity={activity}
+                user={user}
+                users={users}
+                collapsed={!selected}
+            />
         </div>
     );
 }
+
+
+
 
 export function CommentMessageHeader({ title, subtitle, actions }: { title: string, subtitle?: string, actions?: React.ReactNode }) {
     return <div className="flex items-center gap-2">

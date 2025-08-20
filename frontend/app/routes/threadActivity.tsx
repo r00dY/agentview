@@ -95,11 +95,10 @@ export default function ThreadActivityPage() {
 
                         { activity.commentMessages.length > 0 && <CommentThread
                             activity={activity}
-                            userId={user?.id}
+                            user={user}
                             users={users}
                             thread={thread}
-                            selected={true}
-                            onSelect={() => {}}
+                            collapsed={false}
                         /> }
                     </div>
 

@@ -18,7 +18,7 @@ import { auth } from './auth'
 import { getRootUrl } from './getRootUrl'
 import { createInvitation, cancelInvitation, getPendingInvitations, getValidInvitation } from './invitations'
 import { getAllActivities, getLastRun } from '~/lib/threadUtils'
-import { ClientSchema, ActivitySchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, CommentMessageSchema, RunSchema, ScoreSchema, ScoreCreateSchema } from '~/apiTypes'
+import { ClientSchema, ActivitySchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, CommentMessageSchema, RunSchema, ScoreSchema, ScoreCreateSchema, type User } from '~/apiTypes'
 import { fetchThread, fetchThreads } from './threads'
 import { run as runFunction } from './run'
 
@@ -1102,14 +1102,22 @@ app.openapi(membersGETRoute, async (c) => {
   try {
     await getSessionAndValidateAdmin(c);
     
-    const users = await auth.api.listUsers({
+    const response = await auth.api.listUsers({
       headers: c.req.raw.headers,
       query: {
         limit: 100,
       },
     });
 
-    return c.json(users.users, 200);
+    const users: User[] = response.users.map((user) => ({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    }));
+
+    return c.json(users, 200);
   } catch (error: any) {
     return errorToResponse(c, error);
   }

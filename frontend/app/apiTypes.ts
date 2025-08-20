@@ -1,12 +1,15 @@
+import type { User } from 'lucide-react'
 import z from 'zod'
 
-// export const UserSchema = z.object({
-//     id: z.string(),
-//     created_at: z.date(),
-//     updated_at: z.date(),
-//     name: z.string(),
-//     email: z.string(),
-// })
+export const UserSchema = z.object({
+    id: z.string(),
+    createdAt: z.date(),
+    updatedAt: z.date(),
+    name: z.string(),
+    email: z.string(),
+})
+
+export type User = z.infer<typeof UserSchema>
 
 export const VersionSchema = z.object({
     id: z.string(),
