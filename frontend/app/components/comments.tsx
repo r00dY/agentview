@@ -61,7 +61,7 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
     }));
 
     return (<div ref={ref}>
-            <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-4">
 
                 {/* Display comments */}
                 {visibleMessages.map((message: any, index: number) => {
