@@ -89,7 +89,7 @@ export default function ThreadActivityPage() {
 
 
                     <div className="mt-8">
-                        <h3 className="text-sm font-medium mb-2 text-muted-foreground">Discussion</h3>
+                        <h3 className="text-sm font-medium mb-4 text-muted-foreground">Discussion</h3>
 
                         { activity.commentMessages.length === 0 && <div className="text-muted-foreground text-sm">No discussion available</div> }
 
