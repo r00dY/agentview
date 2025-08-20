@@ -1,6 +1,6 @@
 import { useFetcher } from "react-router";
 import { Button } from "~/components/ui/button";
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
 import {
     DropdownMenu,
@@ -8,10 +8,9 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
-import { EllipsisVerticalIcon, PencilIcon, StarIcon } from "lucide-react";
+import { EllipsisVerticalIcon } from "lucide-react";
 import { TextEditor, textToElements } from "./wysiwyg/TextEditor";
 import type { Activity, Thread, User } from "~/apiTypes";
-import { ScoreModal } from "./ScoreModal";
 import { config } from "~/agentview.config";
 
 
@@ -21,7 +20,6 @@ export type CommentThreadProps = {
     user: User, 
     users: User[], 
     collapsed?: boolean,
-    onReset?: () => void,
 }
 
 export type CommentThreadFloatingBoxProps = CommentThreadProps & {
@@ -38,10 +36,10 @@ export type CommentThreadFloatingButtonProps = CommentThreadFloatingBoxProps & {
 }
 
 
-export function CommentThread({ thread, activity, user, collapsed = false, users, onReset }: CommentThreadProps) {
+export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, activity, user, collapsed = false, users }, ref) => {
     const fetcher = useFetcher();
 
-    const visibleMessages = activity.commentMessages.filter((m: any) => !m.deletedAt) ?? []
+    const visibleMessages = activity.commentMessages.filter((m: any) => !m.deletedAt) ?? []     
     const visibleScores = activity.scores.filter((s: any) => !s.deletedAt) ?? []
     const hasZeroVisisbleComments = visibleMessages.length === 0
 
@@ -54,7 +52,14 @@ export function CommentThread({ thread, activity, user, collapsed = false, users
         formRef.current?.reset();
     });
 
-    return (<div>
+    useImperativeHandle(ref, () => ({
+        reset: () => {
+            setCurrentlyEditedItemId(null);
+            formRef.current?.reset();   
+        }
+    }));
+
+    return (<div ref={ref}>
             <div className="flex flex-col gap-6">
                 {/* Display scores */}
                 {visibleScores.map((score: any) => (
@@ -160,9 +165,9 @@ export function CommentThread({ thread, activity, user, collapsed = false, users
                             onClick={(e) => {
                                 setCurrentlyEditedItemId(null);
 
-                                if (hasZeroVisisbleComments) {
-                                    onReset?.()
-                                }
+                                // if (hasZeroVisisbleComments) {
+                                //     onReset?.()
+                                // }
                             }}
                         >
                             Cancel
@@ -184,32 +189,17 @@ export function CommentThread({ thread, activity, user, collapsed = false, users
 
         </div>
     );
-}
-
-
+});
 
 
 
 export function CommentThreadFloatingBox({ thread, activity, user, selected = false, users, onSelect }: CommentThreadFloatingBoxProps) {
-    const fetcher = useFetcher();
-
-    const visibleMessages = activity.commentMessages.filter((m: any) => !m.deletedAt) ?? []
-    const visibleScores = activity.scores.filter((s: any) => !s.deletedAt) ?? []
-    const hasZeroVisisbleComments = visibleMessages.length === 0
-
-    const formRef = useRef<HTMLFormElement>(null);
-    const [currentlyEditedItemId, setCurrentlyEditedItemId] = useState<string | null>(null); // "new" for new comment, comment id for edits
-
-    useFetcherSuccess(fetcher, () => {
-        setCurrentlyEditedItemId(null);
-        console.log('resetting form')
-        formRef.current?.reset();
-    });
+    const commentThreadRef = useRef<any>(null);
 
     useEffect(() => {
         if (!selected) {
-            setCurrentlyEditedItemId(null);
-        }
+            commentThreadRef.current?.reset();
+        }       
     }, [selected])
 
     useEffect(() => {
@@ -244,6 +234,7 @@ export function CommentThreadFloatingBox({ thread, activity, user, selected = fa
                 user={user}
                 users={users}
                 collapsed={!selected}
+                ref={commentThreadRef}
             />
         </div>
     );

@@ -9,7 +9,7 @@ import { parseSSE } from "~/lib/parseSSE";
 import { authClient } from "~/lib/auth-client";
 import { apiFetch } from "~/lib/apiFetch";
 import { ItemsWithCommentsLayout } from "~/components/ItemsWithCommentsLayout";
-import { CommentThread } from "~/components/comments";
+import { CommentThreadFloatingBox } from "~/components/comments";
 import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
 import { getLastRun, getAllActivities, getVersions } from "~/lib/threadUtils";
 import { type Thread } from "~/apiTypes";
@@ -156,7 +156,7 @@ function ThreadPage() {
 
     const threadStatus = lastRun?.state === "completed" ? "idle" : (lastRun?.state ?? "idle")
 
-    
+
     // const setSelectedActivityId = (id: string | undefined) => {
     //     if (id === selectedActivityId) {
     //         return // prevents unnecessary revalidation of the page
@@ -321,6 +321,7 @@ function ThreadPage() {
                     />
                     })}
                 </div>
+
                 {/* <ItemsWithCommentsLayout items={activeActivities.map((activity) => {
 
                     const hasComments = activity.commentMessages.filter((m: any) => !m.deletedAt).length > 0
@@ -333,7 +334,7 @@ function ThreadPage() {
                             selected={selectedActivityId === activity.id}
                         />,
                         commentsComponent: (hasComments || (selectedActivityId === activity.id)) ?
-                            <CommentThread
+                            <CommentThreadFloatingBox
                                 activity={activity}
                                 userId={loaderData.userId}
                                 selected={selectedActivityId === activity.id}
@@ -345,13 +346,6 @@ function ThreadPage() {
                 })} selectedItemId={selectedActivityId}
                 /> */}
 
-                {/* <div>
-                    {lastRun?.state === 'in_progress' && <div>in progress...</div>}
-                    {lastRun?.state === 'failed' && <div>
-                        <div>failed</div>
-                        <div>{lastRun?.fail_reason?.message}</div>
-                    </div>}
-                </div> */}
             </div>
 
         </div>
