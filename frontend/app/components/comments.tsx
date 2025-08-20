@@ -12,6 +12,7 @@ import { EllipsisVerticalIcon } from "lucide-react";
 import { TextEditor, textToElements } from "./wysiwyg/TextEditor";
 import type { Activity, Thread, User } from "~/apiTypes";
 import { config } from "~/agentview.config";
+import { timeAgoShort } from "~/lib/timeAgo";
 
 
 export type CommentThreadProps = {
@@ -20,6 +21,7 @@ export type CommentThreadProps = {
     user: User, 
     users: User[], 
     collapsed?: boolean,
+    singleLineMessageHeader?: boolean,
 }
 
 export type CommentThreadFloatingBoxProps = CommentThreadProps & {
@@ -36,11 +38,10 @@ export type CommentThreadFloatingButtonProps = CommentThreadFloatingBoxProps & {
 }
 
 
-export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, activity, user, collapsed = false, users }, ref) => {
+export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, activity, user, collapsed = false, users, singleLineMessageHeader = false }, ref) => {
     const fetcher = useFetcher();
 
     const visibleMessages = activity.commentMessages.filter((m: any) => !m.deletedAt) ?? []     
-    const visibleScores = activity.scores.filter((s: any) => !s.deletedAt) ?? []
     const hasZeroVisisbleComments = visibleMessages.length === 0
 
     const formRef = useRef<HTMLFormElement>(null);
@@ -61,17 +62,6 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
 
     return (<div ref={ref}>
             <div className="flex flex-col gap-6">
-                {/* Display scores */}
-                {visibleScores.map((score: any) => (
-                    <ScoreItem
-                        key={score.id}
-                        score={score}
-                        activity={activity}
-                        userId={user.id}
-                        users={users}
-                        thread={thread}
-                    />
-                ))}
 
                 {/* Display comments */}
                 {visibleMessages.map((message: any, index: number) => {
@@ -120,6 +110,7 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                         onCancelEdit={() => setCurrentlyEditedItemId(null)}
                         compressionLevel={compressionLevel}
                         users={users}
+                        singleLineMessageHeader={singleLineMessageHeader}
                     />
                 })}
 
@@ -127,20 +118,7 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
 
 
             {!collapsed && <div className="">
-                {hasZeroVisisbleComments && <CommentMessageHeader title={users.find((u) => u.id === user.id)?.name || "You"} />}
-
-                {/* <div className="mt-4 mb-4">
-                    <ScoreModal
-                        activity={activity}
-                        thread={thread}
-                        trigger={
-                            <Button variant="outline" size="sm" className="gap-2">
-                                <StarIcon className="w-4 h-4" />
-                                Scores
-                            </Button>
-                        }
-                    />
-                </div> */}
+                {hasZeroVisisbleComments && <CommentMessageHeader title={users.find((u) => u.id === user.id)?.name || "You"} singleLineMessageHeader={singleLineMessageHeader}/>}
 
                 {(hasZeroVisisbleComments || currentlyEditedItemId === "new" || currentlyEditedItemId === null) && <fetcher.Form method="post" action={`/threads/${thread.id}/comments`} className="mt-4" ref={formRef}>
                     <TextEditor
@@ -243,7 +221,26 @@ export function CommentThreadFloatingBox({ thread, activity, user, selected = fa
 
 
 
-export function CommentMessageHeader({ title, subtitle, actions }: { title: string, subtitle?: string, actions?: React.ReactNode }) {
+export function CommentMessageHeader({ title, subtitle, actions, singleLineMessageHeader = false }: { title: string, subtitle?: string, actions?: React.ReactNode, singleLineMessageHeader?: boolean }) {
+
+    if (singleLineMessageHeader) {
+        return <div className="flex flex-row justify-between">
+        
+        <div className="flex flex-row items-center gap-2">
+            <div className="rounded-full bg-gray-300 flex-shrink-0"
+                style={{ width: 24, height: 24 }}
+            />
+            <div className="text-sm font-medium">
+                {title}
+            </div>
+            <div className="text-xs text-gray-400">
+                {subtitle}
+            </div>
+        </div>
+        {actions}
+        </div>
+    }
+
     return <div className="flex items-center gap-2">
         {/* Thumbnail */}
         <div
@@ -256,7 +253,7 @@ export function CommentMessageHeader({ title, subtitle, actions }: { title: stri
                     <div className="text-sm font-medium ">
                         {title}
                     </div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-xs text-gray-400">
                         {subtitle}
                     </div>
                 </div>
@@ -270,17 +267,14 @@ export function CommentMessageHeader({ title, subtitle, actions }: { title: stri
 type MessageCompressionLevel = "none" | "medium" | "high";
 
 // New subcomponent for comment message item with edit logic
-export function CommentMessageItem({ message, userId, activityId, thread, user, users, isEditing, onRequestEdit, onCancelEdit, compressionLevel = "none" }: { message: any, userId: string | null, fetcher: any, activityId: string, thread: Thread, user: any, users: any[], isEditing: boolean, onRequestEdit: () => void, onCancelEdit: () => void, compressionLevel?: MessageCompressionLevel }) {
+export function CommentMessageItem({ message, userId, activityId, thread, user, users, isEditing, onRequestEdit, onCancelEdit, compressionLevel = "none", singleLineMessageHeader = false }: { message: any, userId: string | null, fetcher: any, activityId: string, thread: Thread, user: any, users: any[], isEditing: boolean, onRequestEdit: () => void, onCancelEdit: () => void, compressionLevel?: MessageCompressionLevel, singleLineMessageHeader?: boolean }) {
     const isDeleted = message.deletedAt;
     const fetcher = useFetcher();
     const isOwn = userId && message.userId === userId;
-    const subtitle = new Date(message.createdAt).toLocaleString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    }) + (message.updatedAt && message.updatedAt !== message.createdAt ? " · Edited" : "") + (isDeleted ? " · Deleted" : "")
+
+
+    const createdAt = timeAgoShort(message.createdAt);
+    const subtitle = createdAt + (message.updatedAt && message.updatedAt !== message.createdAt ? " · edited" : "") + (isDeleted ? " · deleted" : "")
 
     useFetcherSuccess(fetcher, () => {
         onCancelEdit();
@@ -289,11 +283,11 @@ export function CommentMessageItem({ message, userId, activityId, thread, user, 
     return (
         <div className={`${isDeleted ? 'opacity-60' : ''}`}>
 
-            <CommentMessageHeader title={user.name} subtitle={subtitle} actions={
+            <CommentMessageHeader title={user.name} subtitle={subtitle} singleLineMessageHeader={singleLineMessageHeader} actions={
                 isOwn && !isDeleted && (<DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button size="icon" variant="ghost">
-                            <EllipsisVerticalIcon className="w-4 h-4" />
+                            <EllipsisVerticalIcon className="w-4 h-4 text-gray-400" />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent className="w-32" align="start">
@@ -320,7 +314,7 @@ export function CommentMessageItem({ message, userId, activityId, thread, user, 
             
 
             {/* Comment content */}
-            <div className="text-sm mt-2">
+            <div className="text-sm">
                 {isEditing ? (
                     <fetcher.Form method="post" action={`/threads/${thread.id}/comments`} className="space-y-2">
 
@@ -358,89 +352,11 @@ export function CommentMessageItem({ message, userId, activityId, thread, user, 
                         This comment was deleted
                     </div>
                 ) : (
-                    <div className={`gówno ${compressionLevel === "high" ? "line-clamp-6" : compressionLevel === "medium" ? "line-clamp-3" : ""}`}>
+                    <div className={`ml-8 ${compressionLevel === "high" ? "line-clamp-6" : compressionLevel === "medium" ? "line-clamp-3" : ""}`}>
                         {textToElements(message.content, users.map((user: any) => ({
                             id: user.id,
                             label: user.name
                         })))}
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-}
-
-// Score item component
-export function ScoreItem({ score, activity, userId, users, thread }: { 
-    score: any, 
-    activity: any, 
-    userId: string | null, 
-    users: any[], 
-    thread: Thread
-}) {
-    const fetcher = useFetcher();
-    const isOwn = userId && score.createdBy === userId;
-    const user = users.find((u) => u.id === score.createdBy);
-    const subtitle = new Date(score.createdAt).toLocaleString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
-
-    // Find score configuration to get the title
-    const threadConfig = config.threads.find((t: any) => t.type === thread.type);
-    const activityConfig = threadConfig?.activities.find((a: any) => 
-        a.type === activity.type && a.role === activity.role
-    );
-    const scoreConfig = activityConfig?.scores?.find((s: any) => s.name === score.name);
-    const scoreTitle = scoreConfig?.title || score.name;
-
-    return (
-        <div className="border-l-4 border-blue-500 pl-4 py-2">
-            <CommentMessageHeader 
-                title={user?.name || "Unknown User"} 
-                subtitle={`${scoreTitle} · ${subtitle}`}
-                actions={
-                    isOwn && (
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button size="icon" variant="ghost">
-                                    <EllipsisVerticalIcon className="w-4 h-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent className="w-32" align="start">
-                                <DropdownMenuItem onClick={(e) => {
-                                    e.preventDefault();
-                                    if (confirm('Are you sure you want to delete this score?')) {
-                                        // TODO: Implement score deletion
-                                        console.log('Delete score:', score.id);
-                                    }
-                                }}>
-                                    Delete
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    )
-                }
-            />
-            
-            <div className="text-sm mt-2 space-y-2">
-                <div className="bg-gray-50 p-3 rounded-md">
-                    <div className="font-medium text-gray-700 mb-1">Score Value:</div>
-                    <pre className="text-xs text-gray-600 whitespace-pre-wrap">
-                        {JSON.stringify(score.value, null, 2)}
-                    </pre>
-                </div>
-                
-                {score.commentId && (
-                    <div className="text-gray-700">
-                        <div className="font-medium mb-1">Comment:</div>
-                        <div className="text-sm">
-                            {/* TODO: Display the associated comment */}
-                            Comment ID: {score.commentId}
-                        </div>
                     </div>
                 )}
             </div>

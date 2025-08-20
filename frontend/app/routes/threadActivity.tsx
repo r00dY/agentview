@@ -65,7 +65,7 @@ export default function ThreadActivityPage() {
 
             <div className=" p-6 max-w-4xl space-y-6">
                     <div>
-                        <h3 className="text-sm font-medium mb-2 text-muted-foreground">Scores</h3>
+                        <h3 className="text-sm font-medium mb-2 text-gray-700">Scores</h3>
 
                         { availableScores.length === 0 && <div className="text-muted-foreground text-sm">No scores available</div> }
 
@@ -73,12 +73,12 @@ export default function ThreadActivityPage() {
                             {availableScores.map((scoreConfig: any) => {
                                 const userScore = userScoresMap[scoreConfig.name];
                                 const scoreTitle = scoreConfig.title || scoreConfig.name;
-                                const scoreValue = userScore ? JSON.stringify(userScore.value) : "empty";
+                                const scoreValue = userScore ? JSON.stringify(userScore.value) : "Empty";
                                 
                                 return (
                                     <PropertyList.Item key={scoreConfig.name}>
                                         <PropertyList.Title>{scoreTitle}</PropertyList.Title>
-                                        <PropertyList.TextValue isMonospace={true} isMuted={scoreValue === "empty"}>
+                                        <PropertyList.TextValue isMonospace={false} isMuted={scoreValue === "Empty"}>
                                             {scoreValue}
                                         </PropertyList.TextValue>
                                     </PropertyList.Item>
@@ -89,17 +89,18 @@ export default function ThreadActivityPage() {
 
 
                     <div className="mt-8">
-                        <h3 className="text-sm font-medium mb-4 text-muted-foreground">Discussion</h3>
+                        <h3 className="text-sm font-medium mb-4 text-gray-700">Discussion</h3>
 
                         { activity.commentMessages.length === 0 && <div className="text-muted-foreground text-sm">No discussion available</div> }
 
-                        { activity.commentMessages.length > 0 && <CommentThread
+                        { activity.commentMessages.length > 0 && <div className="max-w-[720px]"><CommentThread
                             activity={activity}
                             user={user}
                             users={users}
                             thread={thread}
                             collapsed={false}
-                        /> }
+                            singleLineMessageHeader={true}
+                        /></div> }
                     </div>
 
 
