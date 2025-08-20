@@ -13,6 +13,7 @@ import { TextEditor, textToElements } from "./wysiwyg/TextEditor";
 import type { Activity, Thread, User } from "~/apiTypes";
 import { config } from "~/agentview.config";
 import { timeAgoShort } from "~/lib/timeAgo";
+import { PropertyList } from "./PropertyList";
 
 
 export type CommentThreadProps = {
@@ -312,6 +313,18 @@ export function CommentMessageItem({ message, userId, activityId, thread, user, 
                 )
             } />
             
+
+            {/* <PropertyList className="ml-8 mb-4">
+                <PropertyList.Item>
+                    <PropertyList.Title>User satisfaction</PropertyList.Title>
+                    <PropertyList.TextValue isMuted={false}>Bad</PropertyList.TextValue>
+                </PropertyList.Item>
+
+                <PropertyList.Item>
+                    <PropertyList.Title>Can go to client?</PropertyList.Title>
+                    <PropertyList.TextValue isMuted={false}>Kind of</PropertyList.TextValue>
+                </PropertyList.Item>
+            </PropertyList> */}
 
             {/* Comment content */}
             <div className="text-sm">
