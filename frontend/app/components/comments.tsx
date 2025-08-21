@@ -1,6 +1,6 @@
 import { useFetcher } from "react-router";
 import { Button } from "~/components/ui/button";
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { act, forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
 import {
     DropdownMenu,
@@ -14,6 +14,7 @@ import type { Activity, Thread, User } from "~/apiTypes";
 import { config } from "~/agentview.config";
 import { timeAgoShort } from "~/lib/timeAgo";
 import { PropertyList } from "./PropertyList";
+import { Input } from "./ui/input";
 
 
 export type CommentThreadProps = {
@@ -39,6 +40,34 @@ export type CommentThreadFloatingButtonProps = CommentThreadFloatingBoxProps & {
 }
 
 
+
+/** ------ FORM (temporarily here) ------ */
+
+
+
+
+
+type FormFieldProps = {
+    // name: string,
+    label: any,
+    control: any,
+    required?: boolean,
+    errorMessage?: string,
+    defaultValue?: string
+}
+
+function FormField(props: FormFieldProps) {
+    const { label, control, required, errorMessage } = props;
+    return <div className="flex flex-row gap-4">
+        <label className="text-sm text-gray-700 w-[170px] flex-shrink-0 truncate">{label}</label>
+        <div>
+            {control}
+            {errorMessage && <div className="text-xs text-red-500">{errorMessage}</div>}
+        </div>
+    </div>
+}
+
+
 export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, activity, user, collapsed = false, users, singleLineMessageHeader = false }, ref) => {
     const fetcher = useFetcher();
 
@@ -47,6 +76,23 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
 
     const formRef = useRef<HTMLFormElement>(null);
     const [currentlyEditedItemId, setCurrentlyEditedItemId] = useState<string | null>(null); // "new" for new comment, comment id for edits
+
+
+
+    // Get scores for this activity type from config
+    const threadConfig = config.threads.find((t: any) => t.type === thread.type);
+    const activityConfig = threadConfig?.activities.find((a: any) => 
+        a.type === activity.type && a.role === activity.role
+    );
+    const scoreConfigs = activityConfig?.scores || [];
+
+    const scores: Record<string, any> = {};
+    for (const score of activity.scores ?? []) {
+        scores[score.name] = score.value;
+    }
+
+    const unassignedScoreConfigs = scoreConfigs.filter((scoreConfig) => !scores[scoreConfig.name]);
+
 
     useFetcherSuccess(fetcher, () => {
         setCurrentlyEditedItemId(null);
@@ -117,8 +163,74 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
 
             </div>
 
+            {!collapsed && <div className="ml-8 pt-4 border-t mt-4">
 
-            {!collapsed && <div className="">
+                {true && <fetcher.Form method="post" action={`/threads/${thread.id}/comments`} ref={formRef}>
+
+                { unassignedScoreConfigs.length > 0 && <div className="mb-4">
+                    {unassignedScoreConfigs.map((scoreConfig) => (   
+                        <FormField
+                            key={scoreConfig.name}
+                            label={scoreConfig.title ?? scoreConfig.name}
+                            control={<Input type="text" placeholder="Enter value" />}
+                            errorMessage={`Incorrect value`}
+                        />
+                    ))}
+                    </div> }
+
+                  {/* { unassignedScoreConfigs.length > 0 && <PropertyList className="mb-4">
+                    {unassignedScoreConfigs.map((scoreConfig) => (   
+                        <PropertyList.Item>
+                            <PropertyList.Title>{scoreConfig.title ?? scoreConfig.name}</PropertyList.Title>
+                            <PropertyList.TextValue isMuted={false}>
+                                <Input type="text" placeholder="Enter value" />
+                            </PropertyList.TextValue>
+                        </PropertyList.Item>
+                    ))}
+                    </PropertyList> } */}
+
+
+                    <TextEditor
+                        mentionItems={users.map(user => ({
+                            id: user.id,
+                            label: user.name
+                        }))}
+                        name="content"
+                        placeholder={(hasZeroVisisbleComments ? "Comment" : "Reply") + " or tag other, using @"}
+                        className="min-h-[10px] resize-none mb-0"
+                        onFocus={() => {
+                            setCurrentlyEditedItemId("new");
+                        }}
+                    />
+
+                    <input type="hidden" name="activityId" value={activity.id} />
+                    <div className={`gap-2 justify-end mt-2 ${(currentlyEditedItemId === "new" || hasZeroVisisbleComments) ? "flex" : "hidden"}`}>
+                        <Button
+                            type="reset"
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                                setCurrentlyEditedItemId(null);
+                            }}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="submit"
+                            size="sm"
+                            disabled={fetcher.state !== 'idle'}
+                        >
+                            {fetcher.state !== 'idle' ? 'Posting...' : 'Comment'}
+                        </Button>
+                    </div>
+                    {fetcher.data?.error && (
+                        <div className="text-sm text-red-500">{fetcher.data.error}</div>
+                    )}
+                </fetcher.Form>}
+            </div>}
+
+
+            {/* {!collapsed && <div className="">
                 {hasZeroVisisbleComments && <CommentMessageHeader title={users.find((u) => u.id === user.id)?.name || "You"} singleLineMessageHeader={singleLineMessageHeader}/>}
 
                 {(hasZeroVisisbleComments || currentlyEditedItemId === "new" || currentlyEditedItemId === null) && <fetcher.Form method="post" action={`/threads/${thread.id}/comments`} className="mt-4" ref={formRef}>
@@ -143,10 +255,6 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                             size="sm"
                             onClick={(e) => {
                                 setCurrentlyEditedItemId(null);
-
-                                // if (hasZeroVisisbleComments) {
-                                //     onReset?.()
-                                // }
                             }}
                         >
                             Cancel
@@ -163,7 +271,7 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                         <div className="text-sm text-red-500">{fetcher.data.error}</div>
                     )}
                 </fetcher.Form>}
-            </div>}
+            </div>} */}
 
 
         </div>
