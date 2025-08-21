@@ -21,18 +21,20 @@ const formSchema = z.object({
 })
  
 export function ProfileForm() {
-    const form = useForm<z.infer<typeof formSchema>>({
-        resolver: zodResolver(formSchema),
-        defaultValues: {
-          username: "",
-        },
-      })
+  const form = useForm<z.infer<typeof formSchema>>({
+      resolver: zodResolver(formSchema),
+      defaultValues: {
+        username: "",
+      },
+    })
 
-      function onSubmit(values: z.infer<typeof formSchema>) {
-        // Do something with the form values.
-        // ✅ This will be type-safe and validated.
-        console.log(values)
-      }
+    function onSubmit(values: z.infer<typeof formSchema>) {
+      // Do something with the form values.
+      // ✅ This will be type-safe and validated.
+      console.log(values)
+    }
+
+    console.log('form', form)
  
   return (
     <Form {...form}>
@@ -40,8 +42,10 @@ export function ProfileForm() {
         <FormField
           control={form.control}
           name="username"
-          render={({ field }) => (
-            <FormItem>
+          render={({ field }) => {
+            console.log('field', field)
+
+            return <FormItem>
               <FormLabel>Username</FormLabel>
               <FormControl>
                 <Input placeholder="shadcn" {...field} />
@@ -51,7 +55,7 @@ export function ProfileForm() {
               </FormDescription>
               <FormMessage />
             </FormItem>
-          )}
+          }}
         />
         <Button type="submit">Submit</Button>
       </form>

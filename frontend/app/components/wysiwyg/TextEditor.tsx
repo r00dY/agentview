@@ -9,6 +9,7 @@ import { computePosition, flip, shift, offset } from '@floating-ui/dom'
 import { cn } from '~/lib/utils'
 import { type SuggestionProps } from '@tiptap/suggestion'
 import Linkify from "linkify-react";
+import { useOnFormReset } from '~/hooks/useOnFormReset';
 
 // export const MENTION_STYLES = 'bg-cyan-50 text-cyan-800 px-1 py-0.5 rounded-md'
 export const MENTION_STYLES = 'text-cyan-700'
@@ -236,41 +237,6 @@ export function textToElements(text: string, mentionItems: TextEditorMentionItem
   return elements
 }
 
-
-export function useOnFormReset(callback: () => void) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  
-  useEffect(() => {
-    if (!inputRef.current) return;
-    
-    const forms = document.querySelectorAll('form');
-    let closestForm: HTMLFormElement | null = null;
-    
-    // Find the form that contains this component's input element
-    for (const form of forms) {
-      if (form.contains(inputRef.current)) {
-        closestForm = form;
-        break;
-      }
-    }
-    
-    if (closestForm) {        
-      const handleReset = (e: Event) => {
-        console.log('RESET!!!')
-        callback();
-      };
-
-      closestForm.addEventListener("reset", handleReset);
-
-      return () => {
-        closestForm?.removeEventListener("reset", handleReset);
-      };
-    }
-
-  }, [callback]);
-  
-  return inputRef;
-}
 
 
 export type TextEditorProps = {

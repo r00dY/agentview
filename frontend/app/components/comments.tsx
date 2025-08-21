@@ -13,8 +13,8 @@ import { TextEditor, textToElements } from "./wysiwyg/TextEditor";
 import type { Activity, Thread, User } from "~/apiTypes";
 import { config } from "~/agentview.config";
 import { timeAgoShort } from "~/lib/timeAgo";
-import { PropertyList } from "./PropertyList";
 import { Input } from "./ui/input";
+import { FormField } from "./form";
 
 
 export type CommentThreadProps = {
@@ -41,38 +41,6 @@ export type CommentThreadFloatingButtonProps = CommentThreadFloatingBoxProps & {
 
 
 
-/** ------ FORM (temporarily here) ------ */
-
-
-type FormInputProps<T=any> = {
-    id: string,
-    name: string,
-    value: T,
-    onChange: (value: T) => void,
-}
-
-type FormFieldProps<T = any> = {
-    id: string,
-    children: ReactNode
-    label: string;
-    description?: string;
-    validationError?: string;
-};  
-
-
-function FormField<T=any>(props: FormFieldProps<T>) {
-    const { id, label,description, validationError, children } = props;
-    return <div className="flex flex-row gap-4">
-        <label className="text-sm text-gray-700 w-[170px] flex-shrink-0 truncate" htmlFor={id}>{label}</label>
-        {<div>
-            <div>
-                {children}
-            </div>
-            {description && <div className="text-xs text-gray-500">{description}</div>}
-            {validationError && <div className="text-xs text-red-500">{validationError}</div>}
-        </div>}
-    </div>
-}
 
 
 export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, activity, user, collapsed = false, users, singleLineMessageHeader = false }, ref) => {
@@ -83,8 +51,6 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
 
     const formRef = useRef<HTMLFormElement>(null);
     const [currentlyEditedItemId, setCurrentlyEditedItemId] = useState<string | null>(null); // "new" for new comment, comment id for edits
-
-
 
     // Get scores for this activity type from config
     const threadConfig = config.threads.find((t: any) => t.type === thread.type);
@@ -172,18 +138,31 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
 
             {!collapsed && <div className="ml-8 pt-4 border-t mt-4">
 
+                {/* <ProfileForm /> */}
+
                 {true && <fetcher.Form method="post" action={`/threads/${thread.id}/comments`} ref={formRef}>
+
+
 
                 { unassignedScoreConfigs.length > 0 && <div className="mb-4">
                     {unassignedScoreConfigs.map((scoreConfig) => (   
-                        <FormField
+                        <FormField<string | null>
                             key={scoreConfig.name}
                             id={scoreConfig.name}
                             label={scoreConfig.title ?? scoreConfig.name}
-                            validationError={`Incorrect value`}
-                        >
-                            <Input type="text" placeholder="Enter value" id={scoreConfig.name} name={scoreConfig.name} defaultValue={scores[scoreConfig.name]}/>
-                        </FormField>
+                            error={`Incorrect value`}
+                            name={scoreConfig.name}
+                            defaultValue={"dupa"}
+                            InputComponent={({ value, onChange, name, id })=> <Input value={value ?? ""} placeholder="Enter value" onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)} name={name} id={id}/>}
+                        />
+                        // <FormField
+                        //     key={scoreConfig.name}
+                        //     id={scoreConfig.name}
+                        //     label={scoreConfig.title ?? scoreConfig.name}
+                        //     error={`Incorrect value`}
+                        // >
+                        //     <Input type="text" placeholder="Enter value" id={scoreConfig.name} name={scoreConfig.name} defaultValue={scores[scoreConfig.name]}/>
+                        // </FormField>
                     ))}
                     </div> }
 
