@@ -14,7 +14,7 @@ import type { Activity, Thread, User } from "~/apiTypes";
 import { config } from "~/agentview.config";
 import { timeAgoShort } from "~/lib/timeAgo";
 import { Input } from "./ui/input";
-import { FormField } from "./form";
+import { FormField, FormFieldBase } from "./form";
 
 
 export type CommentThreadProps = {
@@ -141,8 +141,6 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
 
                 {true && <fetcher.Form method="post" action={`/threads/${thread.id}/comments`} ref={formRef}>
 
-
-
                 { unassignedScoreConfigs.length > 0 && <div className="mb-4">
                     {unassignedScoreConfigs.map((scoreConfig) => (   
                         <FormField
@@ -168,19 +166,23 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                     ))}
                     </PropertyList> } */}
 
+                    <div>
+                        <div className="text-sm mb-1 text-gray-700">Extra comment</div>
+                        <TextEditor
+                            mentionItems={users.map(user => ({
+                                id: user.id,
+                                label: user.name
+                            }))}
+                            name="content"
+                            placeholder={(hasZeroVisisbleComments ? "Comment" : "Reply") + " or tag other, using @"}
+                            className="min-h-[10px] resize-none mb-0"
+                            onFocus={() => {
+                                setCurrentlyEditedItemId("new");
+                            }}
+                        />
 
-                    <TextEditor
-                        mentionItems={users.map(user => ({
-                            id: user.id,
-                            label: user.name
-                        }))}
-                        name="content"
-                        placeholder={(hasZeroVisisbleComments ? "Comment" : "Reply") + " or tag other, using @"}
-                        className="min-h-[10px] resize-none mb-0"
-                        onFocus={() => {
-                            setCurrentlyEditedItemId("new");
-                        }}
-                    />
+                    </div>
+
 
                     <input type="hidden" name="activityId" value={activity.id} />
                     <div className={`gap-2 justify-end mt-2 ${(currentlyEditedItemId === "new" || hasZeroVisisbleComments) ? "flex" : "hidden"}`}>

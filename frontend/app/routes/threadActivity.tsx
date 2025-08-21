@@ -19,7 +19,6 @@ export async function clientLoader({ request, params }: Route.ClientLoaderArgs) 
             status: usersResponse.status,
         });
     }
-
     
     return {
         user: session.data!.user,
