@@ -1,6 +1,6 @@
 import { useFetcher } from "react-router";
 import { Button } from "~/components/ui/button";
-import { act, forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { act, forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
 import {
     DropdownMenu,
@@ -44,26 +44,33 @@ export type CommentThreadFloatingButtonProps = CommentThreadFloatingBoxProps & {
 /** ------ FORM (temporarily here) ------ */
 
 
-
-
-
-type FormFieldProps = {
-    // name: string,
-    label: any,
-    control: any,
-    required?: boolean,
-    errorMessage?: string,
-    defaultValue?: string
+type FormInputProps<T=any> = {
+    id: string,
+    name: string,
+    value: T,
+    onChange: (value: T) => void,
 }
 
-function FormField(props: FormFieldProps) {
-    const { label, control, required, errorMessage } = props;
+type FormFieldProps<T = any> = {
+    id: string,
+    children: ReactNode
+    label: string;
+    description?: string;
+    validationError?: string;
+};  
+
+
+function FormField<T=any>(props: FormFieldProps<T>) {
+    const { id, label,description, validationError, children } = props;
     return <div className="flex flex-row gap-4">
-        <label className="text-sm text-gray-700 w-[170px] flex-shrink-0 truncate">{label}</label>
-        <div>
-            {control}
-            {errorMessage && <div className="text-xs text-red-500">{errorMessage}</div>}
-        </div>
+        <label className="text-sm text-gray-700 w-[170px] flex-shrink-0 truncate" htmlFor={id}>{label}</label>
+        {<div>
+            <div>
+                {children}
+            </div>
+            {description && <div className="text-xs text-gray-500">{description}</div>}
+            {validationError && <div className="text-xs text-red-500">{validationError}</div>}
+        </div>}
     </div>
 }
 
@@ -171,10 +178,12 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                     {unassignedScoreConfigs.map((scoreConfig) => (   
                         <FormField
                             key={scoreConfig.name}
+                            id={scoreConfig.name}
                             label={scoreConfig.title ?? scoreConfig.name}
-                            control={<Input type="text" placeholder="Enter value" />}
-                            errorMessage={`Incorrect value`}
-                        />
+                            validationError={`Incorrect value`}
+                        >
+                            <Input type="text" placeholder="Enter value" id={scoreConfig.name} name={scoreConfig.name} defaultValue={scores[scoreConfig.name]}/>
+                        </FormField>
                     ))}
                     </div> }
 
