@@ -28,10 +28,19 @@ export interface NonAsyncRunResult {
   activities: any[];
 }
 
-export interface ScoreConfig {
+export type FormInputProps<T=any> = {
+  id: string,
+  name: string,
+  value: T,
+  onChange: (value: T) => void,
+}
+
+
+export interface ScoreConfig<T=any> {
   name: string;
   title?: string;
   schema: z.ZodType;
+  input: React.ComponentType<FormInputProps<T>>;
 }
 
 export interface ActivityConfig {

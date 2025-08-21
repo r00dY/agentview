@@ -50,7 +50,7 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
     const hasZeroVisisbleComments = visibleMessages.length === 0
 
     const formRef = useRef<HTMLFormElement>(null);
-    const [currentlyEditedItemId, setCurrentlyEditedItemId] = useState<string | null>(null); // "new" for new comment, comment id for edits
+    const [currentlyEditedItemId, setCurrentlyEditedItemId] = useState<string | null>("new" /*null*/); // "new" for new comment, comment id for edits
 
     // Get scores for this activity type from config
     const threadConfig = config.threads.find((t: any) => t.type === thread.type);
@@ -65,7 +65,6 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
     }
 
     const unassignedScoreConfigs = scoreConfigs.filter((scoreConfig) => !scores[scoreConfig.name]);
-
 
     useFetcherSuccess(fetcher, () => {
         setCurrentlyEditedItemId(null);
@@ -146,23 +145,15 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
 
                 { unassignedScoreConfigs.length > 0 && <div className="mb-4">
                     {unassignedScoreConfigs.map((scoreConfig) => (   
-                        <FormField<string | null>
+                        <FormField
                             key={scoreConfig.name}
                             id={scoreConfig.name}
                             label={scoreConfig.title ?? scoreConfig.name}
                             error={`Incorrect value`}
                             name={scoreConfig.name}
-                            defaultValue={"dupa"}
-                            InputComponent={({ value, onChange, name, id })=> <Input value={value ?? ""} placeholder="Enter value" onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)} name={name} id={id}/>}
+                            defaultValue={scores[scoreConfig.name] ?? null}
+                            InputComponent={scoreConfig.input}
                         />
-                        // <FormField
-                        //     key={scoreConfig.name}
-                        //     id={scoreConfig.name}
-                        //     label={scoreConfig.title ?? scoreConfig.name}
-                        //     error={`Incorrect value`}
-                        // >
-                        //     <Input type="text" placeholder="Enter value" id={scoreConfig.name} name={scoreConfig.name} defaultValue={scores[scoreConfig.name]}/>
-                        // </FormField>
                     ))}
                     </div> }
 

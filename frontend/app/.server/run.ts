@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import type { RunFunction } from "./types";
+import type { RunFunction } from "../types";
 
 const client = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,

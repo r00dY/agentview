@@ -1,14 +1,8 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useOnFormReset } from '~/hooks/useOnFormReset';
-
-
-export type FormInputProps<T=any> = {
-    id: string,
-    name: string,
-    value: T,
-    onChange: (value: T) => void,
-}
+import type { FormInputProps } from "~/types";
+import { Input } from "./ui/input";
 
 export type FormFieldBaseProps = {
     id: string,
@@ -62,4 +56,8 @@ export function FormField<T=any>(props: FormFieldProps<T>) {
             }}/>
         </FormFieldBase>
     </>
+}
+
+export const TextInput : React.ComponentType<FormInputProps<string | null>> = ({ value, onChange, name, id })=> {
+    return <Input value={value ?? ""} placeholder="Enter value" onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)} name={name} id={id}/>
 }

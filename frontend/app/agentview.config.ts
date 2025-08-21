@@ -1,5 +1,6 @@
-import type { AgentViewConfig } from "./.server/types";
+import type { AgentViewConfig } from "./types";
 import { z } from "zod";
+import { TextInput } from "./components/form";
 
 export const config : AgentViewConfig = {
     email: async (payload: any) => {
@@ -25,7 +26,8 @@ export const config : AgentViewConfig = {
                         {
                             name: "user_satisfaction",
                             title: "User satisfaction",
-                            schema: z.boolean()
+                            schema: z.boolean(),
+                            input: TextInput
                         }
                         // {
                         //     name: "helpfulness",
