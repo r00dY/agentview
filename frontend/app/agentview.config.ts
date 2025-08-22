@@ -37,6 +37,12 @@ export const config : AgentViewConfig = {
                                     icon: ThumbsDown
                                 }
                             }
+                        },
+                        {
+                            name: "whatever",
+                            title: "Whatever",
+                            schema: z.string(),
+                            input: TextInput
                         }
                         // {
                         //     name: "helpfulness",

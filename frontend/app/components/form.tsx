@@ -64,8 +64,8 @@ export function FormField<T=any>(props: FormFieldProps<T>) {
     </>
 }
 
-export const TextInput : React.ComponentType<FormInputProps<string | null>> = ({ value, onChange, name, id })=> {
-    return <Input value={value ?? ""} placeholder="Enter value" onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)} name={name} id={id}/>
+export const TextInput : React.ComponentType<FormInputProps<string | undefined>> = ({ value, onChange, name, id })=> {
+    return <Input value={value ?? ""} placeholder="Enter value" onChange={(e) => onChange(e.target.value === "" ? undefined : e.target.value)} name={name} id={id}/>
 }
 
 
