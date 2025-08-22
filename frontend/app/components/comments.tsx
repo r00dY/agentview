@@ -147,10 +147,11 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                             key={scoreConfig.name}
                             id={scoreConfig.name}
                             label={scoreConfig.title ?? scoreConfig.name}
-                            error={`Incorrect value`}
+                            // error={`Incorrect value`}
                             name={scoreConfig.name}
-                            defaultValue={scores[scoreConfig.name] ?? null}
+                            defaultValue={scores[scoreConfig.name]}
                             InputComponent={scoreConfig.input}
+                            options={scoreConfig.options}
                         />
                     ))}
                     </div> }

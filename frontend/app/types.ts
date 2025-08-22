@@ -33,6 +33,7 @@ export type FormInputProps<T=any> = {
   name: string,
   value: T,
   onChange: (value: T) => void,
+  options?: any
 }
 
 
@@ -41,6 +42,7 @@ export interface ScoreConfig<T=any> {
   title?: string;
   schema: z.ZodType;
   input: React.ComponentType<FormInputProps<T>>;
+  options?: any
 }
 
 export interface ActivityConfig {
