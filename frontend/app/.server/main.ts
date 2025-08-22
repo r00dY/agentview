@@ -610,6 +610,11 @@ app.openapi(runWatchRoute, async (c) => {
   const { thread_id } = c.req.param()
 
   const threadRow = await fetchThread(thread_id);
+
+  if (!threadRow) {
+    return c.json({ message: "Thread not found" }, 404);
+  }
+
   const lastRun = getLastRun(threadRow)
   const activities = getAllActivities(threadRow)
 
@@ -709,29 +714,6 @@ app.openapi(runWatchRoute, async (c) => {
 
 /* --------- FEED --------- */
 
-const feedItemsPOSTRoute = createRoute({
-  method: 'post',
-  path: '/api/threads/{thread_id}/activities/{activity_id}/feed_items',
-  request: {
-    params: z.object({
-      thread_id: z.string(),
-      activity_id: z.string(),
-    }),
-    body: body(z.object({
-      comment: z.string().optional(),
-      scores: z.array(z.object({
-        name: z.string(),
-        value: z.any(),
-      })).optional(),
-    }))
-  },
-  responses: {
-    201: response_data(z.object({})),
-    400: response_error(),
-    401: response_error(),
-    404: response_error(),
-  },
-})
 
 function validateScore(thread: Thread, activity: Activity, scoreName: string, scoreValue: any) {
 
@@ -770,6 +752,29 @@ function validateScore(thread: Thread, activity: Activity, scoreName: string, sc
   }
 }
 
+const feedItemsPOSTRoute = createRoute({
+  method: 'post',
+  path: '/api/threads/{thread_id}/activities/{activity_id}/feed_items',
+  request: {
+    params: z.object({
+      thread_id: z.string(),
+      activity_id: z.string(),
+    }),
+    body: body(z.object({
+      comment: z.string().optional(),
+      scores: z.array(z.object({
+        name: z.string(),
+        value: z.any(),
+      })).optional(),
+    }))
+  },
+  responses: {
+    201: response_data(z.object({})),
+    400: response_error(),
+    401: response_error(),
+    404: response_error(),
+  },
+})
 
 app.openapi(feedItemsPOSTRoute, async (c) => {
   const body = await c.req.json()
@@ -793,9 +798,9 @@ app.openapi(feedItemsPOSTRoute, async (c) => {
       return c.json({ message: "Activity not found" }, 404);
     }
 
-    const scores = body.scores ?? []
+    const inputScores = body.scores ?? []
 
-    for (const score of scores) {
+    for (const score of inputScores) {
       try {
         validateScore(thread, activity, score.name, score.value)
       } catch (error: any) {
@@ -809,19 +814,19 @@ app.openapi(feedItemsPOSTRoute, async (c) => {
       const [newMessage] = await tx.insert(commentMessages).values({
         activityId: activity_id,
         userId: session.user.id,
-        content: body.content ?? null,
+        content: body.comment ?? null,
       }).returning();
 
       // Add comment mentions
-      if (body.content) {
+      if (body.comment) {
         let mentions;
         let userMentions: string[] = [];
 
         try {
-          mentions = extractMentions(body.content);
+          mentions = extractMentions(body.comment);
           userMentions = mentions.user_id || [];
         } catch (error) {
-          return c.json({ messagE: `Invalid mention format: ${(error as Error).message}`}, 400)
+          return c.json({ message: `Invalid mention format: ${(error as Error).message}`}, 400)
         }
 
         if (userMentions.length > 0) {
@@ -834,7 +839,7 @@ app.openapi(feedItemsPOSTRoute, async (c) => {
         }
       }
 
-      for (const score of scores) {
+      for (const score of inputScores) {
         await tx.insert(scores).values({
           activityId: activity_id,
           name: score.name,

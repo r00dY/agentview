@@ -78,14 +78,14 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
         }
     }));
 
-    const messageScoresMap : Record<string, Score[]> = {}
+    // const messageScoresMap : Record<string, Score[]> = {}
 
-    for (const score of activity.scores ?? []) {
-        if (score.commentId === null) {
-            continue
-        }
-        messageScoresMap[score.commentId].push(score)
-    }
+    // for (const score of activity.scores ?? []) {
+    //     if (score.commentId === null) {
+    //         continue
+    //     }
+    //     messageScoresMap[score.commentId].push(score)
+    // }
 
     return (<div ref={ref}>
             <div className="flex flex-col gap-4">
