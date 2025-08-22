@@ -151,7 +151,7 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                 )}
 
 
-                <fetcher.Form method="post" action={`/threads/${thread.id}/activities/${activity.id}/scores_and_comments`} ref={formRef}>
+                <fetcher.Form method="post" action={`/threads/${thread.id}/activities/${activity.id}/comments`} ref={formRef}>
 
                 { unassignedScoreConfigs.length > 0 && <div className="mb-4">
                     {unassignedScoreConfigs.map((scoreConfig) => (   
@@ -159,8 +159,8 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                             key={scoreConfig.name}
                             id={scoreConfig.name}
                             label={scoreConfig.title ?? scoreConfig.name}
-                            error={fetcher.data?.error?.fieldErrors?.["score." + scoreConfig.name]}
-                            name={"score." + scoreConfig.name}
+                            error={fetcher.data?.error?.fieldErrors?.["scores." + scoreConfig.name]}
+                            name={"scores." + scoreConfig.name}
                             defaultValue={scores[scoreConfig.name] ?? undefined}
                             InputComponent={scoreConfig.input}
                             options={scoreConfig.options}

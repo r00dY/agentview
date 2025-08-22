@@ -770,7 +770,7 @@ function validateScore(thread: Thread, activity: Activity, scoreName: string, sc
 
 const feedItemsPOSTRoute = createRoute({
   method: 'post',
-  path: '/api/threads/{thread_id}/activities/{activity_id}/feed_items',
+  path: '/api/threads/{thread_id}/activities/{activity_id}/comments',
   request: {
     params: z.object({
       thread_id: z.string(),
@@ -778,10 +778,7 @@ const feedItemsPOSTRoute = createRoute({
     }),
     body: body(z.object({
       comment: z.string().optional(),
-      scores: z.array(z.object({
-        name: z.string(),
-        value: z.any(),
-      })).optional(),
+      scores: z.record(z.string(), z.any()).optional()
     }))
   },
   responses: {
@@ -814,11 +811,11 @@ app.openapi(feedItemsPOSTRoute, async (c) => {
       return c.json({ message: "Activity not found" }, 404);
     }
 
-    const inputScores = body.scores ?? []
+    const inputScores = body.scores ?? {}
 
-    for (const score of inputScores) {
+    for (const [scoreName, scoreValue] of Object.entries(inputScores)) {
       try {
-        validateScore(thread, activity, score.name, score.value)
+        validateScore(thread, activity, scoreName, scoreValue)
       } catch (error: any) {
         return c.json({ message: error.message }, 400)
       }
@@ -855,11 +852,11 @@ app.openapi(feedItemsPOSTRoute, async (c) => {
         }
       }
 
-      for (const score of inputScores) {
+      for (const [scoreName, scoreValue] of Object.entries(inputScores)) {
         await tx.insert(scores).values({
           activityId: activity_id,
-          name: score.name,
-          value: score.value,
+          name: scoreName,
+          value: scoreValue,
           commentId: newMessage.id,
           createdBy: session.user.id,
         })

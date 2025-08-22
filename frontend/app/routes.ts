@@ -20,7 +20,8 @@ export default [
                 // route("comments", "routes/threadComments.tsx"),
                 // route("comment-edit", "routes/threadCommentEdit.tsx"),
                 route("activities/:activityId", "routes/threadActivity.tsx"),
-                route("activities/:activityId/comments", "routes/threadComments.tsx"),
+                route("activities/:activityId/comments", "routes/threadActivityComments.tsx"),
+                
                 // route("activities/:activityId/scores", "routes/threadScores.tsx"),
                 // route("activities/:activityId/scores_and_comments", "routes/threadScoresAndComments.tsx"),
             ]),
