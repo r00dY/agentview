@@ -100,5 +100,4 @@ export const ToggleBooleanInput : React.ComponentType<FormInputProps<boolean | u
         </ToggleGroupItem>
     </ToggleGroup>
     )
-    
 }
