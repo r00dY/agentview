@@ -31,7 +31,7 @@ export type Client = z.infer<typeof ClientSchema>
 export const CommentMessageSchema = z.object({
     id: z.string(),
     userId: z.string(),
-    content: z.string(),
+    content: z.string().nullable(),
     createdAt: z.date(),
     updatedAt: z.date().nullable(),
     deletedAt: z.date().nullable(),

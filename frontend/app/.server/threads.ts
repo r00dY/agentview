@@ -40,5 +40,11 @@ export async function fetchThreads(thread_id?: string) {
   }
   
   export async function fetchThread(thread_id: string) {
-    return (await fetchThreads(thread_id))[0]
+    const threads = await fetchThreads(thread_id)
+
+    if (threads.length === 0) {
+      return undefined;
+    }
+
+    return threads[0]
   }

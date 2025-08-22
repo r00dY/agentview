@@ -18,7 +18,7 @@ import { auth } from './auth'
 import { getRootUrl } from './getRootUrl'
 import { createInvitation, cancelInvitation, getPendingInvitations, getValidInvitation } from './invitations'
 import { getAllActivities, getLastRun } from '~/lib/threadUtils'
-import { ClientSchema, ActivitySchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, CommentMessageSchema, RunSchema, ScoreSchema, ScoreCreateSchema, type User } from '~/apiTypes'
+import { ClientSchema, ActivitySchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, CommentMessageSchema, RunSchema, ScoreSchema, ScoreCreateSchema, type User, type Thread, type Activity } from '~/apiTypes'
 import { fetchThread, fetchThreads } from './threads'
 import { run as runFunction } from './run'
 import { extractMentions } from '../lib/utils'
@@ -707,29 +707,73 @@ app.openapi(runWatchRoute, async (c) => {
 
 
 
+/* --------- FEED --------- */
 
-
-/* --------- COMMENTS --------- */
-
-// Comments POST (create new comment)
-const commentsPOSTRoute = createRoute({
+const feedItemsPOSTRoute = createRoute({
   method: 'post',
-  path: '/api/comments',
+  path: '/api/threads/{thread_id}/activities/{activity_id}/feed_items',
   request: {
+    params: z.object({
+      thread_id: z.string(),
+      activity_id: z.string(),
+    }),
     body: body(z.object({
-      content: z.string(),
-      activityId: z.string(),
+      comment: z.string().optional(),
+      scores: z.array(z.object({
+        name: z.string(),
+        value: z.any(),
+      })).optional(),
     }))
   },
   responses: {
-    201: response_data(CommentMessageSchema),
+    201: response_data(z.object({})),
     400: response_error(),
     401: response_error(),
+    404: response_error(),
   },
 })
 
-app.openapi(commentsPOSTRoute, async (c) => {
+function validateScore(thread: Thread, activity: Activity, scoreName: string, scoreValue: any) {
+
+  // Find the thread config
+  const threadConfig = config.threads.find((t) => t.type === thread.type);
+  if (!threadConfig) {
+    throw new Error(`Thread type '${thread.type}' not found in configuration`);
+  }
+
+  // Find the activity config for this thread/activity
+  const activityConfig = threadConfig.activities.find(
+    (activityConfig) => activityConfig.type === activity.type && activityConfig.role === activity.role
+  );
+
+  const activityTypeCuteName = `${activity.type}' / '${activity.role}`
+
+  if (!activityConfig) {
+    throw new Error(
+      `Activity '${activityTypeCuteName}' not found in configuration for thread type '${thread.type}'`
+    );
+  }
+
+  // Find the score config for this activity
+  const scoreConfig = activityConfig.scores?.find((scoreConfig) => scoreConfig.name === scoreName);
+  if (!scoreConfig) {
+    throw new Error(
+      `Score name '${scoreName}' not found in configuration for activity  '${activityTypeCuteName}' in thread type '${thread.type}'`
+    );
+  }
+
+  // Validate value against the schema
+  try {
+    scoreConfig.schema.parse(scoreValue);
+  } catch (error: any) {
+    throw new Error(`Invalid score value: ${error.message}`);
+  }
+}
+
+
+app.openapi(feedItemsPOSTRoute, async (c) => {
   const body = await c.req.json()
+  const { thread_id, activity_id } = c.req.param()
   
   try {
     const session = await auth.api.getSession({ headers: c.req.raw.headers })
@@ -737,46 +781,152 @@ app.openapi(commentsPOSTRoute, async (c) => {
       return c.json({ message: "Authentication required" }, 401);
     }
 
+    // validate thread, activity and scores
+    const thread = await fetchThread(thread_id)
+    if (!thread) {
+      return c.json({ message: "Thread not found" }, 404);
+    }
 
-    const newMessage = await db.transaction(async (tx) => {
+    const activity = getAllActivities(thread).find((a) => a.id === activity_id)
 
-      // Create the comment message
+    if (!activity) {
+      return c.json({ message: "Activity not found" }, 404);
+    }
+
+    const scores = body.scores ?? []
+
+    for (const score of scores) {
+      try {
+        validateScore(thread, activity, score.name, score.value)
+      } catch (error: any) {
+        return c.json({ message: error.message }, 400)
+      }
+    }
+
+    await db.transaction(async (tx) => {
+
+      // Add comment
       const [newMessage] = await tx.insert(commentMessages).values({
-        activityId: body.activityId,
+        activityId: activity_id,
         userId: session.user.id,
-        content: body.content,
+        content: body.content ?? null,
       }).returning();
 
-      // Handle mentions for new comments
-      let mentions;
-      let userMentions: string[] = [];
+      // Add comment mentions
+      if (body.content) {
+        let mentions;
+        let userMentions: string[] = [];
 
-      try {
-        mentions = extractMentions(body.content);
-        userMentions = mentions.user_id || [];
-      } catch (error) {
-        throw new Error(`Invalid mention format: ${(error as Error).message}`);
+        try {
+          mentions = extractMentions(body.content);
+          userMentions = mentions.user_id || [];
+        } catch (error) {
+          return c.json({ messagE: `Invalid mention format: ${(error as Error).message}`}, 400)
+        }
+
+        if (userMentions.length > 0) {
+          await tx.insert(commentMentions).values(
+            userMentions.map((mentionedUserId: string) => ({
+              commentMessageId: newMessage.id,
+              mentionedUserId,
+            }))
+          );
+        }
       }
 
-      if (userMentions.length > 0) {
-        await tx.insert(commentMentions).values(
-          userMentions.map((mentionedUserId: string) => ({
-            commentMessageId: newMessage.id,
-            mentionedUserId,
-          }))
-        );
+      for (const score of scores) {
+        await tx.insert(scores).values({
+          activityId: activity_id,
+          name: score.name,
+          value: score.value,
+          commentId: newMessage.id,
+          createdBy: session.user.id,
+        })
       }
-
-      return newMessage;
+     
+      // return newMessage;
     })
 
-    return c.json(newMessage, 201);
+    return c.json({}, 201);
 
   } catch (error: any) {
     console.error('Error creating comment:', error);
     return c.json({ message: "Failed to create comment: " + error.message }, 400);
   }
 })
+
+
+/* --------- COMMENTS --------- */
+
+// Comments POST (create new comment)
+// const commentsPOSTRoute = createRoute({
+//   method: 'post',
+//   path: '/api/comments',
+//   request: {
+//     body: body(z.object({
+//       content: z.string(),
+//       activityId: z.string(),
+//     }))
+//   },
+//   responses: {
+//     201: response_data(CommentMessageSchema),
+//     400: response_error(),
+//     401: response_error(),
+//   },
+// })
+
+// app.openapi(commentsPOSTRoute, async (c) => {
+//   const body = await c.req.json()
+  
+//   try {
+//     const session = await auth.api.getSession({ headers: c.req.raw.headers })
+//     if (!session) {
+//       return c.json({ message: "Authentication required" }, 401);
+//     }
+
+
+//     const newMessage = await db.transaction(async (tx) => {
+
+//       // Create the comment message
+//       const [newMessage] = await tx.insert(commentMessages).values({
+//         activityId: body.activityId,
+//         userId: session.user.id,
+//         content: body.content,
+//       }).returning();
+
+//       // Handle mentions for new comments
+//       let mentions;
+//       let userMentions: string[] = [];
+
+//       try {
+//         mentions = extractMentions(body.content);
+//         userMentions = mentions.user_id || [];
+//       } catch (error) {
+//         throw new Error(`Invalid mention format: ${(error as Error).message}`);
+//       }
+
+//       if (userMentions.length > 0) {
+//         await tx.insert(commentMentions).values(
+//           userMentions.map((mentionedUserId: string) => ({
+//             commentMessageId: newMessage.id,
+//             mentionedUserId,
+//           }))
+//         );
+//       }
+
+//       return newMessage;
+//     })
+
+//     return c.json(newMessage, 201);
+
+//   } catch (error: any) {
+//     console.error('Error creating comment:', error);
+//     return c.json({ message: "Failed to create comment: " + error.message }, 400);
+//   }
+// })
+
+
+
 
 // Comments PUT (edit comment)
 const commentsPUTRoute = createRoute({
@@ -961,107 +1111,107 @@ app.openapi(commentsDELETERoute, async (c) => {
 
 /* --------- SCORES --------- */
 
-// Scores POST (create new score)
-const scoresPOSTRoute = createRoute({
-  method: 'post',
-  path: '/api/scores',
-  request: {
-    body: body(ScoreCreateSchema)
-  },
-  responses: {
-    201: response_data(ScoreSchema),
-    400: response_error(),
-    401: response_error(),
-    404: response_error(),
-  },
-})
+// // Scores POST (create new score)
+// const scoresPOSTRoute = createRoute({
+//   method: 'post',
+//   path: '/api/scores',
+//   request: {
+//     body: body(ScoreCreateSchema)
+//   },
+//   responses: {
+//     201: response_data(ScoreSchema),
+//     400: response_error(),
+//     401: response_error(),
+//     404: response_error(),
+//   },
+// })
 
-app.openapi(scoresPOSTRoute, async (c) => {
-  const body = await c.req.json()
+// app.openapi(scoresPOSTRoute, async (c) => {
+//   const body = await c.req.json()
   
-  try {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers })
-    if (!session) {
-      return c.json({ message: "Authentication required" }, 401);
-    }
+//   try {
+//     const session = await auth.api.getSession({ headers: c.req.raw.headers })
+//     if (!session) {
+//       return c.json({ message: "Authentication required" }, 401);
+//     }
 
-    // Validate that the activity exists
-    const activityExists = await db.query.activity.findFirst({
-      where: eq(activity.id, body.activityId)
-    });
+//     // Validate that the activity exists
+//     const activityExists = await db.query.activity.findFirst({
+//       where: eq(activity.id, body.activityId)
+//     });
     
-    if (!activityExists) {
-      return c.json({ message: "Activity not found" }, 404);
-    }
+//     if (!activityExists) {
+//       return c.json({ message: "Activity not found" }, 404);
+//     }
 
-    // Validate that the comment exists if commentId is provided
-    if (body.commentId) {
-      const commentExists = await db.query.commentMessages.findFirst({
-        where: eq(commentMessages.id, body.commentId)
-      });
+//     // Validate that the comment exists if commentId is provided
+//     if (body.commentId) {
+//       const commentExists = await db.query.commentMessages.findFirst({
+//         where: eq(commentMessages.id, body.commentId)
+//       });
       
-      if (!commentExists) {
-        return c.json({ message: "Comment not found" }, 404);
-      }
-    }
+//       if (!commentExists) {
+//         return c.json({ message: "Comment not found" }, 404);
+//       }
+//     }
     
-    // Validate score name and value against config
-    // First, find the activity that this score belongs to
-    const activityRecord = await db.query.activity.findFirst({
-      where: eq(activity.id, body.activityId),
-      with: {
-        thread: true
-      }
-    });
+//     // Validate score name and value against config
+//     // First, find the activity that this score belongs to
+//     const activityRecord = await db.query.activity.findFirst({
+//       where: eq(activity.id, body.activityId),
+//       with: {
+//         thread: true
+//       }
+//     });
     
-    if (!activityRecord) {
-      return c.json({ message: "Activity not found" }, 404);
-    }
+//     if (!activityRecord) {
+//       return c.json({ message: "Activity not found" }, 404);
+//     }
 
-    // Find the thread configuration
-    const threadConfig = config.threads.find((t) => t.type === activityRecord.thread.type);
-    if (!threadConfig) {
-      return c.json({ message: `Thread type not found in configuration` }, 400);
-    }
+//     // Find the thread configuration
+//     const threadConfig = config.threads.find((t) => t.type === activityRecord.thread.type);
+//     if (!threadConfig) {
+//       return c.json({ message: `Thread type not found in configuration` }, 400);
+//     }
 
-    // Find the activity configuration
-    const activityConfig = threadConfig.activities.find((a) => 
-      a.type === activityRecord.type && a.role === activityRecord.role
-    );
-    
-    if (!activityConfig) {
-      return c.json({ message: `Activity type '${activityRecord.type}' with role '${activityRecord.role}' not found in configuration` }, 400);
-    }
+//     // Find the activity configuration
+//     const activityConfig = threadConfig.activities.find((a) => 
+//       a.type === activityRecord.type && a.role === activityRecord.role
+//     );
 
-    // Find the score configuration for this activity
-    const scoreConfig = activityConfig.scores?.find((score: any) => score.name === body.name);
-    if (!scoreConfig) {
-      return c.json({ message: `Score name '${body.name}' not found in configuration for activity type '${activityRecord.type}' with role '${activityRecord.role}'` }, 400);
-    }
+//     if (!activityConfig) {
+//       return c.json({ message: `Activity type '${activityRecord.type}' with role '${activityRecord.role}' not found in configuration` }, 400);
+//     }
 
-    // Validate value against the schema
-    try {
-      scoreConfig.schema.parse(body.value);
-    } catch (error: any) {
-      return c.json({ message: `Invalid score value: ${error.message}` }, 400);
-    }
+//     // Find the score configuration for this activity
+//     const scoreConfig = activityConfig.scores?.find((score: any) => score.name === body.name);
+//     if (!scoreConfig) {
+//       return c.json({ message: `Score name '${body.name}' not found in configuration for activity type '${activityRecord.type}' with role '${activityRecord.role}'` }, 400);
+//     }
 
-    // Create the score
-    const [newScore] = await db.insert(scores).values({
-      activityId: body.activityId,
-      name: body.name,
-      value: body.value,
-      commentId: body.commentId,
-      createdBy: session.user.id,
-    }).returning();
+//     // Validate value against the schema
+//     try {
+//       scoreConfig.schema.parse(body.value);
+//     } catch (error: any) {
+//       return c.json({ message: `Invalid score value: ${error.message}` }, 400);
+//     }
 
-    return c.json(newScore, 201);
+//     // Create the score
+//     const [newScore] = await db.insert(scores).values({
+//       activityId: body.activityId,
+//       name: body.name,
+//       value: body.value,
+//       commentId: body.commentId,
+//       createdBy: session.user.id,
+//     }).returning();
 
-  } catch (error: any) {
-    console.error('Error creating score:', error);
-    return c.json({ message: "Failed to create score: " + error.message }, 400);
-  }
-})
+//     return c.json(newScore, 201);
+
+//   } catch (error: any) {
+//     console.error('Error creating score:', error);
+//     return c.json({ message: "Failed to create score: " + error.message }, 400);
+//   }
+// })
 
 
 /* --------- MEMBERS --------- */

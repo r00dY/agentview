@@ -96,7 +96,7 @@ export const commentMessages = pgTable('comment_messages', {
   id: uuid('id').primaryKey().defaultRandom(),
   activityId: uuid('activity_id').notNull().references(() => activity.id, { onDelete: 'cascade' }),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  content: text('content').notNull(),
+  content: text('content'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 
@@ -118,7 +118,7 @@ export const commentMentions = pgTable('comment_mentions', {
 export const commentMessageEdits = pgTable('comment_message_edits', {
   id: uuid('id').primaryKey().defaultRandom(),
   commentMessageId: uuid('comment_message_id').notNull().references(() => commentMessages.id, { onDelete: 'cascade' }),
-  previousContent: text('previous_content').notNull(),
+  previousContent: text('previous_content'),
   editedAt: timestamp('edited_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -128,7 +128,7 @@ export const scores = pgTable('scores', {
 
   name: varchar('type', { length: 255 }).notNull(),
   value: jsonb('value').notNull(),
-  commentId: uuid('comment_id').references(() => commentMessages.id, { onDelete: 'set null' }),
+  commentId: uuid('comment_id').notNull().references(() => commentMessages.id, { onDelete: 'cascade' }),
 
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -137,7 +137,9 @@ export const scores = pgTable('scores', {
   // Soft delete fields
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
   deletedBy: text('deleted_by').references(() => users.id, { onDelete: 'set null' }),
-});
+}, (table) => ({
+  activityNameUnique: uniqueIndex('scores_activity_name_unique').on(table.activityId, table.name),
+}));
 
 
 export const threadRelations = relations(thread, ({ many, one }) => ({
