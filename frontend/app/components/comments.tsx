@@ -1,21 +1,21 @@
+import { AlertCircleIcon, EllipsisVerticalIcon } from "lucide-react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useFetcher } from "react-router";
+import { config } from "~/agentview.config";
+import type { Activity, CommentMessage, Thread, User } from "~/apiTypes";
 import { Button } from "~/components/ui/button";
-import { act, forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
-import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu"
-import { AlertCircleIcon, EllipsisVerticalIcon } from "lucide-react";
-import { TextEditor, textToElements } from "./wysiwyg/TextEditor";
-import type { Activity, Score, Thread, User } from "~/apiTypes";
-import { config } from "~/agentview.config";
+} from "~/components/ui/dropdown-menu";
+import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
 import { timeAgoShort } from "~/lib/timeAgo";
-import { Input } from "./ui/input";
-import { FormField, FormFieldBase } from "./form";
-import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
+import { FormField } from "./form";
+import { PropertyList } from "./PropertyList";
+import { Alert, AlertDescription } from "./ui/alert";
+import { TextEditor, textToElements } from "./wysiwyg/TextEditor";
 
 
 export type CommentThreadProps = {
@@ -357,24 +357,26 @@ export function CommentMessageHeader({ title, subtitle, actions, singleLineMessa
 type MessageCompressionLevel = "none" | "medium" | "high";
 
 // New subcomponent for comment message item with edit logic
-export function CommentMessageItem({ message, userId, activityId, thread, user, users, isEditing, onRequestEdit, onCancelEdit, compressionLevel = "none", singleLineMessageHeader = false }: { message: any, userId: string | null, fetcher: any, activityId: string, thread: Thread, user: any, users: any[], isEditing: boolean, onRequestEdit: () => void, onCancelEdit: () => void, compressionLevel?: MessageCompressionLevel, singleLineMessageHeader?: boolean }) {
-    const isDeleted = message.deletedAt;
+export function CommentMessageItem({ message, userId, activityId, thread, user, users, isEditing, onRequestEdit, onCancelEdit, compressionLevel = "none", singleLineMessageHeader = false }: { message: CommentMessage, userId: string | null, fetcher: any, activityId: string, thread: Thread, user: any, users: any[], isEditing: boolean, onRequestEdit: () => void, onCancelEdit: () => void, compressionLevel?: MessageCompressionLevel, singleLineMessageHeader?: boolean }) {
+    if (message.deletedAt) {
+        throw new Error("Deleted messages don't have rendering code.")
+    }
+
     const fetcher = useFetcher();
     const isOwn = userId && message.userId === userId;
 
-
     const createdAt = timeAgoShort(message.createdAt);
-    const subtitle = createdAt + (message.updatedAt && message.updatedAt !== message.createdAt ? " · edited" : "") + (isDeleted ? " · deleted" : "")
+    const subtitle = createdAt + (message.updatedAt && message.updatedAt !== message.createdAt ? " · edited" : "")
 
     useFetcherSuccess(fetcher, () => {
         onCancelEdit();
     });
 
     return (
-        <div className={`${isDeleted ? 'opacity-60' : ''}`}>
+        <div>
 
             <CommentMessageHeader title={user.name} subtitle={subtitle} singleLineMessageHeader={singleLineMessageHeader} actions={
-                isOwn && !isDeleted && (<DropdownMenu>
+                isOwn && (<DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button size="icon" variant="ghost">
                             <EllipsisVerticalIcon className="w-4 h-4 text-gray-400" />
@@ -407,7 +409,7 @@ export function CommentMessageItem({ message, userId, activityId, thread, user, 
             <div className="text-sm">
                 {isEditing ? (
                     <fetcher.Form method="post" action={`/threads/${thread.id}/comment-edit`} className="space-y-2">
-
+                        FINISH THISSSSS
                         <TextEditor
                             mentionItems={users.map(user => ({
                                 id: user.id,
@@ -415,7 +417,7 @@ export function CommentMessageItem({ message, userId, activityId, thread, user, 
                             }))}
                             name="content"
                             placeholder={"Edit or tag others, using @"}
-                            defaultValue={message.content}
+                            defaultValue={message.content ?? ""}
                             className="min-h-[10px] resize-none mb-0"
                         />
                         <input type="hidden" name="editCommentMessageId" value={message.id} />
@@ -436,18 +438,28 @@ export function CommentMessageItem({ message, userId, activityId, thread, user, 
                             <div className="text-sm text-red-500">{fetcher.data.error.message}</div>
                         )}
                     </fetcher.Form>
-                ) : isDeleted ? (
-                    <div className="text-muted-foreground italic">
-                        This comment was deleted
-                    </div>
-                ) : (
-                    <div className={`ml-8 ${compressionLevel === "high" ? "line-clamp-6" : compressionLevel === "medium" ? "line-clamp-3" : ""}`}>
+                ) : <div className="ml-8">
+
+
+                    { message.scores && message.scores.length > 0 && <div>
+                        <PropertyList.Root className="mb-2">
+                            {message.scores.map((score) => (
+                                <PropertyList.Item key={score.id}>
+                                    <PropertyList.Title>{score.name}</PropertyList.Title>
+                                    <PropertyList.TextValue>{JSON.stringify(score.value)}</PropertyList.TextValue>
+                                </PropertyList.Item>
+                            ))}
+                        </PropertyList.Root>
+                    </div>}
+                    
+
+                    { message.content && <div className={`${compressionLevel === "high" ? "line-clamp-6" : compressionLevel === "medium" ? "line-clamp-3" : ""}`}>
                         {textToElements(message.content, users.map((user: any) => ({
                             id: user.id,
                             label: user.name
                         })))}
-                    </div>
-                )}
+                    </div>}
+                </div>}
             </div>
         </div>
     );
