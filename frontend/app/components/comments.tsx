@@ -10,12 +10,13 @@ import {
 } from "~/components/ui/dropdown-menu"
 import { AlertCircleIcon, EllipsisVerticalIcon } from "lucide-react";
 import { TextEditor, textToElements } from "./wysiwyg/TextEditor";
-import type { Activity, Thread, User } from "~/apiTypes";
+import type { Activity, CommentMessage, Score, Thread, User } from "~/apiTypes";
 import { config } from "~/agentview.config";
 import { timeAgoShort } from "~/lib/timeAgo";
 import { Input } from "./ui/input";
 import { FormField, FormFieldBase } from "./form";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
+import { PropertyList } from "./PropertyList";
 
 
 export type CommentThreadProps = {
@@ -42,13 +43,78 @@ export type CommentThreadFloatingButtonProps = CommentThreadFloatingBoxProps & {
 
 
 
+type FeedEvent = {
+    id: string,
+    createdAt: Date,
+    updatedAt: Date | null,
+    createdBy: string,
+    score: Score[],
+    message?: CommentMessage,
+}
 
+function getFeedEvents(activity: Activity) {
+    const visibleMessages = activity.commentMessages.filter((m: any) => !m.deletedAt) ?? []
+    const visibleScores = activity.scores.filter((s: any) => !s.deletedAt) ?? []
+
+    const feedEvents: FeedEvent[] = []
+
+    // Insert all activity.scores as feedEvents (score in array, message empty), then all messages (message filled, scores empty)
+    for (const score of visibleScores ?? []) {
+        feedEvents.push({
+            id: score.id,   
+            createdAt: new Date(score.createdAt),
+            updatedAt: score.updatedAt,
+            createdBy: score.createdBy,
+            score: [score],
+            message: undefined,
+        }); 
+    }
+    for (const message of visibleMessages) {
+        feedEvents.push({
+            id: message.id,
+            createdAt: new Date(message.createdAt),
+            score: [],
+            message: message,
+            createdBy: message.userId,
+            updatedAt: message.updatedAt,
+        });
+    }
+
+    // Sort by createdAt ascending (oldest first, highest date last)
+    feedEvents.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+    // Normalize: move scores with commentId to their message's feedEvent
+    // Build a map from message id to feedEvent
+    const messageIdToFeedEvent: Record<string, FeedEvent> = {};
+    for (const fe of feedEvents) {
+        if (fe.message && fe.message.id) {
+            messageIdToFeedEvent[fe.message.id] = fe;
+        }
+    }
+
+    // Go through feedEvents, for any score with commentId, move it to the corresponding message feedEvent
+    for (let i = feedEvents.length - 1; i >= 0; i--) {
+        const fe = feedEvents[i];
+        if (fe.score.length === 1 && fe.score[0].commentId) {
+            const commentId = fe.score[0].commentId;
+            const target = messageIdToFeedEvent[commentId];
+            if (target) {
+                target.score.push(fe.score[0]);
+                feedEvents.splice(i, 1); // remove this score-only event
+            }
+        }
+    }
+
+    return feedEvents
+}
 
 export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, activity, user, collapsed = false, users, singleLineMessageHeader = false }, ref) => {
     const fetcher = useFetcher();
+    // const visibleMessages = activity.commentMessages.filter((m: any) => !m.deletedAt) ?? []
+    // const visibleScores = activity.scores.filter((s: any) => !s.deletedAt) ?? []
 
-    const visibleMessages = activity.commentMessages.filter((m: any) => !m.deletedAt) ?? []     
-    const hasZeroVisisbleComments = visibleMessages.length === 0
+    const feedEvents = getFeedEvents(activity)
+    const hasZeroEvents = feedEvents.length === 0
 
     const formRef = useRef<HTMLFormElement>(null);
     const [currentlyEditedItemId, setCurrentlyEditedItemId] = useState<string | null>("new" /*null*/); // "new" for new comment, comment id for edits
@@ -69,7 +135,6 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
 
     useFetcherSuccess(fetcher, () => {
         setCurrentlyEditedItemId(null);
-        console.log('resetting form')
         formRef.current?.reset();
     });
 
@@ -80,20 +145,14 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
         }
     }));
 
-    console.log('FETCHER DATA',fetcher.data)
-
     return (<div ref={ref}>
             <div className="flex flex-col gap-4">
 
                 {/* Display comments */}
-                {visibleMessages.map((message: any, index: number) => {
-                    const count = visibleMessages.length;
+                {feedEvents.map((event: FeedEvent, index: number) => {
+                    const count = feedEvents.length;
 
                     let compressionLevel: MessageCompressionLevel = "none";
-
-                    if (message.deletedAt) {
-                        return null
-                    }
 
                     if (collapsed) {
                         if (count === 1) {
@@ -120,15 +179,14 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                     }
 
                     return <CommentMessageItem
-                        key={message.id}
-                        message={message}
-                        userId={user.id}
+                        key={event.id}
+                        event={event}
+                        user={user}
                         fetcher={fetcher}
                         activityId={activity.id}
                         thread={thread}
-                        user={users.find((user) => user.id === message.userId)}
-                        isEditing={currentlyEditedItemId === message.id}
-                        onRequestEdit={() => setCurrentlyEditedItemId(message.id)}
+                        isEditing={currentlyEditedItemId === event.id}
+                        onRequestEdit={() => setCurrentlyEditedItemId(event.id)}
                         onCancelEdit={() => setCurrentlyEditedItemId(null)}
                         compressionLevel={compressionLevel}
                         users={users}
@@ -173,7 +231,7 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                                 label: user.name
                             }))}
                             name="comment"
-                            placeholder={(hasZeroVisisbleComments ? "Comment" : "Reply") + " or tag other, using @"}
+                            placeholder={(hasZeroEvents ? "Comment" : "Reply") + " or tag other, using @"}
                             className="min-h-[10px] resize-none mb-0"
                             onFocus={() => {
                                 setCurrentlyEditedItemId("new");
@@ -181,7 +239,7 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                         />
                     </div>
 
-                    <div className={`gap-2 justify-end mt-2 ${(currentlyEditedItemId === "new" || hasZeroVisisbleComments) ? "flex" : "hidden"}`}>
+                    <div className={`gap-2 justify-end mt-2 ${(currentlyEditedItemId === "new" || hasZeroEvents) ? "flex" : "hidden"}`}>
                         <Button
                             type="reset"
                             variant="ghost"
@@ -350,24 +408,22 @@ export function CommentMessageHeader({ title, subtitle, actions, singleLineMessa
 type MessageCompressionLevel = "none" | "medium" | "high";
 
 // New subcomponent for comment message item with edit logic
-export function CommentMessageItem({ message, userId, activityId, thread, user, users, isEditing, onRequestEdit, onCancelEdit, compressionLevel = "none", singleLineMessageHeader = false }: { message: any, userId: string | null, fetcher: any, activityId: string, thread: Thread, user: any, users: any[], isEditing: boolean, onRequestEdit: () => void, onCancelEdit: () => void, compressionLevel?: MessageCompressionLevel, singleLineMessageHeader?: boolean }) {
-    const isDeleted = message.deletedAt;
+export function CommentMessageItem({ event, activityId, thread, user, users, isEditing, onRequestEdit, onCancelEdit, compressionLevel = "none", singleLineMessageHeader = false }: { event: FeedEvent, user: User, fetcher: any, activityId: string, thread: Thread, user: any, users: any[], isEditing: boolean, onRequestEdit: () => void, onCancelEdit: () => void, compressionLevel?: MessageCompressionLevel, singleLineMessageHeader?: boolean }) {
     const fetcher = useFetcher();
-    const isOwn = userId && message.userId === userId;
+    const isOwn = event.createdBy === user.id;
 
-
-    const createdAt = timeAgoShort(message.createdAt);
-    const subtitle = createdAt + (message.updatedAt && message.updatedAt !== message.createdAt ? " · edited" : "") + (isDeleted ? " · deleted" : "")
+    const createdAt = timeAgoShort(event.createdAt);
+    const subtitle = createdAt + (event.updatedAt && event.updatedAt !== event.createdAt ? " · edited" : "")
 
     useFetcherSuccess(fetcher, () => {
         onCancelEdit();
     });
 
     return (
-        <div className={`${isDeleted ? 'opacity-60' : ''}`}>
+        <div>
 
             <CommentMessageHeader title={user.name} subtitle={subtitle} singleLineMessageHeader={singleLineMessageHeader} actions={
-                isOwn && !isDeleted && (<DropdownMenu>
+                isOwn && <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button size="icon" variant="ghost">
                             <EllipsisVerticalIcon className="w-4 h-4 text-gray-400" />
@@ -381,18 +437,18 @@ export function CommentMessageItem({ message, userId, activityId, thread, user, 
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={(e) => {
                             e.preventDefault();
-                            if (confirm('Are you sure you want to delete this comment?')) {
-                                const formData = new FormData();
-                                formData.append('deleteCommentMessageId', message.id);
-                                formData.append('activityId', activityId);
-                                fetcher.submit(formData, { method: 'post', action: `/threads/${thread.id}/comments` });
-                            }
+                            alert('not implemented temporarily')
+                            // if (confirm('Are you sure you want to delete this comment?')) {
+                            //     const formData = new FormData();
+                            //     formData.append('deleteCommentMessageId', event.id);
+                            //     formData.append('activityId', activityId);
+                            //     fetcher.submit(formData, { method: 'post', action: `/threads/${thread.id}/comments` });
+                            // }
                         }}>
                             Delete
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
-                )
             } />
         
 
@@ -429,16 +485,25 @@ export function CommentMessageItem({ message, userId, activityId, thread, user, 
                             <div className="text-sm text-red-500">{fetcher.data.error.message}</div>
                         )}
                     </fetcher.Form>
-                ) : isDeleted ? (
-                    <div className="text-muted-foreground italic">
-                        This comment was deleted
-                    </div>
                 ) : (
-                    <div className={`ml-8 ${compressionLevel === "high" ? "line-clamp-6" : compressionLevel === "medium" ? "line-clamp-3" : ""}`}>
-                        {textToElements(message.content, users.map((user: any) => ({
-                            id: user.id,
-                            label: user.name
-                        })))}
+                    <div className="ml-8">
+
+                        { event.score.length > 0 && <PropertyList>
+                            {event.score.map((score) => (
+                                <PropertyList.Item key={score.id}>
+                                    <PropertyList.Title>{score.name}</PropertyList.Title>
+                                    <PropertyList.TextValue>{score.value}</PropertyList.TextValue>
+                                </PropertyList.Item>
+                            ))}
+                        </PropertyList>}
+
+                        { event.message && <div className={`${compressionLevel === "high" ? "line-clamp-6" : compressionLevel === "medium" ? "line-clamp-3" : ""}`}>
+                            {textToElements(event.message.content, users.map((user: any) => ({
+                                id: user.id,
+                                label: user.name
+                            })))}
+                        </div> }
+
                     </div>
                 )}
             </div>
