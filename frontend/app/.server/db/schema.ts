@@ -207,6 +207,7 @@ export const commentMessagesRelations = relations(commentMessages, ({ one, many 
   }),
   mentions: many(commentMentions),
   edits: many(commentMessageEdits),
+  scores: many(scores),
 }));
 
 export const commentMentionsRelations = relations(commentMentions, ({ one }) => ({

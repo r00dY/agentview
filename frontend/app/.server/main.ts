@@ -744,6 +744,21 @@ function validateScore(thread: Thread, activity: Activity, scoreName: string, sc
     );
   }
 
+  // Check if there is already a score with the same name in any commentMessage's scores
+  if (activity.commentMessages) {
+    for (const message of activity.commentMessages) {
+      if (message.scores) {
+        for (const score of message.scores) {
+          if (score.name === scoreName && !score.deletedAt) {
+            throw new Error(
+              `A score with name '${scoreName}' already exists.`
+            );
+          }
+        }
+      }
+    }
+  }
+
   // Validate value against the schema
   try {
     scoreConfig.schema.parse(scoreValue);

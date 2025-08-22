@@ -59,8 +59,10 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
     const scoreConfigs = activityConfig?.scores || [];
 
     const scores: Record<string, any> = {};
-    for (const score of activity.scores ?? []) {
-        scores[score.name] = score.value;
+    for (const message of visibleMessages) {
+        for (const score of message.scores ?? []) {
+            scores[score.name] = score.value;
+        }
     }
 
     const unassignedScoreConfigs = scoreConfigs.filter((scoreConfig) => !scores[scoreConfig.name]);

@@ -28,17 +28,6 @@ export const ClientSchema = z.object({
 
 export type Client = z.infer<typeof ClientSchema>
 
-export const CommentMessageSchema = z.object({
-    id: z.string(),
-    userId: z.string(),
-    content: z.string().nullable(),
-    createdAt: z.date(),
-    updatedAt: z.date().nullable(),
-    deletedAt: z.date().nullable(),
-    deletedBy: z.string().nullable(),
-})
-
-export type CommentMessage = z.infer<typeof CommentMessageSchema>
 
 export const ScoreSchema = z.object({
     id: z.string(),
@@ -57,6 +46,20 @@ export const ScoreSchema = z.object({
 
 export type Score = z.infer<typeof ScoreSchema>
 
+export const CommentMessageSchema = z.object({
+    id: z.string(),
+    userId: z.string(),
+    content: z.string().nullable(),
+    createdAt: z.date(),
+    updatedAt: z.date().nullable(),
+    deletedAt: z.date().nullable(),
+    deletedBy: z.string().nullable(),
+    scores: z.array(ScoreSchema).nullable(),
+})
+
+export type CommentMessage = z.infer<typeof CommentMessageSchema>
+
+
 export const ActivitySchema = z.object({
     id: z.string(),
     created_at: z.date(),
@@ -66,7 +69,6 @@ export const ActivitySchema = z.object({
     type: z.string(),
     role: z.string(),
     commentMessages: z.array(CommentMessageSchema),
-    scores: z.array(ScoreSchema),
 })
 
 export type Activity = z.infer<typeof ActivitySchema>
