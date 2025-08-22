@@ -6,7 +6,6 @@ import type { Route } from "./+types/login";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { AlertCircleIcon } from "lucide-react";
-import { APIError } from "better-auth/api";
 import { betterAuthErrorToBaseError, type ActionResponse } from "~/lib/errors";
 import { authClient } from "~/lib/auth-client";
 

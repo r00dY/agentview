@@ -3,8 +3,6 @@ import type { Route } from "./+types/threadActivity";
 import { Header, HeaderTitle } from "~/components/header";
 import type { Thread } from "~/apiTypes";
 import { getAllActivities } from "~/lib/threadUtils";
-import { PropertyList } from "~/components/PropertyList";
-import { config } from "~/agentview.config";
 import { authClient } from "~/lib/auth-client";
 import { CommentThread } from "~/components/comments";
 import { apiFetch } from "~/lib/apiFetch";
@@ -92,14 +90,14 @@ export default function ThreadActivityPage() {
 
                         {/* { activity.commentMessages.length === 0 && <div className="text-muted-foreground text-sm">No discussion available</div> } */}
 
-                        { activity.commentMessages.length > 0 && <div className="max-w-[720px]"><CommentThread
+                        <div className="max-w-[720px]"><CommentThread
                             activity={activity}
                             user={user}
                             users={users}
                             thread={thread}
                             collapsed={false}
                             singleLineMessageHeader={true}
-                        /></div> }
+                        /></div>
                     {/* </div> */}
 
 

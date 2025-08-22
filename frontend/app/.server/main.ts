@@ -199,6 +199,7 @@ app.openapi(threadsPOSTRoute, async (c) => {
     return c.json({ message: error.message }, 400);
   }
 
+
   // Validate whether client exists in db
   if (!isUUID(body.client_id)) {
     return c.json({ message: `Invalid client id: ${body.client_id}` }, 400);

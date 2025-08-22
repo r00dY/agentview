@@ -17,7 +17,6 @@ import { PropertyList } from "./PropertyList";
 import { Alert, AlertDescription } from "./ui/alert";
 import { TextEditor, textToElements } from "./wysiwyg/TextEditor";
 
-
 export type CommentThreadProps = {
     thread: Thread,
     activity: Activity, 
@@ -40,8 +39,6 @@ export type CommentThreadFloatingButtonProps = CommentThreadFloatingBoxProps & {
     onSelect: (activity: any) => void,
 }
 
-
-
 export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, activity, user, collapsed = false, users, singleLineMessageHeader = false }, ref) => {
     const fetcher = useFetcher();
 
@@ -49,7 +46,8 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
     const hasZeroVisisbleComments = visibleMessages.length === 0
 
     const formRef = useRef<HTMLFormElement>(null);
-    const [currentlyEditedItemId, setCurrentlyEditedItemId] = useState<string | null>("new" /*null*/); // "new" for new comment, comment id for edits
+
+    // const [currentlyEditedItemId, setCurrentlyEditedItemId] = useState<string | null>("new" /*null*/); // "new" for new comment, comment id for edits
 
     // Get scores for this activity type from config
     const threadConfig = config.threads.find((t: any) => t.type === thread.type);
@@ -68,14 +66,14 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
     const unassignedScoreConfigs = scoreConfigs.filter((scoreConfig) => !scores[scoreConfig.name]);
 
     useFetcherSuccess(fetcher, () => {
-        setCurrentlyEditedItemId(null);
-        console.log('resetting form')
+        // setCurrentlyEditedItemId(null);
+        // console.log('resetting form')
         formRef.current?.reset();
     });
 
     useImperativeHandle(ref, () => ({
         reset: () => {
-            setCurrentlyEditedItemId(null);
+            // setCurrentlyEditedItemId(null);
             formRef.current?.reset();   
         }
     }));
@@ -90,6 +88,7 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
     // }
 
     return (<div ref={ref}>
+            {/* Hot reload test comment */}
             <div className="flex flex-col gap-4">
 
                 {/* Display comments */}
@@ -134,9 +133,6 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                         activityId={activity.id}
                         thread={thread}
                         user={users.find((user) => user.id === message.userId)}
-                        isEditing={currentlyEditedItemId === message.id}
-                        onRequestEdit={() => setCurrentlyEditedItemId(message.id)}
-                        onCancelEdit={() => setCurrentlyEditedItemId(null)}
                         compressionLevel={compressionLevel}
                         users={users}
                         singleLineMessageHeader={singleLineMessageHeader}
@@ -155,7 +151,7 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                 )}
 
 
-                {true && <fetcher.Form method="post" action={`/threads/${thread.id}/activities/${activity.id}/scores_and_comments`} ref={formRef}>
+                <fetcher.Form method="post" action={`/threads/${thread.id}/activities/${activity.id}/scores_and_comments`} ref={formRef}>
 
                 { unassignedScoreConfigs.length > 0 && <div className="mb-4">
                     {unassignedScoreConfigs.map((scoreConfig) => (   
@@ -172,6 +168,7 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                     ))}
                     </div> }
 
+
                     <div>
                         <div className="text-sm mb-1 text-gray-700">Extra comment</div>
                         <TextEditor
@@ -182,19 +179,20 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                             name="comment"
                             placeholder={(hasZeroVisisbleComments ? "Comment" : "Reply") + " or tag other, using @"}
                             className="min-h-[10px] resize-none mb-0"
-                            onFocus={() => {
-                                setCurrentlyEditedItemId("new");
-                            }}
+                            // onFocus={() => {
+                            //     setCurrentlyEditedItemId("new");
+                            // }}
                         />
                     </div>
 
-                    <div className={`gap-2 justify-end mt-2 ${(currentlyEditedItemId === "new" || hasZeroVisisbleComments) ? "flex" : "hidden"}`}>
+                    <div className={`gap-2 justify-end mt-2 flex`}>
                         <Button
                             type="reset"
                             variant="ghost"
                             size="sm"
                             onClick={(e) => {
-                                setCurrentlyEditedItemId(null);
+                                formRef.current?.reset();
+                                // setCurrentlyEditedItemId(null);
                             }}
                         >
                             Cancel
@@ -205,11 +203,11 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                             disabled={fetcher.state !== 'idle'}
                         >
                             {fetcher.state !== 'idle' ? 'Posting...' : 'Submit'}
+
                         </Button>
                     </div>
-                </fetcher.Form>}
+                </fetcher.Form>
             </div>}
-
 
             {/* {!collapsed && <div className="">
                 {hasZeroVisisbleComments && <CommentMessageHeader title={users.find((u) => u.id === user.id)?.name || "You"} singleLineMessageHeader={singleLineMessageHeader}/>}
@@ -357,7 +355,7 @@ export function CommentMessageHeader({ title, subtitle, actions, singleLineMessa
 type MessageCompressionLevel = "none" | "medium" | "high";
 
 // New subcomponent for comment message item with edit logic
-export function CommentMessageItem({ message, userId, activityId, thread, user, users, isEditing, onRequestEdit, onCancelEdit, compressionLevel = "none", singleLineMessageHeader = false }: { message: CommentMessage, userId: string | null, fetcher: any, activityId: string, thread: Thread, user: any, users: any[], isEditing: boolean, onRequestEdit: () => void, onCancelEdit: () => void, compressionLevel?: MessageCompressionLevel, singleLineMessageHeader?: boolean }) {
+export function CommentMessageItem({ message, userId, activityId, thread, user, users, compressionLevel = "none", singleLineMessageHeader = false }: { message: CommentMessage, userId: string | null, fetcher: any, activityId: string, thread: Thread, user: any, users: any[], compressionLevel?: MessageCompressionLevel, singleLineMessageHeader?: boolean }) {
     if (message.deletedAt) {
         throw new Error("Deleted messages don't have rendering code.")
     }
@@ -368,8 +366,10 @@ export function CommentMessageItem({ message, userId, activityId, thread, user, 
     const createdAt = timeAgoShort(message.createdAt);
     const subtitle = createdAt + (message.updatedAt && message.updatedAt !== message.createdAt ? " · edited" : "")
 
+    const [isEditing, setIsEditing] = useState(false);
+
     useFetcherSuccess(fetcher, () => {
-        onCancelEdit();
+        setIsEditing(false);
     });
 
     return (
@@ -384,7 +384,7 @@ export function CommentMessageItem({ message, userId, activityId, thread, user, 
                     </DropdownMenuTrigger>
                     <DropdownMenuContent className="w-32" align="start">
                         <DropdownMenuItem onClick={(e) => {
-                            onRequestEdit()
+                            setIsEditing(true);
                         }}>
                             Edit
                         </DropdownMenuItem>
@@ -403,13 +403,11 @@ export function CommentMessageItem({ message, userId, activityId, thread, user, 
                 </DropdownMenu>
                 )
             } />
-        
 
             {/* Comment content */}
             <div className="text-sm">
                 {isEditing ? (
                     <fetcher.Form method="post" action={`/threads/${thread.id}/comment-edit`} className="space-y-2">
-                        FINISH THISSSSS
                         <TextEditor
                             mentionItems={users.map(user => ({
                                 id: user.id,
@@ -429,7 +427,7 @@ export function CommentMessageItem({ message, userId, activityId, thread, user, 
                                 type="reset"
                                 variant="outline"
                                 size="sm"
-                                onClick={() => onCancelEdit()}
+                                onClick={() => { setIsEditing(false) }}
                             >
                                 Cancel
                             </Button>
@@ -439,7 +437,6 @@ export function CommentMessageItem({ message, userId, activityId, thread, user, 
                         )}
                     </fetcher.Form>
                 ) : <div className="ml-8">
-
 
                     { message.scores && message.scores.length > 0 && <div>
                         <PropertyList.Root className="mb-2">
@@ -452,7 +449,6 @@ export function CommentMessageItem({ message, userId, activityId, thread, user, 
                         </PropertyList.Root>
                     </div>}
                     
-
                     { message.content && <div className={`${compressionLevel === "high" ? "line-clamp-6" : compressionLevel === "medium" ? "line-clamp-3" : ""}`}>
                         {textToElements(message.content, users.map((user: any) => ({
                             id: user.id,

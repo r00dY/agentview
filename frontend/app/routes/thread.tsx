@@ -2,14 +2,11 @@ import { redirect, useLoaderData, useFetcher, Outlet, Link, Form, data, useParam
 import type { Route } from "./+types/thread";
 import { Button } from "~/components/ui/button";
 import { Header, HeaderTitle } from "~/components/header";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Textarea } from "~/components/ui/textarea";
 import { useEffect, useState } from "react";
 import { parseSSE } from "~/lib/parseSSE";
 import { authClient } from "~/lib/auth-client";
 import { apiFetch } from "~/lib/apiFetch";
-import { ItemsWithCommentsLayout } from "~/components/ItemsWithCommentsLayout";
-import { CommentThreadFloatingBox } from "~/components/comments";
 import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
 import { getLastRun, getAllActivities, getVersions } from "~/lib/threadUtils";
 import { type Thread } from "~/apiTypes";

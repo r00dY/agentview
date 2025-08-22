@@ -1,4 +1,4 @@
-import { redirect, useLoaderData, Link, data } from "react-router";
+import { useLoaderData, Link, data } from "react-router";
 import type { Route } from "./+types/emails";
 import {
   Table,

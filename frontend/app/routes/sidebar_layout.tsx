@@ -65,7 +65,7 @@ export default function Layout() {
       <div className="flex h-screen bg-background w-full">
         <Sidebar className="border-r">
           <SidebarHeader className="px-3 py-3">
-            <img src="/public/logo.svg" alt="AgentView Logo" className="max-w-[100px]" />
+            <img src="/logo.svg" alt="AgentView Logo" className="max-w-[100px]" />
 
             {/* <Button variant={"outline"} className="w-full justify-start gap-2 mt-5" asChild>
 

@@ -1,6 +1,4 @@
 import type { Route } from "./+types/change-password";
-import { APIError } from "better-auth/api";
-import { data } from "react-router";  
 import { authClient } from "~/lib/auth-client";
 import { type ActionResponse, betterAuthErrorToBaseError } from "~/lib/errors";
 

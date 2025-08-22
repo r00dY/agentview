@@ -1,8 +1,7 @@
-import { redirect, useLoaderData, Link, data } from "react-router";
+import { useLoaderData, data } from "react-router";
 import type { Route } from "./+types/emailDetail";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Card, CardContent } from "~/components/ui/card";
 import { Header, HeaderTitle } from "~/components/header";
-import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
 import { apiFetch } from "~/lib/apiFetch";
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {

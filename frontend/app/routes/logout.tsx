@@ -6,38 +6,14 @@ export async function clientAction({
   request,
 }: Route.ActionArgs) {
 
-  try {
-    const { data, error } = await authClient.signOut();
+  const { data, error } = await authClient.signOut();
 
-    if (error) {
-      return { status: "error", error };
-    }
+  if (error) {
+    return { ok: false, error };
+  }
 
-    return {
-        status: "success",
-        data: null
-    }
-    
-  } catch (error) {
-    if (error instanceof APIError) {
-      return { status: "error", error: { message: error.message } };
-    }
-    return { status: "error", error: { message: 'An unexpected error occurred. Please try again.' } };
+  return {
+      ok: true,
+      data: null
   }
 }
-
-type SuccessResponse = {
-  data: any
-}
-
-type ErrorResponse = {
-  error: {
-    message: string,
-    [key: string]: any
-  }
-}
-
-type Response = SuccessResponse | ErrorResponse
-
-const a : Response = { data: "dupa" }
-
