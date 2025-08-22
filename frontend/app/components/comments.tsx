@@ -8,13 +8,14 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
-import { EllipsisVerticalIcon } from "lucide-react";
+import { AlertCircleIcon, EllipsisVerticalIcon } from "lucide-react";
 import { TextEditor, textToElements } from "./wysiwyg/TextEditor";
 import type { Activity, Thread, User } from "~/apiTypes";
 import { config } from "~/agentview.config";
 import { timeAgoShort } from "~/lib/timeAgo";
 import { Input } from "./ui/input";
 import { FormField, FormFieldBase } from "./form";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 
 
 export type CommentThreadProps = {
@@ -79,6 +80,8 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
         }
     }));
 
+    console.log('FETCHER DATA',fetcher.data)
+
     return (<div ref={ref}>
             <div className="flex flex-col gap-4">
 
@@ -137,9 +140,15 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
 
             {!collapsed && <div className="ml-8 pt-4 border-t mt-4">
 
-                {/* <ProfileForm /> */}
+                { fetcher.state === 'idle' && fetcher.data?.ok === false && (
+                    <Alert variant="destructive" className="mb-4">
+                        <AlertCircleIcon className="h-4 w-4" />
+                        <AlertDescription>{fetcher.data.error.message}</AlertDescription>
+                    </Alert>
+                )}
 
-                {true && <fetcher.Form method="post" action={`/threads/${thread.id}/comments`} ref={formRef}>
+
+                {true && <fetcher.Form method="post" action={`/threads/${thread.id}/activities/${activity.id}/scores_and_comments`} ref={formRef}>
 
                 { unassignedScoreConfigs.length > 0 && <div className="mb-4">
                     {unassignedScoreConfigs.map((scoreConfig) => (   
@@ -147,25 +156,14 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                             key={scoreConfig.name}
                             id={scoreConfig.name}
                             label={scoreConfig.title ?? scoreConfig.name}
-                            // error={`Incorrect value`}
-                            name={scoreConfig.name}
-                            defaultValue={scores[scoreConfig.name]}
+                            error={fetcher.data?.error?.fieldErrors?.["score." + scoreConfig.name]}
+                            name={"score." + scoreConfig.name}
+                            defaultValue={scores[scoreConfig.name] ?? undefined}
                             InputComponent={scoreConfig.input}
                             options={scoreConfig.options}
                         />
                     ))}
                     </div> }
-
-                  {/* { unassignedScoreConfigs.length > 0 && <PropertyList className="mb-4">
-                    {unassignedScoreConfigs.map((scoreConfig) => (   
-                        <PropertyList.Item>
-                            <PropertyList.Title>{scoreConfig.title ?? scoreConfig.name}</PropertyList.Title>
-                            <PropertyList.TextValue isMuted={false}>
-                                <Input type="text" placeholder="Enter value" />
-                            </PropertyList.TextValue>
-                        </PropertyList.Item>
-                    ))}
-                    </PropertyList> } */}
 
                     <div>
                         <div className="text-sm mb-1 text-gray-700">Extra comment</div>
@@ -174,18 +172,15 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                                 id: user.id,
                                 label: user.name
                             }))}
-                            name="content"
+                            name="comment"
                             placeholder={(hasZeroVisisbleComments ? "Comment" : "Reply") + " or tag other, using @"}
                             className="min-h-[10px] resize-none mb-0"
                             onFocus={() => {
                                 setCurrentlyEditedItemId("new");
                             }}
                         />
-
                     </div>
 
-
-                    <input type="hidden" name="activityId" value={activity.id} />
                     <div className={`gap-2 justify-end mt-2 ${(currentlyEditedItemId === "new" || hasZeroVisisbleComments) ? "flex" : "hidden"}`}>
                         <Button
                             type="reset"
@@ -202,12 +197,9 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                             size="sm"
                             disabled={fetcher.state !== 'idle'}
                         >
-                            {fetcher.state !== 'idle' ? 'Posting...' : 'Comment'}
+                            {fetcher.state !== 'idle' ? 'Posting...' : 'Submit'}
                         </Button>
                     </div>
-                    {fetcher.data?.error && (
-                        <div className="text-sm text-red-500">{fetcher.data.error}</div>
-                    )}
                 </fetcher.Form>}
             </div>}
 
@@ -402,24 +394,12 @@ export function CommentMessageItem({ message, userId, activityId, thread, user, 
                 </DropdownMenu>
                 )
             } />
-            
-
-            {/* <PropertyList className="ml-8 mb-4">
-                <PropertyList.Item>
-                    <PropertyList.Title>User satisfaction</PropertyList.Title>
-                    <PropertyList.TextValue isMuted={false}>Bad</PropertyList.TextValue>
-                </PropertyList.Item>
-
-                <PropertyList.Item>
-                    <PropertyList.Title>Can go to client?</PropertyList.Title>
-                    <PropertyList.TextValue isMuted={false}>Kind of</PropertyList.TextValue>
-                </PropertyList.Item>
-            </PropertyList> */}
+        
 
             {/* Comment content */}
             <div className="text-sm">
                 {isEditing ? (
-                    <fetcher.Form method="post" action={`/threads/${thread.id}/comments`} className="space-y-2">
+                    <fetcher.Form method="post" action={`/threads/${thread.id}/comment-edit`} className="space-y-2">
 
                         <TextEditor
                             mentionItems={users.map(user => ({
@@ -432,7 +412,6 @@ export function CommentMessageItem({ message, userId, activityId, thread, user, 
                             className="min-h-[10px] resize-none mb-0"
                         />
                         <input type="hidden" name="editCommentMessageId" value={message.id} />
-                        <input type="hidden" name="activityId" value={activityId} />
                         <div className="flex gap-2 mt-1">
                             <Button type="submit" size="sm" disabled={fetcher.state !== 'idle'}>
                                 {fetcher.state !== 'idle' ? 'Saving...' : 'Save'}
@@ -446,8 +425,8 @@ export function CommentMessageItem({ message, userId, activityId, thread, user, 
                                 Cancel
                             </Button>
                         </div>
-                        {fetcher.data?.error && (
-                            <div className="text-sm text-red-500">{fetcher.data.error}</div>
+                        {fetcher.data?.error?.message && (
+                            <div className="text-sm text-red-500">{fetcher.data.error.message}</div>
                         )}
                     </fetcher.Form>
                 ) : isDeleted ? (

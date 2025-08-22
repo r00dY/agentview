@@ -46,7 +46,6 @@ export function FormField<T=any>(props: FormFieldProps<T>) {
         setFieldValue(defaultValue);
     });
 
-    console.log("stringified fieldValue", JSON.stringify(fieldValue));
     // const [fieldError, setFieldError] = useState<string | undefined>(error);
 
     // useEffect(() => {
@@ -54,7 +53,7 @@ export function FormField<T=any>(props: FormFieldProps<T>) {
     // }, [error]);
 
     return <>
-        <input type="hidden" name={name} value={JSON.stringify(fieldValue)} ref={inputRef}/>
+        <input type="hidden" name={name} value={JSON.stringify(fieldValue) ?? ""} ref={inputRef}/>
         <FormFieldBase id={id} label={label} description={description} error={error}>
             <InputComponent id={id} name={`agentview__${name}`} value={fieldValue} options={options} onChange={(newValue) => {
                 setFieldValue(newValue);

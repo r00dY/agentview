@@ -21,6 +21,7 @@ import { getAllActivities, getLastRun } from '~/lib/threadUtils'
 import { ClientSchema, ActivitySchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, CommentMessageSchema, RunSchema, ScoreSchema, ScoreCreateSchema, type User } from '~/apiTypes'
 import { fetchThread, fetchThreads } from './threads'
 import { run as runFunction } from './run'
+import { extractMentions } from '../lib/utils'
 
 export const app = new OpenAPIHono({
   defaultHook: (result, c) => {
@@ -736,9 +737,8 @@ app.openapi(commentsPOSTRoute, async (c) => {
       return c.json({ message: "Authentication required" }, 401);
     }
 
-    const { extractMentions } = await import('../lib/utils')
 
-    const newMessage = await db.transaction(async (tx: any) => {
+    const newMessage = await db.transaction(async (tx) => {
 
       // Create the comment message
       const [newMessage] = await tx.insert(commentMessages).values({
@@ -1008,7 +1008,10 @@ app.openapi(scoresPOSTRoute, async (c) => {
     // Validate score name and value against config
     // First, find the activity that this score belongs to
     const activityRecord = await db.query.activity.findFirst({
-      where: eq(activity.id, body.activityId)
+      where: eq(activity.id, body.activityId),
+      with: {
+        thread: true
+      }
     });
     
     if (!activityRecord) {
@@ -1016,15 +1019,16 @@ app.openapi(scoresPOSTRoute, async (c) => {
     }
 
     // Find the thread configuration
-    const threadConfig = config.threads.find((t: any) => t.type === activityRecord.thread_id);
+    const threadConfig = config.threads.find((t) => t.type === activityRecord.thread.type);
     if (!threadConfig) {
       return c.json({ message: `Thread type not found in configuration` }, 400);
     }
 
     // Find the activity configuration
-    const activityConfig = threadConfig.activities.find((a: any) => 
+    const activityConfig = threadConfig.activities.find((a) => 
       a.type === activityRecord.type && a.role === activityRecord.role
     );
+    
     if (!activityConfig) {
       return c.json({ message: `Activity type '${activityRecord.type}' with role '${activityRecord.role}' not found in configuration` }, 400);
     }
