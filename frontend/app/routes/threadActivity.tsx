@@ -60,7 +60,7 @@ export default function ThreadActivityPage() {
         </Header>
         <div className="flex-1 overflow-y-auto">
 
-            <div className=" p-6 max-w-4xl space-y-6">
+            {/* <div className=" p-6 max-w-4xl space-y-6"> */}
                     {/* <div>
                         <h3 className="text-sm font-medium mb-2 text-gray-700">Scores</h3>
 
@@ -90,7 +90,7 @@ export default function ThreadActivityPage() {
 
                         {/* { activity.commentMessages.length === 0 && <div className="text-muted-foreground text-sm">No discussion available</div> } */}
 
-                        <div className="max-w-[720px]"><CommentThread
+                        <div><CommentThread
                             activity={activity}
                             user={user}
                             users={users}
@@ -101,7 +101,7 @@ export default function ThreadActivityPage() {
                     {/* </div> */}
 
 
-            </div>
+            {/* </div> */}
 
         </div>
     </div>

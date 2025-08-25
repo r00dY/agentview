@@ -100,7 +100,7 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
 
     return (<div ref={ref}>
         {/* Hot reload test comment */}
-        <div className="flex flex-col gap-4">
+        { visibleMessages.length > 0 && <div className="flex flex-col gap-4 p-6 max-w-2xl">
 
             {/* Display comments */}
             {visibleMessages.map((message: any, index: number) => {
@@ -150,9 +150,11 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                 />
             })}
 
-        </div>
+        </div> }
 
-        {!collapsed && <div className={`${visibleMessages.length > 0 ? "mt-4 border-t pt-4" : ""}`}>
+        { !collapsed && visibleMessages.length > 0 && <div className="border-t px-4 max-w-2xl"></div>}
+
+        {!collapsed && <div className={`max-w-2xl p-6`}>
 
 
             <div className="flex flex-row gap-2">
