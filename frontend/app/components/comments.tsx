@@ -179,7 +179,6 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                     ))}
                 </div>}
 
-
                 <div>
                     <div className="text-sm mb-1 text-gray-700">Extra comment</div>
                     <TextEditor
