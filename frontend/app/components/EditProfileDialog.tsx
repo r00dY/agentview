@@ -43,7 +43,7 @@ export function EditProfileDialog({
 
       <DialogContent>
 
-<editFetcher.Form
+  <editFetcher.Form
           action="/user"
           method="put"
           className="space-y-4"

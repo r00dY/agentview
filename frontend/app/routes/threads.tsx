@@ -1,4 +1,4 @@
-import { redirect, useLoaderData, useFetcher, Outlet, Link, Form , data, NavLink} from "react-router";
+import { redirect, useLoaderData, Outlet, Link, Form , data, NavLink} from "react-router";
 import type { Route } from "./+types/threads";
 
 import { Button } from "~/components/ui/button";
