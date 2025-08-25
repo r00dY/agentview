@@ -150,11 +150,9 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                 />
             })}
 
-            {visibleMessages.length === 0 && <div className="text-sm text-gray-500">No activity yet.</div>}
-
         </div>
 
-        {!collapsed && <div className="mt-6 border-t pt-4">
+        {!collapsed && <div className={`${visibleMessages.length > 0 ? "mt-4 border-t pt-4" : ""}`}>
 
 
             <div className="flex flex-row gap-2">
@@ -165,6 +163,7 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                 />
 
                 <div className="flex-1">
+                    {unassignedScoreConfigs.length > 0 && <div className="text-sm font-medium mb-3">Your Scores & Comment</div>}
 {/* 
                 <div className="flex flex-row items-center gap-2 mb-10">
                     <Button size="sm"><GaugeIcon />Add Score</Button>
