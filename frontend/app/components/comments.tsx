@@ -1,4 +1,4 @@
-import { AlertCircleIcon, EllipsisVerticalIcon } from "lucide-react";
+import { AlertCircleIcon, EllipsisVerticalIcon, Gauge, GaugeIcon, Reply, ReplyIcon } from "lucide-react";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 import { config } from "~/agentview.config";
@@ -74,7 +74,7 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
 
     // const [currentlyEditedItemId, setCurrentlyEditedItemId] = useState<string | null>("new" /*null*/); // "new" for new comment, comment id for edits
 
-    const { scores, unassignedScoreConfigs } = getScoresInfo(thread, activity);
+    const { scores, unassignedScoreConfigs, allScoreConfigs } = getScoresInfo(thread, activity);
 
     useFetcherSuccess(fetcher, () => {
         // setCurrentlyEditedItemId(null);
@@ -150,69 +150,90 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                 />
             })}
 
+            {visibleMessages.length === 0 && <div className="text-sm text-gray-500">No activity yet.</div>}
+
         </div>
 
-        {!collapsed && <div className="ml-8 pt-4 border-t mt-4">
-
-            {fetcher.state === 'idle' && fetcher.data?.ok === false && (
-                <Alert variant="destructive" className="mb-4">
-                    <AlertCircleIcon className="h-4 w-4" />
-                    <AlertDescription>{fetcher.data.error.message}</AlertDescription>
-                </Alert>
-            )}
+        {!collapsed && <div className="mt-6 border-t pt-4">
 
 
-            <fetcher.Form method="post" action={`/threads/${thread.id}/activities/${activity.id}/comments`} ref={formRef}>
+            <div className="flex flex-row gap-2">
 
-                {unassignedScoreConfigs.length > 0 && <div className="mb-4">
-                    {unassignedScoreConfigs.map((scoreConfig) => (
-                        <FormField
-                            key={scoreConfig.name}
-                            id={scoreConfig.name}
-                            label={scoreConfig.title ?? scoreConfig.name}
-                            error={fetcher.data?.error?.fieldErrors?.["scores." + scoreConfig.name]}
-                            name={"scores." + scoreConfig.name}
-                            defaultValue={scores[scoreConfig.name] ?? undefined}
-                            InputComponent={scoreConfig.input}
-                            options={scoreConfig.options}
+
+                <div className={`rounded-full bg-gray-300 flex-shrink-0 ${unassignedScoreConfigs.length === 0 ? "mt-[6px]" : ""}`}
+                    style={{ width: 24, height: 24 }}
+                />
+
+                <div className="flex-1">
+{/* 
+                <div className="flex flex-row items-center gap-2 mb-10">
+                    <Button size="sm"><GaugeIcon />Add Score</Button>
+                    <Button variant="outline" size="sm"><ReplyIcon /> Just reply</Button>
+                </div> */}
+
+                {fetcher.state === 'idle' && fetcher.data?.ok === false && (
+                    <Alert variant="destructive" className="mb-4">
+                        <AlertCircleIcon className="h-4 w-4" />
+                        <AlertDescription>{fetcher.data.error.message}</AlertDescription>
+                    </Alert>
+                )}
+
+
+                <fetcher.Form method="post" action={`/threads/${thread.id}/activities/${activity.id}/comments`} ref={formRef}>
+
+                    {unassignedScoreConfigs.length > 0 && <div className="mb-4 space-y-2">
+                        {unassignedScoreConfigs.map((scoreConfig) => (
+                            <FormField
+                                key={scoreConfig.name}
+                                id={scoreConfig.name}
+                                label={scoreConfig.title ?? scoreConfig.name}
+                                error={fetcher.data?.error?.fieldErrors?.["scores." + scoreConfig.name]}
+                                name={"scores." + scoreConfig.name}
+                                defaultValue={scores[scoreConfig.name] ?? undefined}
+                                InputComponent={scoreConfig.input}
+                                options={scoreConfig.options}
+                            />
+                        ))}
+                    </div>}
+
+                    <div>
+                        { unassignedScoreConfigs.length > 0 && <div className="text-sm mb-1 text-gray-700">Comment</div>}
+                        <TextEditor
+                            mentionItems={users.map(user => ({
+                                id: user.id,
+                                label: user.name
+                            }))}
+                            name="comment"
+                            placeholder={(hasZeroVisisbleComments ? "Comment" : "Reply") + " or tag other, using @"}
+                            className="min-h-[10px] resize-none mb-0"
                         />
-                    ))}
-                </div>}
+                    </div>
 
-                <div>
-                    <div className="text-sm mb-1 text-gray-700">Extra comment</div>
-                    <TextEditor
-                        mentionItems={users.map(user => ({
-                            id: user.id,
-                            label: user.name
-                        }))}
-                        name="comment"
-                        placeholder={(hasZeroVisisbleComments ? "Comment" : "Reply") + " or tag other, using @"}
-                        className="min-h-[10px] resize-none mb-0"
-                    />
+                    <div className={`gap-2 justify-end mt-2 flex`}>
+                        <Button
+                            type="reset"
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                                formRef.current?.reset();
+                            }}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="submit"
+                            size="sm"
+                            disabled={fetcher.state !== 'idle'}
+                        >
+                            {fetcher.state !== 'idle' ? 'Posting...' : 'Submit'}
+
+                        </Button>
+                    </div>
+                </fetcher.Form>
                 </div>
 
-                <div className={`gap-2 justify-end mt-2 flex`}>
-                    <Button
-                        type="reset"
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                            formRef.current?.reset();
-                        }}
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        type="submit"
-                        size="sm"
-                        disabled={fetcher.state !== 'idle'}
-                    >
-                        {fetcher.state !== 'idle' ? 'Posting...' : 'Submit'}
-
-                    </Button>
-                </div>
-            </fetcher.Form>
+            
+            </div>
         </div>}
 
         {/* {!collapsed && <div className="">
