@@ -26,7 +26,7 @@ export const config : AgentViewConfig = {
                     content: z.string(),
                     scores: [
                         {
-                            name: "user_satisfaction",
+                            name: "user_reaction",
                             title: "Reaction",
                             schema: z.boolean(),
                             input: ToggleBooleanInput,
