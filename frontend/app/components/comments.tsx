@@ -428,10 +428,7 @@ export function CommentMessageItem({ message, userId, activity, thread, user, us
                         </Alert>
                     )}
 
-                    <fetcher.Form method="post" ref={formRef} onSubmit={(e) => {
-                        e.preventDefault();
-                        alert('bang')
-                    }} className="space-y-2">
+                    <fetcher.Form method="put" action={`/threads/${thread.id}/activities/${activity.id}/comments/${message.id}`} ref={formRef} className="space-y-2">
                         {messageScoreConfigs.length > 0 && <div className="mb-4">
                             {messageScoreConfigs.map((scoreConfig) => <FormField
                                 key={scoreConfig.name}
@@ -443,9 +440,7 @@ export function CommentMessageItem({ message, userId, activity, thread, user, us
                                 InputComponent={scoreConfig.input}
                                 options={scoreConfig.options}
                             />)}
-
                         </div>}
-
 
                         <TextEditor
                             mentionItems={users.map(user => ({
