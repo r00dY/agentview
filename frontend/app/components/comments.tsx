@@ -19,9 +19,9 @@ import { TextEditor, textToElements } from "./wysiwyg/TextEditor";
 
 export type CommentThreadProps = {
     thread: Thread,
-    activity: Activity, 
-    user: User, 
-    users: User[], 
+    activity: Activity,
+    user: User,
+    users: User[],
     collapsed?: boolean,
     singleLineMessageHeader?: boolean,
 }
@@ -33,19 +33,20 @@ export type CommentThreadFloatingBoxProps = CommentThreadProps & {
 
 export type CommentThreadFloatingButtonProps = CommentThreadFloatingBoxProps & {
     thread: Thread,
-    activity: Activity, 
-    userId: string | null, 
-    users: any[], 
+    activity: Activity,
+    userId: string | null,
+    users: any[],
     onSelect: (activity: any) => void,
 }
 
-function getScoresInfo(thread: Thread, activity: Activity) {    const threadConfig = config.threads.find((t: any) => t.type === thread.type);
-    const activityConfig = threadConfig?.activities.find((a: any) => 
+function getScoresInfo(thread: Thread, activity: Activity) {
+    const threadConfig = config.threads.find((t: any) => t.type === thread.type);
+    const activityConfig = threadConfig?.activities.find((a: any) =>
         a.type === activity.type && a.role === activity.role
     );
     const allScoreConfigs = activityConfig?.scores || [];
 
-    const visibleMessages = activity.commentMessages.filter((m: any) => !m.deletedAt) ?? []     
+    const visibleMessages = activity.commentMessages.filter((m: any) => !m.deletedAt) ?? []
 
     const scores: Record<string, any> = {};
     for (const message of visibleMessages) {
@@ -66,7 +67,7 @@ function getScoresInfo(thread: Thread, activity: Activity) {    const threadConf
 export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, activity, user, collapsed = false, users, singleLineMessageHeader = false }, ref) => {
     const fetcher = useFetcher();
 
-    const visibleMessages = activity.commentMessages.filter((m: any) => !m.deletedAt) ?? []     
+    const visibleMessages = activity.commentMessages.filter((m: any) => !m.deletedAt) ?? []
     const hasZeroVisisbleComments = visibleMessages.length === 0
 
     const formRef = useRef<HTMLFormElement>(null);
@@ -84,7 +85,7 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
     useImperativeHandle(ref, () => ({
         reset: () => {
             // setCurrentlyEditedItemId(null);
-            formRef.current?.reset();   
+            formRef.current?.reset();
         }
     }));
 
@@ -98,73 +99,73 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
     // }
 
     return (<div ref={ref}>
-            {/* Hot reload test comment */}
-            <div className="flex flex-col gap-4">
+        {/* Hot reload test comment */}
+        <div className="flex flex-col gap-4">
 
-                {/* Display comments */}
-                {visibleMessages.map((message: any, index: number) => {
-                    const count = visibleMessages.length;
+            {/* Display comments */}
+            {visibleMessages.map((message: any, index: number) => {
+                const count = visibleMessages.length;
 
-                    let compressionLevel: MessageCompressionLevel = "none";
+                let compressionLevel: MessageCompressionLevel = "none";
 
-                    if (message.deletedAt) {
-                        return null
+                if (message.deletedAt) {
+                    return null
+                }
+
+                if (collapsed) {
+                    if (count === 1) {
+                        compressionLevel = "high"
                     }
+                    else {
+                        compressionLevel = "medium";
+                        if (count >= 3 && index != 0 && index != count - 1) {
 
-                    if (collapsed) {
-                        if (count === 1) {
-                            compressionLevel = "high"
-                        }
-                        else {
-                            compressionLevel = "medium";
-                            if (count >= 3 && index != 0 && index != count - 1) {
-
-                                if (index === 1) {
-                                    return (
-                                        <div className="flex items-center" key="separator">
-                                            <hr className="flex-grow border-gray-300" />
-                                            <span className="mx-2 text-xs text-muted-foreground px-2 rounded select-none">
-                                                {count - 2} more comment{(count - 2) > 1 ? "s" : ""}
-                                            </span>
-                                            <hr className="flex-grow border-gray-300" />
-                                        </div>
-                                    )
-                                }
-                                return null
+                            if (index === 1) {
+                                return (
+                                    <div className="flex items-center" key="separator">
+                                        <hr className="flex-grow border-gray-300" />
+                                        <span className="mx-2 text-xs text-muted-foreground px-2 rounded select-none">
+                                            {count - 2} more comment{(count - 2) > 1 ? "s" : ""}
+                                        </span>
+                                        <hr className="flex-grow border-gray-300" />
+                                    </div>
+                                )
                             }
+                            return null
                         }
                     }
+                }
 
-                    return <CommentMessageItem
-                        key={message.id}
-                        message={message}
-                        userId={user.id}
-                        fetcher={fetcher}
-                        activity={activity}
-                        thread={thread}
-                        user={users.find((user) => user.id === message.userId)}
-                        compressionLevel={compressionLevel}
-                        users={users}
-                        singleLineMessageHeader={singleLineMessageHeader}
-                    />
-                })}
+                return <CommentMessageItem
+                    key={message.id}
+                    message={message}
+                    userId={user.id}
+                    fetcher={fetcher}
+                    activity={activity}
+                    thread={thread}
+                    user={users.find((user) => user.id === message.userId)}
+                    compressionLevel={compressionLevel}
+                    users={users}
+                    singleLineMessageHeader={singleLineMessageHeader}
+                />
+            })}
 
-            </div>
+        </div>
 
-            {!collapsed && <div className="ml-8 pt-4 border-t mt-4">
+        {!collapsed && <div className="ml-8 pt-4 border-t mt-4">
 
-                { fetcher.state === 'idle' && fetcher.data?.ok === false && (
-                    <Alert variant="destructive" className="mb-4">
-                        <AlertCircleIcon className="h-4 w-4" />
-                        <AlertDescription>{fetcher.data.error.message}</AlertDescription>
-                    </Alert>
-                )}
+            {fetcher.state === 'idle' && fetcher.data?.ok === false && (
+                <Alert variant="destructive" className="mb-4">
+                    <AlertCircleIcon className="h-4 w-4" />
+                    <AlertDescription>{fetcher.data.error.message}</AlertDescription>
+                </Alert>
+            )}
 
 
-                <fetcher.Form method="post" action={`/threads/${thread.id}/activities/${activity.id}/comments`} ref={formRef}>
+            <fetcher.Form method="post" action={`/threads/${thread.id}/activities/${activity.id}/comments`} ref={formRef}>
 
-                { unassignedScoreConfigs.length > 0 && <div className="mb-4">
-                    {unassignedScoreConfigs.map((scoreConfig) => (   
+                {unassignedScoreConfigs.length > 0 && <div className="mb-4">
+                    {unassignedScoreConfigs.map((scoreConfig) => (
                         <FormField
                             key={scoreConfig.name}
                             id={scoreConfig.name}
@@ -176,46 +177,46 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                             options={scoreConfig.options}
                         />
                     ))}
-                    </div> }
+                </div>}
 
 
-                    <div>
-                        <div className="text-sm mb-1 text-gray-700">Extra comment</div>
-                        <TextEditor
-                            mentionItems={users.map(user => ({
-                                id: user.id,
-                                label: user.name
-                            }))}
-                            name="comment"
-                            placeholder={(hasZeroVisisbleComments ? "Comment" : "Reply") + " or tag other, using @"}
-                            className="min-h-[10px] resize-none mb-0"
-                        />
-                    </div>
+                <div>
+                    <div className="text-sm mb-1 text-gray-700">Extra comment</div>
+                    <TextEditor
+                        mentionItems={users.map(user => ({
+                            id: user.id,
+                            label: user.name
+                        }))}
+                        name="comment"
+                        placeholder={(hasZeroVisisbleComments ? "Comment" : "Reply") + " or tag other, using @"}
+                        className="min-h-[10px] resize-none mb-0"
+                    />
+                </div>
 
-                    <div className={`gap-2 justify-end mt-2 flex`}>
-                        <Button
-                            type="reset"
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                                formRef.current?.reset();
-                            }}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            type="submit"
-                            size="sm"
-                            disabled={fetcher.state !== 'idle'}
-                        >
-                            {fetcher.state !== 'idle' ? 'Posting...' : 'Submit'}
+                <div className={`gap-2 justify-end mt-2 flex`}>
+                    <Button
+                        type="reset"
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                            formRef.current?.reset();
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        type="submit"
+                        size="sm"
+                        disabled={fetcher.state !== 'idle'}
+                    >
+                        {fetcher.state !== 'idle' ? 'Posting...' : 'Submit'}
 
-                        </Button>
-                    </div>
-                </fetcher.Form>
-            </div>}
+                    </Button>
+                </div>
+            </fetcher.Form>
+        </div>}
 
-            {/* {!collapsed && <div className="">
+        {/* {!collapsed && <div className="">
                 {hasZeroVisisbleComments && <CommentMessageHeader title={users.find((u) => u.id === user.id)?.name || "You"} singleLineMessageHeader={singleLineMessageHeader}/>}
 
                 {(hasZeroVisisbleComments || currentlyEditedItemId === "new" || currentlyEditedItemId === null) && <fetcher.Form method="post" action={`/threads/${thread.id}/comments`} className="mt-4" ref={formRef}>
@@ -259,7 +260,7 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
             </div>} */}
 
 
-        </div>
+    </div>
     );
 });
 
@@ -271,7 +272,7 @@ export function CommentThreadFloatingBox({ thread, activity, user, selected = fa
     useEffect(() => {
         if (!selected) {
             commentThreadRef.current?.reset();
-        }       
+        }
     }, [selected])
 
     useEffect(() => {
@@ -319,19 +320,19 @@ export function CommentMessageHeader({ title, subtitle, actions, singleLineMessa
 
     if (singleLineMessageHeader) {
         return <div className="flex flex-row justify-between">
-        
-        <div className="flex flex-row items-center gap-2">
-            <div className="rounded-full bg-gray-300 flex-shrink-0"
-                style={{ width: 24, height: 24 }}
-            />
-            <div className="text-sm font-medium">
-                {title}
+
+            <div className="flex flex-row items-center gap-2">
+                <div className="rounded-full bg-gray-300 flex-shrink-0"
+                    style={{ width: 24, height: 24 }}
+                />
+                <div className="text-sm font-medium">
+                    {title}
+                </div>
+                <div className="text-xs text-gray-400">
+                    {subtitle}
+                </div>
             </div>
-            <div className="text-xs text-gray-400">
-                {subtitle}
-            </div>
-        </div>
-        {actions}
+            {actions}
         </div>
     }
 
@@ -420,7 +421,7 @@ export function CommentMessageItem({ message, userId, activity, thread, user, us
             <div className="text-sm ml-8">
                 {isEditing ? (<div>
 
-                    { fetcher.state === 'idle' && fetcher.data?.ok === false && (
+                    {fetcher.state === 'idle' && fetcher.data?.ok === false && (
                         <Alert variant="destructive" className="mb-4">
                             <AlertCircleIcon className="h-4 w-4" />
                             <AlertDescription>{fetcher.data.error.message}</AlertDescription>
@@ -431,19 +432,19 @@ export function CommentMessageItem({ message, userId, activity, thread, user, us
                         e.preventDefault();
                         alert('bang')
                     }} className="space-y-2">
-                        { messageScoreConfigs.length > 0 && <div className="mb-4">
+                        {messageScoreConfigs.length > 0 && <div className="mb-4">
                             {messageScoreConfigs.map((scoreConfig) => <FormField
-                                    key={scoreConfig.name}
-                                    id={scoreConfig.name}
-                                    label={scoreConfig.title ?? scoreConfig.name}
-                                    error={fetcher.data?.error?.fieldErrors?.["scores." + scoreConfig.name]}
-                                    name={"scores." + scoreConfig.name}
-                                    defaultValue={scores[scoreConfig.name] ?? undefined}
-                                    InputComponent={scoreConfig.input}
-                                    options={scoreConfig.options}
-                                />)}
+                                key={scoreConfig.name}
+                                id={scoreConfig.name}
+                                label={scoreConfig.title ?? scoreConfig.name}
+                                error={fetcher.data?.error?.fieldErrors?.["scores." + scoreConfig.name]}
+                                name={"scores." + scoreConfig.name}
+                                defaultValue={scores[scoreConfig.name] ?? undefined}
+                                InputComponent={scoreConfig.input}
+                                options={scoreConfig.options}
+                            />)}
 
-                                </div>}
+                        </div>}
 
 
                         <TextEditor
@@ -467,7 +468,7 @@ export function CommentMessageItem({ message, userId, activity, thread, user, us
                                 size="sm"
                                 onClick={() => {
                                     formRef.current?.reset();
-                                    setIsEditing(false); 
+                                    setIsEditing(false);
                                 }}
                             >
                                 Cancel
@@ -480,7 +481,7 @@ export function CommentMessageItem({ message, userId, activity, thread, user, us
 
                 </div>) : <div>
 
-                    { message.scores && message.scores.length > 0 && <div>
+                    {message.scores && message.scores.length > 0 && <div>
                         <PropertyList.Root className="mb-2">
                             {message.scores.map((score) => (
                                 <PropertyList.Item key={score.id}>
@@ -490,8 +491,8 @@ export function CommentMessageItem({ message, userId, activity, thread, user, us
                             ))}
                         </PropertyList.Root>
                     </div>}
-                    
-                    { message.content && <div className={`${compressionLevel === "high" ? "line-clamp-6" : compressionLevel === "medium" ? "line-clamp-3" : ""}`}>
+
+                    {message.content && <div className={`${compressionLevel === "high" ? "line-clamp-6" : compressionLevel === "medium" ? "line-clamp-3" : ""}`}>
                         {textToElements(message.content, users.map((user: any) => ({
                             id: user.id,
                             label: user.name
