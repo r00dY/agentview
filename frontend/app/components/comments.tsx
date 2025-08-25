@@ -391,10 +391,7 @@ export function CommentMessageItem({ message, userId, activityId, thread, user, 
                         <DropdownMenuItem onClick={(e) => {
                             e.preventDefault();
                             if (confirm('Are you sure you want to delete this comment?')) {
-                                // const formData = new FormData();
-                                // formData.append('deleteCommentMessageId', message.id);
-                                // formData.append('activityId', activityId);
-                                fetcher.submit(null, { method: 'delete', action: `/threads/${thread.id}/activities/${activityId}/comments/${message.id}` });
+                                fetcher.submit(null, { method: 'delete', action: `/threads/${thread.id}/activities/${activityId}/comments/${message.id}` }); // that could be fetcher.Form!
                             }
                         }}>
                             Delete
