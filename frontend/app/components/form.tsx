@@ -54,7 +54,7 @@ export function FormField<T=any>(props: FormFieldProps<T>) {
 
     return <>
         <input type="hidden" name={name} value={JSON.stringify(fieldValue) ?? ""} ref={inputRef}/>
-        <FormFieldBase id={id} label={label} description={description} error={error}>
+            <FormFieldBase id={id} label={label} description={description} error={error}>
             <InputComponent id={id} name={`agentview__${name}`} value={fieldValue} options={options} onChange={(newValue) => {
                 setFieldValue(newValue);
                 // setFieldError(undefined);

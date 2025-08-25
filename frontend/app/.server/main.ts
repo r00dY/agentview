@@ -874,6 +874,77 @@ app.openapi(feedItemsPOSTRoute, async (c) => {
 })
 
 
+// Comments DELETE (delete comment)
+const commentsDELETERoute = createRoute({
+  method: 'delete',
+  path: '/api/threads/{thread_id}/activities/{activity_id}/comments/{comment_id}',
+  request: {
+    params: z.object({
+      thread_id: z.string(),
+      activity_id: z.string(),
+      comment_id: z.string(),
+    }),
+  },
+  responses: {
+    200: response_data(z.object({})),
+    400: response_error(),
+    401: response_error(),
+    404: response_error(),
+  },
+})
+
+app.openapi(commentsDELETERoute, async (c) => {
+  const { comment_id } = c.req.param()
+  
+  try {
+    const session = await auth.api.getSession({ headers: c.req.raw.headers })
+    if (!session) {
+      return c.json({ message: "Authentication required" }, 401);
+    }
+    
+    const message = await db.query.commentMessages.findFirst({
+      where: eq(commentMessages.id, comment_id),
+      with: {
+        scores: true,
+      }
+    })
+
+    if (!message) {
+      return c.json({ message: "Comment message not found" }, 404);
+    }
+
+    // Check if user can delete this comment (own comment or admin)
+    if (message.userId !== session.user.id) {
+      return c.json({ message: "You can only delete your own comments." }, 401);
+    }
+
+    await db.transaction(async (tx) => {
+      await tx.delete(commentMentions).where(eq(commentMentions.commentMessageId, comment_id));
+      await tx.delete(scores).where(eq(scores.commentId, comment_id));
+      await tx.update(commentMessages).set({
+        deletedAt: new Date(),
+        deletedBy: session.user.id
+      }).where(eq(commentMessages.id, comment_id));
+
+    });
+
+    // Soft delete the comment
+    // await db.update(commentMessages)
+    //   .set({ 
+    //     deletedAt: new Date(),
+    //     deletedBy: session.user.id
+    //   })
+    //   .where(eq(commentMessages.id, comment_id));
+
+    return c.json({}, 200);
+
+  } catch (error: any) {
+    console.error('Error deleting comment:', error);
+    return c.json({ message: "Failed to delete comment: " + error.message }, 400);
+  }
+})
+
+
 /* --------- COMMENTS --------- */
 
 // Comments POST (create new comment)
@@ -946,185 +1017,185 @@ app.openapi(feedItemsPOSTRoute, async (c) => {
 
 
 
-// Comments PUT (edit comment)
-const commentsPUTRoute = createRoute({
-  method: 'put',
-  path: '/api/comments/{commentId}',
-  request: {
-    params: z.object({
-      commentId: z.string(),
-    }),
-    body: body(z.object({
-      content: z.string(),
-    }))
-  },
-  responses: {
-    200: response_data(z.object({})),
-    400: response_error(),
-    401: response_error(),
-    404: response_error(),
-  },
-})
+// // Comments PUT (edit comment)
+// const commentsPUTRoute = createRoute({
+//   method: 'put',
+//   path: '/api/comments/{commentId}',
+//   request: {
+//     params: z.object({
+//       commentId: z.string(),
+//     }),
+//     body: body(z.object({
+//       content: z.string(),
+//     }))
+//   },
+//   responses: {
+//     200: response_data(z.object({})),
+//     400: response_error(),
+//     401: response_error(),
+//     404: response_error(),
+//   },
+// })
 
-app.openapi(commentsPUTRoute, async (c) => {
-  const { commentId } = c.req.param()
-  const body = await c.req.json()
+// app.openapi(commentsPUTRoute, async (c) => {
+//   const { commentId } = c.req.param()
+//   const body = await c.req.json()
   
-  try {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers })
-    if (!session) {
-      return c.json({ message: "Authentication required" }, 401);
-    }
+//   try {
+//     const session = await auth.api.getSession({ headers: c.req.raw.headers })
+//     if (!session) {
+//       return c.json({ message: "Authentication required" }, 401);
+//     }
 
-    const { extractMentions } = await import('../lib/utils')
+//     const { extractMentions } = await import('../lib/utils')
 
-    // Find the comment message
-    const [message] = await db
-      .select()
-      .from(commentMessages)
-      .where(eq(commentMessages.id, commentId));
+//     // Find the comment message
+//     const [message] = await db
+//       .select()
+//       .from(commentMessages)
+//       .where(eq(commentMessages.id, commentId));
     
-    if (!message) {
-      return c.json({ message: "Comment message not found" }, 404);
-    }
+//     if (!message) {
+//       return c.json({ message: "Comment message not found" }, 404);
+//     }
     
-    if (message.userId !== session.user.id) {
-      return c.json({ message: "You can only edit your own comments." }, 401);
-    }
+//     if (message.userId !== session.user.id) {
+//       return c.json({ message: "You can only edit your own comments." }, 401);
+//     }
 
-    // Extract mentions from new content
-    let newMentions, previousMentions;
-    let newUserMentions: string[] = [], previousUserMentions: string[] = [];
+//     // Extract mentions from new content
+//     let newMentions, previousMentions;
+//     let newUserMentions: string[] = [], previousUserMentions: string[] = [];
 
-    try {
-      newMentions = extractMentions(body.content);
-      previousMentions = extractMentions(message.content);
-      newUserMentions = newMentions.user_id || [];
-      previousUserMentions = previousMentions.user_id || [];
-    } catch (error) {
-      return c.json({ message: `Invalid mention format: ${(error as Error).message}` }, 400);
-    }
+//     try {
+//       newMentions = extractMentions(body.content);
+//       previousMentions = extractMentions(message.content);
+//       newUserMentions = newMentions.user_id || [];
+//       previousUserMentions = previousMentions.user_id || [];
+//     } catch (error) {
+//       return c.json({ message: `Invalid mention format: ${(error as Error).message}` }, 400);
+//     }
 
-    // Store previous content in edit history
-    await db.insert(commentMessageEdits).values({
-      commentMessageId: commentId,
-      previousContent: message.content,
-    });
+//     // Store previous content in edit history
+//     await db.insert(commentMessageEdits).values({
+//       commentMessageId: commentId,
+//       previousContent: message.content,
+//     });
 
-    // Update the comment message
-    await db.update(commentMessages)
-      .set({ content: body.content, updatedAt: new Date() })
-      .where(eq(commentMessages.id, commentId));
+//     // Update the comment message
+//     await db.update(commentMessages)
+//       .set({ content: body.content, updatedAt: new Date() })
+//       .where(eq(commentMessages.id, commentId));
 
-    // Handle mentions for edits
-    if (newUserMentions.length > 0 || previousUserMentions.length > 0) {
-      // Get existing mentions for this message
-      const existingMentions = await db
-        .select()
-        .from(commentMentions)
-        .where(eq(commentMentions.commentMessageId, commentId));
+//     // Handle mentions for edits
+//     if (newUserMentions.length > 0 || previousUserMentions.length > 0) {
+//       // Get existing mentions for this message
+//       const existingMentions = await db
+//         .select()
+//         .from(commentMentions)
+//         .where(eq(commentMentions.commentMessageId, commentId));
 
-      const existingMentionedUserIds = existingMentions.map((m: any) => m.mentionedUserId);
+//       const existingMentionedUserIds = existingMentions.map((m: any) => m.mentionedUserId);
 
-      // Find mentions to keep (existed before and still exist)
-      const mentionsToKeep = newUserMentions.filter((mention: string) =>
-        previousUserMentions.includes(mention) && existingMentionedUserIds.includes(mention)
-      );
+//       // Find mentions to keep (existed before and still exist)
+//       const mentionsToKeep = newUserMentions.filter((mention: string) =>
+//         previousUserMentions.includes(mention) && existingMentionedUserIds.includes(mention)
+//       );
 
-      // Find new mentions to add
-      const newMentionsToAdd = newUserMentions.filter((mention: string) =>
-        !existingMentionedUserIds.includes(mention)
-      );
+//       // Find new mentions to add
+//       const newMentionsToAdd = newUserMentions.filter((mention: string) =>
+//         !existingMentionedUserIds.includes(mention)
+//       );
 
-      // Find mentions to remove (existed before but not in new content)
-      const mentionsToRemove = existingMentionedUserIds.filter((mention: string) =>
-        !newUserMentions.includes(mention)
-      );
+//       // Find mentions to remove (existed before but not in new content)
+//       const mentionsToRemove = existingMentionedUserIds.filter((mention: string) =>
+//         !newUserMentions.includes(mention)
+//       );
 
-      // Remove mentions that are no longer present
-      if (mentionsToRemove.length > 0) {
-        await db.delete(commentMentions)
-          .where(and(
-            eq(commentMentions.commentMessageId, commentId),
-            inArray(commentMentions.mentionedUserId, mentionsToRemove)
-          ));
-      }
+//       // Remove mentions that are no longer present
+//       if (mentionsToRemove.length > 0) {
+//         await db.delete(commentMentions)
+//           .where(and(
+//             eq(commentMentions.commentMessageId, commentId),
+//             inArray(commentMentions.mentionedUserId, mentionsToRemove)
+//           ));
+//       }
 
-      // Add new mentions
-      if (newMentionsToAdd.length > 0) {
-        await db.insert(commentMentions).values(
-          newMentionsToAdd.map((mentionedUserId: string) => ({
-            commentMessageId: commentId,
-            mentionedUserId,
-          }))
-        );
-      }
-    }
+//       // Add new mentions
+//       if (newMentionsToAdd.length > 0) {
+//         await db.insert(commentMentions).values(
+//           newMentionsToAdd.map((mentionedUserId: string) => ({
+//             commentMessageId: commentId,
+//             mentionedUserId,
+//           }))
+//         );
+//       }
+//     }
 
-    return c.json({}, 200);
+//     return c.json({}, 200);
 
-  } catch (error: any) {
-    console.error('Error editing comment:', error);
-    return c.json({ message: "Failed to edit comment: " + error.message }, 400);
-  }
-})
+//   } catch (error: any) {
+//     console.error('Error editing comment:', error);
+//     return c.json({ message: "Failed to edit comment: " + error.message }, 400);
+//   }
+// })
 
-// Comments DELETE (delete comment)
-const commentsDELETERoute = createRoute({
-  method: 'delete',
-  path: '/api/comments/{commentId}',
-  request: {
-    params: z.object({
-      commentId: z.string(),
-    }),
-  },
-  responses: {
-    200: response_data(z.object({})),
-    400: response_error(),
-    401: response_error(),
-    404: response_error(),
-  },
-})
+// // Comments DELETE (delete comment)
+// const commentsDELETERoute = createRoute({
+//   method: 'delete',
+//   path: '/api/comments/{commentId}',
+//   request: {
+//     params: z.object({
+//       commentId: z.string(),
+//     }),
+//   },
+//   responses: {
+//     200: response_data(z.object({})),
+//     400: response_error(),
+//     401: response_error(),
+//     404: response_error(),
+//   },
+// })
 
-app.openapi(commentsDELETERoute, async (c) => {
-  const { commentId } = c.req.param()
+// app.openapi(commentsDELETERoute, async (c) => {
+//   const { commentId } = c.req.param()
   
-  try {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers })
-    if (!session) {
-      return c.json({ message: "Authentication required" }, 401);
-    }
+//   try {
+//     const session = await auth.api.getSession({ headers: c.req.raw.headers })
+//     if (!session) {
+//       return c.json({ message: "Authentication required" }, 401);
+//     }
 
-    // Find the comment message
-    const [message] = await db
-      .select()
-      .from(commentMessages)
-      .where(eq(commentMessages.id, commentId));
+//     // Find the comment message
+//     const [message] = await db
+//       .select()
+//       .from(commentMessages)
+//       .where(eq(commentMessages.id, commentId));
 
-    if (!message) {
-      return c.json({ message: "Comment message not found" }, 404);
-    }
+//     if (!message) {
+//       return c.json({ message: "Comment message not found" }, 404);
+//     }
 
-    // Check if user can delete this comment (own comment or admin)
-    if (message.userId !== session.user.id) {
-      return c.json({ message: "You can only delete your own comments." }, 401);
-    }
+//     // Check if user can delete this comment (own comment or admin)
+//     if (message.userId !== session.user.id) {
+//       return c.json({ message: "You can only delete your own comments." }, 401);
+//     }
 
-    // Soft delete the comment
-    await db.update(commentMessages)
-      .set({ 
-        deletedAt: new Date(),
-        deletedBy: session.user.id
-      })
-      .where(eq(commentMessages.id, commentId));
+//     // Soft delete the comment
+//     await db.update(commentMessages)
+//       .set({ 
+//         deletedAt: new Date(),
+//         deletedBy: session.user.id
+//       })
+//       .where(eq(commentMessages.id, commentId));
 
-    return c.json({}, 200);
+//     return c.json({}, 200);
 
-  } catch (error: any) {
-    console.error('Error deleting comment:', error);
-    return c.json({ message: "Failed to delete comment: " + error.message }, 400);
-  }
-})
+//   } catch (error: any) {
+//     console.error('Error deleting comment:', error);
+//     return c.json({ message: "Failed to delete comment: " + error.message }, 400);
+//   }
+// })
 
 
 /* --------- SCORES --------- */
