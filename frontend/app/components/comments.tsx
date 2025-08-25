@@ -39,6 +39,30 @@ export type CommentThreadFloatingButtonProps = CommentThreadFloatingBoxProps & {
     onSelect: (activity: any) => void,
 }
 
+function getScoresInfo(thread: Thread, activity: Activity) {    const threadConfig = config.threads.find((t: any) => t.type === thread.type);
+    const activityConfig = threadConfig?.activities.find((a: any) => 
+        a.type === activity.type && a.role === activity.role
+    );
+    const allScoreConfigs = activityConfig?.scores || [];
+
+    const visibleMessages = activity.commentMessages.filter((m: any) => !m.deletedAt) ?? []     
+
+    const scores: Record<string, any> = {};
+    for (const message of visibleMessages) {
+        for (const score of message.scores ?? []) {
+            scores[score.name] = score.value;
+        }
+    }
+
+    const unassignedScoreConfigs = allScoreConfigs.filter((scoreConfig) => !scores[scoreConfig.name]);
+
+    return {
+        allScoreConfigs,
+        scores,
+        unassignedScoreConfigs
+    }
+}
+
 export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, activity, user, collapsed = false, users, singleLineMessageHeader = false }, ref) => {
     const fetcher = useFetcher();
 
@@ -49,21 +73,7 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
 
     // const [currentlyEditedItemId, setCurrentlyEditedItemId] = useState<string | null>("new" /*null*/); // "new" for new comment, comment id for edits
 
-    // Get scores for this activity type from config
-    const threadConfig = config.threads.find((t: any) => t.type === thread.type);
-    const activityConfig = threadConfig?.activities.find((a: any) => 
-        a.type === activity.type && a.role === activity.role
-    );
-    const scoreConfigs = activityConfig?.scores || [];
-
-    const scores: Record<string, any> = {};
-    for (const message of visibleMessages) {
-        for (const score of message.scores ?? []) {
-            scores[score.name] = score.value;
-        }
-    }
-
-    const unassignedScoreConfigs = scoreConfigs.filter((scoreConfig) => !scores[scoreConfig.name]);
+    const { scores, unassignedScoreConfigs } = getScoresInfo(thread, activity);
 
     useFetcherSuccess(fetcher, () => {
         // setCurrentlyEditedItemId(null);
@@ -130,7 +140,7 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                         message={message}
                         userId={user.id}
                         fetcher={fetcher}
-                        activityId={activity.id}
+                        activity={activity}
                         thread={thread}
                         user={users.find((user) => user.id === message.userId)}
                         compressionLevel={compressionLevel}
@@ -179,9 +189,6 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                             name="comment"
                             placeholder={(hasZeroVisisbleComments ? "Comment" : "Reply") + " or tag other, using @"}
                             className="min-h-[10px] resize-none mb-0"
-                            // onFocus={() => {
-                            //     setCurrentlyEditedItemId("new");
-                            // }}
                         />
                     </div>
 
@@ -192,7 +199,6 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                             size="sm"
                             onClick={(e) => {
                                 formRef.current?.reset();
-                                // setCurrentlyEditedItemId(null);
                             }}
                         >
                             Cancel
@@ -355,18 +361,27 @@ export function CommentMessageHeader({ title, subtitle, actions, singleLineMessa
 type MessageCompressionLevel = "none" | "medium" | "high";
 
 // New subcomponent for comment message item with edit logic
-export function CommentMessageItem({ message, userId, activityId, thread, user, users, compressionLevel = "none", singleLineMessageHeader = false }: { message: CommentMessage, userId: string | null, fetcher: any, activityId: string, thread: Thread, user: any, users: any[], compressionLevel?: MessageCompressionLevel, singleLineMessageHeader?: boolean }) {
+export function CommentMessageItem({ message, userId, activity, thread, user, users, compressionLevel = "none", singleLineMessageHeader = false }: { message: CommentMessage, userId: string | null, fetcher: any, activity: Activity, thread: Thread, user: any, users: any[], compressionLevel?: MessageCompressionLevel, singleLineMessageHeader?: boolean }) {
     if (message.deletedAt) {
         throw new Error("Deleted messages don't have rendering code.")
     }
 
     const fetcher = useFetcher();
     const isOwn = userId && message.userId === userId;
+    const formRef = useRef<HTMLFormElement>(null);
 
     const createdAt = timeAgoShort(message.createdAt);
     const subtitle = createdAt + (message.updatedAt && message.updatedAt !== message.createdAt ? " · edited" : "")
 
     const [isEditing, setIsEditing] = useState(false);
+
+    const { scores, allScoreConfigs } = getScoresInfo(thread, activity);
+
+    const messageScoreConfigs = allScoreConfigs.filter(
+        (scoreConfig) =>
+            message.scores &&
+            message.scores.some((score) => score.name === scoreConfig.name)
+    );
 
     useFetcherSuccess(fetcher, () => {
         setIsEditing(false);
@@ -391,7 +406,7 @@ export function CommentMessageItem({ message, userId, activityId, thread, user, 
                         <DropdownMenuItem onClick={(e) => {
                             e.preventDefault();
                             if (confirm('Are you sure you want to delete this comment?')) {
-                                fetcher.submit(null, { method: 'delete', action: `/threads/${thread.id}/activities/${activityId}/comments/${message.id}` }); // that could be fetcher.Form!
+                                fetcher.submit(null, { method: 'delete', action: `/threads/${thread.id}/activities/${activity.id}/comments/${message.id}` }); // that could be fetcher.Form!
                             }
                         }}>
                             Delete
@@ -402,9 +417,35 @@ export function CommentMessageItem({ message, userId, activityId, thread, user, 
             } />
 
             {/* Comment content */}
-            <div className="text-sm">
-                {isEditing ? (
-                    <fetcher.Form method="post" action={`/threads/${thread.id}/comment-edit`} className="space-y-2">
+            <div className="text-sm ml-8">
+                {isEditing ? (<div>
+
+                    { fetcher.state === 'idle' && fetcher.data?.ok === false && (
+                        <Alert variant="destructive" className="mb-4">
+                            <AlertCircleIcon className="h-4 w-4" />
+                            <AlertDescription>{fetcher.data.error.message}</AlertDescription>
+                        </Alert>
+                    )}
+
+                    <fetcher.Form method="post" ref={formRef} onSubmit={(e) => {
+                        e.preventDefault();
+                        alert('bang')
+                    }} className="space-y-2">
+                        { messageScoreConfigs.length > 0 && <div className="mb-4">
+                            {messageScoreConfigs.map((scoreConfig) => <FormField
+                                    key={scoreConfig.name}
+                                    id={scoreConfig.name}
+                                    label={scoreConfig.title ?? scoreConfig.name}
+                                    error={fetcher.data?.error?.fieldErrors?.["scores." + scoreConfig.name]}
+                                    name={"scores." + scoreConfig.name}
+                                    defaultValue={scores[scoreConfig.name] ?? undefined}
+                                    InputComponent={scoreConfig.input}
+                                    options={scoreConfig.options}
+                                />)}
+
+                                </div>}
+
+
                         <TextEditor
                             mentionItems={users.map(user => ({
                                 id: user.id,
@@ -415,7 +456,7 @@ export function CommentMessageItem({ message, userId, activityId, thread, user, 
                             defaultValue={message.content ?? ""}
                             className="min-h-[10px] resize-none mb-0"
                         />
-                        <input type="hidden" name="editCommentMessageId" value={message.id} />
+
                         <div className="flex gap-2 mt-1">
                             <Button type="submit" size="sm" disabled={fetcher.state !== 'idle'}>
                                 {fetcher.state !== 'idle' ? 'Saving...' : 'Save'}
@@ -424,7 +465,10 @@ export function CommentMessageItem({ message, userId, activityId, thread, user, 
                                 type="reset"
                                 variant="outline"
                                 size="sm"
-                                onClick={() => { setIsEditing(false) }}
+                                onClick={() => {
+                                    formRef.current?.reset();
+                                    setIsEditing(false); 
+                                }}
                             >
                                 Cancel
                             </Button>
@@ -433,7 +477,8 @@ export function CommentMessageItem({ message, userId, activityId, thread, user, 
                             <div className="text-sm text-red-500">{fetcher.data.error.message}</div>
                         )}
                     </fetcher.Form>
-                ) : <div className="ml-8">
+
+                </div>) : <div>
 
                     { message.scores && message.scores.length > 0 && <div>
                         <PropertyList.Root className="mb-2">
