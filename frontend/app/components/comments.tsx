@@ -55,7 +55,7 @@ function getScoresInfo(thread: Thread, activity: Activity) {
         }
     }
 
-    const unassignedScoreConfigs = allScoreConfigs.filter((scoreConfig) => !scores[scoreConfig.name]);
+    const unassignedScoreConfigs = allScoreConfigs.filter((scoreConfig) => scores[scoreConfig.name] === undefined || scores[scoreConfig.name] === null);
 
     return {
         allScoreConfigs,
@@ -88,6 +88,7 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
             formRef.current?.reset();
         }
     }));
+
 
     // const messageScoresMap : Record<string, Score[]> = {}
 
@@ -450,7 +451,7 @@ export function CommentMessageItem({ message, userId, activity, thread, user, us
                     )}
 
                     <fetcher.Form method="put" action={`/threads/${thread.id}/activities/${activity.id}/comments/${message.id}`} ref={formRef} className="space-y-2">
-                        {messageScoreConfigs.length > 0 && <div className="mb-4">
+                        {messageScoreConfigs.length > 0 && <div className="mb-4 space-y-2">
                             {messageScoreConfigs.map((scoreConfig) => <FormField
                                 key={scoreConfig.name}
                                 id={scoreConfig.name}

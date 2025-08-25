@@ -33,10 +33,12 @@ export const config : AgentViewConfig = {
                             display: DisplayBooleanComponent,
                             options: {
                                 true: {
-                                    icon: ThumbsUp
+                                    icon: ThumbsUp,
+                                    // label: "Liked"
                                 },
                                 false: {
-                                    icon: ThumbsDown
+                                    icon: ThumbsDown,
+                                    // label: "Disliked"
                                 }
                             }
                         },
