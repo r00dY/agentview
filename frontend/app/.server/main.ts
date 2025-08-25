@@ -1,6 +1,8 @@
 import 'dotenv/config'
 import { serve } from '@hono/node-server'
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
+import { HTTPException } from 'hono/http-exception'
+
 import { cors } from 'hono/cors'
 import { streamSSE } from 'hono/streaming'
 import { APIError } from "better-auth/api";
@@ -720,7 +722,7 @@ function validateScore(thread: Thread, activity: Activity, scoreName: string, sc
   // Find the thread config
   const threadConfig = config.threads.find((t) => t.type === thread.type);
   if (!threadConfig) {
-    throw new Error(`Thread type '${thread.type}' not found in configuration`);
+    throw new HTTPException(400, { message: `Thread type '${thread.type}' not found in configuration` });
   }
 
   // Find the activity config for this thread/activity
@@ -731,17 +733,13 @@ function validateScore(thread: Thread, activity: Activity, scoreName: string, sc
   const activityTypeCuteName = `${activity.type}' / '${activity.role}`
 
   if (!activityConfig) {
-    throw new Error(
-      `Activity '${activityTypeCuteName}' not found in configuration for thread type '${thread.type}'`
-    );
+    throw new HTTPException(400, { message: `Activity '${activityTypeCuteName}' not found in configuration for thread type '${thread.type}'` });
   }
 
   // Find the score config for this activity
   const scoreConfig = activityConfig.scores?.find((scoreConfig) => scoreConfig.name === scoreName);
   if (!scoreConfig) {
-    throw new Error(
-      `Score name '${scoreName}' not found in configuration for activity  '${activityTypeCuteName}' in thread type '${thread.type}'`
-    );
+    throw new HTTPException(400, { message: `Score name '${scoreName}' not found in configuration for activity  '${activityTypeCuteName}' in thread type '${thread.type}'` });
   }
 
   // Check if there is already a score with the same name in any commentMessage's scores
@@ -750,9 +748,7 @@ function validateScore(thread: Thread, activity: Activity, scoreName: string, sc
       if (message.scores) {
         for (const score of message.scores) {
           if (score.name === scoreName && !score.deletedAt) {
-            throw new Error(
-              `A score with name '${scoreName}' already exists.`
-            );
+            throw new HTTPException(400, { message: `A score with name '${scoreName}' already exists.` });
           }
         }
       }
@@ -791,36 +787,56 @@ const commentsPOSTRoute = createRoute({
   },
 })
 
+async function requireSession(headers: Headers) {
+  const session = await auth.api.getSession({ headers })
+  if (!session) {
+    throw new HTTPException(401, { message: "Authentication required" });
+  }
+  return session
+}
+
+async function requireThread(thread_id: string) {
+  const thread = await fetchThread(thread_id)
+  if (!thread) {
+    throw new HTTPException(404, { message: "Thread not found" });
+  }
+  return thread
+}
+
+async function requireActivity(thread: Thread, activity_id: string) {
+  const activity = getAllActivities(thread).find((a) => a.id === activity_id)
+  if (!activity) {
+    throw new HTTPException(404, { message: "Activity not found" });
+  }
+  return activity
+}
+
+async function requireCommentMessageFromUser(thread: Thread, activity: Activity, comment_id: string, user: User) {
+  const comment = activity.commentMessages?.find((m) => m.id === comment_id && m.deletedAt === null)
+  if (!comment) {
+    throw new HTTPException(404, { message: "Comment not found" });
+  }
+
+  if (comment.userId !== user.id) {
+    throw new HTTPException(401, { message: "You can only edit your own comments." });
+  }
+
+  return comment
+}
+
 app.openapi(commentsPOSTRoute, async (c) => {
   const body = await c.req.json()
   const { thread_id, activity_id } = c.req.param()
   
   try {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers })
-    if (!session) {
-      return c.json({ message: "Authentication required" }, 401);
-    }
-
-    // validate thread, activity and scores
-    const thread = await fetchThread(thread_id)
-    if (!thread) {
-      return c.json({ message: "Thread not found" }, 404);
-    }
-
-    const activity = getAllActivities(thread).find((a) => a.id === activity_id)
-
-    if (!activity) {
-      return c.json({ message: "Activity not found" }, 404);
-    }
+    const session = await requireSession(c.req.raw.headers);
+    const thread = await requireThread(thread_id)
+    const activity = await requireActivity(thread, activity_id);
 
     const inputScores = body.scores ?? {}
 
     for (const [scoreName, scoreValue] of Object.entries(inputScores)) {
-      try {
-        validateScore(thread, activity, scoreName, scoreValue, { mustNotExist: true })
-      } catch (error: any) {
-        return c.json({ message: error.message }, 400)
-      }
+      validateScore(thread, activity, scoreName, scoreValue, { mustNotExist: true })
     }
 
     await db.transaction(async (tx) => {
@@ -896,43 +912,26 @@ const commentsDELETERoute = createRoute({
 })
 
 app.openapi(commentsDELETERoute, async (c) => {
-  const { comment_id } = c.req.param()
+  const { comment_id, thread_id, activity_id } = c.req.param()
   
   try {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers })
-    if (!session) {
-      return c.json({ message: "Authentication required" }, 401);
-    }
-    
-    const message = await db.query.commentMessages.findFirst({
-      where: eq(commentMessages.id, comment_id),
-      with: {
-        scores: true,
-      }
-    })
-
-    if (!message) {
-      return c.json({ message: "Comment message not found" }, 404);
-    }
-
-    // Check if user can delete this comment (own comment or admin)
-    if (message.userId !== session.user.id) {
-      return c.json({ message: "You can only delete your own comments." }, 401);
-    }
+    const session = await requireSession(c.req.raw.headers);
+    const thread = await requireThread(thread_id)
+    const activity = await requireActivity(thread, activity_id);
+    const commentMessage = await requireCommentMessageFromUser(thread, activity, comment_id, session.user);
 
     await db.transaction(async (tx) => {
-      await tx.delete(commentMentions).where(eq(commentMentions.commentMessageId, comment_id));
-      await tx.delete(scores).where(eq(scores.commentId, comment_id));
+      await tx.delete(commentMentions).where(eq(commentMentions.commentMessageId, commentMessage.id));
+      await tx.delete(scores).where(eq(scores.commentId, commentMessage.id));
       await tx.update(commentMessages).set({
         deletedAt: new Date(),
         deletedBy: session.user.id
-      }).where(eq(commentMessages.id, comment_id));
+      }).where(eq(commentMessages.id, commentMessage.id));
 
     });
     return c.json({}, 200);
 
   } catch (error: any) {
-    console.error('Error deleting comment:', error);
     return c.json({ message: "Failed to delete comment: " + error.message }, 400);
   }
 })
@@ -1037,40 +1036,15 @@ app.openapi(commentsPUTRoute, async (c) => {
   const body = await c.req.json()
   
   try {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers })
-    if (!session) {
-      return c.json({ message: "Authentication required" }, 401);
-    }
-
-    // validate thread, activity and scores
-    const thread = await fetchThread(thread_id)
-    if (!thread) {
-      return c.json({ message: "Thread not found" }, 404);
-    }
-
-    const activity = getAllActivities(thread).find((a) => a.id === activity_id)
-
-    if (!activity) {
-      return c.json({ message: "Activity not found" }, 404);
-    }
+    const session = await requireSession(c.req.raw.headers);
+    const thread = await requireThread(thread_id)
+    const activity = await requireActivity(thread, activity_id);
+    const commentMessage = await requireCommentMessageFromUser(thread, activity, comment_id, session.user);
 
     const inputScores = body.scores ?? {}
 
     for (const [scoreName, scoreValue] of Object.entries(inputScores)) {
-      try {
-        validateScore(thread, activity, scoreName, scoreValue, { mustNotExist: false })
-      } catch (error: any) {
-        return c.json({ message: error.message }, 400)
-      }
-    }
-
-    const message = activity.commentMessages?.find((m) => m.id === comment_id && m.deletedAt === null)
-    if (!message) {
-      return c.json({ message: "Comment message not found" }, 404);
-    }
-
-    if (message.userId !== session.user.id) {
-      return c.json({ message: "You can only edit your own comments." }, 401);
+      validateScore(thread, activity, scoreName, scoreValue, { mustNotExist: false })
     }
 
 
