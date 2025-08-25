@@ -14,6 +14,16 @@ export async function clientAction({ request, params }: Route.ClientActionArgs):
 
     const { comment, scores } = extractionResponse.data;
 
+    // Validation: at least one of content or scores must be provided
+    if (!comment && Object.keys(scores).length === 0) {
+        return { 
+            ok: false, 
+            error: {
+                message: "At least one of comment or score must be provided",
+            }
+        };
+    }
+
     const response = await apiFetch(`/api/threads/${params.id}/activities/${params.activityId}/comments`, {
         method: 'POST',
         body: {

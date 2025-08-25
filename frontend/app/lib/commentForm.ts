@@ -35,16 +35,6 @@ export const commentFormDataToJSON = (formData: FormData): ActionResponse => {
         }
     }
 
-    // Validation: at least one of content or scores must be provided
-    if (!comment && Object.keys(scores).length === 0) {
-        return { 
-            ok: false, 
-            error: {
-                message: "At least one of comment or score must be provided",
-            }
-        };
-    }
-
     // If there are JSON parsing errors, return them
     if (Object.keys(scoreErrors).length > 0) {
         return { 
