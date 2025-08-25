@@ -1044,9 +1044,6 @@ app.openapi(commentsPUTRoute, async (c) => {
 
     const inputScores = body.scores ?? {}
 
-    console.log('COMMENT PUT!!!')
-    console.log(body)
-
     for (const [scoreName, scoreValue] of Object.entries(inputScores)) {
       validateScore(thread, activity, scoreName, scoreValue, { mustNotExist: false })
     }
