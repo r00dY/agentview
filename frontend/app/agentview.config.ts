@@ -2,6 +2,7 @@ import type { AgentViewConfig } from "./types";
 import { z } from "zod";
 import { SwitchInput, TextInput, ToggleBooleanInput } from "./components/form";
 import { ThumbsDown, ThumbsUp } from "lucide-react";
+import { DisplayBooleanComponent, DisplayTextComponent } from "./components/display";
 
 export const config : AgentViewConfig = {
     email: async (payload: any) => {
@@ -29,6 +30,7 @@ export const config : AgentViewConfig = {
                             title: "Reaction",
                             schema: z.boolean(),
                             input: ToggleBooleanInput,
+                            display: DisplayBooleanComponent,
                             options: {
                                 true: {
                                     icon: ThumbsUp
@@ -42,7 +44,8 @@ export const config : AgentViewConfig = {
                             name: "whatever",
                             title: "Whatever",
                             schema: z.string(),
-                            input: TextInput
+                            input: TextInput,
+                            display: DisplayTextComponent
                         }
                         // {
                         //     name: "helpfulness",

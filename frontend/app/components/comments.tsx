@@ -494,12 +494,12 @@ export function CommentMessageItem({ message, userId, activity, thread, user, us
 
                 </div>) : <div>
 
-                    {message.scores && message.scores.length > 0 && <div>
+                    {messageScoreConfigs.length > 0 && <div>
                         <PropertyList.Root className="mb-2">
-                            {message.scores.map((score) => (
-                                <PropertyList.Item key={score.id}>
-                                    <PropertyList.Title>{score.name}</PropertyList.Title>
-                                    <PropertyList.TextValue>{JSON.stringify(score.value)}</PropertyList.TextValue>
+                            {messageScoreConfigs.map((scoreConfig) => (
+                                <PropertyList.Item key={scoreConfig.name}>
+                                    <PropertyList.Title>{scoreConfig.title ?? scoreConfig.name}</PropertyList.Title>
+                                    <PropertyList.TextValue><scoreConfig.display value={scores[scoreConfig.name]} options={scoreConfig.options} /></PropertyList.TextValue>
                                 </PropertyList.Item>
                             ))}
                         </PropertyList.Root>
