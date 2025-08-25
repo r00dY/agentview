@@ -446,7 +446,7 @@ export function CommentMessageItem({ message, userId, activity, thread, user, us
                                 id: user.id,
                                 label: user.name
                             }))}
-                            name="content"
+                            name="comment"
                             placeholder={"Edit or tag others, using @"}
                             defaultValue={message.content ?? ""}
                             className="min-h-[10px] resize-none mb-0"
@@ -468,9 +468,6 @@ export function CommentMessageItem({ message, userId, activity, thread, user, us
                                 Cancel
                             </Button>
                         </div>
-                        {fetcher.data?.error?.message && (
-                            <div className="text-sm text-red-500">{fetcher.data.error.message}</div>
-                        )}
                     </fetcher.Form>
 
                 </div>) : <div>

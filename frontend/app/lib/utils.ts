@@ -17,6 +17,10 @@ export function isAsyncIterable(obj: any) {
  * @throws Error if @[...] format is invalid
  */
 export function extractMentions(content: string): Record<string, string[]> {
+  if (content === null || content === undefined) {
+    return {};
+  }
+
   const mentionRegex = /@\[([^\]]+)\]/g;
   const mentions: Record<string, string[]> = {};
   let match;
