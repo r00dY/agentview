@@ -31,11 +31,6 @@ export const config : any = {
                             title: "Whatever",
                             schema: z.string()
                         }
-                        // {
-                        //     name: "helpfulness",
-                        //     title: "How helpful was the response",
-                        //     schema: z.number().min(1).max(5)
-                        // }
                     ]
                 }
             ]

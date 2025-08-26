@@ -17,7 +17,7 @@ import { isAsyncIterable, extractMentions } from './utils'
 import { auth } from './auth'
 import { createInvitation, cancelInvitation, getPendingInvitations, getValidInvitation } from './invitations'
 import { fetchThread } from './threads'
-import { run as runFunction } from './run'
+import { callAgentApi, callAgentApiStream } from './agentApi'
 import { getStudioURL } from './getStudioURL'
 
 // shared imports
@@ -409,11 +409,11 @@ app.openapi(runsPOSTRoute, async (c) => {
     }
 
     try {
-      const runOutput = runFunction(input)
-      let versionId: string | null = null;
-
-      if (isAsyncIterable(runOutput)) {
-        console.log('is async iterable')
+      // Try streaming first, fallback to non-streaming
+      try {
+        console.log('trying streaming agent API')
+        const runOutput = callAgentApiStream(input)
+        let versionId: string | null = null;
 
         let firstItem = true;
         for await (const item of runOutput) {
@@ -456,16 +456,15 @@ app.openapi(runsPOSTRoute, async (c) => {
           // This is a regular activity
           await validateAndInsertActivity(item)
         }
-
-      }
-      else {
-        console.log('not async iterable')
-
-        const result = await runOutput;
+      } catch (streamError: any) {
+        console.log('streaming failed, trying non-streaming:', streamError.message)
+        
+        // Fallback to non-streaming API
+        const result = await callAgentApi(input);
 
         if (!result || typeof result !== 'object' || !('manifest' in result) || !('activities' in result)) {
           throw { 
-            message: "Non-async iterable run function must return { manifest, activities }" 
+            message: "Agent API must return { manifest, activities }" 
           };
         }
 
@@ -488,7 +487,7 @@ app.openapi(runsPOSTRoute, async (c) => {
             }
           }).returning();
           
-          versionId = version.id;
+          const versionId = version.id;
           
           // Update the run with version_id
           if (userActivity.run_id) {
@@ -530,11 +529,16 @@ app.openapi(runsPOSTRoute, async (c) => {
         return
       }
       
+      // Handle transport errors (connection dropped, etc.)
+      const failReason = error.message 
+        ? { message: error.message, details: error }
+        : { message: "Error in agent API call", details: error }
+      
       await db.update(run)
         .set({
           state: 'failed',
           finished_at: new Date(),
-          fail_reason: error.message ? error : { message: "Error in `run`", details: error }
+          fail_reason: failReason
           })
           .where(eq(run.id, userActivity.run_id));
       }
