@@ -136,7 +136,7 @@ async def run(request: RunRequest):
             last_user_message = request.thread.activities[-1].content if request.thread.activities else ""
 
             # Generate activities
-            num_messages = 1
+            num_messages = 3
 
             for i in range(num_messages):
                 # Check for error simulation
@@ -168,7 +168,7 @@ async def run(request: RunRequest):
                     role="assistant",
                     content=content
                 )
-                
+
                 yield f"event: activity\ndata: {json.dumps(activity.dict())}\n\n"
 
         except Exception as e:

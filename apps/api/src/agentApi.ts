@@ -46,6 +46,10 @@ export async function* callAgentAPI(request: { thread: any }): AsyncGenerator<Ag
   for await (const { event, data } of parseSSE(response.body)) {
     let parsedData: any;
 
+    if (event === "ping") {
+      continue
+    }
+
     try {
       parsedData = JSON.parse(data)
     } catch(e) {
