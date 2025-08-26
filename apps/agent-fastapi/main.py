@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional, Union
 import json
@@ -10,25 +10,26 @@ import random
 app = FastAPI(title="Agent FastAPI", version="1.0.0")
 
 # Pydantic models for request/response
-class Activity(BaseModel):
-    id: str
-    type: str
-    role: str
-    content: Any
-    created_at: str
-    run_id: Optional[str] = None
+# class Activity(BaseModel):
+#     id: str
+#     type: str
+#     role: str
+#     content: Any
+#     created_at: str
+#     run_id: Optional[str] = None
 
-class Thread(BaseModel):
-    id: str
-    created_at: str
-    updated_at: str
-    metadata: Dict[str, Any]
-    client_id: str
-    type: str
-    activities: List[Activity]
+# class Thread(BaseModel):
+#     id: str
+#     created_at: str
+#     updated_at: str
+#     metadata: Dict[str, Any]
+#     client_id: str
+#     type: str
+#     activities: List[Activity]
 
 class RunRequest(BaseModel):
-    thread: Thread
+    thread: Any
+
 
 class VersionManifest(BaseModel):
     type: str = "manifest"
@@ -117,10 +118,6 @@ async def root():
 
 @app.post("/run")
 async def run(request: RunRequest):
-    """
-    Run the agent and stream the response using Server-Sent Events.
-    This is the streaming version that mimics the async generator.
-    """
     async def generate():
         try:
             # Emit version manifest first
@@ -133,7 +130,11 @@ async def run(request: RunRequest):
                 }
             )
             
-            yield f"data: {json.dumps(manifest.dict())}\n\n"
+            yield f"event: manifest\ndata: {json.dumps(manifest.dict())}\n\n"
+
+
+            yield f"event: error\ndata: {json.dumps({"message": 'No i sraka.'})}\n\n"
+            return
 
             # Get the last user message
             last_user_message = request.thread.activities[-1].content if request.thread.activities else ""

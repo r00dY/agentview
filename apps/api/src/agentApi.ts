@@ -1,82 +1,123 @@
 
 const AGENT_API_URL = 'http://localhost:8000/run'
 
-// export interface AgentRunRequest {
-//   thread: {
-//     id: string
-//     created_at: Date
-//     updated_at: Date
-//     metadata: any
-//     client_id: string
-//     type: string
-//     activities: any[]
-//   }
-// }
-
-// export interface VersionManifest {
-//   type: 'manifest'
-//   version: string
-//   env?: string
-//   metadata?: any
-// }
-
-// export interface ActivityResponse {
-//   type: string
-//   role: string
-//   content: any
-// }
-
-// export interface AgentErrorResponse {
-//   message: string
-//   details?: any
-// }
-
-// export interface AgentRunResult {
-//   manifest: VersionManifest
-//   activities: ActivityResponse[]
-// }
-
-// export async function callAgentApi(request: AgentRunRequest): Promise<AgentRunResult> {
-//   const response = await fetch(`${AGENT_API_URL}/run`, {
-//     method: 'POST',
-//     headers: {
-//       'Content-Type': 'application/json',
-//     },
-//     body: JSON.stringify(request),
-//   })
-
-//   if (!response.ok) {
-//     const errorData = await response.json().catch(() => ({ message: 'Unknown error' }))
-//     throw new Error(errorData.message || `HTTP ${response.status}`)
-//   }
-
-//   return await response.json()
-// }
-
 export interface SSEEvent {
   event?: string
   data: string
 }
 
-export function parseSSE(line: string): SSEEvent | null {
-  const trimmed = line.trim()
-  if (!trimmed) return null
+export interface VersionManifest {
+  type: 'manifest'
+  version: string
+  env?: string
+  metadata?: any
+}
 
+export interface ActivityResponse {
+  type: string
+  role: string
+  content: any
+}
+
+export interface AgentErrorResponse {
+  message: string
+  [key: string]: any
+}
+
+
+function parseText(text: string): any {
+  try {
+    return JSON.parse(text)
+  } catch (e) {
+    return text
+  }
+}
+
+function getErrorObject(input: any): AgentErrorResponse {
+  input = parseText(input)
+
+  if (typeof input === 'object' && 'message' in input) {
+    return input
+  }
+  return {
+    message: "Unknown error",
+    details: input
+  }
+}
+
+export async function* parseSSE(body: ReadableStream<Uint8Array<ArrayBufferLike>>): AsyncGenerator<SSEEvent, void, unknown> {
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+
+  let buffer = ''
+
+  try {
+
+    while (true) {
+      const { done, value } = await reader.read()
+      
+      if (done) {
+        // Process any remaining data in buffer
+        if (buffer.trim()) {
+          const blocks = buffer.split('\n\n')
+          for (const block of blocks) {
+            if (block.trim()) {
+              const event = parseSSEBlock(block)
+              if (event) {
+                yield event
+              }
+            }
+          }
+        }
+        break
+      }
+
+      buffer += decoder.decode(value, { stream: true })
+      const blocks = buffer.split('\n\n')
+      
+      // Keep the last (potentially incomplete) block in buffer
+      buffer = blocks.pop() || ''
+
+      // Process complete blocks
+      for (const block of blocks) {
+        if (block.trim()) {
+          const event = parseSSEBlock(block)
+          if (event) {
+            yield event
+          }
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock()
+  }
+}
+
+
+/**
+ * Parse a single SSE block (separated by \n\n)
+ * Returns null if the block is empty or invalid
+ */
+function parseSSEBlock(block: string): SSEEvent | null {
+  console.log("parse block", block)
+  const lines = block.split('\n')
   let event: string | undefined
   let data = ''
 
-  if (trimmed.startsWith('event:')) {
-    event = trimmed.substring(6).trim()
-  } else if (trimmed.startsWith('data:')) {
-    data = trimmed.substring(5).trim()
-  } else {
-    return null
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+
+    if (trimmed.startsWith('event:')) {
+      event = trimmed.substring(6).trim()
+    } else if (trimmed.startsWith('data:')) {
+      data = trimmed.substring(5).trim()
+    }
   }
 
-  return { event, data }
-} 
-
-
+  // Only return an event if we have data
+  return data ? { event, data } : null
+}
 
 
 export async function* callAgentAPI(request: { thread: any }): AsyncGenerator<any, void, unknown> {
@@ -89,70 +130,55 @@ export async function* callAgentAPI(request: { thread: any }): AsyncGenerator<an
   })
 
   if (!response.ok) {
-    try {
-      const data = await response.json()
-
-      if (typeof data === 'object') {
-        throw {
-          ...data,
-          message: `[Agent API] Error response (${response.status}): ${data.message ?? 'Unknown error'}`
-        }
-      } else {
-        throw {
-          message: `[Agent API] Error response (${response.status}): Unknown error`,
-          body: data ?? undefined
-        }
-      }
-    } catch (e) {
-      throw {
-        message: `[Agent API] Error response (${response.status}): Unknown error`,
-      }
+    const error = getErrorObject(await response.text())
+    console.log("error", error)
+    throw {
+      ...error,
+      message: `HTTP error response (${response.status}): ${error.message}`,
     }
   }
+
+  const contentType = response.headers.get('Content-Type');
+  if (!contentType || !contentType.startsWith('text/event-stream')) {
+    throw {
+      message: `Expected Content-Type "text/event-stream", got "${contentType}"`
+    }
+  }
+
 
   if (!response.body) {
     throw {
-      message: `[Agent API] No response body`,
+      message: 'No response body'
     }
   }
 
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder()
+  console.log("------- STREAMING -------")
+  for await (const { event, data } of parseSSE(response.body)) {
+    try {
+      const parsedData = JSON.parse(data)
 
-  try {
-    let buffer = ''
+      console.log("event", event, parsedData)
 
-    while (true) {
-      const { done, value } = await reader.read()
-      
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        if (line.trim() === '') continue
-
-        const parsed = parseSSE(line)
-        if (!parsed) continue
-
-        if (parsed.event === 'error') {
-          const errorData: AgentErrorResponse = JSON.parse(parsed.data)
-          throw new Error(errorData.message)
-        }
-
-        if (parsed.event === 'activity') {
-          const activity: ActivityResponse = JSON.parse(parsed.data)
-          yield activity
-        } else if (!parsed.event) {
-          // This is the manifest (no event specified)
-          const manifest: VersionManifest = JSON.parse(parsed.data)
-          yield manifest
+      if (event === "error") {
+        const error = getErrorObject(parsedData)
+        throw {
+          ...error,
+          message: `${error.message ?? "Unknown error event"}`
         }
       }
+      else {
+        yield {
+          type: event,
+          data
+        }
+      }
+
+    } catch(e) {
+      throw {
+        message: 'Error parsing SSE event (event data must be an object)',
+        details: data
+      }
     }
-  } finally {
-    reader.releaseLock()
   }
-} 
+  console.log("------- STREAMING ENDS -------")
+}

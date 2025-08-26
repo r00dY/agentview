@@ -17,7 +17,7 @@ import { isAsyncIterable, extractMentions } from './utils'
 import { auth } from './auth'
 import { createInvitation, cancelInvitation, getPendingInvitations, getValidInvitation } from './invitations'
 import { fetchThread } from './threads'
-import { callAgentApi, callAgentApiStream } from './agentApi'
+import { callAgentAPI } from './agentApi'
 import { getStudioURL } from './getStudioURL'
 
 // shared imports
@@ -410,84 +410,33 @@ app.openapi(runsPOSTRoute, async (c) => {
 
     try {
       // Try streaming first, fallback to non-streaming
-      try {
-        console.log('trying streaming agent API')
-        const runOutput = callAgentApiStream(input)
-        let versionId: string | null = null;
+      const runOutput = callAgentAPI(input)
+      let versionId: string | null = null;
 
-        let firstItem = true;
-        for await (const item of runOutput) {
-          // The first yield MUST be a manifest
-          if (firstItem) {
-            if (!item || typeof item !== 'object' || !('type' in item) || item.type !== 'manifest') {
-              throw { 
-                message: "No 'manifest' was sent by the agent." 
-              };
-            }
-            
-            const versionManifest = item as { type: string; version: string; env?: string; metadata?: any };
-            console.log('Version manifest received:', versionManifest);
-            
-            // Create or find existing version
-            const [version] = await db.insert(versions).values({
-              version: versionManifest.version,
-              env: versionManifest.env || 'dev',
-              metadata: versionManifest.metadata || null,
-            }).onConflictDoUpdate({
-              target: [versions.version, versions.env],
-              set: {
-                metadata: versionManifest.metadata || null,
-              }
-            }).returning();
-            
-            versionId = version.id;
-            
-            // Update the run with version_id
-            if (userActivity.run_id) {
-              await db.update(run)
-                .set({ version_id: versionId })
-                .where(eq(run.id, userActivity.run_id));
-            }
-            
-            firstItem = false;
-            continue; // Skip this item as it's not an activity
-          }
-          
-          // This is a regular activity
-          await validateAndInsertActivity(item)
-        }
-      } catch (streamError: any) {
-        console.log('streaming failed, trying non-streaming:', streamError.message)
-        
-        // Fallback to non-streaming API
-        const result = await callAgentApi(input);
+      let firstItem = true;
+      for await (const event of runOutput) {
 
-        if (!result || typeof result !== 'object' || !('manifest' in result) || !('activities' in result)) {
+        // The first yield MUST be a manifest
+        if (firstItem && event.type !== 'manifest') {
           throw { 
-            message: "Agent API must return { manifest, activities }" 
+            message: "No 'manifest' was sent by the agent." 
           };
         }
 
-        const { manifest, activities } = result;
-
-        // Handle manifest
-        if (manifest && typeof manifest === 'object' && 'version' in manifest) {
-          const versionManifest = manifest as { version: string; env?: string; metadata?: any };
-          console.log('Version manifest received:', versionManifest);
-          
+        if (event.type === 'manifest') {
           // Create or find existing version
           const [version] = await db.insert(versions).values({
-            version: versionManifest.version,
-            env: versionManifest.env || 'dev',
-            metadata: versionManifest.metadata || null,
+            version: event.data.version,
+            env: event.data.env || 'dev',
+            metadata: event.data.metadata || null,
           }).onConflictDoUpdate({
             target: [versions.version, versions.env],
             set: {
-              metadata: versionManifest.metadata || null,
+              metadata: event.data.metadata || null,
             }
           }).returning();
           
-          const versionId = version.id;
+          versionId = version.id;
           
           // Update the run with version_id
           if (userActivity.run_id) {
@@ -495,44 +444,41 @@ app.openapi(runsPOSTRoute, async (c) => {
               .set({ version_id: versionId })
               .where(eq(run.id, userActivity.run_id));
           }
+          
+          firstItem = false;
+          continue; // Skip this item as it's not an activity
         }
-
-        // Handle activities
-        if (!Array.isArray(activities)) {
-          throw { 
-            message: "Activities must be an array" 
-          };
+        else if (event.type === 'activity') {
+          // This is a regular activity
+          await validateAndInsertActivity(event.data)
         }
-
-        for (const activityData of activities) {
-          await validateAndInsertActivity(activityData)
+        else {
+          throw {
+            message: `Unknown event type: ${event.type}`
+          }
         }
       }
 
-      console.log('updating run as completed')
+        if (!(await isStillRunning())) {
+          return
+        }
 
-      if (!(await isStillRunning())) {
-        return
-      }
-
-      await db.update(run)
-        .set({
-          state: 'completed',
-          finished_at: new Date(),
-        })
-        .where(eq(run.id, userActivity.run_id));
+        await db.update(run)
+          .set({
+            state: 'completed',
+            finished_at: new Date(),
+          })
+          .where(eq(run.id, userActivity.run_id));
     }
     catch (error: any) {
-      console.log('Catch!', error)
-
       if (!(await isStillRunning())) {
         return
       }
       
       // Handle transport errors (connection dropped, etc.)
-      const failReason = error.message 
-        ? { message: error.message, details: error }
-        : { message: "Error in agent API call", details: error }
+      const failReason = typeof error?.message === 'string' 
+        ? error
+        : { message: "[internal error]", details: error }
       
       await db.update(run)
         .set({
@@ -541,7 +487,145 @@ app.openapi(runsPOSTRoute, async (c) => {
           fail_reason: failReason
           })
           .where(eq(run.id, userActivity.run_id));
-      }
+    }
+
+
+
+
+    // try {
+    //   // Try streaming first, fallback to non-streaming
+    //   try {
+    //     console.log('trying streaming agent API')
+    //     const runOutput = callAgentApiStream(input)
+    //     let versionId: string | null = null;
+
+    //     let firstItem = true;
+    //     for await (const item of runOutput) {
+    //       // The first yield MUST be a manifest
+    //       if (firstItem) {
+    //         if (!item || typeof item !== 'object' || !('type' in item) || item.type !== 'manifest') {
+    //           throw { 
+    //             message: "No 'manifest' was sent by the agent." 
+    //           };
+    //         }
+            
+    //         const versionManifest = item as { type: string; version: string; env?: string; metadata?: any };
+    //         console.log('Version manifest received:', versionManifest);
+            
+    //         // Create or find existing version
+    //         const [version] = await db.insert(versions).values({
+    //           version: versionManifest.version,
+    //           env: versionManifest.env || 'dev',
+    //           metadata: versionManifest.metadata || null,
+    //         }).onConflictDoUpdate({
+    //           target: [versions.version, versions.env],
+    //           set: {
+    //             metadata: versionManifest.metadata || null,
+    //           }
+    //         }).returning();
+            
+    //         versionId = version.id;
+            
+    //         // Update the run with version_id
+    //         if (userActivity.run_id) {
+    //           await db.update(run)
+    //             .set({ version_id: versionId })
+    //             .where(eq(run.id, userActivity.run_id));
+    //         }
+            
+    //         firstItem = false;
+    //         continue; // Skip this item as it's not an activity
+    //       }
+          
+    //       // This is a regular activity
+    //       await validateAndInsertActivity(item)
+    //     }
+    //   } catch (streamError: any) {
+    //     console.log('streaming failed, trying non-streaming:', streamError.message)
+        
+    //     // Fallback to non-streaming API
+    //     const result = await callAgentApi(input);
+
+    //     if (!result || typeof result !== 'object' || !('manifest' in result) || !('activities' in result)) {
+    //       throw { 
+    //         message: "Agent API must return { manifest, activities }" 
+    //       };
+    //     }
+
+    //     const { manifest, activities } = result;
+
+    //     // Handle manifest
+    //     if (manifest && typeof manifest === 'object' && 'version' in manifest) {
+    //       const versionManifest = manifest as { version: string; env?: string; metadata?: any };
+    //       console.log('Version manifest received:', versionManifest);
+          
+    //       // Create or find existing version
+    //       const [version] = await db.insert(versions).values({
+    //         version: versionManifest.version,
+    //         env: versionManifest.env || 'dev',
+    //         metadata: versionManifest.metadata || null,
+    //       }).onConflictDoUpdate({
+    //         target: [versions.version, versions.env],
+    //         set: {
+    //           metadata: versionManifest.metadata || null,
+    //         }
+    //       }).returning();
+          
+    //       const versionId = version.id;
+          
+    //       // Update the run with version_id
+    //       if (userActivity.run_id) {
+    //         await db.update(run)
+    //           .set({ version_id: versionId })
+    //           .where(eq(run.id, userActivity.run_id));
+    //       }
+    //     }
+
+    //     // Handle activities
+    //     if (!Array.isArray(activities)) {
+    //       throw { 
+    //         message: "Activities must be an array" 
+    //       };
+    //     }
+
+    //     for (const activityData of activities) {
+    //       await validateAndInsertActivity(activityData)
+    //     }
+    //   }
+
+    //   console.log('updating run as completed')
+
+    //   if (!(await isStillRunning())) {
+    //     return
+    //   }
+
+    //   await db.update(run)
+    //     .set({
+    //       state: 'completed',
+    //       finished_at: new Date(),
+    //     })
+    //     .where(eq(run.id, userActivity.run_id));
+    // }
+    // catch (error: any) {
+    //   console.log('Catch!', error)
+
+    //   if (!(await isStillRunning())) {
+    //     return
+    //   }
+      
+    //   // Handle transport errors (connection dropped, etc.)
+    //   const failReason = error.message 
+    //     ? { message: error.message, details: error }
+    //     : { message: "Error in agent API call", details: error }
+      
+    //   await db.update(run)
+    //     .set({
+    //       state: 'failed',
+    //       finished_at: new Date(),
+    //       fail_reason: failReason
+    //       })
+    //       .where(eq(run.id, userActivity.run_id));
+    //   }
 
   })();
 
@@ -617,40 +701,15 @@ const runWatchRoute = createRoute({
 app.openapi(runWatchRoute, async (c) => {
   const { thread_id } = c.req.param()
 
-  const threadRow = await fetchThread(thread_id);
-
-  if (!threadRow) {
-    return c.json({ message: "Thread not found" }, 404);
-  }
+  const threadRow = await requireThread(thread_id)
 
   const lastRun = getLastRun(threadRow)
-  const activities = getAllActivities(threadRow)
+  // const activities = getAllActivities(threadRow)
 
-  if (!threadRow) {
-    return c.json({ message: "Thread not found" }, 404);
-  }
 
-  if (lastRun?.state !== 'in_progress') {
-    return c.json({ message: "Thread active run must be in 'in_progress' state to watch" }, 400);
-  }
-
-  // let lastActivityIndex: number;
-
-  // if (c.req.query().last_activity_id) {
-  //   lastActivityIndex = activities.findIndex((a) => a.id === c.req.query().last_activity_id)
-
-  //   if (lastActivityIndex === -1) {
-  //     return c.json({ message: "Last activity id not found" }, 400);
-  //   }
+  // if (lastRun?.state !== 'in_progress') {
+  //   return c.json({ message: "Thread active run must be in 'in_progress' state to watch" }, 400);
   // }
-  // else {
-  //   lastActivityIndex = activities.length - 1
-  // }
-
-  // // Only include activities before lastActivityId in ignoredActivityIds
-  // const ignoredActivityIds = activities
-  //   .slice(0, activities.findIndex((a) => a.id === activities[lastActivityIndex].id))
-  //   .map((a) => a.id);
 
 
   // 4. Start SSE stream
