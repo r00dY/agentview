@@ -17,7 +17,7 @@ import { extractMentions } from './utils'
 import { auth } from './auth'
 import { createInvitation, cancelInvitation, getPendingInvitations, getValidInvitation } from './invitations'
 import { fetchThread } from './threads'
-import { callAgentAPI } from './agentApi'
+import { callAgentAPI , AgentAPIError} from './agentApi'
 import { getStudioURL } from './getStudioURL'
 
 // shared imports
@@ -470,15 +470,21 @@ app.openapi(runsPOSTRoute, async (c) => {
           })
           .where(eq(run.id, userActivity.run_id));
     }
-    catch (error: any) {
+    catch (error: unknown) {
       if (!(await isStillRunning())) {
         return
       }
 
-      // Handle transport errors (connection dropped, etc.)
-      const failReason = typeof error?.message === 'string' 
-        ? error
-        : { message: "[internal error]", details: error }
+      let failReason: { message: string, [key: string ]: any }
+
+      if (error instanceof AgentAPIError) {
+        failReason = error.object
+      }
+      else {
+        failReason = {
+          message: "AgentView internal error, please report to the team"
+        }
+      }
       
       await db.update(run)
         .set({

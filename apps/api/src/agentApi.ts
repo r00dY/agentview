@@ -6,6 +6,16 @@ export interface AgentErrorResponse {
   [key: string]: any
 }
 
+export class AgentAPIError extends Error {
+  object: { message: string; [key: string]: any }
+
+  constructor(object: { message: string; [key: string]: any }) {
+    super(object.message);
+    this.name = 'AgentAPIError';
+    this.object = object
+  }
+}
+
 export type AgentAPIEvent = {
   name: string,
   data: any
@@ -24,33 +34,32 @@ export async function* callAgentAPI(request: { thread: any }): AsyncGenerator<Ag
     })
   }
   catch(error: unknown) {
-    throw {
+    throw new AgentAPIError({
       message: "Agent API network error",
       details: (error as Error).message
-    }
+    })
   }
 
   if (!response.ok) {
     const error = getErrorObject(tryParseJSON(await response.text()))
-    console.log("error", error)
-    throw {
+    throw new AgentAPIError({
       ...error,
       message: `HTTP error response (${response.status}): ${error.message}`,
-    }
+    })  
   }
 
   const contentType = response.headers.get('Content-Type');
 
   if (!contentType) {
-    throw {
+    throw new AgentAPIError({
       message: 'No Content-Type header'
-    }
+    })
   }
 
   if (!response.body) {
-    throw {
+    throw new AgentAPIError({
       message: 'No response body'
-    }
+    })
   }
 
     /** NON-STREAMING RESPONSE **/
@@ -87,19 +96,19 @@ export async function* callAgentAPI(request: { thread: any }): AsyncGenerator<Ag
       try {
         parsedData = JSON.parse(data)
       } catch(e) {
-        throw {
+        throw new AgentAPIError({
           message: 'Error parsing SSE event (event data must be an object)',
           eventData: data
-        }
+        })
       }
 
       if (event === "error") {
         const error = getErrorObject(parsedData)
 
-        throw {
+        throw new AgentAPIError({
           ...error,
           message: `${error.message ?? "Unknown error event"}`
-        }
+        })
       }
       else {
         yield {
@@ -111,9 +120,9 @@ export async function* callAgentAPI(request: { thread: any }): AsyncGenerator<Ag
 
   }
   else {
-    throw {
+    throw new AgentAPIError({
       message: `Expected Content-Type "application/json" or "text/event-stream", got "${contentType}"`
-    }
+    })
   }
 
 }
@@ -207,10 +216,10 @@ function parseSSEBlock(block: string): SSERawEvent {
   }
 
   if (!event) {
-    throw {
+    throw new AgentAPIError({
       message: 'Incorrect SSE block format',
       eventData: block
-    }
+    })
   }
   
   // Only return an event if we have data
