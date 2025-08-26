@@ -34,8 +34,6 @@ function parseText(text: string): any {
 }
 
 function getErrorObject(input: any): AgentErrorResponse {
-  input = parseText(input)
-
   if (typeof input === 'object' && 'message' in input) {
     return input
   }
@@ -49,9 +47,9 @@ export async function* parseSSE(body: ReadableStream<Uint8Array<ArrayBufferLike>
   const reader = body.getReader()
   const decoder = new TextDecoder()
 
-  let buffer = ''
 
   try {
+    let buffer = ''
 
     while (true) {
       const { done, value } = await reader.read()
@@ -99,7 +97,6 @@ export async function* parseSSE(body: ReadableStream<Uint8Array<ArrayBufferLike>
  * Returns null if the block is empty or invalid
  */
 function parseSSEBlock(block: string): SSEEvent | null {
-  console.log("parse block", block)
   const lines = block.split('\n')
   let event: string | undefined
   let data = ''
@@ -130,7 +127,7 @@ export async function* callAgentAPI(request: { thread: any }): AsyncGenerator<an
   })
 
   if (!response.ok) {
-    const error = getErrorObject(await response.text())
+    const error = getErrorObject(parseText(await response.text()))
     console.log("error", error)
     throw {
       ...error,
@@ -154,29 +151,32 @@ export async function* callAgentAPI(request: { thread: any }): AsyncGenerator<an
 
   console.log("------- STREAMING -------")
   for await (const { event, data } of parseSSE(response.body)) {
+    console.log("event:", event)
+    console.log("data:", data)
+
+    let parsedData: any;
+
     try {
-      const parsedData = JSON.parse(data)
-
-      console.log("event", event, parsedData)
-
-      if (event === "error") {
-        const error = getErrorObject(parsedData)
-        throw {
-          ...error,
-          message: `${error.message ?? "Unknown error event"}`
-        }
-      }
-      else {
-        yield {
-          type: event,
-          data
-        }
-      }
-
+      parsedData = JSON.parse(data)
     } catch(e) {
       throw {
         message: 'Error parsing SSE event (event data must be an object)',
-        details: data
+        eventData: data
+      }
+    }
+
+    if (event === "error") {
+      const error = getErrorObject(parsedData)
+
+      throw {
+        ...error,
+        message: `${error.message ?? "Unknown error event"}`
+      }
+    }
+    else {
+      yield {
+        type: event,
+        data: parsedData
       }
     }
   }

@@ -10,25 +10,25 @@ import random
 app = FastAPI(title="Agent FastAPI", version="1.0.0")
 
 # Pydantic models for request/response
-# class Activity(BaseModel):
-#     id: str
-#     type: str
-#     role: str
-#     content: Any
-#     created_at: str
-#     run_id: Optional[str] = None
+class Activity(BaseModel):
+    id: str
+    type: str
+    role: str
+    content: Any
+    created_at: str
+    run_id: Optional[str] = None
 
-# class Thread(BaseModel):
-#     id: str
-#     created_at: str
-#     updated_at: str
-#     metadata: Dict[str, Any]
-#     client_id: str
-#     type: str
-#     activities: List[Activity]
+class Thread(BaseModel):
+    id: str
+    created_at: str
+    updated_at: str
+    metadata: Dict[str, Any]
+    client_id: str
+    type: str
+    activities: List[Activity]
 
 class RunRequest(BaseModel):
-    thread: Any
+    thread: Thread
 
 
 class VersionManifest(BaseModel):
@@ -132,15 +132,11 @@ async def run(request: RunRequest):
             
             yield f"event: manifest\ndata: {json.dumps(manifest.dict())}\n\n"
 
-
-            yield f"event: error\ndata: {json.dumps({"message": 'No i sraka.'})}\n\n"
-            return
-
             # Get the last user message
             last_user_message = request.thread.activities[-1].content if request.thread.activities else ""
 
             # Generate activities
-            num_messages = 3
+            num_messages = 1
 
             for i in range(num_messages):
                 # Check for error simulation

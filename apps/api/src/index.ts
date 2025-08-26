@@ -474,6 +474,9 @@ app.openapi(runsPOSTRoute, async (c) => {
       if (!(await isStillRunning())) {
         return
       }
+
+      console.log('CATCH!', error)
+      
       
       // Handle transport errors (connection dropped, etc.)
       const failReason = typeof error?.message === 'string' 
