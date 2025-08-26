@@ -12,13 +12,23 @@ export type AgentAPIEvent = {
 }
 
 export async function* callAgentAPI(request: { thread: any }): AsyncGenerator<AgentAPIEvent, void, unknown> {
-  const response = await fetch(AGENT_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(request),
-  })
+  let response : Response;
+
+  try {
+    response = await fetch(AGENT_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    })
+  }
+  catch(error: unknown) {
+    throw {
+      message: "Agent API network error",
+      details: (error as Error).message
+    }
+  }
 
   if (!response.ok) {
     const error = getErrorObject(tryParseJSON(await response.text()))
@@ -67,7 +77,6 @@ export async function* callAgentAPI(request: { thread: any }): AsyncGenerator<Ag
 
   /** STREAMING RESPONSE **/
   else if (contentType.startsWith('text/event-stream')) {
-    
     for await (const { event, data } of parseSSE(response.body)) {
       let parsedData: any;
 
