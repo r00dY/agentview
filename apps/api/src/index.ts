@@ -25,9 +25,6 @@ import { config } from './shared/agentview.config'
 import { getStudioURL } from './getStudioURL'
 
 
-
-
-
 export const app = new OpenAPIHono({
   defaultHook: (result, c) => {
     if (!result.success) {
