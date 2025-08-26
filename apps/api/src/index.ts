@@ -39,7 +39,7 @@ export const app = new OpenAPIHono({
 })
 
 app.use('*', cors({
-  origin: getStudioURL(),
+  origin: [getStudioURL()],
   credentials: true,
 }))
 
