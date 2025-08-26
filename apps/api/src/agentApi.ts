@@ -1,5 +1,5 @@
 
-const AGENT_API_URL = 'http://localhost:8000/run'
+const AGENT_API_URL = 'http://localhost:8000/run_stream'
 
 export interface AgentErrorResponse {
   message: string
