@@ -13,7 +13,7 @@ import { client, thread, activity, run, email, commentMessages, commentMessageEd
 import { eq, desc, and, inArray} from 'drizzle-orm'
 import { response_data, response_error, body } from './hono_utils'
 import { isUUID } from './isUUID'
-import { isAsyncIterable, extractMentions } from './utils'
+import { extractMentions } from './utils'
 import { auth } from './auth'
 import { createInvitation, cancelInvitation, getPendingInvitations, getValidInvitation } from './invitations'
 import { fetchThread } from './threads'
