@@ -1,6 +1,5 @@
 import 'dotenv/config'
 import { serve } from '@hono/node-server'
-import { Hono, type Context } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 
 import { cors } from 'hono/cors'
@@ -12,18 +11,22 @@ import { swaggerUI } from '@hono/swagger-ui'
 import { db } from './db'
 import { client, thread, activity, run, email, commentMessages, commentMessageEdits, commentMentions, versions, scores } from './db/schema'
 import { asc, eq, ne, desc, and, inArray, isNull } from 'drizzle-orm'
-import { response_data, response_error, body } from '../lib/hono_utils'
-import { config } from '../agentview.config'
-import { isUUID } from '../lib/isUUID'
-import { isAsyncIterable } from '../lib/utils'
+import { response_data, response_error, body } from './hono_utils'
+import { isUUID } from './isUUID'
+import { isAsyncIterable, extractMentions } from './utils'
 import { auth } from './auth'
-import { getRootUrl } from './getRootUrl'
 import { createInvitation, cancelInvitation, getPendingInvitations, getValidInvitation } from './invitations'
-import { getAllActivities, getLastRun } from '~/lib/threadUtils'
-import { ClientSchema, ActivitySchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, CommentMessageSchema, RunSchema, ScoreSchema, ScoreCreateSchema, type User, type Thread, type Activity } from '~/apiTypes'
 import { fetchThread, fetchThreads } from './threads'
 import { run as runFunction } from './run'
-import { extractMentions } from '../lib/utils'
+
+import { getAllActivities, getLastRun } from './shared/threadUtils'
+import { ClientSchema, ActivitySchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, CommentMessageSchema, RunSchema, ScoreSchema, ScoreCreateSchema, type User, type Thread, type Activity } from './shared/apiTypes'
+import { config } from './shared/agentview.config'
+import { getStudioURL } from './getStudioURL'
+
+
+
+
 
 export const app = new OpenAPIHono({
   defaultHook: (result, c) => {
@@ -32,14 +35,14 @@ export const app = new OpenAPIHono({
       return c.json({
         message: 'Validation error',
         issues: result.error.issues
-      }, 422)
+      }, 422) 
 
     }
   }
 })
 
 app.use('*', cors({
-  origin: getRootUrl(),
+  origin: getStudioURL(),
   credentials: true,
 }))
 
@@ -1663,27 +1666,23 @@ app.doc('/openapi', {
 })
 
 app.get('/docs', swaggerUI({ url: '/openapi' }))
-
 app.get('/', (c) => c.text('Hello Agent View!'))
 
+const port = (() => {
+  // Get the port from API_PORT
+  const apiPort = process.env.API_PORT;
+  if (!apiPort) throw new Error('API_PORT is not set');
+
+  try {
+    return Number(apiPort);
+  } catch (e) {
+    throw new Error('Invalid API_PORT: ' + e);
+  }
+})()
 
 serve({
   fetch: app.fetch,
-  port: (() => {
-    // Get the port from VITE_AGENTVIEW_API_BASE_URL
-    const url = process.env.VITE_AGENTVIEW_API_BASE_URL;
-    if (!url) throw new Error('VITE_AGENTVIEW_API_BASE_URL is not set');
-    try {
-      const parsed = new URL(url);
-      if (parsed.port) return Number(parsed.port);
-      // Default ports for http/https
-      if (parsed.protocol === 'http:') return 80;
-      if (parsed.protocol === 'https:') return 443;
-      throw new Error('No port specified in VITE_AGENTVIEW_API_BASE_URL and protocol is not http/https');
-    } catch (e) {
-      throw new Error('Invalid VITE_AGENTVIEW_API_BASE_URL: ' + e);
-    }
-  })()
+  port
 })
 
-console.log("Agent View API running...")
+console.log("Agent View API running on port " + port)
