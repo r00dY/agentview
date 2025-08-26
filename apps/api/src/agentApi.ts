@@ -21,7 +21,7 @@ export async function* callAgentAPI(request: { thread: any }): AsyncGenerator<Ag
   })
 
   if (!response.ok) {
-    const error = getErrorObject(parseText(await response.text()))
+    const error = getErrorObject(tryParseJSON(await response.text()))
     console.log("error", error)
     throw {
       ...error,
@@ -73,7 +73,7 @@ export async function* callAgentAPI(request: { thread: any }): AsyncGenerator<Ag
 }
 
 
-function parseText(text: string): any {
+function tryParseJSON(text: string): any {
   try {
     return JSON.parse(text)
   } catch (e) {
