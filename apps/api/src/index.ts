@@ -417,13 +417,13 @@ app.openapi(runsPOSTRoute, async (c) => {
       for await (const event of runOutput) {
 
         // The first yield MUST be a manifest
-        if (firstItem && event.type !== 'manifest') {
+        if (firstItem && event.name !== 'manifest') {
           throw { 
             message: "No 'manifest' was sent by the agent." 
           };
         }
 
-        if (event.type === 'manifest') {
+        if (event.name === 'manifest') {
           // Create or find existing version
           const [version] = await db.insert(versions).values({
             version: event.data.version,
@@ -448,13 +448,13 @@ app.openapi(runsPOSTRoute, async (c) => {
           firstItem = false;
           continue; // Skip this item as it's not an activity
         }
-        else if (event.type === 'activity') {
+        else if (event.name === 'activity') {
           // This is a regular activity
           await validateAndInsertActivity(event.data)
         }
         else {
           throw {
-            message: `Unknown event type: ${event.type}`
+            message: `Unknown event type: ${event.name}`
           }
         }
       }
@@ -475,9 +475,6 @@ app.openapi(runsPOSTRoute, async (c) => {
         return
       }
 
-      console.log('CATCH!', error)
-      
-      
       // Handle transport errors (connection dropped, etc.)
       const failReason = typeof error?.message === 'string' 
         ? error

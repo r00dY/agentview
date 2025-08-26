@@ -1,123 +1,17 @@
 
 const AGENT_API_URL = 'http://localhost:8000/run'
 
-export interface SSEEvent {
-  event?: string
-  data: string
-}
-
-export interface VersionManifest {
-  type: 'manifest'
-  version: string
-  env?: string
-  metadata?: any
-}
-
-export interface ActivityResponse {
-  type: string
-  role: string
-  content: any
-}
-
 export interface AgentErrorResponse {
   message: string
   [key: string]: any
 }
 
-
-function parseText(text: string): any {
-  try {
-    return JSON.parse(text)
-  } catch (e) {
-    return text
-  }
+export type AgentAPIEvent = {
+  name: string,
+  data: any
 }
 
-function getErrorObject(input: any): AgentErrorResponse {
-  if (typeof input === 'object' && 'message' in input) {
-    return input
-  }
-  return {
-    message: "Unknown error",
-    details: input
-  }
-}
-
-export async function* parseSSE(body: ReadableStream<Uint8Array<ArrayBufferLike>>): AsyncGenerator<SSEEvent, void, unknown> {
-  const reader = body.getReader()
-  const decoder = new TextDecoder()
-
-
-  try {
-    let buffer = ''
-
-    while (true) {
-      const { done, value } = await reader.read()
-      
-      if (done) {
-        // Process any remaining data in buffer
-        if (buffer.trim()) {
-          const blocks = buffer.split('\n\n')
-          for (const block of blocks) {
-            if (block.trim()) {
-              const event = parseSSEBlock(block)
-              if (event) {
-                yield event
-              }
-            }
-          }
-        }
-        break
-      }
-
-      buffer += decoder.decode(value, { stream: true })
-      const blocks = buffer.split('\n\n')
-      
-      // Keep the last (potentially incomplete) block in buffer
-      buffer = blocks.pop() || ''
-
-      // Process complete blocks
-      for (const block of blocks) {
-        if (block.trim()) {
-          const event = parseSSEBlock(block)
-          if (event) {
-            yield event
-          }
-        }
-      }
-    }
-  } finally {
-    reader.releaseLock()
-  }
-}
-
-
-/**
- * Parse a single SSE block (separated by \n\n)
- * Returns null if the block is empty or invalid
- */
-function parseSSEBlock(block: string): SSEEvent | null {
-  const lines = block.split('\n')
-  let event: string | undefined
-  let data = ''
-
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!trimmed) continue
-
-    if (trimmed.startsWith('event:')) {
-      event = trimmed.substring(6).trim()
-    } else if (trimmed.startsWith('data:')) {
-      data = trimmed.substring(5).trim()
-    }
-  }
-
-  // Only return an event if we have data
-  return data ? { event, data } : null
-}
-
-
-export async function* callAgentAPI(request: { thread: any }): AsyncGenerator<any, void, unknown> {
+export async function* callAgentAPI(request: { thread: any }): AsyncGenerator<AgentAPIEvent, void, unknown> {
   const response = await fetch(AGENT_API_URL, {
     method: 'POST',
     headers: {
@@ -171,9 +65,109 @@ export async function* callAgentAPI(request: { thread: any }): AsyncGenerator<an
     }
     else {
       yield {
-        type: event,
+        name: event,
         data: parsedData
       }
     }
   }
+}
+
+
+function parseText(text: string): any {
+  try {
+    return JSON.parse(text)
+  } catch (e) {
+    return text
+  }
+}
+
+function getErrorObject(input: any): AgentErrorResponse {
+  if (typeof input === 'object' && 'message' in input) {
+    return input
+  }
+  return {
+    message: "Unknown error",
+    details: input
+  }
+}
+
+interface SSERawEvent {
+  event: string
+  data: string
+}
+
+async function* parseSSE(body: ReadableStream<Uint8Array<ArrayBufferLike>>): AsyncGenerator<SSERawEvent, void, unknown> {
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+
+
+  try {
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      
+      if (done) {
+        // Process any remaining data in buffer
+        if (buffer.trim()) {
+          const blocks = buffer.split('\n\n')
+          for (const block of blocks) {
+            if (block.trim()) {
+              const event = parseSSEBlock(block)
+              if (event) {
+                yield event
+              }
+            }
+          }
+        }
+        break
+      }
+
+      buffer += decoder.decode(value, { stream: true })
+      const blocks = buffer.split('\n\n')
+      
+      // Keep the last (potentially incomplete) block in buffer
+      buffer = blocks.pop() || ''
+
+      // Process complete blocks
+      for (const block of blocks) {
+        if (block.trim()) {
+          const event = parseSSEBlock(block)
+          if (event) {
+            yield event
+          }
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock()
+  }
+}
+
+
+function parseSSEBlock(block: string): SSERawEvent {
+  const lines = block.split('\n')
+  let event: string | undefined
+  let data = ''
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+
+    if (trimmed.startsWith('event:')) {
+      event = trimmed.substring(6).trim()
+    } else if (trimmed.startsWith('data:')) {
+      data = trimmed.substring(5).trim()
+    }
+  }
+
+  if (!event) {
+    throw {
+      message: 'Incorrect SSE block format',
+      eventData: block
+    }
+  }
+  
+  // Only return an event if we have data
+  return { event, data }
 }
