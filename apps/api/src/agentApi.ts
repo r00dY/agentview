@@ -149,11 +149,7 @@ export async function* callAgentAPI(request: { thread: any }): AsyncGenerator<an
     }
   }
 
-  console.log("------- STREAMING -------")
   for await (const { event, data } of parseSSE(response.body)) {
-    console.log("event:", event)
-    console.log("data:", data)
-
     let parsedData: any;
 
     try {
@@ -180,5 +176,4 @@ export async function* callAgentAPI(request: { thread: any }): AsyncGenerator<an
       }
     }
   }
-  console.log("------- STREAMING ENDS -------")
 }
