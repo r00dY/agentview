@@ -100,7 +100,6 @@ async function* parseSSE(body: ReadableStream<Uint8Array<ArrayBufferLike>>): Asy
   const reader = body.getReader()
   const decoder = new TextDecoder()
 
-
   try {
     let buffer = ''
 
