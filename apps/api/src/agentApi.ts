@@ -30,12 +30,12 @@ export async function* callAgentAPI(request: { thread: any }): AsyncGenerator<Ag
   }
 
   const contentType = response.headers.get('Content-Type');
-  if (!contentType || !contentType.startsWith('text/event-stream')) {
+
+  if (!contentType) {
     throw {
-      message: `Expected Content-Type "text/event-stream", got "${contentType}"`
+      message: 'No Content-Type header'
     }
   }
-
 
   if (!response.body) {
     throw {
@@ -43,37 +43,70 @@ export async function* callAgentAPI(request: { thread: any }): AsyncGenerator<Ag
     }
   }
 
-  for await (const { event, data } of parseSSE(response.body)) {
-    let parsedData: any;
+    /** NON-STREAMING RESPONSE **/
+  if (contentType.startsWith('application/json')) {
+    const data = await response.json()
 
-    if (event === "ping") {
-      continue
-    }
-
-    try {
-      parsedData = JSON.parse(data)
-    } catch(e) {
-      throw {
-        message: 'Error parsing SSE event (event data must be an object)',
-        eventData: data
-      }
-    }
-
-    if (event === "error") {
-      const error = getErrorObject(parsedData)
-
-      throw {
-        ...error,
-        message: `${error.message ?? "Unknown error event"}`
-      }
-    }
-    else {
+    // emit manifest
+    if (data.manifest) {
       yield {
-        name: event,
-        data: parsedData
+        name: "manifest",
+        data: data.manifest
+      }
+    }
+
+    if (data.activities) {
+      for (const activity of data.activities) {
+        yield {
+          name: "activity",
+          data: activity
+        }
       }
     }
   }
+
+  /** STREAMING RESPONSE **/
+  else if (contentType.startsWith('text/event-stream')) {
+    
+    for await (const { event, data } of parseSSE(response.body)) {
+      let parsedData: any;
+
+      if (event === "ping") {
+        continue
+      }
+
+      try {
+        parsedData = JSON.parse(data)
+      } catch(e) {
+        throw {
+          message: 'Error parsing SSE event (event data must be an object)',
+          eventData: data
+        }
+      }
+
+      if (event === "error") {
+        const error = getErrorObject(parsedData)
+
+        throw {
+          ...error,
+          message: `${error.message ?? "Unknown error event"}`
+        }
+      }
+      else {
+        yield {
+          name: event,
+          data: parsedData
+        }
+      }
+    }
+
+  }
+  else {
+    throw {
+      message: `Expected Content-Type "application/json" or "text/event-stream", got "${contentType}"`
+    }
+  }
+
 }
 
 
