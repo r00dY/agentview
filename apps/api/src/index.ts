@@ -18,11 +18,12 @@ import { auth } from './auth'
 import { createInvitation, cancelInvitation, getPendingInvitations, getValidInvitation } from './invitations'
 import { fetchThread } from './threads'
 import { run as runFunction } from './run'
+import { getStudioURL } from './getStudioURL'
 
+// shared imports
 import { getAllActivities, getLastRun } from './shared/threadUtils'
 import { ClientSchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, RunSchema, type User, type Thread, type Activity } from './shared/apiTypes'
 import { config } from './shared/agentview.config'
-import { getStudioURL } from './getStudioURL'
 
 
 export const app = new OpenAPIHono({
