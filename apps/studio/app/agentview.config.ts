@@ -34,11 +34,11 @@ export const config : AgentViewConfig = {
                             options: {
                                 true: {
                                     icon: ThumbsUp,
-                                    // label: "Liked"
+                                    label: "Like"
                                 },
                                 false: {
                                     icon: ThumbsDown,
-                                    // label: "Disliked"
+                                    label: "Don't like"
                                 }
                             }
                         },
