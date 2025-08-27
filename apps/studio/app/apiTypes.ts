@@ -112,7 +112,6 @@ export const ThreadCreateSchema = ThreadSchema.pick({
     metadata: true,
 })
 
-
 export const ScoreCreateSchema = ScoreSchema.pick({
     activityId: true,
     name: true,

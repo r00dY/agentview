@@ -38,4 +38,3 @@ export interface ThreadConfig {
 export type AgentViewConfig = {
   threads: ThreadConfig[],
 }
-
