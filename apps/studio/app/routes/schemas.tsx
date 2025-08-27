@@ -5,7 +5,7 @@ import { Header, HeaderTitle } from "~/components/header";
 import { apiFetch } from "~/lib/apiFetch";
 import { Button } from "~/components/ui/button";
 import { config } from "~/agentview.config";
-import { getConfigAsJSON } from "~/lib/getConfigAsJSON";
+import { serializeBaseConfig, getBaseConfig } from "~/lib/baseConfigHelpers";
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const response = await apiFetch(`/api/dev/schemas/current`);
@@ -21,7 +21,7 @@ export async function clientAction({ request }: Route.ActionArgs) {
   const response = await apiFetch(`/api/dev/schemas`, {
     method: "POST",
     body: {
-        schema: getConfigAsJSON(config)
+        schema: serializeBaseConfig(getBaseConfig(config))
     }
   });
   

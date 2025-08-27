@@ -4,15 +4,22 @@ import * as z from "zod"
 import type { BaseConfig } from "./shared/configTypes";
 
 
-export function getConfigAsJSON(config: AgentViewConfig) {
-  return JSON.stringify(getBaseConfig(config), (key, value) => {
-    if (key === "schema" || key === "metadata" || key === "content") {
-      return z.toJSONSchema(value)
-    }
-    return value
-  }, 2)
+export function serializeBaseConfig(config: BaseConfig): any {
+  return {
+    threads: config.threads.map((thread) => ({
+      ...thread,
+      metadata: thread.metadata ? z.toJSONSchema(thread.metadata) : undefined,
+      activities: thread.activities.map((activity) => ({
+        ...activity,
+        content: z.toJSONSchema(activity.content),
+        scores: activity.scores?.map((score) => ({
+          ...score,
+          schema: z.toJSONSchema(score.schema),
+        }))
+      }))
+    }))
+  }
 }
-
 
 export function getBaseConfig(config: AgentViewConfig): BaseConfig {
   return {
@@ -31,7 +38,6 @@ export function getBaseConfig(config: AgentViewConfig): BaseConfig {
       }))
     }))
   }
-
 }
 
 // Helper function to check if a value is a React component
@@ -74,5 +80,3 @@ function filterOutReactAndFunctions(obj: any): any {
 
   return obj;
 }
-
-console.log(JSON.stringify(getConfigAsJSON(config), null, 2))
