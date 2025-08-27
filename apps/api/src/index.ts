@@ -23,6 +23,8 @@ import { getStudioURL } from './getStudioURL'
 // shared imports
 import { getAllActivities, getLastRun } from './shared/threadUtils'
 import { ClientSchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, RunSchema, type User, type Thread, type Activity, SchemaSchema, SchemaCreateSchema } from './shared/apiTypes'
+import { getSchema } from './getSchema'
+import type { BaseConfig } from './shared/configTypes'
 // import { config } from './shared/agentview.config'
 
 
@@ -59,6 +61,15 @@ async function requireSession(headers: Headers) {
     throw new HTTPException(401, { message: "Unauthorized" });
   }
   return session
+}
+
+async function requireSchema() {
+  const schema = await getSchema()
+  if (!schema) {
+    throw new HTTPException(404, { message: "Schema not found" });
+  }
+  return schema
+  
 }
 
 
@@ -241,19 +252,20 @@ const threadsPOSTRoute = createRoute({
 app.openapi(threadsPOSTRoute, async (c) => {
   const body = await c.req.json()
 
+  const schema = await requireSchema()
+
   // Find thread configuration by type
-  const threadConfig = config.threads.find((t: any) => t.type === body.type);
+  const threadConfig = schema.threads.find((threadConfig) => threadConfig.type === body.name);
   if (!threadConfig) {
     return c.json({ message: `Thread type '${body.type}' not found in configuration` }, 400);
   }
 
   // Validate metadata against the schema
   try {
-    threadConfig.metadata.parse(body.metadata);
+    threadConfig.metadata?.parse(body.metadata);
   } catch (error: any) {
     return c.json({ message: error.message }, 400);
   }
-
 
   // Validate whether client exists in db
   if (!isUUID(body.client_id)) {
@@ -328,14 +340,11 @@ app.openapi(runsPOSTRoute, async (c) => {
   const { thread_id } = c.req.param()
   const { input: { type, role, content } } = await c.req.json()
 
-  const threadRow = await fetchThread(thread_id);
-
-  if (!threadRow) {
-    return c.json({ message: "Thread not found" }, 404);
-  }
+  const threadRow = await requireThread(thread_id)
+  const schema = await requireSchema()
 
   // Find thread configuration by type
-  const threadConfig = config.threads.find((t: any) => t.type === threadRow.type);
+  const threadConfig = schema.threads.find((threadConfig) => threadConfig.type === threadRow.type);
   if (!threadConfig) {
     return c.json({ message: `Thread type '${threadRow.type}' not found in configuration` }, 400);
   }
@@ -345,7 +354,7 @@ app.openapi(runsPOSTRoute, async (c) => {
   }
 
   // Find activity configuration by type and role
-  const activityConfig = threadConfig.activities.find((a: any) => a.type === type && a.role === role);
+  const activityConfig = threadConfig.activities.find((activityConfig) => activityConfig.type === type && activityConfig.role === role);
   if (!activityConfig) {
     return c.json({ message: `Activity type '${type}' with role '${role}' not found in configuration` }, 400);
   }
@@ -413,13 +422,13 @@ app.openapi(runsPOSTRoute, async (c) => {
     }
 
     function validateActivity(activity: any) {
-      const activitySchemas = threadConfig.activities
-        .filter((a: any) => a.role !== 'user') // Exclude user activities from output validation
-        .map((a: any) =>
+      const activitySchemas = threadConfig!.activities
+        .filter((activityConfig) => activityConfig.role !== 'user') // Exclude user activities from output validation
+        .map((activityConfig) =>
           z.object({
-            type: z.literal(a.type),
-            role: z.literal(a.role),
-            content: a.content
+            type: z.literal(activityConfig.type),
+            role: z.literal(activityConfig.role),
+            content: activityConfig.content
           })
         );
 
@@ -702,9 +711,9 @@ app.openapi(runWatchRoute, async (c) => {
 /* --------- FEED --------- */
 
 
-function validateScore(thread: Thread, activity: Activity, scoreName: string, scoreValue: any, options?: { mustNotExist?: boolean }) {
+function validateScore(schema: BaseConfig, thread: Thread, activity: Activity, scoreName: string, scoreValue: any, options?: { mustNotExist?: boolean }) {
   // Find the thread config
-  const threadConfig = config.threads.find((t) => t.type === thread.type);
+  const threadConfig = schema.threads.find((threadConfig) => threadConfig.type === thread.type);
   if (!threadConfig) {
     throw new HTTPException(400, { message: `Thread type '${thread.type}' not found in configuration` });
   }
@@ -779,11 +788,12 @@ app.openapi(commentsPOSTRoute, async (c) => {
     const session = await requireSession(c.req.raw.headers);
     const thread = await requireThread(thread_id)
     const activity = await requireActivity(thread, activity_id);
+    const schema = await requireSchema()
 
     const inputScores = body.scores ?? {}
 
     for (const [scoreName, scoreValue] of Object.entries(inputScores)) {
-      validateScore(thread, activity, scoreName, scoreValue, { mustNotExist: true })
+      validateScore(schema, thread, activity, scoreName, scoreValue, { mustNotExist: true })
     }
 
     await db.transaction(async (tx) => {

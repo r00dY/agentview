@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useOnFormReset } from '~/hooks/useOnFormReset';
-import type { FormInputProps } from "~/types";
+import type { FormInputProps } from "~/lib/types";
 import { Input } from "./ui/input";
 import { Switch } from "./ui/switch";
 import {

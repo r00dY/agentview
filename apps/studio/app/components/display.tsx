@@ -1,4 +1,4 @@
-import type { DisplayComponentProps } from "~/types";
+import type { DisplayComponentProps } from "~/lib/types";
 import { Badge } from "./ui/badge";
 
 export function DisplayTextComponent({ value, options }: DisplayComponentProps<string>) {

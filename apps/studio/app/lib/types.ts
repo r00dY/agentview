@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { BaseScoreConfig, BaseActivityConfig, BaseThreadConfig, BaseConfig } from "./shared/configTypes";
 
 export type FormInputProps<T=any> = {
   id: string,
@@ -13,28 +14,16 @@ export type DisplayComponentProps<T=any> = {
   options?: any
 }
 
-export interface ScoreConfig<T=any> {
-  name: string;
+export type ScoreConfig<T=any> = BaseScoreConfig & {
   title?: string;
-  schema: z.ZodType;
   input: React.ComponentType<FormInputProps<T>>;
   display: React.ComponentType<DisplayComponentProps<T>>;
-  options?: any
 }
 
-export interface ActivityConfig {
-  type: string;
-  role: string;
-  content: z.ZodType;
-  scores?: ScoreConfig[];
-}
+export type ActivityConfig = BaseActivityConfig<ScoreConfig>;
 
-export interface ThreadConfig {
-  name: string;
-  metadata?: z.ZodType;
-  activities: ActivityConfig[];
-}
+export type ThreadConfig = BaseThreadConfig<ActivityConfig>;
   
 export type AgentViewConfig = {
-  threads: ThreadConfig[],
+  threads: ThreadConfig[],  
 }

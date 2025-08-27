@@ -1,4 +1,4 @@
-import type { AgentViewConfig } from "./types";
+import type { AgentViewConfig } from "./lib/types";
 import { z } from "zod";
 import { TextInput, ToggleBooleanInput } from "./components/form";
 import { ThumbsDown, ThumbsUp } from "lucide-react";
@@ -7,7 +7,7 @@ import { DisplayBooleanComponent, DisplayTextComponent } from "./components/disp
 export const config : AgentViewConfig = {
     threads: [
         {
-            name: "pdp_chat",
+            type: "pdp_chat",
             metadata: z.object({
                 product_id: z.string()
             }),

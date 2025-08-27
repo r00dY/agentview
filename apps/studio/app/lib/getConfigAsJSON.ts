@@ -1,30 +1,43 @@
 import { config } from "../agentview.config";
-import type { AgentViewConfig } from "../types";
+import type { AgentViewConfig } from "./types";
 import * as z from "zod"
+import type { BaseConfig } from "./shared/configTypes";
+
 
 export function getConfigAsJSON(config: AgentViewConfig) {
-    return {
-        threads: config.threads.map((thread) => ({
-            name: thread.name,
-            metadata: thread.metadata ? z.toJSONSchema(thread.metadata) : undefined,
-            activities: thread.activities.map((activity) => ({
-                type: activity.type,
-                role: activity.role,
-                content: z.toJSONSchema(activity.content),
-                scores: activity.scores?.map((score) => ({
-                    name: score.name,
-                    schema: z.toJSONSchema(score.schema),
-                    options: filterOutReactAndFunctions(score.options)
-                }))
-            }))
-        }))
+  return JSON.stringify(getBaseConfig(config), (key, value) => {
+    if (key === "schema" || key === "metadata" || key === "content") {
+      return z.toJSONSchema(value)
     }
+    return value
+  }, 2)
+}
+
+
+export function getBaseConfig(config: AgentViewConfig): BaseConfig {
+  return {
+    threads: config.threads.map((thread) => ({
+      type: thread.type,
+      metadata: thread.metadata,
+      activities: thread.activities.map((activity) => ({
+        type: activity.type,
+        role: activity.role,
+        content: activity.content,
+        scores: activity.scores?.map((score) => ({
+          name: score.name,
+          schema: score.schema,
+          options: filterOutReactAndFunctions(score.options)
+        }))
+      }))
+    }))
+  }
+
 }
 
 // Helper function to check if a value is a React component
 function isReactComponent(value: any): boolean {
   return typeof value === 'function' && (
-    value.displayName || 
+    value.displayName ||
     value.name?.startsWith('React') ||
     value.$$typeof === Symbol.for('react.element') ||
     value.$$typeof === Symbol.for('react.memo') ||
@@ -42,11 +55,11 @@ function filterOutReactAndFunctions(obj: any): any {
   if (obj === null || obj === undefined) {
     return obj;
   }
-  
+
   if (Array.isArray(obj)) {
     return obj.map(filterOutReactAndFunctions);
   }
-  
+
   if (typeof obj === 'object') {
     const filtered: any = {};
     for (const [key, value] of Object.entries(obj)) {
@@ -58,7 +71,7 @@ function filterOutReactAndFunctions(obj: any): any {
     }
     return filtered;
   }
-  
+
   return obj;
 }
 
