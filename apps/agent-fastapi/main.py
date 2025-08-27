@@ -53,6 +53,7 @@ async def root():
 
 @app.post("/run_stream")
 async def run(request: RunRequest):
+
     async def generate():
         try:
             # Emit version manifest first
