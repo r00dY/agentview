@@ -8,8 +8,8 @@ import { parseSSE } from "~/lib/parseSSE";
 import { authClient } from "~/lib/auth-client";
 import { apiFetch } from "~/lib/apiFetch";
 import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
-import { getLastRun, getAllActivities, getVersions } from "~/lib/threadUtils";
-import { type Thread } from "~/apiTypes";
+import { getLastRun, getAllActivities, getVersions } from "~/lib/shared/threadUtils";
+import { type Thread } from "~/lib/shared/apiTypes";
 import { getThreadsList } from "~/lib/utils";
 import { PropertyList } from "~/components/PropertyList";
 

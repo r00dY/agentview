@@ -1,5 +1,4 @@
 import { type Activity, type Thread } from "./apiTypes"
-import z from "zod"
 
 export function getLastRun(thread: Thread) {
   return thread.runs.length > 0 ? thread.runs[thread.runs.length - 1] : undefined

@@ -1,4 +1,3 @@
-import type { User } from 'lucide-react'
 import z from 'zod'
 
 export const UserSchema = z.object({
@@ -27,7 +26,6 @@ export const ClientSchema = z.object({
 })
 
 export type Client = z.infer<typeof ClientSchema>
-
 
 export const ScoreSchema = z.object({
     id: z.string(),
@@ -118,3 +116,17 @@ export const ScoreCreateSchema = ScoreSchema.pick({
     value: true,
     commentId: true,
 })
+
+export const SchemaSchema = z.object({
+    id: z.string(),
+    schema: z.any(),
+    createdAt: z.date(),
+    createdBy: z.string(),
+})
+
+export type Schema = z.infer<typeof SchemaSchema>
+
+export const SchemaCreateSchema = SchemaSchema.pick({
+    schema: true,
+})
+

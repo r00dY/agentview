@@ -1,8 +1,8 @@
 import { data, useLoaderData, useOutletContext, useParams } from "react-router";
 import type { Route } from "./+types/threadActivity";
 import { Header, HeaderTitle } from "~/components/header";
-import type { Thread } from "~/apiTypes";
-import { getAllActivities } from "~/lib/threadUtils";
+import type { Thread } from "~/lib/shared/apiTypes";
+import { getAllActivities } from "~/lib/shared/threadUtils";
 import { authClient } from "~/lib/auth-client";
 import { CommentThread } from "~/components/comments";
 import { apiFetch } from "~/lib/apiFetch";

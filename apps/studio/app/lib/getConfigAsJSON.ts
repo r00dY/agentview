@@ -2,7 +2,7 @@ import { config } from "../agentview.config";
 import type { AgentViewConfig } from "../types";
 import * as z from "zod"
 
-function getConfigAsJSON(config: AgentViewConfig) {
+export function getConfigAsJSON(config: AgentViewConfig) {
     return {
         threads: config.threads.map((thread) => ({
             name: thread.name,

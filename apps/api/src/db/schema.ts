@@ -141,6 +141,13 @@ export const scores = pgTable('scores', {
   activityNameUnique: uniqueIndex('scores_activity_name_unique').on(table.activityId, table.name),
 }));
 
+// Schemas
+export const schemas = pgTable('schemas', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  schema: jsonb('value').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  createdBy: text('created_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
+});
 
 export const threadRelations = relations(thread, ({ many, one }) => ({
   activities: many(activity),

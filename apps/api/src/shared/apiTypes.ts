@@ -27,7 +27,6 @@ export const ClientSchema = z.object({
 
 export type Client = z.infer<typeof ClientSchema>
 
-
 export const ScoreSchema = z.object({
     id: z.string(),
     activityId: z.string(),
@@ -111,10 +110,23 @@ export const ThreadCreateSchema = ThreadSchema.pick({
     metadata: true,
 })
 
-
 export const ScoreCreateSchema = ScoreSchema.pick({
     activityId: true,
     name: true,
     value: true,
     commentId: true,
 })
+
+export const SchemaSchema = z.object({
+    id: z.string(),
+    schema: z.any(),
+    createdAt: z.date(),
+    createdBy: z.string(),
+})
+
+export type Schema = z.infer<typeof SchemaSchema>
+
+export const SchemaCreateSchema = SchemaSchema.pick({
+    schema: true,
+})
+

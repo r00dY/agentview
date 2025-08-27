@@ -7,7 +7,7 @@ import {
     useLoaderData,
   } from "react-router";
   
-  import { LogOut, ChevronUp, User, Edit, Lock, Users, Mail, MessageCircle } from "lucide-react"
+  import { LogOut, ChevronUp, User, Edit, Lock, Users, Mail, MessageCircle, Database } from "lucide-react"
   import {
     SidebarProvider,
     Sidebar,
@@ -46,13 +46,13 @@ export async function clientLoader({request}: Route.ClientLoaderArgs) {
 
   return {
     session: session.data,
-    showEmails: true
+    isDeveloper: true
   };
 }
 
 
 export default function Layout() {
-  const { session, showEmails } = useLoaderData<typeof clientLoader>()
+  const { session, isDeveloper } = useLoaderData<typeof clientLoader>()
   const logoutFetcher = useFetcher()
 
   const [editProfileOpen, setEditProfileOpen] = React.useState(false)
@@ -144,7 +144,7 @@ export default function Layout() {
               </SidebarGroupContent>
             </SidebarGroup>}
 
-            { showEmails && <SidebarGroup>
+            { isDeveloper && <SidebarGroup>
               <SidebarGroupLabel>Developer</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
@@ -153,6 +153,15 @@ export default function Layout() {
                       <Link to="/emails">
                         <Mail className="mr-2 h-4 w-4" />
                         <span>Emails</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <Link to="/schemas">
+                        <Database className="mr-2 h-4 w-4" />
+                        <span>Schemas</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

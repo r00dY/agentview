@@ -9,7 +9,7 @@ import { APIError } from "better-auth/api";
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { swaggerUI } from '@hono/swagger-ui'
 import { db } from './db'
-import { client, thread, activity, run, email, commentMessages, commentMessageEdits, commentMentions, versions, scores } from './db/schema'
+import { client, thread, activity, run, email, commentMessages, commentMessageEdits, commentMentions, versions, scores, schemas } from './db/schema'
 import { eq, desc, and, inArray} from 'drizzle-orm'
 import { response_data, response_error, body } from './hono_utils'
 import { isUUID } from './isUUID'
@@ -22,8 +22,8 @@ import { getStudioURL } from './getStudioURL'
 
 // shared imports
 import { getAllActivities, getLastRun } from './shared/threadUtils'
-import { ClientSchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, RunSchema, type User, type Thread, type Activity } from './shared/apiTypes'
-import { config } from './shared/agentview.config'
+import { ClientSchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, RunSchema, type User, type Thread, type Activity, SchemaSchema, SchemaCreateSchema } from './shared/apiTypes'
+// import { config } from './shared/agentview.config'
 
 
 export const app = new OpenAPIHono({
@@ -49,6 +49,58 @@ app.use('*', cors({
 app.on(["POST", "GET"], "/api/auth/*", (c) => {
 	return auth.handler(c.req.raw);
 });
+
+/** --------- UTILS --------- */
+
+
+async function requireSession(headers: Headers) {
+  const session = await auth.api.getSession({ headers })
+  if (!session) {
+    throw new HTTPException(401, { message: "Unauthorized" });
+  }
+  return session
+}
+
+
+async function requireAdminSession(headers: Headers) {
+  const session = await requireSession(headers)
+
+  if (session.user.role !== "admin") {
+    throw new HTTPException(401, { message: "Unauthorized" });
+  }
+
+  return session;
+}
+
+async function requireThread(thread_id: string) {
+  const thread = await fetchThread(thread_id)
+  if (!thread) {
+    throw new HTTPException(404, { message: "Thread not found" });
+  }
+  return thread
+}
+
+async function requireActivity(thread: Thread, activity_id: string) {
+  const activity = getAllActivities(thread).find((a) => a.id === activity_id)
+  if (!activity) {
+    throw new HTTPException(404, { message: "Activity not found" });
+  }
+  return activity
+}
+
+async function requireCommentMessageFromUser(thread: Thread, activity: Activity, comment_id: string, user: User) {
+  const comment = activity.commentMessages?.find((m) => m.id === comment_id && m.deletedAt === null)
+  if (!comment) {
+    throw new HTTPException(404, { message: "Comment not found" });
+  }
+
+  if (comment.userId !== user.id) {
+    throw new HTTPException(401, { message: "You can only edit your own comments." });
+  }
+
+  return comment
+}
+
 
 
 /* --------- CLIENTS --------- */
@@ -696,43 +748,6 @@ function validateScore(thread: Thread, activity: Activity, scoreName: string, sc
 }
 
 
-async function requireSession(headers: Headers) {
-  const session = await auth.api.getSession({ headers })
-  if (!session) {
-    throw new HTTPException(401, { message: "Authentication required" });
-  }
-  return session
-}
-
-async function requireThread(thread_id: string) {
-  const thread = await fetchThread(thread_id)
-  if (!thread) {
-    throw new HTTPException(404, { message: "Thread not found" });
-  }
-  return thread
-}
-
-async function requireActivity(thread: Thread, activity_id: string) {
-  const activity = getAllActivities(thread).find((a) => a.id === activity_id)
-  if (!activity) {
-    throw new HTTPException(404, { message: "Activity not found" });
-  }
-  return activity
-}
-
-async function requireCommentMessageFromUser(thread: Thread, activity: Activity, comment_id: string, user: User) {
-  const comment = activity.commentMessages?.find((m) => m.id === comment_id && m.deletedAt === null)
-  if (!comment) {
-    throw new HTTPException(404, { message: "Comment not found" });
-  }
-
-  if (comment.userId !== user.id) {
-    throw new HTTPException(401, { message: "You can only edit your own comments." });
-  }
-
-  return comment
-}
-
 
 const commentsPOSTRoute = createRoute({
   method: 'post',
@@ -1267,19 +1282,6 @@ app.openapi(commentsPUTRoute, async (c) => {
 
 /* --------- MEMBERS --------- */
 
-async function getSessionAndValidateAdmin(c: any) {
-  const session = await auth.api.getSession({ headers: c.req.raw.headers })
-
-  if (!session) {
-    throw new APIError(401, { message: "Unauthorized" });
-  }
-
-  if (session.user.role !== "admin") {
-    throw new APIError(401, { message: "Unauthorized" });
-  }
-
-  return session;
-}
 
 const MemberSchema = z.object({
   id: z.string(),
@@ -1305,7 +1307,7 @@ const membersGETRoute = createRoute({
 
 app.openapi(membersGETRoute, async (c) => {
   try {
-    await getSessionAndValidateAdmin(c);
+    await requireAdminSession(c.req.raw.headers);
     
     const response = await auth.api.listUsers({
       headers: c.req.raw.headers,
@@ -1351,7 +1353,7 @@ app.openapi(memberPOSTRoute, async (c) => {
   const body = await c.req.json()
   
   try {
-    await getSessionAndValidateAdmin(c);
+    await requireAdminSession(c.req.raw.headers);
 
     await auth.api.setRole({
       headers: c.req.raw.headers,
@@ -1385,7 +1387,7 @@ app.openapi(memberDELETERoute, async (c) => {
   const { memberId } = c.req.param()
   
   try {
-    await getSessionAndValidateAdmin(c);
+    await requireAdminSession(c.req.raw.headers);
 
     await auth.api.removeUser({
       headers: c.req.raw.headers,
@@ -1445,7 +1447,7 @@ app.openapi(invitationsPOSTRoute, async (c) => {
   const body = await c.req.json()
   
   try {
-    const session = await getSessionAndValidateAdmin(c);
+    const session = await requireAdminSession(c.req.raw.headers);
 
     await createInvitation(body.email, body.role, session.user.id);
     
@@ -1475,7 +1477,7 @@ const invitationsGETRoute = createRoute({
 
 app.openapi(invitationsGETRoute, async (c) => {
   try {
-    await getSessionAndValidateAdmin(c);
+    await requireAdminSession(c.req.raw.headers);
 
     const pendingInvitations = await getPendingInvitations();
     return c.json(pendingInvitations, 200);
@@ -1505,7 +1507,7 @@ app.openapi(invitationDELETERoute, async (c) => {
   const { id } = c.req.param()
 
   try {
-    await getSessionAndValidateAdmin(c);
+    await requireAdminSession(c.req.raw.headers);
     await cancelInvitation(id);
     return c.json({}, 200);
   } catch (error: any) {
@@ -1582,6 +1584,51 @@ app.openapi(emailDetailGETRoute, async (c) => {
   const { id } = c.req.param()
   const emailRow = await db.query.email.findFirst({ where: eq(email.id, id) })
   return c.json(emailRow, 200)
+})
+
+/* --------- SCHEMAS ---------   */
+
+const schemasGETRoute = createRoute({
+  method: 'get',
+  path: '/api/dev/schemas/current',
+  responses: {
+    200: response_data(z.array(SchemaSchema).nullable()),
+  },
+})
+
+app.openapi(schemasGETRoute, async (c) => {
+  await requireAdminSession(c.req.raw.headers)
+  
+  const schemaRows = await db.select().from(schemas).orderBy(desc(schemas.createdAt)).limit(1)
+  if (schemaRows.length === 0) {
+    return c.json(null, 200)
+  }
+  return c.json(schemaRows[0], 200)
+})
+
+const schemasPOSTRoute = createRoute({
+  method: 'post',
+  path: '/api/dev/schemas',
+  request: {
+    body: body(SchemaCreateSchema)
+  },
+  responses: {
+    200: response_data(z.array(SchemaSchema).nullable()),
+  },
+})
+
+app.openapi(schemasPOSTRoute, async (c) => {
+  await requireAdminSession(c.req.raw.headers)
+  
+  const session = await requireSession(c.req.raw.headers)
+  const body = await c.req.json()
+
+  const [newSchema] = await db.insert(schemas).values({
+    schema: body.schema,
+    createdBy: session.user.id,
+  }).returning()
+
+  return c.json(newSchema, 200)
 })
 
 
