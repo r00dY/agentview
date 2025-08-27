@@ -1,0 +1,64 @@
+{
+  "threads": [
+    {
+      "name": "pdp_chat",
+      "metadata": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "product_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id"
+        ],
+        "additionalProperties": false
+      },
+      "activities": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "string"
+          }
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "content": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "string"
+          },
+          "scores": [
+            {
+              "name": "user_reaction",
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "boolean"
+              },
+              "options": {
+                "true": {
+                  "icon": {},
+                  "label": "Like"
+                },
+                "false": {
+                  "icon": {},
+                  "label": "Don't like"
+                }
+              }
+            },
+            {
+              "name": "whatever",
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "string"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

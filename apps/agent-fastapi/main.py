@@ -137,7 +137,7 @@ async def run(request: RunRequest):
     )
 
     # Get the last user message
-    last_user_message = request.thread.activities[-1].content if request.thread.activities else ""
+    # last_user_message = request.thread.activities[-1].content if request.thread.activities else ""
 
     # Generate activities
     num_messages = 3
