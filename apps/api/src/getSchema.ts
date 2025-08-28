@@ -5,7 +5,6 @@ import { convertJsonSchemaToZod } from 'zod-from-json-schema';
 import type { BaseConfig } from "./shared/configTypes";
 
 function parseSchema(schema: any): BaseConfig {
-    console.log('parseSchema', schema)
     return {
         threads: schema.threads.map((thread: any) => ({
             type: thread.type,
