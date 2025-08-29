@@ -1,6 +1,6 @@
-import { pgTable, text, timestamp, uuid, varchar, jsonb, boolean, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, varchar, jsonb, boolean, uniqueIndex, integer, bigserial, bigint } from "drizzle-orm/pg-core";
 import { users } from "./auth-schema";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 export const invitations = pgTable("invitation", {
   id: text('id').primaryKey(),
@@ -140,6 +140,39 @@ export const scores = pgTable('scores', {
 }, (table) => ({
   activityNameUnique: uniqueIndex('scores_activity_name_unique').on(table.activityId, table.name),
 }));
+
+
+
+
+
+export const events = pgTable('events', {
+  id: bigserial({ mode: 'number' }).primaryKey(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  authorId: text('author_id').references(() => users.id),
+  type: varchar('type', { length: 256 }).notNull(),  // "comment_created", "comment_edited", "comment_deleted" (with scores & mentions, everything bundled)
+  commentId: uuid('comment_id').references(() => commentMessages.id),
+  payload: jsonb('payload').notNull(), // scores: 2, mentions: 1, comment: true / false
+});
+
+export const inboxItems = pgTable('inbox_items', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  activityId: uuid('activity_id').references(() => activity.id), // for now (user x activity) is the only possible "inbox item", later maybe (user x thread) will happen
+  userId: text('user_id').references(() => users.id),
+
+  lastReadEventId: bigint('last_read_event_id', { mode: 'number' }).references(() => events.id),
+  lastEventId: bigint('last_event_id', { mode: 'number' }).references(() => events.id),
+
+  // lastEventAt: timestamp('last_event_at', { withTimezone: true }),
+
+  // unreadCount: integer('unread_count').notNull().default(0),
+  // attentionLevel: integer('attention_level').notNull().default(0), // 0: none, 1: low, 2: high (mention)
+}, (table) => ({
+  userActivityUnique: uniqueIndex('inbox_items_user_activity_unique').on(table.userId, table.activityId),
+}));
+
+
 
 // Schemas
 export const schemas = pgTable('schemas', {

@@ -9,7 +9,7 @@ import { APIError } from "better-auth/api";
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { swaggerUI } from '@hono/swagger-ui'
 import { db } from './db'
-import { client, thread, activity, run, email, commentMessages, commentMessageEdits, commentMentions, versions, scores, schemas } from './db/schema'
+import { client, thread, activity, run, email, commentMessages, commentMessageEdits, commentMentions, versions, scores, schemas, events, inboxItems } from './db/schema'
 import { eq, desc, and, inArray} from 'drizzle-orm'
 import { response_data, response_error, body } from './hono_utils'
 import { isUUID } from './isUUID'
@@ -25,6 +25,7 @@ import { getAllActivities, getLastRun } from './shared/threadUtils'
 import { ClientSchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, RunSchema, type User, type Thread, type Activity, SchemaSchema, SchemaCreateSchema } from './shared/apiTypes'
 import { getSchema } from './getSchema'
 import type { BaseConfig } from './shared/configTypes'
+import { users } from './db/auth-schema'
 // import { config } from './shared/agentview.config'
 
 
@@ -805,10 +806,11 @@ app.openapi(commentsPOSTRoute, async (c) => {
         content: body.comment ?? null,
       }).returning();
 
+      let userMentions: string[] = [];
+
       // Add comment mentions
       if (body.comment) {
         let mentions;
-        let userMentions: string[] = [];
 
         try {
           mentions = extractMentions(body.comment);
@@ -827,6 +829,7 @@ app.openapi(commentsPOSTRoute, async (c) => {
         }
       }
 
+      // add scores
       for (const [scoreName, scoreValue] of Object.entries(inputScores)) {
         await tx.insert(scores).values({
           activityId: activity_id,
@@ -837,7 +840,32 @@ app.openapi(commentsPOSTRoute, async (c) => {
         })
       }
      
-      // return newMessage;
+      // add event
+      const [event] = await tx.insert(events).values({
+        type: 'comment_created',
+        authorId: session.user.id,
+        payload: {},
+        commentId: newMessage.id,
+      }).returning();
+
+      // add inbox items (notifications!)
+      const notifiedUsers = await tx.select({ id: users.id }).from(users);
+
+      const inboxItemValues = notifiedUsers.map((user) => ({
+        userId: user.id,
+        activityId: activity_id,
+        lastEventId: event.id,
+      }));
+
+      await tx.insert(inboxItems)
+        .values(inboxItemValues)
+        .onConflictDoUpdate({
+          target: [inboxItems.userId, inboxItems.activityId],
+          set: {
+            updatedAt: new Date(),
+          },
+        });
+
     })
 
     return c.json({}, 201);

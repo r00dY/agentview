@@ -20,7 +20,9 @@ import {
   versionsRelations,
   scores,
   scoresRelations,
-  schemas
+  schemas,
+  events,
+  inboxItems
 } from "./db/schema";
 
 export const db = drizzle(process.env.DATABASE_URL!, {
@@ -48,6 +50,8 @@ export const db = drizzle(process.env.DATABASE_URL!, {
     versionsRelations,
     scores,
     scoresRelations,
-    schemas
+    schemas,
+    events,
+    inboxItems
   }
 });
