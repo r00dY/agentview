@@ -22,7 +22,8 @@ import {
   scoresRelations,
   schemas,
   events,
-  inboxItems
+  inboxItems,
+  inboxItemsRelations
 } from "./db/schema";
 
 export const db = drizzle(process.env.DATABASE_URL!, {
@@ -52,6 +53,7 @@ export const db = drizzle(process.env.DATABASE_URL!, {
     scoresRelations,
     schemas,
     events,
-    inboxItems
+    inboxItems,
+    inboxItemsRelations
   }
 });

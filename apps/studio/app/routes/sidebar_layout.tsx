@@ -7,7 +7,7 @@ import {
     useLoaderData,
   } from "react-router";
   
-  import { LogOut, ChevronUp, User, Edit, Lock, Users, Mail, MessageCircle, Database } from "lucide-react"
+  import { LogOut, ChevronUp, User, Edit, Lock, Users, Mail, MessageCircle, Database, Inbox } from "lucide-react"
   import {
     SidebarProvider,
     Sidebar,
@@ -76,8 +76,23 @@ export default function Layout() {
             </Button> */}
           </SidebarHeader>
 
-
           <SidebarContent>
+          <SidebarGroup>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <Link to="/inbox">
+                        <Inbox className="mr-2 h-4 w-4" />
+                        <span>Inbox</span>
+                      </Link>
+                    </SidebarMenuButton>
+
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
             <SidebarGroup>
               <SidebarGroupLabel>Production</SidebarGroupLabel>
               <SidebarGroupContent>

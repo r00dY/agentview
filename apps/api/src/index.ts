@@ -10,7 +10,7 @@ import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { swaggerUI } from '@hono/swagger-ui'
 import { db } from './db'
 import { client, thread, activity, run, email, commentMessages, commentMessageEdits, commentMentions, versions, scores, schemas, events, inboxItems } from './db/schema'
-import { eq, desc, and, inArray} from 'drizzle-orm'
+import { eq, desc, and, inArray, ne } from 'drizzle-orm'
 import { response_data, response_error, body } from './hono_utils'
 import { isUUID } from './isUUID'
 import { extractMentions } from './utils'
@@ -22,10 +22,11 @@ import { getStudioURL } from './getStudioURL'
 
 // shared imports
 import { getAllActivities, getLastRun } from './shared/threadUtils'
-import { ClientSchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, RunSchema, type User, type Thread, type Activity, SchemaSchema, SchemaCreateSchema } from './shared/apiTypes'
+import { ClientSchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, RunSchema, ActivitySchema, type User, type Thread, type Activity, SchemaSchema, SchemaCreateSchema, InboxItemSchema } from './shared/apiTypes'
 import { getSchema } from './getSchema'
 import type { BaseConfig } from './shared/configTypes'
 import { users } from './db/auth-schema'
+import type { Session } from 'better-auth'
 // import { config } from './shared/agentview.config'
 
 
@@ -73,7 +74,6 @@ async function requireSchema() {
   
 }
 
-
 async function requireAdminSession(headers: Headers) {
   const session = await requireSession(headers)
 
@@ -113,6 +113,21 @@ async function requireCommentMessageFromUser(thread: Thread, activity: Activity,
   return comment
 }
 
+async function requireInboxItem(user: User, inboxItemId: string) {
+  const inboxItem = await db.query.inboxItems.findFirst({
+    where: eq(inboxItems.id, inboxItemId),
+  });
+
+  if (!inboxItem) {
+    throw new HTTPException(404, { message: "Inbox item not found" });
+  }
+
+  if (inboxItem.userId !== user.id) {
+    throw new HTTPException(401, { message: "Unauthorized" });
+  }
+
+  return inboxItem
+}
 
 
 /* --------- CLIENTS --------- */
@@ -849,7 +864,7 @@ app.openapi(commentsPOSTRoute, async (c) => {
       }).returning();
 
       // add inbox items (notifications!)
-      const notifiedUsers = await tx.select({ id: users.id }).from(users);
+      const notifiedUsers = await tx.select({ id: users.id }).from(users).where(ne(users.id, session.user.id));
 
       const inboxItemValues = notifiedUsers.map((user) => ({
         userId: user.id,
@@ -1347,6 +1362,8 @@ app.openapi(invitationValidateRoute, async (c) => {
 
 
 
+
+
 /* --------- EMAILS --------- */
 
 // Emails GET
@@ -1435,6 +1452,79 @@ app.openapi(schemasPOSTRoute, async (c) => {
   return c.json(newSchema, 200)
 })
 
+
+/* --------- INBOX --------- */
+
+
+
+// Inbox GET (get all inbox items for the user)
+const inboxGETRoute = createRoute({
+  method: 'get',
+  path: '/api/inbox',
+  responses: {
+    200: response_data(z.array(InboxItemSchema)),
+    401: response_error(),
+  },
+})
+
+app.openapi(inboxGETRoute, async (c) => {
+  const session = await requireSession(c.req.raw.headers);
+  
+  const inboxItemsData = await db.query.inboxItems.findMany({
+    where: eq(inboxItems.userId, session.user.id),
+    orderBy: (inboxItems, { desc }) => [desc(inboxItems.updatedAt)],
+  });
+
+  // // Transform the data to include the isRead field
+  // const transformedInboxItems = inboxItemsData.map((item) => ({
+  //   ...item,
+  //   isRead: item.lastReadEventId === item.lastEventId,
+  // }));
+
+  return c.json(inboxItemsData, 200);
+});
+
+
+
+// Mark inbox item as read
+const inboxMarkAsReadRoute = createRoute({
+  method: 'post',
+  path: '/api/inbox/{id}/mark_as_read',
+  request: {
+    params: z.object({
+      id: z.string(),
+    }),
+  },
+  responses: {
+    200: response_data(z.object({})),
+    400: response_error(),
+    401: response_error(),
+    404: response_error(),
+  },
+})
+
+app.openapi(inboxMarkAsReadRoute, async (c) => {
+  const { id } = c.req.param()
+  
+  try {
+    const session = await requireSession(c.req.raw.headers);
+    const inboxItem = await requireInboxItem(session.user, id)
+    
+    // Update the lastReadEventId to match lastEventId
+    await db.update(inboxItems)
+      .set({
+        lastReadEventId: inboxItem.lastEventId,
+        // updatedAt: new Date(),
+      })
+      .where(eq(inboxItems.id, id));
+
+    return c.json({}, 200);
+  } catch (error: any) {
+    return errorToResponse(c, error);
+  }
+})
+
+/* --------- EMAILS --------- */
 
 // The OpenAPI documentation will be available at /doc
 app.doc('/openapi', {

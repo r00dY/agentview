@@ -159,7 +159,7 @@ export const inboxItems = pgTable('inbox_items', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   activityId: uuid('activity_id').references(() => activity.id), // for now (user x activity) is the only possible "inbox item", later maybe (user x thread) will happen
-  userId: text('user_id').references(() => users.id),
+  userId: text('user_id').notNull().references(() => users.id),
 
   lastReadEventId: bigint('last_read_event_id', { mode: 'number' }).references(() => events.id),
   lastEventId: bigint('last_event_id', { mode: 'number' }).references(() => events.id),
@@ -285,4 +285,23 @@ export const scoresRelations = relations(scores, ({ one }) => ({
     fields: [scores.deletedBy],
     references: [users.id],
   }),
+}));
+
+export const inboxItemsRelations = relations(inboxItems, ({ one }) => ({
+  // activity: one(activity, {
+  //   fields: [inboxItems.activityId],
+  //   references: [activity.id],
+  // }),
+  // user: one(users, {
+  //   fields: [inboxItems.userId],
+  //   references: [users.id],
+  // }),
+  // lastReadEvent: one(events, {
+  //   fields: [inboxItems.lastReadEventId],
+  //   references: [events.id],
+  // }),
+  // lastEvent: one(events, {
+  //   fields: [inboxItems.lastEventId],
+  //   references: [events.id],
+  // }),
 }));

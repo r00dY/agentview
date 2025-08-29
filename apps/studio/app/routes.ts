@@ -27,6 +27,7 @@ export default [
                 // route("activities/:activityId/scores_and_comments", "routes/threadScoresAndComments.tsx"),
             ]),
         ]),
+        route("inbox", "routes/inbox.tsx"),
         route("schemas", "routes/schemas.tsx"),
 
         route("logout", "routes/logout.tsx"),
