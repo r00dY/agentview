@@ -1,8 +1,8 @@
 import "dotenv/config";
 import * as readline from "node:readline";
 import { execSync } from "node:child_process";
-import { auth } from "../../studio/app/.server/auth";
-import { db } from "../../studio/app/.server/db";
+import { auth } from "../src/auth";
+import { db } from "../src/db";
 
 // Create readline interface for user input
 const rl = readline.createInterface({

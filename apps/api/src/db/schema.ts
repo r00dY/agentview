@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, varchar, jsonb, boolean, uniqueIndex, integer, bigserial, bigint } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, varchar, jsonb, boolean, uniqueIndex, integer, bigserial, bigint, serial } from "drizzle-orm/pg-core";
 import { users } from "./auth-schema";
 import { relations, sql } from "drizzle-orm";
 
@@ -48,6 +48,7 @@ export const client = pgTable("client", {
 
 export const thread = pgTable("thread", {
   id: uuid("id").primaryKey().defaultRandom(),
+  number: serial("string").notNull(),
   created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   metadata: jsonb("data"),
@@ -57,6 +58,7 @@ export const thread = pgTable("thread", {
 
 export const activity = pgTable("activity", {
   id: uuid("id").primaryKey().defaultRandom(),
+  number: serial("string").notNull(),
   created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   content: jsonb("content"),

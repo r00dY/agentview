@@ -50,7 +50,6 @@ export async function clientLoader({request}: Route.ClientLoaderArgs) {
   };
 }
 
-
 export default function Layout() {
   const { session, isDeveloper } = useLoaderData<typeof clientLoader>()
   const logoutFetcher = useFetcher()

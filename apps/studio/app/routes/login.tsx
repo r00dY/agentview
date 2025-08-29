@@ -1,4 +1,4 @@
-import { redirect, Form, useActionData } from "react-router";
+import { redirect, Form, useActionData, data } from "react-router";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
@@ -8,6 +8,7 @@ import { Label } from "~/components/ui/label";
 import { AlertCircleIcon } from "lucide-react";
 import { betterAuthErrorToBaseError, type ActionResponse } from "~/lib/errors";
 import { authClient } from "~/lib/auth-client";
+import { apiFetch } from "~/lib/apiFetch";
 
 function redirectUrl(request: Request) {
   const url = new URL(request.url);
@@ -19,11 +20,25 @@ function redirectUrl(request: Request) {
 }
 
 export async function clientLoader({ request }: Route.LoaderArgs) {
-  const { data, error } = await authClient.getSession()
+  const sessionResponse = await authClient.getSession()
 
-  if (data) {
+  if (sessionResponse.data) {
     return redirect(redirectUrl(request));
   }
+
+  // If it's a new installation redirect to signup
+  const statusResponse = await apiFetch<{ is_active: boolean }>('/api/status');
+
+  if (!statusResponse.ok) {
+    throw data(statusResponse.error, {
+      status: statusResponse.status, // TODO: standardised error handling from clientLoaders!!! 
+    });
+  }
+
+  if (!statusResponse.data.is_active) {
+    return redirect("/signup");
+  }
+
 }
 
 

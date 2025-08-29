@@ -27,6 +27,7 @@ import { getSchema } from './getSchema'
 import type { BaseConfig } from './shared/configTypes'
 import { users } from './db/auth-schema'
 import type { Session } from 'better-auth'
+import { getUsersCount } from './users'
 // import { config } from './shared/agentview.config'
 
 
@@ -1522,6 +1523,23 @@ app.openapi(inboxMarkAsReadRoute, async (c) => {
   } catch (error: any) {
     return errorToResponse(c, error);
   }
+})
+
+/* --------- IS ACTIVE --------- */
+
+const statusRoute = createRoute({
+  method: 'get',
+  path: '/api/status',
+  responses: {
+    200: response_data(z.object({
+      is_active: z.boolean(),
+    })),
+  },
+})
+
+app.openapi(statusRoute, async (c) => {
+  const hasUsers = await getUsersCount() > 0;
+  return c.json({ is_active: hasUsers }, 200);
 })
 
 /* --------- EMAILS --------- */
