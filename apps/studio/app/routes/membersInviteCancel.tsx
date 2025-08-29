@@ -1,6 +1,5 @@
 import { data } from "react-router";
 import type { Route } from "./+types/membersInviteCancel";
-import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
 import { apiFetch } from "~/lib/apiFetch";
 
 

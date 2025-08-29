@@ -153,6 +153,8 @@ export const events = pgTable('events', {
   authorId: text('author_id').references(() => users.id),
   type: varchar('type', { length: 256 }).notNull(),  // "comment_created", "comment_edited", "comment_deleted" (with scores & mentions, everything bundled)
   commentId: uuid('comment_id').references(() => commentMessages.id),
+  activityId: uuid('activity_id').references(() => activity.id),
+  threadId: uuid('thread_id').references(() => thread.id),
   payload: jsonb('payload').notNull(), // scores: 2, mentions: 1, comment: true / false
 });
 
@@ -160,11 +162,16 @@ export const inboxItems = pgTable('inbox_items', {
   id: uuid('id').primaryKey().defaultRandom(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+
   activityId: uuid('activity_id').references(() => activity.id), // for now (user x activity) is the only possible "inbox item", later maybe (user x thread) will happen
+  threadId: uuid('thread_id').references(() => thread.id),
+
   userId: text('user_id').notNull().references(() => users.id),
 
   lastReadEventId: bigint('last_read_event_id', { mode: 'number' }).references(() => events.id),
   lastEventId: bigint('last_event_id', { mode: 'number' }).references(() => events.id),
+
+  payload: jsonb('payload').notNull(),
 
   // lastEventAt: timestamp('last_event_at', { withTimezone: true }),
 
@@ -289,7 +296,7 @@ export const scoresRelations = relations(scores, ({ one }) => ({
   }),
 }));
 
-export const inboxItemsRelations = relations(inboxItems, ({ one }) => ({
+export const inboxItemsRelations = relations(inboxItems, ({ one, many }) => ({
   // activity: one(activity, {
   //   fields: [inboxItems.activityId],
   //   references: [activity.id],
@@ -306,4 +313,5 @@ export const inboxItemsRelations = relations(inboxItems, ({ one }) => ({
   //   fields: [inboxItems.lastEventId],
   //   references: [events.id],
   // }),
+  events: many(events),
 }));

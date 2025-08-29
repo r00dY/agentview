@@ -10,7 +10,7 @@ import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { swaggerUI } from '@hono/swagger-ui'
 import { db } from './db'
 import { client, thread, activity, run, email, commentMessages, commentMessageEdits, commentMentions, versions, scores, schemas, events, inboxItems } from './db/schema'
-import { eq, desc, and, inArray, ne } from 'drizzle-orm'
+import { eq, desc, and, inArray, ne, gt, isNull, or } from 'drizzle-orm'
 import { response_data, response_error, body } from './hono_utils'
 import { isUUID } from './isUUID'
 import { extractMentions } from './utils'
@@ -855,13 +855,31 @@ app.openapi(commentsPOSTRoute, async (c) => {
           createdBy: session.user.id,
         })
       }
+
+      const payload = {
+        activity: {
+          id: activity_id,
+          number: activity.number,
+        },
+        thread: {
+          id: thread_id,
+          number: thread.number,
+        },
+        author: {
+          id: session.user.id,
+          name: session.user.name,
+          email: session.user.email,
+        }
+      };
      
       // add event
       const [event] = await tx.insert(events).values({
         type: 'comment_created',
         authorId: session.user.id,
-        payload: {},
+        payload,
         commentId: newMessage.id,
+        activityId: activity_id,
+        threadId: thread_id,
       }).returning();
 
       // add inbox items (notifications!)
@@ -870,7 +888,9 @@ app.openapi(commentsPOSTRoute, async (c) => {
       const inboxItemValues = notifiedUsers.map((user) => ({
         userId: user.id,
         activityId: activity_id,
+        threadId: thread_id,
         lastEventId: event.id,
+        payload
       }));
 
       await tx.insert(inboxItems)
@@ -1127,24 +1147,23 @@ const membersGETRoute = createRoute({
 
 app.openapi(membersGETRoute, async (c) => {
   try {
-    await requireAdminSession(c.req.raw.headers);
+    await requireSession(c.req.raw.headers);
     
-    const response = await auth.api.listUsers({
-      headers: c.req.raw.headers,
-      query: {
-        limit: 100,
-      },
-    });
+    const userRows = await db.select({
+      id: users.id,
+      email: users.email,
+      name: users.name
+    }).from(users);
 
-    const users: User[] = response.users.map((user) => ({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    }));
+    // const users: User[] = response.users.map((user) => ({
+    //   id: user.id,
+    //   email: user.email,
+    //   name: user.name,
+    //   createdAt: user.createdAt,
+    //   updatedAt: user.updatedAt,
+    // }));
 
-    return c.json(users, 200);
+    return c.json(userRows, 200);
   } catch (error: any) {
     return errorToResponse(c, error);
   }
@@ -1471,10 +1490,34 @@ const inboxGETRoute = createRoute({
 app.openapi(inboxGETRoute, async (c) => {
   const session = await requireSession(c.req.raw.headers);
   
-  const inboxItemsData = await db.query.inboxItems.findMany({
-    where: eq(inboxItems.userId, session.user.id),
-    orderBy: (inboxItems, { desc }) => [desc(inboxItems.updatedAt)],
-  });
+  // const inboxItemsData = await db.query.inboxItems.findMany({
+  //   where: eq(inboxItems.userId, session.user.id),
+  //   orderBy: (inboxItems, { desc }) => [desc(inboxItems.updatedAt)],
+  // });
+
+  const rawData = await db
+  .select()
+  .from(inboxItems)
+  .where(eq(inboxItems.userId, session.user.id))
+  .innerJoin(events, and(eq(events.activityId, inboxItems.activityId), or(gt(events.id, inboxItems.lastReadEventId), isNull(inboxItems.lastReadEventId))))
+
+  const dataObj : Record<string, any> = {}
+
+  for (const item of rawData) {
+
+    if (!dataObj[item.inbox_items.id]) {
+      dataObj[item.inbox_items.id] = {
+        ...item.inbox_items,
+        unreadEvents: [{
+          ...item.events,
+        }],
+      }
+    } else {
+      dataObj[item.inbox_items.id].unreadEvents.push({
+        ...item.events,
+      })
+    }
+  }
 
   // // Transform the data to include the isRead field
   // const transformedInboxItems = inboxItemsData.map((item) => ({
@@ -1482,7 +1525,7 @@ app.openapi(inboxGETRoute, async (c) => {
   //   isRead: item.lastReadEventId === item.lastEventId,
   // }));
 
-  return c.json(inboxItemsData, 200);
+  return c.json(Object.values(dataObj), 200);
 });
 
 
