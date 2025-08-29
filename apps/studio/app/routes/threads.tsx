@@ -7,12 +7,15 @@ import { Header, HeaderTitle } from "~/components/header";
 import { getThreadsList } from "~/lib/utils";
 import { authClient } from "~/lib/auth-client";
 import { apiFetch } from "~/lib/apiFetch";
+import type { Thread } from "~/lib/shared/apiTypes";
+import { getAllActivities } from "~/lib/shared/threadUtils";
+import { timeAgoShort } from "~/lib/timeAgo";
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const list = getThreadsList(request);
   const userLocale = request.headers.get('accept-language')?.split(',')[0] || 'en-US';
 
-  const threadsResponse = await apiFetch(`/api/threads?list=${list}`);
+  const threadsResponse = await apiFetch<Thread[]>(`/api/threads?list=${list}`);
 
   if (!threadsResponse.ok) {
     throw data(threadsResponse.error, { status: threadsResponse.status });
@@ -40,25 +43,24 @@ export default function Threads() {
       </Header>
 
       <div className="flex-1 overflow-y-auto">
-        {threads.length > 0 &&threads.map((thread: any) => (
-          <div key={thread.id}>
+        {threads.length > 0 && threads.map((thread) => {
+
+          const activities = getAllActivities(thread);
+          const date = activities.length > 0 ? activities[0].created_at : thread.updated_at;
+
+          return <div key={thread.id}>
             <NavLink to={`/threads/${thread.id}?list=${list}`}>
               {({ isActive }) => (
               <div className={`p-3 border-b hover:bg-gray-50 transition-colors duration-50 ${isActive ? 'bg-gray-100' : ''}`}>
                 <div className="flex flex-col gap-1">
-                    <div className="text-sm font-medium">{thread.id}</div>
-                    <div className="text-xs text-gray-500">
-                      {thread.activities.length > 0 
-                        ? thread.activities[0].created_at.toLocaleString(userLocale)
-                        : thread.updated_at.toLocaleString(userLocale)
-                      }
-                    </div>
+                      <div className="text-sm font-medium">Session {thread.number}</div>
+                      <div className="text-xs text-gray-500">{timeAgoShort(date)}</div>
                 </div>
               </div>
               )}
             </NavLink>
           </div>
-        ))}
+        })}
         { threads.length === 0 && <div className="px-3 py-4 text-muted-foreground">No threads available.</div>}
       </div>
 

@@ -56,7 +56,7 @@ export default function ThreadActivityPage() {
 
     return  <div className="flex-1  flex flex-col">  
         <Header>
-            <HeaderTitle title={`Activity Feed`} />
+            <HeaderTitle title={`Activity ${thread.number}.${activity.number}`} />
         </Header>
         <div className="flex-1 overflow-y-auto">
 

@@ -11,7 +11,7 @@ export function getActiveRuns(thread: Thread) {
 export function getAllActivities(thread: Thread, options?: { activeOnly?: boolean }) {
   const activities: Activity[] = []
 
-  const activeRuns = options?.activeOnly ? getActiveRuns(thread) : thread.runs
+  const activeRuns = (options?.activeOnly ? getActiveRuns(thread) : thread.runs) ?? []
 
   activeRuns.map((run, index) => {
     activities.push(...run.activities)
