@@ -133,14 +133,18 @@ export const SchemaCreateSchema = SchemaSchema.pick({
 })
 
 
+
 export const InboxItemSchema = z.object({
     id: z.string(),
     createdAt: z.date(),
     updatedAt: z.date(),
     activityId: z.string().nullable(),
+    threadId: z.string().nullable(),
     userId: z.string().nullable(),
-    lastReadEventId: z.number().nullable(),
-    lastEventId: z.number().nullable(),
+    unreadCount: z.number(),
+    firstActiveEventId: z.number().nullable(),
+    lastActiveEventId: z.number().nullable(),
+    events: z.array(z.any()),
 })
   
 export type InboxItem = z.infer<typeof InboxItemSchema>

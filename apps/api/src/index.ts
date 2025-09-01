@@ -10,7 +10,7 @@ import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { swaggerUI } from '@hono/swagger-ui'
 import { db } from './db'
 import { client, thread, activity, run, email, commentMessages, commentMessageEdits, commentMentions, versions, scores, schemas, events, inboxItems } from './db/schema'
-import { eq, desc, and, inArray, ne, gt, isNull, or } from 'drizzle-orm'
+import { eq, desc, and, inArray, ne, gt, isNull, or, gte, sql } from 'drizzle-orm'
 import { response_data, response_error, body } from './hono_utils'
 import { isUUID } from './isUUID'
 import { extractMentions } from './utils'
@@ -889,8 +889,9 @@ app.openapi(commentsPOSTRoute, async (c) => {
         userId: user.id,
         activityId: activity_id,
         threadId: thread_id,
-        lastEventId: event.id,
-        payload
+        unreadCount: 1,
+        firstActiveEventId: event.id,
+        // payload
       }));
 
       await tx.insert(inboxItems)
@@ -899,6 +900,8 @@ app.openapi(commentsPOSTRoute, async (c) => {
           target: [inboxItems.userId, inboxItems.activityId],
           set: {
             updatedAt: new Date(),
+            unreadCount: sql`${inboxItems.unreadCount} + 1`,
+            firstActiveEventId: sql`CASE WHEN ${inboxItems.unreadCount} = 0 THEN ${event.id} ELSE ${inboxItems.firstActiveEventId} END`,
           },
         });
 
@@ -1499,7 +1502,8 @@ app.openapi(inboxGETRoute, async (c) => {
   .select()
   .from(inboxItems)
   .where(eq(inboxItems.userId, session.user.id))
-  .innerJoin(events, and(eq(events.activityId, inboxItems.activityId), or(gt(events.id, inboxItems.lastReadEventId), isNull(inboxItems.lastReadEventId))))
+  .innerJoin(events, and(eq(events.activityId, inboxItems.activityId), or(gte(events.id, inboxItems.firstActiveEventId), isNull(inboxItems.firstActiveEventId))))
+  .orderBy(desc(inboxItems.updatedAt), desc(events.createdAt))
 
   const dataObj : Record<string, any> = {}
 
@@ -1508,12 +1512,12 @@ app.openapi(inboxGETRoute, async (c) => {
     if (!dataObj[item.inbox_items.id]) {
       dataObj[item.inbox_items.id] = {
         ...item.inbox_items,
-        unreadEvents: [{
+        events: [{
           ...item.events,
         }],
       }
     } else {
-      dataObj[item.inbox_items.id].unreadEvents.push({
+      dataObj[item.inbox_items.id].events.push({
         ...item.events,
       })
     }
@@ -1557,7 +1561,7 @@ app.openapi(inboxMarkAsReadRoute, async (c) => {
     // Update the lastReadEventId to match lastEventId
     await db.update(inboxItems)
       .set({
-        lastReadEventId: inboxItem.lastEventId,
+        unreadCount: 0
         // updatedAt: new Date(),
       })
       .where(eq(inboxItems.id, id));

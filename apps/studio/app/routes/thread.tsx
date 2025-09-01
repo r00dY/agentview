@@ -298,7 +298,7 @@ function ThreadPage() {
     return <>
     <div className="basis-[720px] flex-shrink-0 flex-grow-0 border-r  flex flex-col">  
         <Header>
-            <HeaderTitle title={`Thread`} />
+            <HeaderTitle title={`Thread ${thread.number}`} />
         </Header>
         <div className="flex-1 overflow-y-auto">
 

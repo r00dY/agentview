@@ -145,8 +145,6 @@ export const scores = pgTable('scores', {
 
 
 
-
-
 export const events = pgTable('events', {
   id: bigserial({ mode: 'number' }).primaryKey(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -168,10 +166,14 @@ export const inboxItems = pgTable('inbox_items', {
 
   userId: text('user_id').notNull().references(() => users.id),
 
-  lastReadEventId: bigint('last_read_event_id', { mode: 'number' }).references(() => events.id),
-  lastEventId: bigint('last_event_id', { mode: 'number' }).references(() => events.id),
+  unreadCount: integer('unread_count').notNull().default(0),
+  firstActiveEventId: bigint('first_active_event_id', { mode: 'number' }).references(() => events.id),
+  // lastActiveEventId: bigint('last_active_event_id', { mode: 'number' }).references(() => events.id),
 
-  payload: jsonb('payload').notNull(),
+  // lastReadEventId: bigint('last_read_event_id', { mode: 'number' }).references(() => events.id),
+  // lastEventId: bigint('last_event_id', { mode: 'number' }).references(() => events.id),
+
+  // payload: jsonb('payload').notNull(),
 
   // lastEventAt: timestamp('last_event_at', { withTimezone: true }),
 
