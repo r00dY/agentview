@@ -1558,13 +1558,11 @@ app.openapi(inboxMarkAsReadRoute, async (c) => {
     const session = await requireSession(c.req.raw.headers);
     const inboxItem = await requireInboxItem(session.user, id)
     
-    // Update the lastReadEventId to match lastEventId
     await db.update(inboxItems)
       .set({
         unreadCount: 0
-        // updatedAt: new Date(),
       })
-      .where(eq(inboxItems.id, id));
+      .where(eq(inboxItems.id, inboxItem.id));
 
     return c.json({}, 200);
   } catch (error: any) {
