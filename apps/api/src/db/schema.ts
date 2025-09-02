@@ -167,7 +167,7 @@ export const inboxItems = pgTable('inbox_items', {
   threadId: uuid('thread_id').references(() => thread.id),
   
   // lastEventId: bigint('last_event_id', { mode: 'number' }).references(() => events.id),
-  
+
   lastReadEventId: bigint('last_read_event_id', { mode: 'number' }).references(() => events.id),
   lastNotifiableEventId: bigint('last_notifiable_event_id', { mode: 'number' }).notNull().references(() => events.id),
   render: jsonb('render').notNull(),
@@ -320,6 +320,14 @@ export const inboxItemsRelations = relations(inboxItems, ({ one, many }) => ({
   user: one(users, {
     fields: [inboxItems.userId],
     references: [users.id],
+  }),
+  lastReadEvent: one(events, {
+    fields: [inboxItems.lastReadEventId],
+    references: [events.id],
+  }),
+  lastNotifiableEvent: one(events, {
+    fields: [inboxItems.lastNotifiableEventId],
+    references: [events.id],
   }),
   // lastReadEvent: one(events, {
   //   fields: [inboxItems.lastReadEventId],

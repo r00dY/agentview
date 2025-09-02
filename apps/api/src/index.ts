@@ -1495,9 +1495,15 @@ app.openapi(inboxGETRoute, async (c) => {
     with: {
       thread: true,
       activity: true,
-    },
-    orderBy: (inboxItems, { desc }) => [desc(inboxItems.updatedAt)]
+      lastNotifiableEvent: true,
+    }
   })
+
+  inboxItemRows.sort((a, b) => {
+    const aDate = a.lastNotifiableEvent?.createdAt ? new Date(a.lastNotifiableEvent.createdAt).getTime() : 0;
+    const bDate = b.lastNotifiableEvent?.createdAt ? new Date(b.lastNotifiableEvent.createdAt).getTime() : 0;
+    return bDate - aDate;
+  });
 
   return c.json(inboxItemRows, 200);
 });

@@ -62,7 +62,7 @@ function InboxItemComponent({ item }: { item: InboxItem }) {
           </div>
         </div>
         <div className="flex flex-row gap-1">
-          <div className="text-sm text-gray-500">{timeAgoShort(item.updatedAt)}</div>
+          <div className="text-sm text-gray-500">{timeAgoShort(item.lastNotifiableEvent.createdAt)}</div>
           <div className="text-sm text-gray-500">{isRead ? "" : `(${item.render.items.length})`}</div>
         </div>
       </div>
