@@ -68,12 +68,12 @@ function InboxItemComponent({ item }: { item: InboxItem }) {
           <div className="text-sm">
             <span className="font-medium">{author.name}</span> commented in{" "}
             <div className="inline-flex font-medium flex-row items-center gap-1">
-              <MessageCircle className="size-4" /> Session {threadNumber} / Item {activityNumber}
+              <MessageCircle className="size-4" /> Session {threadNumber} (item {activityNumber})
             </div>
           </div>
           <div className="flex flex-row gap-1">
             <div className="text-sm text-gray-500">{timeAgoShort(item.updatedAt)}</div>
-            <div className="text-sm text-gray-500">{isRead ? "" : "unread"}</div>
+            <div className="text-sm text-gray-500">{isRead ? "" : `(${item.unreadCount})`}</div>
           </div>
         </div>
         
