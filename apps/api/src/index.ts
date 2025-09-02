@@ -873,7 +873,6 @@ app.openapi(commentsPOSTRoute, async (c) => {
         payload: eventPayload
       }).returning();
 
-
       // update inbox items (notifications!)
       const allUsers = await tx.query.users.findMany({
         with: {
@@ -1612,7 +1611,8 @@ app.openapi(inboxGETRoute, async (c) => {
     with: {
       thread: true,
       activity: true,
-    }
+    },
+    orderBy: (inboxItems, { desc }) => [desc(inboxItems.updatedAt)]
   })
 
   return c.json(inboxItemRows, 200);

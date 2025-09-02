@@ -55,7 +55,7 @@ function InboxItemComponent({ item }: { item: InboxItem }) {
     <div className="p-3 border-b flex flex-col gap-2">
       <div className="flex flex-row gap-2 justify-stretch">
         <div className="text-sm">
-          Something happened in 
+          Some new activities in
           {/* <span className="font-medium">{author.name}</span> commented in{" "} */}
           <div className="inline-flex font-medium flex-row items-center gap-1">
             <MessageCircle className="size-4" /> Session {item.thread.number} (item {item.activity.number})
