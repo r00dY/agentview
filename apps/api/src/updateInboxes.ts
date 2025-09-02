@@ -127,10 +127,7 @@ export async function updateActivityInboxes(
 
             // If this event zeros inbox item, then we must revert the date properly (so that it's not count as "unread")
             if (items.length === 0) {
-                console.log('ZERO!!!');
                 newInboxItem.lastNotifiableEventId = inboxItem.lastReadEventId ?? inboxItem.lastNotifiableEventId
-            } else {
-                console.log('NOT ZERO!!!', items);
             }
 
             newInboxItemValues.push(newInboxItem);
