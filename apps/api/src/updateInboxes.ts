@@ -95,14 +95,14 @@ export async function updateActivityInboxes(
 
             const index = items.findIndex((item: any) => item.comment_id === newItem.comment_id);
             if (index === -1) {
-                continue; // if edited/deleted comment_id doesn't exist in current inbox state, just do nothing.
+                continue; // if edited comment_id doesn't exist in current inbox state, just do nothing. Non-notifiable event.
             }
 
             items[index] = newItem;
             
             newInboxItemValues.push({
                 ...inboxItem,
-                // DO NOT UPDATE lastNotifiableEventId!!! It's not notifiable event.
+                // do not set lastNotifiableEventId. Edits are not notifiable events.
                 render: {
                     ...prevRender,
                     items
@@ -117,15 +117,21 @@ export async function updateActivityInboxes(
             const prevRender = inboxItem.render as any;
             const items = prevRender.items.filter((item: any) => item.comment_id !== newItem.comment_id);
 
+            if (items.length === prevRender.items.length) {
+                continue; // if deleted comment_id doesn't exist in current inbox state, just do nothing. Non-notifiable event.
+            }
+
             const newInboxItem = {
                 ...inboxItem,
+                // do not set lastNotifiableEventId. Deletes are not notifiable events.
                 render: {
                     ...prevRender,
                     items
                 }
             }
 
-            // If this event zeros inbox item, then we must revert the date properly (so that it's not count as "unread")
+            // If this event zeros inbox item, then we must revert the last notifiable event to last read event id (otherwise it will be counted as "unread")
+            // We should not change lastReadEventId as it's information about time when user last time saw the inbox item. It's an event that "counts" as important system information (non derived).
             if (items.length === 0) {
                 newInboxItem.lastNotifiableEventId = inboxItem.lastReadEventId ?? inboxItem.lastNotifiableEventId
             }
