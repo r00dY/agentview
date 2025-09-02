@@ -60,7 +60,7 @@ export type CommentMessage = z.infer<typeof CommentMessageSchema>
 
 export const ActivitySchema = z.object({
     id: z.string(),
-    number: z.string(),
+    number: z.number(),
     created_at: z.date(),
     updated_at: z.date(),
     content: z.any(),
@@ -94,7 +94,7 @@ export type Run = z.infer<typeof RunSchema>
 
 export const ThreadSchema = z.object({
     id: z.string(),
-    number: z.string(),
+    number: z.number(),
     created_at: z.date(),
     updated_at: z.date(),
     metadata: z.any(),

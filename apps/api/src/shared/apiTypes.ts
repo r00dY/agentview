@@ -60,7 +60,7 @@ export type CommentMessage = z.infer<typeof CommentMessageSchema>
 
 export const ActivitySchema = z.object({
     id: z.string(),
-    number: z.string(),
+    number: z.number(),
     created_at: z.date(),
     updated_at: z.date(),
     content: z.any(),
@@ -94,7 +94,7 @@ export type Run = z.infer<typeof RunSchema>
 
 export const ThreadSchema = z.object({
     id: z.string(),
-    number: z.string(),
+    number: z.number(),
     created_at: z.date(),
     updated_at: z.date(),
     metadata: z.any(),
@@ -133,18 +133,7 @@ export const SchemaCreateSchema = SchemaSchema.pick({
 })
 
 
-export const InboxItemSchema = z.object({
-    id: z.string(),
-    createdAt: z.date(),
-    updatedAt: z.date(),
-    activityId: z.string().nullable(),
-    threadId: z.string().nullable(),
-    userId: z.string().nullable(),
-    unreadCount: z.number(),
-    firstActiveEventId: z.number().nullable(),
-    lastActiveEventId: z.number().nullable(),
-    lastReadEventId: z.number().nullable(),
-    lastEventId: z.number().nullable(),
-})
+
+export const InboxItemSchema = z.any() // todo: fix this
   
 export type InboxItem = z.infer<typeof InboxItemSchema>

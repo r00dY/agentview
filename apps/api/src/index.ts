@@ -28,6 +28,7 @@ import type { BaseConfig } from './shared/configTypes'
 import { users } from './db/auth-schema'
 import type { Session } from 'better-auth'
 import { getUsersCount } from './users'
+import { updateActivityInboxes } from './updateInboxes'
 // import { config } from './shared/agentview.config'
 
 // import { buildConflictUpdateColumns } from './buildConflictUpdateColumns'
@@ -860,158 +861,18 @@ app.openapi(commentsPOSTRoute, async (c) => {
       }
 
       // add event
-      const eventPayload = {
-        comment_id: newMessage.id, // never gets deleted
-        has_comment: body.comment ? true : false,
-        user_mentions: userMentions,
-        scores: inputScores,
-      }
-
       const [event] = await tx.insert(events).values({
         type: 'comment_created',
         authorId: session.user.id,
-        payload: eventPayload
+        payload: {
+          comment_id: newMessage.id, // never gets deleted
+          has_comment: body.comment ? true : false,
+          user_mentions: userMentions,
+          scores: inputScores,
+        }
       }).returning();
 
-      // update inbox items (notifications!)
-      const allUsers = await tx.query.users.findMany({
-        with: {
-          inboxItems: {
-            where: ((inboxItems, { eq }) => eq(inboxItems.activityId, activity_id)),
-          }
-        }
-      });
-
-      const newInboxItemValues: any[] = [];
-
-      for (const user of allUsers) {
-        if (user.id === session.user.id) {
-          continue;
-        }
-
-        const newItem = {
-          ...eventPayload,
-          author_id: session.user.id,
-        }
-
-        const inboxItem = user.inboxItems.length === 0 ? null : user.inboxItems[0];
-
-        if (inboxItem) {
-          const isRead = inboxItem.lastReadEventId === inboxItem.lastEventId;
-          const prevRender = inboxItem.render as any;
-
-          newInboxItemValues.push({
-            ...inboxItem,
-            lastEventId: event.id,
-            render: {
-              ...prevRender,
-              items: isRead ? [newItem] : [...prevRender.items, newItem]
-            }
-          });
-        } else {
-          newInboxItemValues.push({
-            userId: user.id,
-            activityId: activity_id,
-            threadId: thread_id,
-            lastEventId: event.id,
-            render: {
-              items: [newItem]
-            }
-          });
-        }
-      }
-
-      await tx.insert(inboxItems).values(newInboxItemValues).onConflictDoUpdate({
-        target: [inboxItems.userId, inboxItems.activityId],
-        set: {
-          updatedAt: new Date(),
-          lastEventId: sql.raw(`excluded.${inboxItems.lastEventId.name}`),
-          render: sql.raw(`excluded.${inboxItems.render.name}`),
-        }
-      });
-
-
-
-        // await tx.update(inboxItems).set({
-
-        // const inboxItemPayload = {
-        //   items:
-        // }
-
-
-        // if (inboxItem) {
-        //   await tx.update(inboxItems).set({
-        //     unreadCount: 1,
-        //     firstActiveEventId: event.id,
-        //   }).where(eq(inboxItems.id, inboxItem.id));
-        // }
-
-        // const inboxItemValue = {
-        //   userId: user.id,
-        //   activityId: activity_id,
-        //   threadId: thread_id,
-        //   unreadCount: 1,
-        //   firstActiveEventId: event.id,
-        // }
-      // }
-      // const allUsers = await tx.select({ id: users.id }).from(users);//.where(ne(users.id, session.user.id));
-
-
-      
-      // // const allUsers = 
-
-      // allUsers.map((user) => {
-
-      //   // do not update inbox item for the user that triggered the event
-      //   if (user.id === session.user.id) {
-      //     return;
-      //   }
-
-      //   const inboxItemValue = {
-      //     userId: user.id,
-      //     activityId: activity_id,
-      //     threadId: thread_id,
-      //     unreadCount: 1,
-      //     firstActiveEventId: event.id,
-      //   }
-
-      // });
-
-      // // for (const user in allUsers) {
-
-      // //   if (user.id === session.user.id) {
-      // //     continue;
-      // //   }
-        
-        
-      // //   // const inboxItemValue = {
-      // //   //   userId: user.id,
-      // //   //   activityId: activity_id,
-      // //   //   threadId: thread_id,
-      // //   //   unreadCount: 1,
-      // //   //   firstActiveEventId: event.id,
-      // //   // }
-      // // }
-
-
-      // const inboxItemValues = allUsers.map((user) => ({
-      //   userId: user.id,
-      //   activityId: activity_id,
-      //   threadId: thread_id,
-      //   unreadCount: 1,
-      //   firstActiveEventId: event.id,
-      // }));
-
-      // await tx.insert(inboxItems)
-      //   .values(inboxItemValues)
-      //   .onConflictDoUpdate({
-      //     target: [inboxItems.userId, inboxItems.activityId],
-      //     set: {
-      //       updatedAt: new Date(),
-      //       unreadCount: sql`${inboxItems.unreadCount} + 1`,
-      //       firstActiveEventId: sql`CASE WHEN ${inboxItems.unreadCount} = 0 THEN ${event.id} ELSE ${inboxItems.firstActiveEventId} END`,
-      //     },
-      //   });
+      await updateActivityInboxes(tx, activity, event);
 
     })
 
@@ -1060,6 +921,17 @@ app.openapi(commentsDELETERoute, async (c) => {
         deletedBy: session.user.id
       }).where(eq(commentMessages.id, commentMessage.id));
 
+      // add event
+      const [event] = await tx.insert(events).values({
+        type: 'comment_deleted',
+        authorId: session.user.id,
+        payload: {
+          comment_id
+        }
+      }).returning();
+      
+      await updateActivityInboxes(tx, activity, event);
+
     });
     return c.json({}, 200);
 
@@ -1097,6 +969,7 @@ app.openapi(commentsPUTRoute, async (c) => {
   const body = await c.req.json()
   
   try {
+    const schema = await requireSchema()
     const session = await requireSession(c.req.raw.headers);
     const thread = await requireThread(thread_id)
     const activity = await requireActivity(thread, activity_id);
@@ -1105,7 +978,7 @@ app.openapi(commentsPUTRoute, async (c) => {
     const inputScores = body.scores ?? {}
 
     for (const [scoreName, scoreValue] of Object.entries(inputScores)) {
-      validateScore(thread, activity, scoreName, scoreValue, { mustNotExist: false })
+      validateScore(schema, thread, activity, scoreName, scoreValue, { mustNotExist: false })
     }
 
     await db.transaction(async (tx) => {
@@ -1220,6 +1093,22 @@ app.openapi(commentsPUTRoute, async (c) => {
           });
         }
       }
+
+      /** ADD EVENT **/
+      const [event] = await tx.insert(events).values({
+        type: 'comment_edited',
+        authorId: session.user.id,
+        payload: {
+          comment_id, // never gets deleted
+          has_comment: body.comment ? true : false,
+          user_mentions: newUserMentions,
+          scores: inputScores,
+        }
+      }).returning();
+      
+      await updateActivityInboxes(tx, activity, event);
+
+
     }); 
 
     return c.json({}, 200);
@@ -1601,11 +1490,6 @@ const inboxGETRoute = createRoute({
 app.openapi(inboxGETRoute, async (c) => {
   const session = await requireSession(c.req.raw.headers);
   
-  // const inboxItemsData = await db.query.inboxItems.findMany({
-  //   where: eq(inboxItems.userId, session.user.id),
-  //   orderBy: (inboxItems, { desc }) => [desc(inboxItems.updatedAt)],
-  // });
-
   const inboxItemRows = await db.query.inboxItems.findMany({
     where: eq(inboxItems.userId, session.user.id),
     with: {
@@ -1616,39 +1500,6 @@ app.openapi(inboxGETRoute, async (c) => {
   })
 
   return c.json(inboxItemRows, 200);
-
-  // const rawData = await db
-  // .select()
-  // .from(inboxItems)
-  // .where(eq(inboxItems.userId, session.user.id))
-  // .innerJoin(events, and(eq(events.activityId, inboxItems.activityId), or(gte(events.id, inboxItems.firstActiveEventId), isNull(inboxItems.firstActiveEventId))))
-  // .orderBy(desc(inboxItems.updatedAt), desc(events.createdAt))
-
-  // const dataObj : Record<string, any> = {}
-
-  // for (const item of rawData) {
-
-  //   if (!dataObj[item.inbox_items.id]) {
-  //     dataObj[item.inbox_items.id] = {
-  //       ...item.inbox_items,
-  //       events: [{
-  //         ...item.events,
-  //       }],
-  //     }
-  //   } else {
-  //     dataObj[item.inbox_items.id].events.push({
-  //       ...item.events,
-  //     })
-  //   }
-  // }
-
-  // // // Transform the data to include the isRead field
-  // // const transformedInboxItems = inboxItemsData.map((item) => ({
-  // //   ...item,
-  // //   isRead: item.lastReadEventId === item.lastEventId,
-  // // }));
-
-  // return c.json(Object.values(dataObj), 200);
 });
 
 
