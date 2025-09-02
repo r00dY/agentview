@@ -26,9 +26,9 @@ import { ClientSchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, R
 import { getSchema } from './getSchema'
 import type { BaseConfig } from './shared/configTypes'
 import { users } from './db/auth-schema'
-import type { Session } from 'better-auth'
 import { getUsersCount } from './users'
 import { updateActivityInboxes } from './updateInboxes'
+import { getLastEvent } from './events'
 // import { config } from './shared/agentview.config'
 
 // import { buildConflictUpdateColumns } from './buildConflictUpdateColumns'
@@ -41,7 +41,7 @@ export const app = new OpenAPIHono({
       return c.json({
         message: 'Validation error',
         issues: result.error.issues
-      }, 422) 
+      }, 422)
 
     }
   }
@@ -1527,10 +1527,11 @@ app.openapi(inboxMarkAsReadRoute, async (c) => {
   try {
     const session = await requireSession(c.req.raw.headers);
     const inboxItem = await requireInboxItem(session.user, id)
+    const lastEvent = await getLastEvent()
     
     await db.update(inboxItems)
       .set({
-        lastReadEventId: sql`${inboxItems.lastEventId}`,
+        lastReadEventId: lastEvent.id,
       })
       .where(eq(inboxItems.id, inboxItem.id));
 

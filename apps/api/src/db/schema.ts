@@ -166,7 +166,7 @@ export const inboxItems = pgTable('inbox_items', {
   activityId: uuid('activity_id').references(() => activity.id), // for now (user x activity) is the only possible "inbox item", later maybe (user x thread) will happen
   threadId: uuid('thread_id').references(() => thread.id),
   
-  lastEventId: bigint('last_event_id', { mode: 'number' }).references(() => events.id),
+  // lastEventId: bigint('last_event_id', { mode: 'number' }).references(() => events.id),
   lastReadEventId: bigint('last_read_event_id', { mode: 'number' }).references(() => events.id),
   render: jsonb('render').notNull(),
 

@@ -3,6 +3,7 @@ import { type InferSelectModel, sql } from "drizzle-orm";
 import type { Activity } from "./shared/apiTypes";
 import { db } from "./db";
 import { inboxItems } from "./db/schema";
+import { getLastEvent } from "./events";
 
 /**
  * This function is "MVP" and is far from perfect.
@@ -35,6 +36,8 @@ export async function updateActivityInboxes(
             }
         }
     });
+
+    const lastEvent = await getLastEvent(tx);
 
     const eventPayload: any = event.payload;
 
