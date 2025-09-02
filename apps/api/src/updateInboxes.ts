@@ -22,14 +22,10 @@ import { inboxItems } from "./db/schema";
  * 
  */
 export async function updateActivityInboxes(
-    tx: Parameters<Parameters<typeof db["transaction"]>[0]>[0], 
-    activity: Activity, 
+    tx: Parameters<Parameters<typeof db["transaction"]>[0]>[0],
+    activity: Activity,
     event: InferSelectModel<typeof events>
 ) {
-
-    if (event.type !== 'comment_created' && event.type !== 'comment_edited' && event.type !== 'comment_deleted') {
-        throw new Error('Event type is not comment_created or comment_edited or comment_deleted');
-    }
 
     // update inbox items (notifications!)
     const allUsers = await tx.query.users.findMany({
@@ -42,52 +38,73 @@ export async function updateActivityInboxes(
 
     const eventPayload: any = event.payload;
 
-    const newInboxItemValues: any[] = [];
 
-    for (const user of allUsers) {
-        if (user.id === event.authorId) {
-            continue;
+    if (event.type === 'comment_created') {
+
+        const newInboxItemValues: any[] = [];
+
+        for (const user of allUsers) {
+            if (!isEventForUser(event, user.id)) {
+                continue;
+            }
+
+            const newItem = {
+                ...eventPayload,
+                author_id: event.authorId,
+            }
+
+            const inboxItem = user.inboxItems.length === 0 ? null : user.inboxItems[0];
+
+            if (inboxItem) {
+                const isRead = inboxItem.lastReadEventId === inboxItem.lastEventId;
+                const prevRender = inboxItem.render as any;
+
+                newInboxItemValues.push({
+                    ...inboxItem,
+                    lastEventId: event.id,
+                    render: {
+                        ...prevRender,
+                        items: isRead ? [newItem] : [...prevRender.items, newItem]
+                    }
+                });
+            } else {
+                newInboxItemValues.push({
+                    userId: user.id,
+                    activityId: activity.id,
+                    threadId: activity.thread_id,
+                    lastEventId: event.id,
+                    render: {
+                        items: [newItem]
+                    }
+                });
+            }
         }
 
-        const newItem = {
-            ...eventPayload,
-            author_id: event.authorId,
-        }
+        await tx.insert(inboxItems).values(newInboxItemValues).onConflictDoUpdate({
+            target: [inboxItems.userId, inboxItems.activityId],
+            set: {
+                updatedAt: new Date(),
+                lastEventId: sql.raw(`excluded.${inboxItems.lastEventId.name}`),
+                render: sql.raw(`excluded.${inboxItems.render.name}`),
+            }
+        });
+    }
+    // else if (event.type === 'comment_edited') {
 
-        const inboxItem = user.inboxItems.length === 0 ? null : user.inboxItems[0];
 
-        if (inboxItem) {
-            const isRead = inboxItem.lastReadEventId === inboxItem.lastEventId;
-            const prevRender = inboxItem.render as any;
+    // }
+    // else if (event.type === 'comment_deleted') {
 
-            newInboxItemValues.push({
-                ...inboxItem,
-                lastEventId: event.id,
-                render: {
-                    ...prevRender,
-                    items: isRead ? [newItem] : [...prevRender.items, newItem]
-                }
-            });
-        } else {
-            newInboxItemValues.push({
-                userId: user.id,
-                activityId: activity.id,
-                threadId: activity.thread_id,
-                lastEventId: event.id,
-                render: {
-                    items: [newItem]
-                }
-            });
-        }
+    // }
+    else {
+        throw new Error(`Incorrect event type: "${event.type}"`);
+    }
+}
+
+function isEventForUser(event: InferSelectModel<typeof events>, userId: string) {
+    if (event.authorId === userId) {
+        return false
     }
 
-    await tx.insert(inboxItems).values(newInboxItemValues).onConflictDoUpdate({
-        target: [inboxItems.userId, inboxItems.activityId],
-        set: {
-            updatedAt: new Date(),
-            lastEventId: sql.raw(`excluded.${inboxItems.lastEventId.name}`),
-            render: sql.raw(`excluded.${inboxItems.render.name}`),
-        }
-    });
-
+    return true;
 }
