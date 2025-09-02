@@ -1,5 +1,5 @@
 import { events } from "./db/schema";
-import { type InferSelectModel, sql } from "drizzle-orm";
+import { inArray, type InferSelectModel, sql } from "drizzle-orm";
 import type { Activity } from "./shared/apiTypes";
 import { db } from "./db";
 import { inboxItems } from "./db/schema";
@@ -27,8 +27,10 @@ export async function updateActivityInboxes(
     activity: Activity,
     event: InferSelectModel<typeof events>
 ) {
+    if (!['comment_created', 'comment_edited', 'comment_deleted'].includes(event.type)) {
+        throw new Error(`Incorrect event type: "${event.type}"`);
+    }
 
-    // update inbox items (notifications!)
     const allUsers = await tx.query.users.findMany({
         with: {
             inboxItems: {
@@ -37,28 +39,35 @@ export async function updateActivityInboxes(
         }
     });
 
-    // const lastEvent = await getLastEvent(tx);
-
     const eventPayload: any = event.payload;
 
+    const newInboxItemValues: any[] = [];   
 
-    if (event.type === 'comment_created') {
+    for (const user of allUsers) {
+        if (!isEventForUser(event, user.id)) {
+            continue;
+        }
 
-        const newInboxItemValues: any[] = [];   
+        const newItem = {
+            ...eventPayload,
+            author_id: event.authorId,
+        }
 
-        for (const user of allUsers) {
-            if (!isEventForUser(event, user.id)) {
-                continue;
-            }
+        const inboxItem = user.inboxItems.length === 0 ? null : user.inboxItems[0];
 
-            const newItem = {
-                ...eventPayload,
-                author_id: event.authorId,
-            }
+        if (event.type === 'comment_created') {
 
-            const inboxItem = user.inboxItems.length === 0 ? null : user.inboxItems[0];
-
-            if (inboxItem) {
+            if (!inboxItem) {
+                newInboxItemValues.push({
+                    userId: user.id,
+                    activityId: activity.id,
+                    threadId: activity.thread_id,
+                    lastNotifiableEventId: event.id,
+                    render: {
+                        items: [newItem]
+                    }
+                });
+            } else {
                 const isRead = !inboxItem.lastReadEventId || inboxItem.lastNotifiableEventId <= inboxItem.lastReadEventId;
                 const prevRender = inboxItem.render as any;
 
@@ -70,19 +79,69 @@ export async function updateActivityInboxes(
                         items: isRead ? [newItem] : [...prevRender.items, newItem]
                     }
                 });
-            } else {
-                newInboxItemValues.push({
-                    userId: user.id,
-                    activityId: activity.id,
-                    threadId: activity.thread_id,
-                    lastNotifiableEventId: event.id,
-                    render: {
-                        items: [newItem]
-                    }
-                });
             }
         }
+        else if (event.type === 'comment_edited') {
+            if (!inboxItem) {
+                continue; // error state: ignore. Inbox item should exist.
+            }
 
+            /**
+             * Edits are not notifable events. They simply update the state of the inbox item, that's it. It's especially important for unread inbox items, but they update read inbox items too. 
+             */
+
+            const prevRender = inboxItem.render as any;
+            const items = [...prevRender.items];
+
+            const index = items.findIndex((item: any) => item.comment_id === newItem.comment_id);
+            if (index === -1) {
+                continue; // if edited/deleted comment_id doesn't exist in current inbox state, just do nothing.
+            }
+
+            items[index] = newItem;
+            
+            newInboxItemValues.push({
+                ...inboxItem,
+                // DO NOT UPDATE lastNotifiableEventId!!! It's not notifiable event.
+                render: {
+                    ...prevRender,
+                    items
+                }
+            });
+        }
+        else if (event.type === 'comment_deleted') {   
+            if (!inboxItem) {
+                continue; // error state: ignore. Inbox item should exist.
+            }
+
+            const prevRender = inboxItem.render as any;
+            const items = prevRender.items.filter((item: any) => item.comment_id !== newItem.comment_id);
+
+            const newInboxItem = {
+                ...inboxItem,
+                render: {
+                    ...prevRender,
+                    items
+                }
+            }
+
+            // If this event zeros inbox item, then we must revert the date properly (so that it's not count as "unread")
+            if (items.length === 0) {
+                console.log('ZERO!!!');
+                newInboxItem.lastNotifiableEventId = inboxItem.lastReadEventId ?? inboxItem.lastNotifiableEventId
+            } else {
+                console.log('NOT ZERO!!!', items);
+            }
+
+            newInboxItemValues.push(newInboxItem);
+        }
+        else {
+            throw new Error(`Incorrect event type: "${event.type}"`);
+        }
+
+    }
+
+    if (newInboxItemValues.length > 0) {
         await tx.insert(inboxItems).values(newInboxItemValues).onConflictDoUpdate({
             target: [inboxItems.userId, inboxItems.activityId],
             set: {
@@ -92,20 +151,70 @@ export async function updateActivityInboxes(
             }
         });
     }
-    else if (event.type === 'comment_edited') {
+
+    // if (inboxItemIdsToDelete.length > 0) {
+    //     await tx.delete(inboxItems).where(inArray(inboxItems.id, inboxItemIdsToDelete));
+    // }
+
+    // if (event.type === 'comment_created') {
+
+    //     const newInboxItemValues: any[] = [];   
+
+    //     for (const user of allUsers) {
+    //         if (!isEventForUser(event, user.id)) {
+    //             continue;
+    //         }
+
+    //         const inboxItem = user.inboxItems.length === 0 ? null : user.inboxItems[0];
+
+    //         if (inboxItem) {
+    //             const isRead = !inboxItem.lastReadEventId || inboxItem.lastNotifiableEventId <= inboxItem.lastReadEventId;
+    //             const prevRender = inboxItem.render as any;
+
+    //             newInboxItemValues.push({
+    //                 ...inboxItem,
+    //                 lastNotifiableEventId: event.id,
+    //                 render: {
+    //                     ...prevRender,
+    //                     items: isRead ? [newItem] : [...prevRender.items, newItem]
+    //                 }
+    //             });
+    //         } else {
+    //             newInboxItemValues.push({
+    //                 userId: user.id,
+    //                 activityId: activity.id,
+    //                 threadId: activity.thread_id,
+    //                 lastNotifiableEventId: event.id,
+    //                 render: {
+    //                     items: [newItem]
+    //                 }
+    //             });
+    //         }
+    //     }
+
+    //     await tx.insert(inboxItems).values(newInboxItemValues).onConflictDoUpdate({
+    //         target: [inboxItems.userId, inboxItems.activityId],
+    //         set: {
+    //             updatedAt: new Date(),
+    //             lastNotifiableEventId: sql.raw(`excluded.${inboxItems.lastNotifiableEventId.name}`),
+    //             render: sql.raw(`excluded.${inboxItems.render.name}`),
+    //         }
+    //     });
+    // }
+    // else if (event.type === 'comment_edited') {
 
 
 
 
 
-        throw new Error("comment_edited is not implemented");
-    }
-    else if (event.type === 'comment_deleted') {
-        throw new Error("comment_deleted is not implemented");
-    }
-    else {
-        throw new Error(`Incorrect event type: "${event.type}"`);
-    }
+    //     throw new Error("comment_edited is not implemented");
+    // }
+    // else if (event.type === 'comment_deleted') {
+    //     throw new Error("comment_deleted is not implemented");
+    // }
+    // else {
+    //     throw new Error(`Incorrect event type: "${event.type}"`);
+    // }
 }
 
 function isEventForUser(event: InferSelectModel<typeof events>, userId: string) {
