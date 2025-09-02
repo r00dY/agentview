@@ -68,7 +68,7 @@ export async function updateActivityInboxes(
                     }
                 });
             } else {
-                const isRead = !inboxItem.lastReadEventId || inboxItem.lastNotifiableEventId <= inboxItem.lastReadEventId;
+                const isRead = inboxItem.lastReadEventId && inboxItem.lastNotifiableEventId <= inboxItem.lastReadEventId;
                 const prevRender = inboxItem.render as any;
 
                 newInboxItemValues.push({
