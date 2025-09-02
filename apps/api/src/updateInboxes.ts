@@ -86,23 +86,19 @@ export async function updateActivityInboxes(
                 continue; // error state: ignore. Inbox item should exist.
             }
 
-            /**
-             * Edits are not notifable events. They simply update the state of the inbox item, that's it. It's especially important for unread inbox items, but they update read inbox items too. 
-             */
-
             const prevRender = inboxItem.render as any;
             const items = [...prevRender.items];
 
             const index = items.findIndex((item: any) => item.comment_id === newItem.comment_id);
             if (index === -1) {
-                continue; // if edited comment_id doesn't exist in current inbox state, just do nothing. Non-notifiable event.
+                continue; // if edited comment_id doesn't exist in current inbox state, just do nothing.
             }
 
             items[index] = newItem;
             
             newInboxItemValues.push({
                 ...inboxItem,
-                // do not set lastNotifiableEventId. Edits are not notifiable events.
+                // We don't have to set lastNotifiableEventId. Edits are not notifiable events. They'll just silently update the state of the inbox item.
                 render: {
                     ...prevRender,
                     items
