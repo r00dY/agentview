@@ -37,14 +37,14 @@ export async function updateActivityInboxes(
         }
     });
 
-    const lastEvent = await getLastEvent(tx);
+    // const lastEvent = await getLastEvent(tx);
 
     const eventPayload: any = event.payload;
 
 
     if (event.type === 'comment_created') {
 
-        const newInboxItemValues: any[] = [];
+        const newInboxItemValues: any[] = [];   
 
         for (const user of allUsers) {
             if (!isEventForUser(event, user.id)) {
@@ -59,12 +59,12 @@ export async function updateActivityInboxes(
             const inboxItem = user.inboxItems.length === 0 ? null : user.inboxItems[0];
 
             if (inboxItem) {
-                const isRead = inboxItem.lastReadEventId === inboxItem.lastEventId;
+                const isRead = !inboxItem.lastReadEventId || inboxItem.lastNotifiableEventId <= inboxItem.lastReadEventId;
                 const prevRender = inboxItem.render as any;
 
                 newInboxItemValues.push({
                     ...inboxItem,
-                    lastEventId: event.id,
+                    lastNotifiableEventId: event.id,
                     render: {
                         ...prevRender,
                         items: isRead ? [newItem] : [...prevRender.items, newItem]
@@ -75,7 +75,7 @@ export async function updateActivityInboxes(
                     userId: user.id,
                     activityId: activity.id,
                     threadId: activity.thread_id,
-                    lastEventId: event.id,
+                    lastNotifiableEventId: event.id,
                     render: {
                         items: [newItem]
                     }
@@ -87,18 +87,17 @@ export async function updateActivityInboxes(
             target: [inboxItems.userId, inboxItems.activityId],
             set: {
                 updatedAt: new Date(),
-                lastEventId: sql.raw(`excluded.${inboxItems.lastEventId.name}`),
+                lastNotifiableEventId: sql.raw(`excluded.${inboxItems.lastNotifiableEventId.name}`),
                 render: sql.raw(`excluded.${inboxItems.render.name}`),
             }
         });
     }
-    // else if (event.type === 'comment_edited') {
-
-
-    // }
-    // else if (event.type === 'comment_deleted') {
-
-    // }
+    else if (event.type === 'comment_edited') {
+        throw new Error("comment_edited is not implemented");
+    }
+    else if (event.type === 'comment_deleted') {
+        throw new Error("comment_deleted is not implemented");
+    }
     else {
         throw new Error(`Incorrect event type: "${event.type}"`);
     }

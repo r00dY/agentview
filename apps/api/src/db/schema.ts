@@ -167,7 +167,9 @@ export const inboxItems = pgTable('inbox_items', {
   threadId: uuid('thread_id').references(() => thread.id),
   
   // lastEventId: bigint('last_event_id', { mode: 'number' }).references(() => events.id),
+  
   lastReadEventId: bigint('last_read_event_id', { mode: 'number' }).references(() => events.id),
+  lastNotifiableEventId: bigint('last_notifiable_event_id', { mode: 'number' }).notNull().references(() => events.id),
   render: jsonb('render').notNull(),
 
   // unreadCount: integer('unread_count').notNull().default(0),

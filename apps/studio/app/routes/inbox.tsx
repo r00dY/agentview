@@ -49,7 +49,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
 // Separate InboxItem component
 function InboxItemComponent({ item }: { item: InboxItem }) {
   const fetcher = useFetcher();
-  const isRead = item.lastReadEventId === item.lastEventId;
+  const isRead = item.lastReadEventId >= item.lastNotifiableEventId;
 
   return (
     <div className="p-3 border-b flex flex-col gap-2">

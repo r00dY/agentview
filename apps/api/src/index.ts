@@ -1527,11 +1527,11 @@ app.openapi(inboxMarkAsReadRoute, async (c) => {
   try {
     const session = await requireSession(c.req.raw.headers);
     const inboxItem = await requireInboxItem(session.user, id)
-    const lastEvent = await getLastEvent()
+    // const lastEvent = await getLastEvent()
     
     await db.update(inboxItems)
       .set({
-        lastReadEventId: lastEvent.id,
+        lastReadEventId: sql`${inboxItems.lastNotifiableEventId}`,
       })
       .where(eq(inboxItems.id, inboxItem.id));
 
