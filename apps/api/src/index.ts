@@ -30,6 +30,8 @@ import type { Session } from 'better-auth'
 import { getUsersCount } from './users'
 // import { config } from './shared/agentview.config'
 
+// import { buildConflictUpdateColumns } from './buildConflictUpdateColumns'
+
 
 export const app = new OpenAPIHono({
   defaultHook: (result, c) => {
@@ -797,6 +799,7 @@ const commentsPOSTRoute = createRoute({
 })
 
 
+
 app.openapi(commentsPOSTRoute, async (c) => {
   const body = await c.req.json()
   const { thread_id, activity_id } = c.req.param()
@@ -856,54 +859,160 @@ app.openapi(commentsPOSTRoute, async (c) => {
         })
       }
 
-      const payload = {
-        activity: {
-          id: activity_id,
-          number: activity.number,
-        },
-        thread: {
-          id: thread_id,
-          number: thread.number,
-        },
-        author: {
-          id: session.user.id,
-          name: session.user.name,
-          email: session.user.email,
-        }
-      };
-     
       // add event
+      const eventPayload = {
+        comment_id: newMessage.id, // never gets deleted
+        has_comment: body.comment ? true : false,
+        user_mentions: userMentions,
+        scores: inputScores,
+      }
+
       const [event] = await tx.insert(events).values({
         type: 'comment_created',
         authorId: session.user.id,
-        payload,
-        commentId: newMessage.id,
-        activityId: activity_id,
-        threadId: thread_id,
+        payload: eventPayload
       }).returning();
 
-      // add inbox items (notifications!)
-      const notifiedUsers = await tx.select({ id: users.id }).from(users).where(ne(users.id, session.user.id));
 
-      const inboxItemValues = notifiedUsers.map((user) => ({
-        userId: user.id,
-        activityId: activity_id,
-        threadId: thread_id,
-        unreadCount: 1,
-        firstActiveEventId: event.id,
-        // payload
-      }));
+      // update inbox items (notifications!)
+      const allUsers = await tx.query.users.findMany({
+        with: {
+          inboxItems: {
+            where: ((inboxItems, { eq }) => eq(inboxItems.activityId, activity_id)),
+          }
+        }
+      });
 
-      await tx.insert(inboxItems)
-        .values(inboxItemValues)
-        .onConflictDoUpdate({
-          target: [inboxItems.userId, inboxItems.activityId],
-          set: {
-            updatedAt: new Date(),
-            unreadCount: sql`${inboxItems.unreadCount} + 1`,
-            firstActiveEventId: sql`CASE WHEN ${inboxItems.unreadCount} = 0 THEN ${event.id} ELSE ${inboxItems.firstActiveEventId} END`,
-          },
-        });
+      const newInboxItemValues: any[] = [];
+
+      for (const user of allUsers) {
+        if (user.id === session.user.id) {
+          continue;
+        }
+
+        const newItem = {
+          ...eventPayload,
+          author_id: session.user.id,
+        }
+
+        const inboxItem = user.inboxItems.length === 0 ? null : user.inboxItems[0];
+
+        if (inboxItem) {
+          const isRead = inboxItem.lastReadEventId === inboxItem.lastEventId;
+          const prevRender = inboxItem.render as any;
+
+          newInboxItemValues.push({
+            ...inboxItem,
+            lastEventId: event.id,
+            render: {
+              ...prevRender,
+              items: isRead ? [newItem] : [...prevRender.items, newItem]
+            }
+          });
+        } else {
+          newInboxItemValues.push({
+            userId: user.id,
+            activityId: activity_id,
+            threadId: thread_id,
+            lastEventId: event.id,
+            render: {
+              items: [newItem]
+            }
+          });
+        }
+      }
+
+      await tx.insert(inboxItems).values(newInboxItemValues).onConflictDoUpdate({
+        target: [inboxItems.userId, inboxItems.activityId],
+        set: {
+          updatedAt: new Date(),
+          lastEventId: sql.raw(`excluded.${inboxItems.lastEventId.name}`),
+          render: sql.raw(`excluded.${inboxItems.render.name}`),
+        }
+      });
+
+
+
+        // await tx.update(inboxItems).set({
+
+        // const inboxItemPayload = {
+        //   items:
+        // }
+
+
+        // if (inboxItem) {
+        //   await tx.update(inboxItems).set({
+        //     unreadCount: 1,
+        //     firstActiveEventId: event.id,
+        //   }).where(eq(inboxItems.id, inboxItem.id));
+        // }
+
+        // const inboxItemValue = {
+        //   userId: user.id,
+        //   activityId: activity_id,
+        //   threadId: thread_id,
+        //   unreadCount: 1,
+        //   firstActiveEventId: event.id,
+        // }
+      // }
+      // const allUsers = await tx.select({ id: users.id }).from(users);//.where(ne(users.id, session.user.id));
+
+
+      
+      // // const allUsers = 
+
+      // allUsers.map((user) => {
+
+      //   // do not update inbox item for the user that triggered the event
+      //   if (user.id === session.user.id) {
+      //     return;
+      //   }
+
+      //   const inboxItemValue = {
+      //     userId: user.id,
+      //     activityId: activity_id,
+      //     threadId: thread_id,
+      //     unreadCount: 1,
+      //     firstActiveEventId: event.id,
+      //   }
+
+      // });
+
+      // // for (const user in allUsers) {
+
+      // //   if (user.id === session.user.id) {
+      // //     continue;
+      // //   }
+        
+        
+      // //   // const inboxItemValue = {
+      // //   //   userId: user.id,
+      // //   //   activityId: activity_id,
+      // //   //   threadId: thread_id,
+      // //   //   unreadCount: 1,
+      // //   //   firstActiveEventId: event.id,
+      // //   // }
+      // // }
+
+
+      // const inboxItemValues = allUsers.map((user) => ({
+      //   userId: user.id,
+      //   activityId: activity_id,
+      //   threadId: thread_id,
+      //   unreadCount: 1,
+      //   firstActiveEventId: event.id,
+      // }));
+
+      // await tx.insert(inboxItems)
+      //   .values(inboxItemValues)
+      //   .onConflictDoUpdate({
+      //     target: [inboxItems.userId, inboxItems.activityId],
+      //     set: {
+      //       updatedAt: new Date(),
+      //       unreadCount: sql`${inboxItems.unreadCount} + 1`,
+      //       firstActiveEventId: sql`CASE WHEN ${inboxItems.unreadCount} = 0 THEN ${event.id} ELSE ${inboxItems.firstActiveEventId} END`,
+      //     },
+      //   });
 
     })
 
@@ -1498,38 +1607,48 @@ app.openapi(inboxGETRoute, async (c) => {
   //   orderBy: (inboxItems, { desc }) => [desc(inboxItems.updatedAt)],
   // });
 
-  const rawData = await db
-  .select()
-  .from(inboxItems)
-  .where(eq(inboxItems.userId, session.user.id))
-  .innerJoin(events, and(eq(events.activityId, inboxItems.activityId), or(gte(events.id, inboxItems.firstActiveEventId), isNull(inboxItems.firstActiveEventId))))
-  .orderBy(desc(inboxItems.updatedAt), desc(events.createdAt))
-
-  const dataObj : Record<string, any> = {}
-
-  for (const item of rawData) {
-
-    if (!dataObj[item.inbox_items.id]) {
-      dataObj[item.inbox_items.id] = {
-        ...item.inbox_items,
-        events: [{
-          ...item.events,
-        }],
-      }
-    } else {
-      dataObj[item.inbox_items.id].events.push({
-        ...item.events,
-      })
+  const inboxItemRows = await db.query.inboxItems.findMany({
+    where: eq(inboxItems.userId, session.user.id),
+    with: {
+      thread: true,
+      activity: true,
     }
-  }
+  })
 
-  // // Transform the data to include the isRead field
-  // const transformedInboxItems = inboxItemsData.map((item) => ({
-  //   ...item,
-  //   isRead: item.lastReadEventId === item.lastEventId,
-  // }));
+  return c.json(inboxItemRows, 200);
 
-  return c.json(Object.values(dataObj), 200);
+  // const rawData = await db
+  // .select()
+  // .from(inboxItems)
+  // .where(eq(inboxItems.userId, session.user.id))
+  // .innerJoin(events, and(eq(events.activityId, inboxItems.activityId), or(gte(events.id, inboxItems.firstActiveEventId), isNull(inboxItems.firstActiveEventId))))
+  // .orderBy(desc(inboxItems.updatedAt), desc(events.createdAt))
+
+  // const dataObj : Record<string, any> = {}
+
+  // for (const item of rawData) {
+
+  //   if (!dataObj[item.inbox_items.id]) {
+  //     dataObj[item.inbox_items.id] = {
+  //       ...item.inbox_items,
+  //       events: [{
+  //         ...item.events,
+  //       }],
+  //     }
+  //   } else {
+  //     dataObj[item.inbox_items.id].events.push({
+  //       ...item.events,
+  //     })
+  //   }
+  // }
+
+  // // // Transform the data to include the isRead field
+  // // const transformedInboxItems = inboxItemsData.map((item) => ({
+  // //   ...item,
+  // //   isRead: item.lastReadEventId === item.lastEventId,
+  // // }));
+
+  // return c.json(Object.values(dataObj), 200);
 });
 
 
@@ -1560,7 +1679,7 @@ app.openapi(inboxMarkAsReadRoute, async (c) => {
     
     await db.update(inboxItems)
       .set({
-        unreadCount: 0
+        lastReadEventId: sql`${inboxItems.lastEventId}`,
       })
       .where(eq(inboxItems.id, inboxItem.id));
 

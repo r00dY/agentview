@@ -149,11 +149,12 @@ export const events = pgTable('events', {
   id: bigserial({ mode: 'number' }).primaryKey(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   authorId: text('author_id').references(() => users.id),
-  type: varchar('type', { length: 256 }).notNull(),  // "comment_created", "comment_edited", "comment_deleted" (with scores & mentions, everything bundled)
-  commentId: uuid('comment_id').references(() => commentMessages.id),
-  activityId: uuid('activity_id').references(() => activity.id),
-  threadId: uuid('thread_id').references(() => thread.id),
-  payload: jsonb('payload').notNull(), // scores: 2, mentions: 1, comment: true / false
+  type: varchar('type', { length: 256 }).notNull(),  // "comment_created", "comment_edited", "comment_deleted", etc...
+  payload: jsonb('payload').notNull(),
+
+  // activityId: uuid('activity_id').references(() => activity.id), // this is derived and temporary!!! Allows us easily to fetch inbox_items with events.
+  // commentId: uuid('comment_id').references(() => commentMessages.id),
+  // threadId: uuid('thread_id').references(() => thread.id),
 });
 
 export const inboxItems = pgTable('inbox_items', {
@@ -161,13 +162,20 @@ export const inboxItems = pgTable('inbox_items', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 
+  userId: text('user_id').notNull().references(() => users.id),
   activityId: uuid('activity_id').references(() => activity.id), // for now (user x activity) is the only possible "inbox item", later maybe (user x thread) will happen
   threadId: uuid('thread_id').references(() => thread.id),
+  
+  lastEventId: bigint('last_event_id', { mode: 'number' }).references(() => events.id),
+  lastReadEventId: bigint('last_read_event_id', { mode: 'number' }).references(() => events.id),
+  render: jsonb('render').notNull(),
 
-  userId: text('user_id').notNull().references(() => users.id),
+  // unreadCount: integer('unread_count').notNull().default(0),
+  // firstActiveEventId: bigint('first_active_event_id', { mode: 'number' }).references(() => events.id),
 
-  unreadCount: integer('unread_count').notNull().default(0),
-  firstActiveEventId: bigint('first_active_event_id', { mode: 'number' }).references(() => events.id),
+
+
+
   // lastActiveEventId: bigint('last_active_event_id', { mode: 'number' }).references(() => events.id),
 
   // lastReadEventId: bigint('last_read_event_id', { mode: 'number' }).references(() => events.id),
@@ -299,14 +307,18 @@ export const scoresRelations = relations(scores, ({ one }) => ({
 }));
 
 export const inboxItemsRelations = relations(inboxItems, ({ one, many }) => ({
-  // activity: one(activity, {
-  //   fields: [inboxItems.activityId],
-  //   references: [activity.id],
-  // }),
-  // user: one(users, {
-  //   fields: [inboxItems.userId],
-  //   references: [users.id],
-  // }),
+  activity: one(activity, {
+    fields: [inboxItems.activityId],
+    references: [activity.id],
+  }),
+  thread: one(thread, {
+    fields: [inboxItems.threadId],
+    references: [thread.id],
+  }),
+  user: one(users, {
+    fields: [inboxItems.userId],
+    references: [users.id],
+  }),
   // lastReadEvent: one(events, {
   //   fields: [inboxItems.lastReadEventId],
   //   references: [events.id],
@@ -316,4 +328,8 @@ export const inboxItemsRelations = relations(inboxItems, ({ one, many }) => ({
   //   references: [events.id],
   // }),
   events: many(events),
+}));
+
+export const usersRelations = relations(users, ({ many }) => ({
+  inboxItems: many(inboxItems),
 }));

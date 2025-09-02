@@ -49,77 +49,65 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
 // Separate InboxItem component
 function InboxItemComponent({ item }: { item: InboxItem }) {
   const fetcher = useFetcher();
-  const isRead = item.unreadCount === 0;
+  const isRead = item.lastReadEventId === item.lastEventId;
 
-  if (item.activityId) {
-    const firstEvent = item.events[0];
-    if (!firstEvent) {
-      console.error('No events found for inbox item', item);
-      return null;
-    }
-
-    const threadNumber = firstEvent.payload.thread.number;
-    const activityNumber = firstEvent.payload.activity.number;
-    const author = firstEvent.payload.author;
-
-    return (
-      <div className="p-3 border-b flex flex-col gap-2">
-        <div className="flex flex-row gap-2 justify-stretch">
-          <div className="text-sm">
-            <span className="font-medium">{author.name}</span> commented in{" "}
-            <div className="inline-flex font-medium flex-row items-center gap-1">
-              <MessageCircle className="size-4" /> Session {threadNumber} (item {activityNumber})
-            </div>
-          </div>
-          <div className="flex flex-row gap-1">
-            <div className="text-sm text-gray-500">{timeAgoShort(item.updatedAt)}</div>
-            <div className="text-sm text-gray-500">{isRead ? "" : `(${item.unreadCount})`}</div>
+  return (
+    <div className="p-3 border-b flex flex-col gap-2">
+      <div className="flex flex-row gap-2 justify-stretch">
+        <div className="text-sm">
+          Something happened in 
+          {/* <span className="font-medium">{author.name}</span> commented in{" "} */}
+          <div className="inline-flex font-medium flex-row items-center gap-1">
+            <MessageCircle className="size-4" /> Session {item.thread.number} (item {item.activity.number})
           </div>
         </div>
-        
-        {/* Mark as read button for unread items */}
-        {!isRead && !fetcher.data?.success && (
-          <fetcher.Form method="post" className="mt-2">
-            <input type="hidden" name="action" value="markAsRead" />
-            <input type="hidden" name="inboxItemId" value={item.id} />
-            
-            {/* Error message */}
-            {fetcher.data?.ok === false && fetcher.state === 'idle' && (
-              <div className="text-sm text-red-600 mb-2">
-                Failed to mark as read. Please try again.
-              </div>
-            )}
-            
-            <Button 
-              type="submit" 
-              variant="outline" 
-              size="sm"
-              disabled={fetcher.state !== "idle"}
-              className="w-full"
-            >
-              {fetcher.state === "submitting" ? "Marking..." : 
-               fetcher.state === "loading" ? "Marked!" : "Mark as Read"}
-            </Button>
-          </fetcher.Form>
-        )}
-        
-        {/* Success message when marked as read */}
-        {/* {fetcher.data?.success && fetcher.state === 'idle' && (
-          <div className="text-sm text-green-600 mt-2 font-medium">
-            ✓ Marked as read
-          </div>
-        )} */}
+        <div className="flex flex-row gap-1">
+          <div className="text-sm text-gray-500">{timeAgoShort(item.updatedAt)}</div>
+          <div className="text-sm text-gray-500">{isRead ? "" : `(${item.render.items.length})`}</div>
+        </div>
       </div>
-    );
-  } else {
-    console.error('Unknown inbox item type', item);
-    return null;
-  }
+      
+      {/* Mark as read button for unread items */}
+      {!isRead && !fetcher.data?.success && (
+        <fetcher.Form method="post" className="mt-2">
+          <input type="hidden" name="action" value="markAsRead" />
+          <input type="hidden" name="inboxItemId" value={item.id} />
+          
+          {/* Error message */}
+          {fetcher.data?.ok === false && fetcher.state === 'idle' && (
+            <div className="text-sm text-red-600 mb-2">
+              Failed to mark as read. Please try again.
+            </div>
+          )}
+          
+          <Button 
+            type="submit" 
+            variant="outline" 
+            size="sm"
+            disabled={fetcher.state !== "idle"}
+            className="w-full"
+          >
+            {fetcher.state === "submitting" ? "Marking..." : 
+              fetcher.state === "loading" ? "Marked!" : "Mark as Read"}
+          </Button>
+        </fetcher.Form>
+      )}
+      
+      {/* Success message when marked as read */}
+      {/* {fetcher.data?.success && fetcher.state === 'idle' && (
+        <div className="text-sm text-green-600 mt-2 font-medium">
+          ✓ Marked as read
+        </div>
+      )} */}
+    </div>
+  );
 }
 
 export default function InboxPage() {
   const { inboxItems } = useLoaderData<typeof clientLoader>();
   console.log(inboxItems);
+
+  // return <div>gowno</div>
 
   return (
     <div className="flex flex-row items-stretch h-full">
