@@ -51,7 +51,9 @@ export function timeAgoShort(
   if (abs >= DAY) return `${applyRound(abs / DAY)}d`;
   if (abs >= HOUR) return `${applyRound(abs / HOUR)}h`;
   if (abs >= MIN) return `${applyRound(abs / MIN)}m`;
-  return `${applyRound(abs / SEC)}s`;
+
+  return "now";
+  // return `${applyRound(abs / SEC)}s`;
 }
 
 /** Formats as DD/MM/YYYY or MM/DD/YYYY depending on the locale’s day/month order, using slashes. */
