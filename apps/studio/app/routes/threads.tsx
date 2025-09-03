@@ -5,7 +5,6 @@ import { Button } from "~/components/ui/button";
 import { PlusIcon } from "lucide-react";
 import { Header, HeaderTitle } from "~/components/header";
 import { getThreadsList } from "~/lib/utils";
-import { authClient } from "~/lib/auth-client";
 import { apiFetch } from "~/lib/apiFetch";
 import type { Thread } from "~/lib/shared/apiTypes";
 import { getAllActivities } from "~/lib/shared/threadUtils";
