@@ -1573,11 +1573,10 @@ app.openapi(inboxMarkAsReadRoute, async (c) => {
   try {
     const session = await requireSession(c.req.raw.headers);
     const inboxItem = await requireInboxItem(session.user, id)
-    const lastEvent = await getLastEvent()
     
     await db.update(inboxItems)
       .set({
-        lastReadEventId: sql`${lastEvent.id}`,
+        lastReadEventId: sql`${inboxItem.lastNotifiableEventId}`, // should be set to last notiffiable event id, because IT IS WHAT USER SAW. If we set it to last event id (from the system) we lose option to renotify user about consecutive events that he should be notified about.
       })
       .where(eq(inboxItems.id, inboxItem.id));
 
