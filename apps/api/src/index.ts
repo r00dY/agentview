@@ -22,7 +22,7 @@ import { getStudioURL } from './getStudioURL'
 
 // shared imports
 import { getAllActivities, getLastRun } from './shared/threadUtils'
-import { ClientSchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, RunSchema, ActivitySchema, type User, type Thread, type Activity, SchemaSchema, SchemaCreateSchema, InboxItemSchema } from './shared/apiTypes'
+import { ClientSchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, RunSchema, ActivitySchema, type User, type Thread, type Activity, SchemaSchema, SchemaCreateSchema, InboxItemSchema, ClientCreateSchema } from './shared/apiTypes'
 import { getSchema } from './getSchema'
 import type { BaseConfig } from './shared/configTypes'
 import { users } from './db/auth-schema'
@@ -104,6 +104,17 @@ async function requireActivity(thread: Thread, activity_id: string) {
   return activity
 }
 
+async function requireClient(client_id: string) {
+  const clientRow = await db.query.client.findFirst({
+    where: eq(client.id, client_id),
+  });
+
+  if (!clientRow) {
+    throw new HTTPException(404, { message: "Client not found" });
+  }
+  return clientRow
+}
+
 async function requireCommentMessageFromUser(thread: Thread, activity: Activity, comment_id: string, user: User) {
   const comment = activity.commentMessages?.find((m) => m.id === comment_id && m.deletedAt === null)
   if (!comment) {
@@ -141,7 +152,7 @@ const apiClientsPOSTRoute = createRoute({
   method: 'post',
   path: '/api/clients',
   request: {
-    body: body(z.object({}))
+    body: body(ClientCreateSchema)
   },
   responses: {
     201: response_data(ClientSchema)
@@ -150,13 +161,12 @@ const apiClientsPOSTRoute = createRoute({
 
 app.openapi(apiClientsPOSTRoute, async (c) => {
   try {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers })
-    if (!session) {
-      return c.json({ message: "Authentication required" }, 401);
-    }
+    const body = await c.req.json()
+    const session = await requireSession(c.req.raw.headers)
 
     const [newClient] = await db.insert(client).values({
       simulated_by: session.user.id,
+      is_shared: body.is_shared,
     }).returning();
     
     return c.json(newClient, 201);
@@ -164,7 +174,6 @@ app.openapi(apiClientsPOSTRoute, async (c) => {
     return errorToResponse(c, error);
   }
 })
-
 
 // Client GET
 const clientGETRoute = createRoute({
@@ -195,6 +204,37 @@ app.openapi(clientGETRoute, async (c) => {
   return c.json(clientRow, 200);
 })
 
+
+const apiClientsPUTRoute = createRoute({
+  method: 'put',
+  path: '/api/clients/{client_id}',
+  request: {
+    body: body(ClientCreateSchema)
+  },
+  responses: {
+    201: response_data(ClientSchema)
+},
+})
+
+app.openapi(apiClientsPUTRoute, async (c) => {
+  try {
+    const body = await c.req.json()
+    const { client_id } = c.req.param()
+
+    const session = await requireSession(c.req.raw.headers)
+    const clientRow = await requireClient(client_id)
+
+    if (clientRow.simulated_by !== session.user.id) {
+      throw new HTTPException(401, { message: "Unauthorized" });
+    }
+
+    const [updatedClient] = await db.update(client).set(body).where(eq(client.id, client_id)).returning();
+    
+    return c.json(updatedClient, 200);
+  } catch (error: any) {
+    return errorToResponse(c, error);
+  }
+})
 
 
 /* --------- THREADS --------- */

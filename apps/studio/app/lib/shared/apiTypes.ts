@@ -23,9 +23,20 @@ export const ClientSchema = z.object({
     created_at: z.date(),
     updated_at: z.date(),
     simulatedBy: z.any().nullable(),
+    is_shared: z.boolean(),
 })
 
 export type Client = z.infer<typeof ClientSchema>
+
+export const ClientCreateSchema = ClientSchema.pick({
+    is_shared: true,
+}).partial()
+
+export type ClientCreate = z.infer<typeof ClientCreateSchema>
+
+
+
+
 
 export const ScoreSchema = z.object({
     id: z.string(),
@@ -131,8 +142,6 @@ export type Schema = z.infer<typeof SchemaSchema>
 export const SchemaCreateSchema = SchemaSchema.pick({
     schema: true,
 })
-
-
 
 export const InboxItemSchema = z.any() // todo: fix this
   

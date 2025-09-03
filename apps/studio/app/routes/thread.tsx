@@ -12,6 +12,9 @@ import { getLastRun, getAllActivities, getVersions } from "~/lib/shared/threadUt
 import { type Thread } from "~/lib/shared/apiTypes";
 import { getThreadsList } from "~/lib/utils";
 import { PropertyList } from "~/components/PropertyList";
+import { Share } from "lucide-react";
+import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
+import { Badge } from "~/components/ui/badge";
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
     const response = await apiFetch<Thread>(`/api/threads/${params.id}`);
@@ -129,6 +132,24 @@ function ThreadDetails({ thread }: { thread: any }) {
     );
 }
 
+function ShareForm({ thread }: { thread: Thread }) {
+    const fetcher = useFetcher();
+    const navigate = useNavigate();
+    
+    useFetcherSuccess(fetcher, () => {
+        navigate(`/threads/${thread.id}?list=simulated_shared`);
+    });
+    
+    if (thread.client.is_shared) {
+        return <Badge>Public</Badge>
+    }
+
+    return <fetcher.Form method="put" action={`/clients/${thread.client.id}/share`}>
+        <input type="hidden" name="is_shared" value="true" />
+        <Button variant="outline" size="sm" type="submit"><Share /> {fetcher.state === "submitting" ? "Making public..." : "Make public"}</Button>
+    </fetcher.Form>
+}
+
 export default function ThreadPageWrapper() {
     const loaderData = useLoaderData<typeof clientLoader>();
     return <ThreadPage key={loaderData.thread.id} />
@@ -152,6 +173,8 @@ function ThreadPage() {
     // const selectedActivityId = activities.find((a: any) => a.id === searchParams.get('activityId'))?.id ?? undefined;
 
     const threadStatus = lastRun?.state === "completed" ? "idle" : (lastRun?.state ?? "idle")
+
+    // console.log(thread)
 
 
     // const setSelectedActivityId = (id: string | undefined) => {
@@ -291,7 +314,6 @@ function ThreadPage() {
         })
     }
 
-
     {/* <div className="flex-1 flex flex-col">  
       <Outlet />
     </div> */}
@@ -299,6 +321,8 @@ function ThreadPage() {
     <div className="basis-[720px] flex-shrink-0 flex-grow-0 border-r  flex flex-col">  
         <Header>
             <HeaderTitle title={`Thread ${thread.number}`} />
+
+            <ShareForm thread={thread} />
         </Header>
         <div className="flex-1 overflow-y-auto">
 
