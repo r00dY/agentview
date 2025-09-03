@@ -21,6 +21,9 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarGroupContent,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton,
 } from "../components/ui/sidebar"
 import type { Route } from "./+types/sidebar_layout";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
@@ -93,6 +96,48 @@ export default function Layout() {
             </SidebarGroup>
 
             <SidebarGroup>
+              <SidebarGroupLabel>Sessions</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton>pdp_chat</SidebarMenuButton>
+                    <SidebarMenuSub>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild>
+                          <Link to="/threads">
+                            <MessageCircle className="mr-2 h-4 w-4" />
+                            <span>Production</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild>
+                          <Link to="/threads?list=simulated_private">
+                            <User className="mr-2 h-4 w-4" />
+                            <span>Simulated Private</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild>
+                          <Link to="/threads?list=simulated_shared">
+                            <Users className="mr-2 h-4 w-4" />
+                            <span>Simulated Shared</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    </SidebarMenuSub>
+
+
+                  </SidebarMenuItem>
+
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+
+
+            {/* <SidebarGroup>
               <SidebarGroupLabel>Production</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
@@ -127,20 +172,9 @@ export default function Layout() {
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-
-
-
-                  {/* <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
-                      <Link to="/evals">
-                        <Gauge className="mr-2 h-4 w-4" />
-                        <span>Evaluations</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem> */}
                 </SidebarMenu>
               </SidebarGroupContent>
-            </SidebarGroup>
+            </SidebarGroup> */}
 
             {user.role === "admin" && <SidebarGroup>
               <SidebarGroupLabel>Organization</SidebarGroupLabel>
