@@ -41,7 +41,7 @@ export async function updateActivityInboxes(
 
     const eventPayload: any = event.payload;
 
-    const newInboxItemValues: any[] = [];   
+    const newInboxItemValues: any[] = [];
 
     for (const user of allUsers) {
         if (!isEventForUser(event, user.id)) {
@@ -150,70 +150,6 @@ export async function updateActivityInboxes(
             }
         });
     }
-
-    // if (inboxItemIdsToDelete.length > 0) {
-    //     await tx.delete(inboxItems).where(inArray(inboxItems.id, inboxItemIdsToDelete));
-    // }
-
-    // if (event.type === 'comment_created') {
-
-    //     const newInboxItemValues: any[] = [];   
-
-    //     for (const user of allUsers) {
-    //         if (!isEventForUser(event, user.id)) {
-    //             continue;
-    //         }
-
-    //         const inboxItem = user.inboxItems.length === 0 ? null : user.inboxItems[0];
-
-    //         if (inboxItem) {
-    //             const isRead = !inboxItem.lastReadEventId || inboxItem.lastNotifiableEventId <= inboxItem.lastReadEventId;
-    //             const prevRender = inboxItem.render as any;
-
-    //             newInboxItemValues.push({
-    //                 ...inboxItem,
-    //                 lastNotifiableEventId: event.id,
-    //                 render: {
-    //                     ...prevRender,
-    //                     items: isRead ? [newItem] : [...prevRender.items, newItem]
-    //                 }
-    //             });
-    //         } else {
-    //             newInboxItemValues.push({
-    //                 userId: user.id,
-    //                 activityId: activity.id,
-    //                 threadId: activity.thread_id,
-    //                 lastNotifiableEventId: event.id,
-    //                 render: {
-    //                     items: [newItem]
-    //                 }
-    //             });
-    //         }
-    //     }
-
-    //     await tx.insert(inboxItems).values(newInboxItemValues).onConflictDoUpdate({
-    //         target: [inboxItems.userId, inboxItems.activityId],
-    //         set: {
-    //             updatedAt: new Date(),
-    //             lastNotifiableEventId: sql.raw(`excluded.${inboxItems.lastNotifiableEventId.name}`),
-    //             render: sql.raw(`excluded.${inboxItems.render.name}`),
-    //         }
-    //     });
-    // }
-    // else if (event.type === 'comment_edited') {
-
-
-
-
-
-    //     throw new Error("comment_edited is not implemented");
-    // }
-    // else if (event.type === 'comment_deleted') {
-    //     throw new Error("comment_deleted is not implemented");
-    // }
-    // else {
-    //     throw new Error(`Incorrect event type: "${event.type}"`);
-    // }
 }
 
 function isEventForUser(event: InferSelectModel<typeof events>, userId: string) {
