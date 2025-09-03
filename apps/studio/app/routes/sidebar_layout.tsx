@@ -95,6 +95,58 @@ export default function Layout() {
               </SidebarGroupContent>
             </SidebarGroup>
 
+            {/* <SidebarGroup>
+              <SidebarGroupLabel>pdp_chat</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton>Production </SidebarMenuButton>
+
+                    <SidebarMenuSub>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild>
+                          <Link to="/threads">
+                            <MessageCircle className="mr-2 h-4 w-4" />
+                            <span>All</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    </SidebarMenuSub>
+
+
+                  </SidebarMenuItem>
+
+
+
+                  <SidebarMenuItem>
+                    <SidebarMenuButton>Simulated</SidebarMenuButton>
+                    <SidebarMenuSub>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild>
+                          <Link to="/threads?list=simulated_private">
+                            <User className="mr-2 h-4 w-4" />
+                            <span> Private</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild>
+                          <Link to="/threads?list=simulated_shared">
+                            <Users className="mr-2 h-4 w-4" />
+                            <span>Shared</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    </SidebarMenuSub>
+
+
+                  </SidebarMenuItem>
+
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup> */}
+
+            
             <SidebarGroup>
               <SidebarGroupLabel>Sessions</SidebarGroupLabel>
               <SidebarGroupContent>
