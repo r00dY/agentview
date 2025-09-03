@@ -175,9 +175,6 @@ export const inboxItems = pgTable('inbox_items', {
   // unreadCount: integer('unread_count').notNull().default(0),
   // firstActiveEventId: bigint('first_active_event_id', { mode: 'number' }).references(() => events.id),
 
-
-
-
   // lastActiveEventId: bigint('last_active_event_id', { mode: 'number' }).references(() => events.id),
 
   // lastReadEventId: bigint('last_read_event_id', { mode: 'number' }).references(() => events.id),
@@ -189,9 +186,9 @@ export const inboxItems = pgTable('inbox_items', {
 
   // unreadCount: integer('unread_count').notNull().default(0),
   // attentionLevel: integer('attention_level').notNull().default(0), // 0: none, 1: low, 2: high (mention)
-}, (table) => ({
-  userActivityUnique: uniqueIndex('inbox_items_user_activity_unique').on(table.userId, table.activityId),
-}));
+}, (table) => [
+  uniqueIndex('inbox_items_user_activity_unique').on(table.userId, table.activityId)
+]);
 
 
 
