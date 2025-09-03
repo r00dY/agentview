@@ -1,27 +1,27 @@
 import React from "react";
 import {
-    Link,
-    Outlet,
-    redirect,
-    useFetcher,
-    useLoaderData,
-  } from "react-router";
-  
-  import { LogOut, ChevronUp, User, Edit, Lock, Users, Mail, MessageCircle, Database, Inbox } from "lucide-react"
-  import {
-    SidebarProvider,
-    Sidebar,
-    SidebarHeader,
-    SidebarContent,
-    SidebarFooter,
-    SidebarMenu,
-    SidebarMenuItem,
-    SidebarMenuButton,
-    SidebarInset,
-    SidebarGroup,
-    SidebarGroupLabel,
-    SidebarGroupContent,
-  } from "../components/ui/sidebar"
+  Link,
+  Outlet,
+  redirect,
+  useFetcher,
+  useLoaderData,
+} from "react-router";
+
+import { LogOut, ChevronUp, User, Edit, Lock, Users, Mail, MessageCircle, Database, Inbox } from "lucide-react"
+import {
+  SidebarProvider,
+  Sidebar,
+  SidebarHeader,
+  SidebarContent,
+  SidebarFooter,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarInset,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarGroupContent,
+} from "../components/ui/sidebar"
 import type { Route } from "./+types/sidebar_layout";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
 import { EditProfileDialog } from "~/components/EditProfileDialog";
@@ -29,7 +29,7 @@ import { ChangePasswordDialog } from "~/components/ChangePasswordDialog";
 import { authClient } from "~/lib/auth-client";
 
 
-export async function clientLoader({request}: Route.ClientLoaderArgs) {
+export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const session = await authClient.getSession()
 
   const url = new URL(request.url);
@@ -56,7 +56,7 @@ export default function Layout() {
 
   const [editProfileOpen, setEditProfileOpen] = React.useState(false)
   const [changePasswordOpen, setChangePasswordOpen] = React.useState(false)
-  
+
   const user = session.user
 
   return (
@@ -76,7 +76,7 @@ export default function Layout() {
           </SidebarHeader>
 
           <SidebarContent>
-          <SidebarGroup>
+            <SidebarGroup>
               <SidebarGroupContent>
                 <SidebarMenu>
                   <SidebarMenuItem>
@@ -117,7 +117,7 @@ export default function Layout() {
                     <SidebarMenuButton asChild>
                       <Link to="/threads?list=simulated_private">
                         <User className="mr-2 h-4 w-4" />
-                        <span>My Sessions</span>
+                        <span>Private Sessions</span>
                       </Link>
                     </SidebarMenuButton>
                     <SidebarMenuButton asChild>
@@ -127,8 +127,8 @@ export default function Layout() {
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                  
-                  
+
+
 
                   {/* <SidebarMenuItem>
                     <SidebarMenuButton asChild>
@@ -142,23 +142,26 @@ export default function Layout() {
               </SidebarGroupContent>
             </SidebarGroup>
 
-            { user.role === "admin" && <SidebarGroup>
+            {user.role === "admin" && <SidebarGroup>
               <SidebarGroupLabel>Organization</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
                   <SidebarMenuItem>
+
                     <SidebarMenuButton asChild>
                       <Link to="/members">
                         <Users className="mr-2 h-4 w-4" />
                         <span>Members</span>
                       </Link>
+
                     </SidebarMenuButton>
+
                   </SidebarMenuItem>
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>}
 
-            { isDeveloper && <SidebarGroup>
+            {isDeveloper && <SidebarGroup>
               <SidebarGroupLabel>Developer</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
@@ -169,7 +172,7 @@ export default function Layout() {
                         <span>Emails</span>
                       </Link>
                     </SidebarMenuButton>
-                  
+
                   </SidebarMenuItem>
                   <SidebarMenuItem>
                     <SidebarMenuButton asChild>
@@ -183,63 +186,63 @@ export default function Layout() {
               </SidebarGroupContent>
             </SidebarGroup>}
           </SidebarContent>
-          
-      <SidebarFooter className="border-t p-3">
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <SidebarMenuButton>
-                    <User />
-                    <div className="flex flex-col items-start text-left">
-                      <span className="text-sm font-medium truncate">{user.name}</span>
-                      <span className="text-xs text-muted-foreground truncate">{user.email}</span>
-                    </div>
-                    <ChevronUp className="ml-auto" />
-                  </SidebarMenuButton>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent side="top" className="w-[--radix-popper-anchor-width]">
-                  <DropdownMenuItem onClick={() => { setEditProfileOpen(true) }}>
-                    <Edit className="mr-2 h-4 w-4" />
-                    Edit Account
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => { setChangePasswordOpen(true) }}>
-                    <Lock className="mr-2 h-4 w-4" />
-                    Change Password
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => {
-                    logoutFetcher.submit(null, {
-                      method: 'post',
-                      action: '/logout'
-                    })
-                  }}>
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Log out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+
+          <SidebarFooter className="border-t p-3">
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <SidebarMenuButton>
+                      <User />
+                      <div className="flex flex-col items-start text-left">
+                        <span className="text-sm font-medium truncate">{user.name}</span>
+                        <span className="text-xs text-muted-foreground truncate">{user.email}</span>
+                      </div>
+                      <ChevronUp className="ml-auto" />
+                    </SidebarMenuButton>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent side="top" className="w-[--radix-popper-anchor-width]">
+                    <DropdownMenuItem onClick={() => { setEditProfileOpen(true) }}>
+                      <Edit className="mr-2 h-4 w-4" />
+                      Edit Account
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => { setChangePasswordOpen(true) }}>
+                      <Lock className="mr-2 h-4 w-4" />
+                      Change Password
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => {
+                      logoutFetcher.submit(null, {
+                        method: 'post',
+                        action: '/logout'
+                      })
+                    }}>
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Log out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
 
 
-              <EditProfileDialog
-                open={editProfileOpen}
-                onOpenChange={setEditProfileOpen}
-                user={user}
-              />
+                <EditProfileDialog
+                  open={editProfileOpen}
+                  onOpenChange={setEditProfileOpen}
+                  user={user}
+                />
 
-              <ChangePasswordDialog
-                open={changePasswordOpen}
-                onOpenChange={setChangePasswordOpen}
-              />
+                <ChangePasswordDialog
+                  open={changePasswordOpen}
+                  onOpenChange={setChangePasswordOpen}
+                />
 
 
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarFooter>
-        
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarFooter>
+
         </Sidebar>
 
         <SidebarInset>
-          <Outlet/>
+          <Outlet />
         </SidebarInset>
       </div>
     </SidebarProvider>

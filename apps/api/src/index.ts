@@ -284,7 +284,7 @@ app.openapi(threadsGETRoute, async (c) => {
       if (list === "real") {
         return thread.client.simulatedBy === null;
       } else if (list === "simulated_private") {
-        return thread.client.simulatedBy !== null && thread.client.simulatedBy.id === userId;
+        return thread.client.simulatedBy !== null && thread.client.simulatedBy.id === userId && !thread.client.is_shared;
       } else if (list === "simulated_shared") {
         return thread.client.simulatedBy !== null && thread.client.is_shared;
       }
