@@ -428,17 +428,6 @@ app.openapi(threadSeenRoute, async (c) => {
       }
     }).returning();
 
-
-    // const inboxItem = await getInboxItemOrCreateEmpty(session.user, thread_id)
-    
-    // if (inboxItem) {
-    //   await db.update(inboxItems)
-    //     .set({
-    //       lastReadEventId: sql`${inboxItem.lastNotifiableEventId}`, // should be set to last notiffiable event id, because IT IS WHAT USER SAW. If we set it to last event id (from the system) we lose option to renotify user about consecutive events that he should be notified about.
-    //     })
-    //     .where(eq(inboxItems.id, inboxItem.id));
-    // }
-
     return c.json({}, 200);
   } catch (error: any) {
     return errorToResponse(c, error);
