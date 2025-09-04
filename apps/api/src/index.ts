@@ -17,7 +17,7 @@ import { extractMentions } from './utils'
 import { auth } from './auth'
 import { createInvitation, cancelInvitation, getPendingInvitations, getValidInvitation } from './invitations'
 import { fetchThread } from './threads'
-import { callAgentAPI , AgentAPIError} from './agentApi'
+import { callAgentAPI, AgentAPIError } from './agentApi'
 import { getStudioURL } from './getStudioURL'
 
 // shared imports
@@ -56,7 +56,7 @@ app.use('*', cors({
 /* --------- AUTH --------- */
 
 app.on(["POST", "GET"], "/api/auth/*", (c) => {
-	return auth.handler(c.req.raw);
+  return auth.handler(c.req.raw);
 });
 
 /** --------- UTILS --------- */
@@ -181,7 +181,7 @@ app.openapi(apiClientsPOSTRoute, async (c) => {
       simulated_by: session.user.id,
       is_shared: body.is_shared,
     }).returning();
-    
+
     return c.json(newClient, 201);
   } catch (error: any) {
     return errorToResponse(c, error);
@@ -226,7 +226,7 @@ const apiClientsPUTRoute = createRoute({
   },
   responses: {
     201: response_data(ClientSchema)
-},
+  },
 })
 
 app.openapi(apiClientsPUTRoute, async (c) => {
@@ -242,7 +242,7 @@ app.openapi(apiClientsPUTRoute, async (c) => {
     }
 
     const [updatedClient] = await db.update(client).set(body).where(eq(client.id, client_id)).returning();
-    
+
     return c.json(updatedClient, 200);
   } catch (error: any) {
     return errorToResponse(c, error);
@@ -279,7 +279,7 @@ app.openapi(threadsGETRoute, async (c) => {
       with: {
         client: true,
         inboxItems: {
-          where: and(isNull(inboxItems.activityId), eq(inboxItems.userId, session.user.id)),
+          where: eq(inboxItems.userId, session.user.id),
         },
       },
       orderBy: (thread: any, { desc }: any) => [desc(thread.updated_at)]
@@ -295,13 +295,27 @@ app.openapi(threadsGETRoute, async (c) => {
       }
     })
 
-    return c.json(threadRowsFiltered.map((thread) => ({
-      ...thread,
-      inboxItems: thread.inboxItems.map((inboxItem) => ({
-        ...inboxItem,
-        isUnread: isInboxItemUnread(inboxItem)
-      }))
-    })), 200);
+    const threadRowsFilteredWithInboxItems = threadRowsFiltered.map((thread) => {
+
+      const threadInboxItem = thread.inboxItems.find((inboxItem) => inboxItem.activityId === null);
+      const activityInboxItems = thread.inboxItems.filter((inboxItem) => inboxItem.activityId !== null);
+      const isThreadUnread = !threadInboxItem || isInboxItemUnread(threadInboxItem);
+
+      
+
+      return {
+        ...thread,
+        inboxItems: thread.inboxItems.map((inboxItem) => ({
+          ...inboxItem,
+          isUnread: isInboxItemUnread(inboxItem)
+        })),
+        notifications: {
+          isUnread: isThreadUnread,
+        }
+      }
+    })
+
+    return c.json(threadRowsFilteredWithInboxItems, 200);
   } catch (error: any) {
     return errorToResponse(c, error);
   }
@@ -338,22 +352,22 @@ app.openapi(threadsPOSTRoute, async (c) => {
 
   const newThread = await db.transaction(async (tx) => {
     const [newThreadRow] = await tx.insert(thread).values(body).returning();
-    
-      // add event
-      const [event] = await tx.insert(events).values({
-        type: 'thread_created',
-        authorId: session.user.id,
-        payload: {
-          thread_id: newThreadRow.id,
-        }
-      }).returning();
 
-      const newThread = await fetchThread(newThreadRow.id, tx);
-      if (!newThread) {
-        throw new Error("[Internal Error] Thread not found");
+    // add event
+    const [event] = await tx.insert(events).values({
+      type: 'thread_created',
+      authorId: session.user.id,
+      payload: {
+        thread_id: newThreadRow.id,
       }
+    }).returning();
 
-      await updateInboxes(tx, event, newThread, null);
+    const newThread = await fetchThread(newThreadRow.id, tx);
+    if (!newThread) {
+      throw new Error("[Internal Error] Thread not found");
+    }
+
+    await updateInboxes(tx, event, newThread, null);
 
     return newThread;
   });
@@ -409,7 +423,7 @@ const threadSeenRoute = createRoute({
 
 app.openapi(threadSeenRoute, async (c) => {
   const { thread_id } = c.req.param()
-  
+
   try {
     const session = await requireSession(c.req.raw.headers);
 
@@ -421,12 +435,12 @@ app.openapi(threadSeenRoute, async (c) => {
       lastReadEventId: null,
       render: { events: [] },
     })
-    .onConflictDoUpdate({
-      target: [inboxItems.userId, inboxItems.activityId, inboxItems.threadId],
-      set: {
-        lastReadEventId: sql`${inboxItems.lastNotifiableEventId}`
-      }
-    }).returning();
+      .onConflictDoUpdate({
+        target: [inboxItems.userId, inboxItems.activityId, inboxItems.threadId],
+        set: {
+          lastReadEventId: sql`${inboxItems.lastNotifiableEventId}`
+        }
+      }).returning();
 
     return c.json({}, 200);
   } catch (error: any) {
@@ -600,8 +614,8 @@ app.openapi(runsPOSTRoute, async (c) => {
 
         // The first yield MUST be a manifest
         if (firstItem && event.name !== 'manifest') {
-          throw { 
-            message: "No 'manifest' was sent by the agent." 
+          throw {
+            message: "No 'manifest' was sent by the agent."
           };
         }
 
@@ -617,16 +631,16 @@ app.openapi(runsPOSTRoute, async (c) => {
               metadata: event.data.metadata || null,
             }
           }).returning();
-          
+
           versionId = version.id;
-          
+
           // Update the run with version_id
           if (userActivity.run_id) {
             await db.update(run)
               .set({ version_id: versionId })
               .where(eq(run.id, userActivity.run_id));
           }
-          
+
           firstItem = false;
           continue; // Skip this item as it's not an activity
         }
@@ -641,23 +655,23 @@ app.openapi(runsPOSTRoute, async (c) => {
         }
       }
 
-        if (!(await isStillRunning())) {
-          return
-        }
+      if (!(await isStillRunning())) {
+        return
+      }
 
-        await db.update(run)
-          .set({
-            state: 'completed',
-            finished_at: new Date(),
-          })
-          .where(eq(run.id, userActivity.run_id));
+      await db.update(run)
+        .set({
+          state: 'completed',
+          finished_at: new Date(),
+        })
+        .where(eq(run.id, userActivity.run_id));
     }
     catch (error: unknown) {
       if (!(await isStillRunning())) {
         return
       }
 
-      let failReason: { message: string, [key: string ]: any }
+      let failReason: { message: string, [key: string]: any }
 
       if (error instanceof AgentAPIError) {
         failReason = error.object
@@ -667,14 +681,14 @@ app.openapi(runsPOSTRoute, async (c) => {
           message: "AgentView internal error, please report to the team"
         }
       }
-      
+
       await db.update(run)
         .set({
           state: 'failed',
           finished_at: new Date(),
           fail_reason: failReason
-          })
-          .where(eq(run.id, userActivity.run_id));
+        })
+        .where(eq(run.id, userActivity.run_id));
     }
 
   })();
@@ -692,7 +706,7 @@ const runCancelRoute = createRoute({
   path: '/api/threads/{thread_id}/cancel_run',
   request: {
     params: z.object({
-      thread_id: z.string(), 
+      thread_id: z.string(),
     }),
   },
   responses: {
@@ -905,7 +919,7 @@ const commentsPOSTRoute = createRoute({
 app.openapi(commentsPOSTRoute, async (c) => {
   const body = await c.req.json()
   const { thread_id, activity_id } = c.req.param()
-  
+
   try {
     const session = await requireSession(c.req.raw.headers);
     const thread = await requireThread(thread_id)
@@ -937,7 +951,7 @@ app.openapi(commentsPOSTRoute, async (c) => {
           mentions = extractMentions(body.comment);
           userMentions = mentions.user_id || [];
         } catch (error) {
-          return c.json({ message: `Invalid mention format: ${(error as Error).message}`}, 400)
+          return c.json({ message: `Invalid mention format: ${(error as Error).message}` }, 400)
         }
 
         if (userMentions.length > 0) {
@@ -1007,7 +1021,7 @@ const commentsDELETERoute = createRoute({
 
 app.openapi(commentsDELETERoute, async (c) => {
   const { comment_id, thread_id, activity_id } = c.req.param()
-  
+
   try {
     const session = await requireSession(c.req.raw.headers);
     const thread = await requireThread(thread_id)
@@ -1030,7 +1044,7 @@ app.openapi(commentsDELETERoute, async (c) => {
           comment_id
         }
       }).returning();
-      
+
       await updateInboxes(tx, event, thread, activity);
 
     });
@@ -1068,7 +1082,7 @@ const commentsPUTRoute = createRoute({
 app.openapi(commentsPUTRoute, async (c) => {
   const { thread_id, activity_id, comment_id } = c.req.param()
   const body = await c.req.json()
-  
+
   try {
     const schema = await requireSchema()
     const session = await requireSession(c.req.raw.headers);
@@ -1129,7 +1143,7 @@ app.openapi(commentsPUTRoute, async (c) => {
         const newMentionsToAdd = newUserMentions.filter((mention: string) =>
           !existingMentionedUserIds.includes(mention)
         );
-            
+
         // Find mentions to remove (existed before but not in new content)
         const mentionsToRemove = existingMentionedUserIds.filter((mention: string) =>
           !newUserMentions.includes(mention)
@@ -1156,12 +1170,12 @@ app.openapi(commentsPUTRoute, async (c) => {
       }
 
       /** EDIT SCORES **/
-      
+
       // Get existing scores for this comment
       const existingScores = commentMessage.scores ?? [];
 
       // Find scores to delete (exist in database but not in inputScores)
-      const scoresToDelete = existingScores.filter(score => 
+      const scoresToDelete = existingScores.filter(score =>
         !Object.keys(inputScores).includes(score.name)
       );
 
@@ -1174,11 +1188,11 @@ app.openapi(commentsPUTRoute, async (c) => {
       // Update or insert scores from inputScores
       for (const [scoreName, scoreValue] of Object.entries(inputScores)) {
         const existingScore = existingScores.find(s => s.name === scoreName);
-        
+
         if (existingScore) {
           // Update existing score
           await tx.update(scores)
-            .set({ 
+            .set({
               value: scoreValue,
               updatedAt: new Date()
             })
@@ -1206,11 +1220,11 @@ app.openapi(commentsPUTRoute, async (c) => {
           scores: inputScores,
         }
       }).returning();
-      
+
       await updateInboxes(tx, event, thread, activity);
 
 
-    }); 
+    });
 
     return c.json({}, 200);
 
@@ -1249,7 +1263,7 @@ const membersGETRoute = createRoute({
 app.openapi(membersGETRoute, async (c) => {
   try {
     await requireSession(c.req.raw.headers);
-    
+
     const userRows = await db.select({
       id: users.id,
       email: users.email,
@@ -1291,7 +1305,7 @@ const memberPOSTRoute = createRoute({
 app.openapi(memberPOSTRoute, async (c) => {
   const { memberId } = c.req.param()
   const body = await c.req.json()
-  
+
   try {
     await requireAdminSession(c.req.raw.headers);
 
@@ -1325,7 +1339,7 @@ const memberDELETERoute = createRoute({
 
 app.openapi(memberDELETERoute, async (c) => {
   const { memberId } = c.req.param()
-  
+
   try {
     await requireAdminSession(c.req.raw.headers);
 
@@ -1386,16 +1400,16 @@ const invitationsPOSTRoute = createRoute({
 
 app.openapi(invitationsPOSTRoute, async (c) => {
   const body = await c.req.json()
-  
+
   try {
     const session = await requireAdminSession(c.req.raw.headers);
 
     await createInvitation(body.email, body.role, session.user.id);
-    
+
     // Get the created invitation to return it
     const pendingInvitations = await getPendingInvitations();
     const createdInvitation = pendingInvitations.find(inv => inv.email === body.email);
-    
+
     if (!createdInvitation) {
       return c.json({ message: "Failed to create invitation" }, 400);
     }
@@ -1541,7 +1555,7 @@ const schemasGETRoute = createRoute({
 
 app.openapi(schemasGETRoute, async (c) => {
   await requireAdminSession(c.req.raw.headers)
-  
+
   const schemaRows = await db.select().from(schemas).orderBy(desc(schemas.createdAt)).limit(1)
   if (schemaRows.length === 0) {
     return c.json(null, 200)
@@ -1562,7 +1576,7 @@ const schemasPOSTRoute = createRoute({
 
 app.openapi(schemasPOSTRoute, async (c) => {
   await requireAdminSession(c.req.raw.headers)
-  
+
   const session = await requireSession(c.req.raw.headers)
   const body = await c.req.json()
 
@@ -1591,7 +1605,7 @@ const inboxGETRoute = createRoute({
 
 app.openapi(inboxGETRoute, async (c) => {
   const session = await requireSession(c.req.raw.headers);
-  
+
   const inboxItemRows = await db.query.inboxItems.findMany({
     where: eq(inboxItems.userId, session.user.id),
     with: {
@@ -1631,11 +1645,11 @@ app.openapi(inboxGETRoute, async (c) => {
 
 // app.openapi(inboxMarkAsReadRoute, async (c) => {
 //   const { id } = c.req.param()
-  
+
 //   try {
 //     const session = await requireSession(c.req.raw.headers);
 //     const inboxItem = await requireInboxItem(session.user, id)
-    
+
 //     await db.update(inboxItems)
 //       .set({
 //         lastReadEventId: sql`${inboxItem.lastNotifiableEventId}`, // should be set to last notiffiable event id, because IT IS WHAT USER SAW. If we set it to last event id (from the system) we lose option to renotify user about consecutive events that he should be notified about.

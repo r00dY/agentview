@@ -30,13 +30,17 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 export function ThreadCard({ thread, list }: { thread: Thread, list: string }) {
   const date = thread.created_at;
 
-  const inboxItem = thread.inboxItems[0];
-  const isUnread = !inboxItem || inboxItem.isUnread;
+  const threadInboxItem = thread.inboxItems.find((inboxItem) => inboxItem.activityId === null);
+  const activityInboxItems = thread.inboxItems.filter((inboxItem) => inboxItem.activityId !== null);
   
-  console.log('Session ' + thread.number + ' - unread?: ' + isUnread);
+  const isThreadUnread = !threadInboxItem || threadInboxItem.isUnread;
+
+
   
-  // const inboxItem = thread.inboxItems[0];
-  // const isRead = inboxItem && (inboxItem.lastNotifiableEventId === null ? false : inboxItem.lastNotifiableEventId <= (inboxItem.lastReadEventId ?? 0));
+  // console.log('Session ' + thread.number + ' - unread?: ' + isUnread);
+  
+  // // const inboxItem = thread.inboxItems[0];
+  // // const isRead = inboxItem && (inboxItem.lastNotifiableEventId === null ? false : inboxItem.lastNotifiableEventId <= (inboxItem.lastReadEventId ?? 0));
 
   return <div key={thread.id}>
     <NavLink to={`/threads/${thread.id}?list=${list}`}>
@@ -45,11 +49,11 @@ export function ThreadCard({ thread, list }: { thread: Thread, list: string }) {
         <div className="flex flex-col gap-1">
               {/* <div className={`text-sm  ${isUnread ? 'font-semibold' : ''}`}>Session {thread.number}</div>
               <div className="text-xs text-gray-500">{timeAgoShort(date)}</div> */}
-              <div className={`text-sm font-medium`}>Session {thread.number}</div>
+              <div className={`text-sm font-normal`}>Session {thread.number}</div>
               <div className="flex flex-row gap-1 items-center">
 
                <div className="text-xs text-gray-500">{timeAgoShort(date)}</div>
-               {isUnread ? <span className="inline-block size-1 rounded-full bg-gray-400" /> : null}
+               {isThreadUnread ? <span className="inline-block size-1 rounded-full bg-gray-400" /> : null}
 
               </div>
         </div>
