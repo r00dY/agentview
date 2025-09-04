@@ -51,8 +51,6 @@ function InboxItemComponent({ item }: { item: InboxItem }) {
   const fetcher = useFetcher();
   const isRead = item.lastReadEventId >= item.lastNotifiableEventId;
 
-  console.log(item);
-
   return (
     <div className="p-3 border-b flex flex-col gap-2">
       <div className="flex flex-row gap-2 justify-between">
@@ -116,7 +114,7 @@ function InboxItemComponent({ item }: { item: InboxItem }) {
 
 export default function InboxPage() {
   const { inboxItems } = useLoaderData<typeof clientLoader>();
-  console.log(inboxItems);
+  console.log('inbox items', inboxItems);
 
   // return <div>gowno</div>
 
