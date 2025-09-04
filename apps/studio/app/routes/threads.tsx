@@ -45,11 +45,11 @@ export function ThreadCard({ thread, list }: { thread: Thread, list: string }) {
         <div className="flex flex-col gap-1">
               {/* <div className={`text-sm  ${isUnread ? 'font-semibold' : ''}`}>Session {thread.number}</div>
               <div className="text-xs text-gray-500">{timeAgoShort(date)}</div> */}
-              <div className={`text-sm font-medium}`}>Session {thread.number}</div>
+              <div className={`text-sm font-medium`}>Session {thread.number}</div>
               <div className="flex flex-row gap-1 items-center">
 
                <div className="text-xs text-gray-500">{timeAgoShort(date)}</div>
-               {isUnread ? <span className="inline-block size-1 rounded-full bg-gray-500" /> : null}
+               {isUnread ? <span className="inline-block size-1 rounded-full bg-gray-400" /> : null}
 
               </div>
         </div>
