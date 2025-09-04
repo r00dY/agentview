@@ -207,6 +207,7 @@ export const threadRelations = relations(thread, ({ many, one }) => ({
     fields: [thread.client_id],
     references: [client.id],
   }),
+  inboxItems: many(inboxItems),
 }));
 
 export const clientRelations = relations(client, ({ many, one }) => ({
@@ -313,6 +314,7 @@ export const inboxItemsRelations = relations(inboxItems, ({ one, many }) => ({
   thread: one(thread, {
     fields: [inboxItems.threadId],
     references: [thread.id],
+
   }),
   user: one(users, {
     fields: [inboxItems.userId],

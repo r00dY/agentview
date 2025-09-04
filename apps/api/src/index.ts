@@ -279,22 +279,21 @@ app.openapi(threadsGETRoute, async (c) => {
 
     const threadRows = await db.query.thread.findMany({
       with: {
-        client: {
-          with: {
-            simulatedBy: true
-          }
-        }
+        client: true,
+        inboxItems: {
+          where: isNull(inboxItems.activityId),
+        },
       },
       orderBy: (thread: any, { desc }: any) => [desc(thread.updated_at)]
     })
 
     const threadRowsFiltered = threadRows.filter((thread: any) => {
       if (list === "real") {
-        return thread.client.simulatedBy === null;
+        return thread.client.simulated_by === null;
       } else if (list === "simulated_private") {
-        return thread.client.simulatedBy !== null && thread.client.simulatedBy === userId && !thread.client.is_shared;
+        return thread.client.simulated_by !== null && thread.client.simulated_by === userId && !thread.client.is_shared;
       } else if (list === "simulated_shared") {
-        return thread.client.simulatedBy !== null && thread.client.is_shared;
+        return thread.client.simulated_by !== null && thread.client.is_shared;
       }
     })
 

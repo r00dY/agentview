@@ -30,6 +30,8 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 export default function Threads() {
   const { threads, userLocale, list } = useLoaderData<typeof clientLoader>();
 
+  console.log(threads.filter((thread) => thread.inboxItems.length > 0));
+
   return <div className="flex flex-row items-stretch h-full">
 
     <div className="basis-[335px] flex-shrink-0 flex-grow-0 border-r flex flex-col ">

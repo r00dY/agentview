@@ -33,20 +33,13 @@ export async function updateInboxes(
         throw new Error(`Incorrect event type: "${event.type}"`);
     }
 
-    console.log("updateInboxes", event.type);
-    console.log("thread", thread);
-    console.log("activity", activity);
-
     const allUsers = await tx.query.users.findMany({
         with: {
             inboxItems: {
-                // where: ((inboxItems, { eq }) => eq(inboxItems.activityId, activity?.id ?? null)),
                 where: ((inboxItems, { eq, and, isNull }) => activity ? eq(inboxItems.activityId, activity.id) : and(eq(inboxItems.threadId, thread.id), isNull(inboxItems.activityId))),
             }
         }
     });
-
-    // const eventPayload: any = event.payload;
 
     const newInboxItemValues: any[] = [];
 
