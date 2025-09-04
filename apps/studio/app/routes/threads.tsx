@@ -2,7 +2,7 @@ import { redirect, useLoaderData, Outlet, Link, Form , data, NavLink} from "reac
 import type { Route } from "./+types/threads";
 
 import { Button } from "~/components/ui/button";
-import { PlusIcon } from "lucide-react";
+import { Circle, CircleCheck, PlusIcon } from "lucide-react";
 import { Header, HeaderTitle } from "~/components/header";
 import { getThreadsList } from "~/lib/utils";
 import { apiFetch } from "~/lib/apiFetch";
@@ -36,7 +36,6 @@ export function ThreadCard({ thread, list }: { thread: Thread, list: string }) {
   console.log('Session ' + thread.number + ' - unread?: ' + isUnread);
   
   // const inboxItem = thread.inboxItems[0];
-
   // const isRead = inboxItem && (inboxItem.lastNotifiableEventId === null ? false : inboxItem.lastNotifiableEventId <= (inboxItem.lastReadEventId ?? 0));
 
   return <div key={thread.id}>
@@ -44,8 +43,15 @@ export function ThreadCard({ thread, list }: { thread: Thread, list: string }) {
       {({ isActive }) => (
       <div className={`p-3 border-b hover:bg-gray-50 transition-colors duration-50 ${isActive ? 'bg-gray-100' : ''}`}>
         <div className="flex flex-col gap-1">
-              <div className={`text-sm  ${isUnread ? 'font-semibold' : ''}`}>Session {thread.number}</div>
-              <div className="text-xs text-gray-500">{timeAgoShort(date)}</div>
+              {/* <div className={`text-sm  ${isUnread ? 'font-semibold' : ''}`}>Session {thread.number}</div>
+              <div className="text-xs text-gray-500">{timeAgoShort(date)}</div> */}
+              <div className={`text-sm font-medium}`}>Session {thread.number}</div>
+              <div className="flex flex-row gap-1 items-center">
+
+               <div className="text-xs text-gray-500">{timeAgoShort(date)}</div>
+               {isUnread ? <span className="inline-block size-1 rounded-full bg-gray-500" /> : null}
+
+              </div>
         </div>
       </div>
       )}
