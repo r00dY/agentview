@@ -43,9 +43,7 @@ export default function Threads() {
 
       <div className="flex-1 overflow-y-auto">
         {threads.length > 0 && threads.map((thread) => {
-
-          const activities = getAllActivities(thread);
-          const date = activities.length > 0 ? activities[0].created_at : thread.updated_at;
+          const date = thread.created_at;
 
           return <div key={thread.id}>
             <NavLink to={`/threads/${thread.id}?list=${list}`}>
