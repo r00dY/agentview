@@ -1,9 +1,10 @@
 import { events } from "./db/schema";
 import { inArray, type InferSelectModel, sql } from "drizzle-orm";
-import type { Activity } from "./shared/apiTypes";
+import type { Activity, Thread } from "./shared/apiTypes";
 import { db } from "./db";
 import { inboxItems } from "./db/schema";
 import { getLastEvent } from "./events";
+import type { Transaction } from "./types";
 
 /**
  * This function is "MVP" and is far from perfect.
@@ -22,40 +23,64 @@ import { getLastEvent } from "./events";
  * - next event is processed only after the previous one is successful.
  * 
  */
-export async function updateActivityInboxes(
-    tx: Parameters<Parameters<typeof db["transaction"]>[0]>[0],
-    activity: Activity,
-    event: InferSelectModel<typeof events>
+export async function updateInboxes(
+    tx: Transaction,
+    event: InferSelectModel<typeof events> & { payload: any },
+    thread: Thread,
+    activity: Activity | null,
 ) {
-    if (!['comment_created', 'comment_edited', 'comment_deleted'].includes(event.type)) {
+    if (!['comment_created', 'comment_edited', 'comment_deleted', 'thread_created'].includes(event.type)) {
         throw new Error(`Incorrect event type: "${event.type}"`);
     }
+
+    console.log("updateInboxes", event.type);
+    console.log("thread", thread);
+    console.log("activity", activity);
 
     const allUsers = await tx.query.users.findMany({
         with: {
             inboxItems: {
-                where: ((inboxItems, { eq }) => eq(inboxItems.activityId, activity.id)),
+                // where: ((inboxItems, { eq }) => eq(inboxItems.activityId, activity?.id ?? null)),
+                where: ((inboxItems, { eq, and, isNull }) => activity ? eq(inboxItems.activityId, activity.id) : and(eq(inboxItems.threadId, thread.id), isNull(inboxItems.activityId))),
             }
         }
     });
 
-    const eventPayload: any = event.payload;
+    // const eventPayload: any = event.payload;
 
     const newInboxItemValues: any[] = [];
 
     for (const user of allUsers) {
-        if (!isEventForUser(event, user.id)) {
-            continue;
-        }
-
-        const newItem = {
-            ...eventPayload,
-            author_id: event.authorId,
+        if (user.inboxItems.length > 1) {
+            throw new Error("[Internal Error] User has more than one inbox item");
         }
 
         const inboxItem = user.inboxItems.length === 0 ? null : user.inboxItems[0];
 
-        if (event.type === 'comment_created') {
+        if (!isEventForUser(event, user.id)) {
+            continue;
+        }
+
+        if (event.type === 'thread_created') {
+            if (inboxItem) {
+                throw new Error("[Internal Error] `thread_created` event encountered inbox item for this thread, shouldn't happen");
+            }
+
+            newInboxItemValues.push({
+                userId: user.id,
+                threadId: event.payload.thread_id,
+                lastNotifiableEventId: event.id,
+                render: {
+                    isNew: true,
+                    author_id: event.authorId,
+                }
+            });
+        }
+        else if (event.type === 'comment_created') {
+            if (!activity) {
+                throw new Error("Activity is required for comment_created event");
+            }
+
 
             if (!inboxItem) {
                 newInboxItemValues.push({
@@ -64,7 +89,7 @@ export async function updateActivityInboxes(
                     threadId: activity.thread_id,
                     lastNotifiableEventId: event.id,
                     render: {
-                        items: [newItem]
+                        items: [eventToItem(event)]
                     }
                 });
             } else {
@@ -76,7 +101,7 @@ export async function updateActivityInboxes(
                     lastNotifiableEventId: event.id,
                     render: {
                         ...prevRender,
-                        items: isRead ? [newItem] : [...prevRender.items, newItem]
+                        items: isRead ? [eventToItem(event)] : [...prevRender.items, eventToItem(event)]
                     }
                 });
             }
@@ -89,12 +114,12 @@ export async function updateActivityInboxes(
             const prevRender = inboxItem.render as any;
             const items = [...prevRender.items];
 
-            const index = items.findIndex((item: any) => item.comment_id === newItem.comment_id);
+            const index = items.findIndex((item: any) => item.comment_id === event.payload.comment_id);
             if (index === -1) {
                 continue; // if edited comment_id doesn't exist in current inbox state, just do nothing.
             }
 
-            items[index] = newItem;
+            items[index] = eventToItem(event);
             
             newInboxItemValues.push({
                 ...inboxItem,
@@ -111,7 +136,7 @@ export async function updateActivityInboxes(
             }
 
             const prevRender = inboxItem.render as any;
-            const items = prevRender.items.filter((item: any) => item.comment_id !== newItem.comment_id);
+            const items = prevRender.items.filter((item: any) => item.comment_id !== event.payload.comment_id);
 
             if (items.length === prevRender.items.length) {
                 continue; // if deleted comment_id doesn't exist in current inbox state, just do nothing. Non-notifiable event.
@@ -158,4 +183,15 @@ function isEventForUser(event: InferSelectModel<typeof events>, userId: string) 
     }
 
     return true;
+}
+
+function eventToItem(event: InferSelectModel<typeof events>) {
+    if (typeof event.payload !== 'object') {
+        throw new Error("[Internal Error] Event payload is not an object");
+    }
+
+    return {
+        ...event.payload,
+        author_id: event.authorId,
+    }
 }

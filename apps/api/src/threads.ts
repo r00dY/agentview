@@ -1,9 +1,10 @@
 import { eq } from "drizzle-orm";
 import { db } from "./db"
 import { thread } from "./db/schema"
+import type { Transaction } from "./types";
 
-export async function fetchThreads(thread_id?: string) {
-    const threadRows = await db.query.thread.findMany({
+export async function fetchThreads(thread_id?: string, tx?: Transaction) {
+    const threadRows = await (tx || db).query.thread.findMany({
       where: thread_id ? eq(thread.id, thread_id) : undefined,
       with: {
         client: {
@@ -39,8 +40,8 @@ export async function fetchThreads(thread_id?: string) {
     // }))
   }
   
-  export async function fetchThread(thread_id: string) {
-    const threads = await fetchThreads(thread_id)
+  export async function fetchThread(thread_id: string, tx? : Transaction) {
+    const threads = await fetchThreads(thread_id, tx)
 
     if (threads.length === 0) {
       return undefined;

@@ -27,8 +27,7 @@ import { getSchema } from './getSchema'
 import type { BaseConfig } from './shared/configTypes'
 import { users } from './db/auth-schema'
 import { getUsersCount } from './users'
-import { updateActivityInboxes } from './updateInboxes'
-import { getLastEvent } from './events'
+import { updateInboxes } from './updateInboxes'
 // import { config } from './shared/agentview.config'
 
 // import { buildConflictUpdateColumns } from './buildConflictUpdateColumns'
@@ -69,15 +68,6 @@ async function requireSession(headers: Headers) {
   return session
 }
 
-async function requireSchema() {
-  const schema = await getSchema()
-  if (!schema) {
-    throw new HTTPException(404, { message: "Schema not found" });
-  }
-  return schema
-  
-}
-
 async function requireAdminSession(headers: Headers) {
   const session = await requireSession(headers)
 
@@ -87,6 +77,23 @@ async function requireAdminSession(headers: Headers) {
 
   return session;
 }
+
+async function requireSchema() {
+  const schema = await getSchema()
+  if (!schema) {
+    throw new HTTPException(404, { message: "Schema not found" });
+  }
+  return schema
+}
+
+async function requireThreadConfig(schema: BaseConfig, threadType: string) {
+  const threadConfig = schema.threads.find((threadConfig) => threadConfig.type === threadType);
+  if (!threadConfig) {
+    throw new HTTPException(404, { message: `Thread type '${threadType}' not found in schema.` });
+  }
+  return threadConfig
+}
+
 
 async function requireThread(thread_id: string) {
   const thread = await fetchThread(thread_id)
@@ -105,6 +112,10 @@ async function requireActivity(thread: Thread, activity_id: string) {
 }
 
 async function requireClient(client_id: string) {
+  if (!isUUID(client_id)) {
+    throw new HTTPException(400, { message: `Invalid client id: ${client_id}` });
+  }
+
   const clientRow = await db.query.client.findFirst({
     where: eq(client.id, client_id),
   });
@@ -313,12 +324,9 @@ app.openapi(threadsPOSTRoute, async (c) => {
   const body = await c.req.json()
 
   const schema = await requireSchema()
-
-  // Find thread configuration by type
-  const threadConfig = schema.threads.find((threadConfig) => threadConfig.type === body.type);
-  if (!threadConfig) {
-    return c.json({ message: `Thread type '${body.type}' not found in configuration` }, 400);
-  }
+  const client = await requireClient(body.client_id)
+  const threadConfig = await requireThreadConfig(schema, body.type)
+  const session = await requireSession(c.req.raw.headers)
 
   // Validate metadata against the schema
   try {
@@ -327,21 +335,30 @@ app.openapi(threadsPOSTRoute, async (c) => {
     return c.json({ message: error.message }, 400);
   }
 
-  // Validate whether client exists in db
-  if (!isUUID(body.client_id)) {
-    return c.json({ message: `Invalid client id: ${body.client_id}` }, 400);
-  }
 
-  const clientExists = await db.query.client.findFirst({
-    where: eq(client.id, body.client_id)
+  const newThread = await db.transaction(async (tx) => {
+    const [newThreadRow] = await tx.insert(thread).values(body).returning();
+    
+      // add event
+      const [event] = await tx.insert(events).values({
+        type: 'thread_created',
+        authorId: session.user.id,
+        payload: {
+          thread_id: newThreadRow.id,
+        }
+      }).returning();
+
+      const newThread = await fetchThread(newThreadRow.id, tx);
+      if (!newThread) {
+        throw new Error("[Internal Error] Thread not found");
+      }
+
+      await updateInboxes(tx, event, newThread, null);
+
+    return newThread;
   });
-  if (!clientExists) {
-    return c.json({ message: `Client with id '${body.client_id}' does not exist` }, 400);
-  }
 
-  const [newThread] = await db.insert(thread).values(body).returning();
-
-  return c.json(await fetchThread(newThread.id), 201);
+  return c.json(newThread, 201);
 })
 
 // Thread GET
@@ -912,7 +929,7 @@ app.openapi(commentsPOSTRoute, async (c) => {
         }
       }).returning();
 
-      await updateActivityInboxes(tx, activity, event);
+      await updateInboxes(tx, event, thread, activity);
 
     })
 
@@ -970,7 +987,7 @@ app.openapi(commentsDELETERoute, async (c) => {
         }
       }).returning();
       
-      await updateActivityInboxes(tx, activity, event);
+      await updateInboxes(tx, event, thread, activity);
 
     });
     return c.json({}, 200);
@@ -1146,7 +1163,7 @@ app.openapi(commentsPUTRoute, async (c) => {
         }
       }).returning();
       
-      await updateActivityInboxes(tx, activity, event);
+      await updateInboxes(tx, event, thread, activity);
 
 
     }); 

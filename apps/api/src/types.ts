@@ -1,3 +1,4 @@
+import type { db } from "./db";
 
 export interface EmailPayload {
   to: string | string[];
@@ -21,3 +22,5 @@ export interface VersionManifest {
   env?: "prod" | "dev" | `dev.${string}`;
   metadata?: any;
 }
+
+export type Transaction = Parameters<Parameters<typeof db["transaction"]>[0]>[0]

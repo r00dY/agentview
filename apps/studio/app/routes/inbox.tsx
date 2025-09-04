@@ -51,19 +51,27 @@ function InboxItemComponent({ item }: { item: InboxItem }) {
   const fetcher = useFetcher();
   const isRead = item.lastReadEventId >= item.lastNotifiableEventId;
 
+
   return (
     <div className="p-3 border-b flex flex-col gap-2">
-      <div className="flex flex-row gap-2 justify-stretch">
+      <div className="flex flex-row gap-2 justify-between">
         <div className="text-sm">
+
+          { item.activity && <>
           Some new activities in
-          {/* <span className="font-medium">{author.name}</span> commented in{" "} */}
           <div className="inline-flex font-medium flex-row items-center gap-1">
-            <MessageCircle className="size-4" /> Session {item.thread.number} (item {item.activity.number})
+            <MessageCircle className="size-4" /> Session {item.thread.number} (item {item.activity.number}). { isRead ? "" : `(${item.render.items.length})` }
           </div>
+          </> }
+
+          { !item.activity && <>
+            Session {item.thread.number} created!
+          </>}
+
         </div>
         <div className="flex flex-row gap-1">
           <div className="text-sm text-gray-500">{timeAgoShort(item.lastNotifiableEvent.createdAt)}</div>
-          <div className="text-sm text-gray-500">{isRead ? "" : `(${item.render.items.length})`}</div>
+          <div className="text-sm text-gray-500">{isRead ? "" : "*"}</div>
         </div>
       </div>
       
