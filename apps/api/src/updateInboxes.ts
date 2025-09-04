@@ -23,14 +23,17 @@ import type { Transaction } from "./types";
  * - next event is processed only after the previous one is successful.
  * 
  */
+
+type EventType = InferSelectModel<typeof events> & { payload: any }
+
 export async function updateInboxes(
     tx: Transaction,
-    event: InferSelectModel<typeof events> & { payload: any },
+    newEvent: EventType,
     thread: Thread,
     activity: Activity | null,
 ) {
-    if (!['comment_created', 'comment_edited', 'comment_deleted', 'thread_created'].includes(event.type)) {
-        throw new Error(`Incorrect event type: "${event.type}"`);
+    if (!['comment_created', 'comment_edited', 'comment_deleted', 'thread_created'].includes(newEvent.type)) {
+        throw new Error(`Incorrect event type: "${newEvent.type}"`);
     }
 
     const allUsers = await tx.query.users.findMany({
@@ -50,88 +53,86 @@ export async function updateInboxes(
 
         const inboxItem = user.inboxItems.length === 0 ? null : user.inboxItems[0];
 
-        if (!isEventForUser(event, user.id)) {
+        if (!isEventForUser(newEvent, user.id)) {
             continue;
         }
 
-        if (event.type === 'thread_created') {
+        if (newEvent.type === 'thread_created') {
             if (inboxItem) {
                 throw new Error("[Internal Error] `thread_created` event encountered inbox item for this thread, shouldn't happen");
             }
 
             newInboxItemValues.push({
                 userId: user.id,
-                threadId: event.payload.thread_id,
-                lastNotifiableEventId: event.id,
+                threadId: newEvent.payload.thread_id,
+                lastNotifiableEventId: newEvent.id,
                 render: {
-                    isNew: true,
-                    author_id: event.authorId,
+                    events: [newEvent]
                 }
             });
         }
-        else if (event.type === 'comment_created') {
+        else if (newEvent.type === 'comment_created') {
             if (!activity) {
                 throw new Error("Activity is required for comment_created event");
             }
-
 
             if (!inboxItem) {
                 newInboxItemValues.push({
                     userId: user.id,
                     activityId: activity.id,
                     threadId: activity.thread_id,
-                    lastNotifiableEventId: event.id,
+                    lastNotifiableEventId: newEvent.id,
                     render: {
-                        items: [eventToItem(event)]
+                        events: [newEvent]
                     }
                 });
             } else {
                 const isRead = inboxItem.lastNotifiableEventId <= (inboxItem.lastReadEventId ?? 0);
-                const prevRender = inboxItem.render as any;
+                const prevRender = inboxItem.render as { events: EventType[] };
 
                 newInboxItemValues.push({
                     ...inboxItem,
-                    lastNotifiableEventId: event.id,
+                    lastNotifiableEventId: newEvent.id,
                     render: {
                         ...prevRender,
-                        items: isRead ? [eventToItem(event)] : [...prevRender.items, eventToItem(event)]
+                        events: isRead ? [newEvent] : [...prevRender.events, newEvent]
                     }
                 });
             }
         }
-        else if (event.type === 'comment_edited') {
+        else if (newEvent.type === 'comment_edited') {
             if (!inboxItem) {
                 continue; // error state: ignore. Inbox item should exist.
             }
 
-            const prevRender = inboxItem.render as any;
-            const items = [...prevRender.items];
+            const prevRender = inboxItem.render as { events: EventType[] };
+            const events = [...prevRender.events];
 
-            const index = items.findIndex((item: any) => item.comment_id === event.payload.comment_id);
+            const index = events.findIndex((event) => event.payload.comment_id === newEvent.payload.comment_id);
             if (index === -1) {
                 continue; // if edited comment_id doesn't exist in current inbox state, just do nothing.
             }
 
-            items[index] = eventToItem(event);
+            events[index] = newEvent;
             
             newInboxItemValues.push({
                 ...inboxItem,
                 // We don't have to set lastNotifiableEventId. Edits are not notifiable events. They'll just silently update the state of the inbox item.
                 render: {
                     ...prevRender,
-                    items
+                    events
                 }
             });
         }
-        else if (event.type === 'comment_deleted') {   
+        else if (newEvent.type === 'comment_deleted') {   
             if (!inboxItem) {
                 continue; // error state: ignore. Inbox item should exist.
             }
 
-            const prevRender = inboxItem.render as any;
-            const items = prevRender.items.filter((item: any) => item.comment_id !== event.payload.comment_id);
+            const prevRender = inboxItem.render as { events: EventType[] };
+            const events = prevRender.events.filter((event) => event.payload.comment_id !== newEvent.payload.comment_id);
 
-            if (items.length === prevRender.items.length) {
+            if (events.length === prevRender.events.length) {
                 continue; // if deleted comment_id doesn't exist in current inbox state, just do nothing. Non-notifiable event.
             }
 
@@ -140,20 +141,20 @@ export async function updateInboxes(
                 // do not set lastNotifiableEventId. Deletes are not notifiable events.
                 render: {
                     ...prevRender,
-                    items
+                    events
                 }
             }
 
             // If this event zeros inbox item, then we must revert the last notifiable event to last read event id (otherwise it will be counted as "unread")
             // We should not change lastReadEventId as it's information about time when user last time saw the inbox item. It's an event that "counts" as important system information (non derived).
-            if (items.length === 0) {
+            if (events.length === 0) {
                 newInboxItem.lastNotifiableEventId = inboxItem.lastReadEventId ?? inboxItem.lastNotifiableEventId
             }
 
             newInboxItemValues.push(newInboxItem);
         }
         else {
-            throw new Error(`Incorrect event type: "${event.type}"`);
+            throw new Error(`Incorrect event type: "${newEvent.type}"`);
         }
 
     }
@@ -176,15 +177,4 @@ function isEventForUser(event: InferSelectModel<typeof events>, userId: string) 
     }
 
     return true;
-}
-
-function eventToItem(event: InferSelectModel<typeof events>) {
-    if (typeof event.payload !== 'object') {
-        throw new Error("[Internal Error] Event payload is not an object");
-    }
-
-    return {
-        ...event.payload,
-        author_id: event.authorId,
-    }
 }

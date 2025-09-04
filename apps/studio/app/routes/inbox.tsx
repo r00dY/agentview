@@ -51,6 +51,7 @@ function InboxItemComponent({ item }: { item: InboxItem }) {
   const fetcher = useFetcher();
   const isRead = item.lastReadEventId >= item.lastNotifiableEventId;
 
+  console.log(item);
 
   return (
     <div className="p-3 border-b flex flex-col gap-2">
@@ -60,8 +61,10 @@ function InboxItemComponent({ item }: { item: InboxItem }) {
           { item.activity && <>
           Some new activities in
           <div className="inline-flex font-medium flex-row items-center gap-1">
-            <MessageCircle className="size-4" /> Session {item.thread.number} (item {item.activity.number}). { isRead ? "" : `(${item.render.items.length})` }
+            <MessageCircle className="size-4" /> Session {item.thread.number} (item {item.activity.number}).
           </div>
+          <br/>
+          { isRead ? "" : `Number events: ${item.render.events.length}` }
           </> }
 
           { !item.activity && <>
