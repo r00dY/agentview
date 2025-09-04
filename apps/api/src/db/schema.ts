@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, varchar, jsonb, boolean, uniqueIndex, integer, bigserial, bigint, serial } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, varchar, jsonb, boolean, uniqueIndex, integer, bigserial, bigint, serial, unique } from "drizzle-orm/pg-core";
 import { users } from "./auth-schema";
 import { relations, sql } from "drizzle-orm";
 
@@ -169,7 +169,7 @@ export const inboxItems = pgTable('inbox_items', {
   // lastEventId: bigint('last_event_id', { mode: 'number' }).references(() => events.id),
 
   lastReadEventId: bigint('last_read_event_id', { mode: 'number' }).references(() => events.id),
-  lastNotifiableEventId: bigint('last_notifiable_event_id', { mode: 'number' }).notNull().references(() => events.id),
+  lastNotifiableEventId: bigint('last_notifiable_event_id', { mode: 'number' }).references(() => events.id),
   render: jsonb('render').notNull(),
 
   // unreadCount: integer('unread_count').notNull().default(0),
@@ -187,7 +187,7 @@ export const inboxItems = pgTable('inbox_items', {
   // unreadCount: integer('unread_count').notNull().default(0),
   // attentionLevel: integer('attention_level').notNull().default(0), // 0: none, 1: low, 2: high (mention)
 }, (table) => [
-  uniqueIndex('inbox_items_user_activity_unique').on(table.userId, table.activityId)
+  unique().on(table.userId, table.activityId, table.threadId).nullsNotDistinct()
 ]);
 
 

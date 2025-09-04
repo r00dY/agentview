@@ -28,6 +28,8 @@ import type { BaseConfig } from './shared/configTypes'
 import { users } from './db/auth-schema'
 import { getUsersCount } from './users'
 import { updateInboxes } from './updateInboxes'
+import { isInboxItemUnread } from './inboxItems'
+import { getLastEvent } from './events'
 // import { config } from './shared/agentview.config'
 
 // import { buildConflictUpdateColumns } from './buildConflictUpdateColumns'
@@ -139,21 +141,21 @@ async function requireCommentMessageFromUser(thread: Thread, activity: Activity,
   return comment
 }
 
-async function requireInboxItem(user: User, inboxItemId: string) {
-  const inboxItem = await db.query.inboxItems.findFirst({
-    where: eq(inboxItems.id, inboxItemId),
-  });
+// async function getInboxItemOrCreateEmpty(user: User, thread_id: string, activity_id?: string) {
+//   const [inboxItem] = await db.insert(inboxItems).values({
+//     userId: user.id,
+//     threadId: thread_id,
+//     activityId: activity_id ?? null,
+//     lastNotifiableEventId: null,
+//     lastReadEventId: null,
+//     render: { events: [] },
+//   })
+//   .onConflictDoNothing({
+//     target: [inboxItems.userId, inboxItems.activityId, inboxItems.threadId],
+//   }).returning();
 
-  if (!inboxItem) {
-    throw new HTTPException(404, { message: "Inbox item not found" });
-  }
-
-  if (inboxItem.userId !== user.id) {
-    throw new HTTPException(401, { message: "Unauthorized" });
-  }
-
-  return inboxItem
-}
+//   return inboxItem;
+// }
 
 
 /* --------- CLIENTS --------- */
@@ -269,19 +271,15 @@ const threadsGETRoute = createRoute({
 
 app.openapi(threadsGETRoute, async (c) => {
   try {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers })
-    if (!session) {
-      return c.json({ message: "Authentication required" }, 401);
-    }
+    const session = await requireSession(c.req.raw.headers)
 
     const list = c.req.query().list || 'real';
-    const userId = session.user.id;
 
     const threadRows = await db.query.thread.findMany({
       with: {
         client: true,
         inboxItems: {
-          where: isNull(inboxItems.activityId),
+          where: and(isNull(inboxItems.activityId), eq(inboxItems.userId, session.user.id)),
         },
       },
       orderBy: (thread: any, { desc }: any) => [desc(thread.updated_at)]
@@ -291,13 +289,19 @@ app.openapi(threadsGETRoute, async (c) => {
       if (list === "real") {
         return thread.client.simulated_by === null;
       } else if (list === "simulated_private") {
-        return thread.client.simulated_by !== null && thread.client.simulated_by === userId && !thread.client.is_shared;
+        return thread.client.simulated_by !== null && thread.client.simulated_by === session.user.id && !thread.client.is_shared;
       } else if (list === "simulated_shared") {
         return thread.client.simulated_by !== null && thread.client.is_shared;
       }
     })
 
-    return c.json(threadRowsFiltered, 200);
+    return c.json(threadRowsFiltered.map((thread) => ({
+      ...thread,
+      inboxItems: thread.inboxItems.map((inboxItem) => ({
+        ...inboxItem,
+        isUnread: isInboxItemUnread(inboxItem)
+      }))
+    })), 200);
   } catch (error: any) {
     return errorToResponse(c, error);
   }
@@ -384,6 +388,61 @@ app.openapi(threadGETRoute, async (c) => {
   }
 
   return c.json(threadRow, 200);
+})
+
+
+const threadSeenRoute = createRoute({
+  method: 'post',
+  path: '/api/threads/{thread_id}/seen',
+  request: {
+    params: z.object({
+      thread_id: z.string(),
+    }),
+  },
+  responses: {
+    200: response_data(z.object({})),
+    400: response_error(),
+    401: response_error(),
+    404: response_error(),
+  },
+})
+
+app.openapi(threadSeenRoute, async (c) => {
+  const { thread_id } = c.req.param()
+  
+  try {
+    const session = await requireSession(c.req.raw.headers);
+
+    await db.insert(inboxItems).values({
+      userId: session.user.id,
+      threadId: thread_id,
+      activityId: null,
+      lastNotifiableEventId: null, // null + null is exception! It means "read, but never had any notifiable events before"
+      lastReadEventId: null,
+      render: { events: [] },
+    })
+    .onConflictDoUpdate({
+      target: [inboxItems.userId, inboxItems.activityId, inboxItems.threadId],
+      set: {
+        lastReadEventId: sql`${inboxItems.lastNotifiableEventId}`
+      }
+    }).returning();
+
+
+    // const inboxItem = await getInboxItemOrCreateEmpty(session.user, thread_id)
+    
+    // if (inboxItem) {
+    //   await db.update(inboxItems)
+    //     .set({
+    //       lastReadEventId: sql`${inboxItem.lastNotifiableEventId}`, // should be set to last notiffiable event id, because IT IS WHAT USER SAW. If we set it to last event id (from the system) we lose option to renotify user about consecutive events that he should be notified about.
+    //     })
+    //     .where(eq(inboxItems.id, inboxItem.id));
+    // }
+
+    return c.json({}, 200);
+  } catch (error: any) {
+    return errorToResponse(c, error);
+  }
 })
 
 
@@ -1295,6 +1354,7 @@ app.openapi(memberDELETERoute, async (c) => {
 /* --------- INVITATIONS --------- */
 
 function errorToResponse(c: any, error: any) {
+  console.error(error);
   if (error instanceof APIError) {
     return c.json(error.body, error.statusCode);
   }
@@ -1564,40 +1624,40 @@ app.openapi(inboxGETRoute, async (c) => {
 
 
 // Mark inbox item as read
-const inboxMarkAsReadRoute = createRoute({
-  method: 'post',
-  path: '/api/inbox/{id}/mark_as_read',
-  request: {
-    params: z.object({
-      id: z.string(),
-    }),
-  },
-  responses: {
-    200: response_data(z.object({})),
-    400: response_error(),
-    401: response_error(),
-    404: response_error(),
-  },
-})
+// const inboxMarkAsReadRoute = createRoute({
+//   method: 'post',
+//   path: '/api/inbox/{id}/mark_as_read',
+//   request: {
+//     params: z.object({
+//       id: z.string(),
+//     }),
+//   },
+//   responses: {
+//     200: response_data(z.object({})),
+//     400: response_error(),
+//     401: response_error(),
+//     404: response_error(),
+//   },
+// })
 
-app.openapi(inboxMarkAsReadRoute, async (c) => {
-  const { id } = c.req.param()
+// app.openapi(inboxMarkAsReadRoute, async (c) => {
+//   const { id } = c.req.param()
   
-  try {
-    const session = await requireSession(c.req.raw.headers);
-    const inboxItem = await requireInboxItem(session.user, id)
+//   try {
+//     const session = await requireSession(c.req.raw.headers);
+//     const inboxItem = await requireInboxItem(session.user, id)
     
-    await db.update(inboxItems)
-      .set({
-        lastReadEventId: sql`${inboxItem.lastNotifiableEventId}`, // should be set to last notiffiable event id, because IT IS WHAT USER SAW. If we set it to last event id (from the system) we lose option to renotify user about consecutive events that he should be notified about.
-      })
-      .where(eq(inboxItems.id, inboxItem.id));
+//     await db.update(inboxItems)
+//       .set({
+//         lastReadEventId: sql`${inboxItem.lastNotifiableEventId}`, // should be set to last notiffiable event id, because IT IS WHAT USER SAW. If we set it to last event id (from the system) we lose option to renotify user about consecutive events that he should be notified about.
+//       })
+//       .where(eq(inboxItems.id, inboxItem.id));
 
-    return c.json({}, 200);
-  } catch (error: any) {
-    return errorToResponse(c, error);
-  }
-})
+//     return c.json({}, 200);
+//   } catch (error: any) {
+//     return errorToResponse(c, error);
+//   }
+// })
 
 /* --------- IS ACTIVE --------- */
 

@@ -5,11 +5,12 @@ import { db } from "./db";
 import { inboxItems } from "./db/schema";
 import { getLastEvent } from "./events";
 import type { Transaction } from "./types";
+import { isInboxItemUnread } from "./inboxItems";
 
 /**
  * This function is "MVP" and is far from perfect.
  * 
- * Problems:
+//  * Problems:
  * 1. It takes transaction as parameter which should not be required. It should be indempotent and retriable.
  * 2. It takes `event` as a parameter, but actually it should just find the inboxes to be updated (based on last_event_id) and update them.
  * 
@@ -87,7 +88,7 @@ export async function updateInboxes(
                     }
                 });
             } else {
-                const isRead = inboxItem.lastNotifiableEventId <= (inboxItem.lastReadEventId ?? 0);
+                const isUnread = isInboxItemUnread(inboxItem);
                 const prevRender = inboxItem.render as { events: EventType[] };
 
                 newInboxItemValues.push({
@@ -95,7 +96,7 @@ export async function updateInboxes(
                     lastNotifiableEventId: newEvent.id,
                     render: {
                         ...prevRender,
-                        events: isRead ? [newEvent] : [...prevRender.events, newEvent]
+                        events: isUnread ? [...prevRender.events, newEvent] : [newEvent] 
                     }
                 });
             }
@@ -156,12 +157,11 @@ export async function updateInboxes(
         else {
             throw new Error(`Incorrect event type: "${newEvent.type}"`);
         }
-
     }
 
     if (newInboxItemValues.length > 0) {
         await tx.insert(inboxItems).values(newInboxItemValues).onConflictDoUpdate({
-            target: [inboxItems.userId, inboxItems.activityId],
+            target: [inboxItems.userId, inboxItems.threadId, inboxItems.activityId],
             set: {
                 updatedAt: new Date(),
                 lastNotifiableEventId: sql.raw(`excluded.${inboxItems.lastNotifiableEventId.name}`),

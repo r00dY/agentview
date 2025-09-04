@@ -1,4 +1,4 @@
-import { redirect, useLoaderData, useFetcher, Outlet, Link, Form, data, useParams, useSearchParams, useNavigate } from "react-router";
+import { redirect, useLoaderData, useFetcher, Outlet, Link, Form, data, useParams, useSearchParams, useNavigate, useRevalidator } from "react-router";
 import type { Route } from "./+types/thread";
 import { Button } from "~/components/ui/button";
 import { Header, HeaderTitle } from "~/components/header";
@@ -159,6 +159,7 @@ function ThreadPage() {
     const loaderData = useLoaderData<typeof clientLoader>();
     const params = useParams();
     const navigate = useNavigate();
+    const revalidator = useRevalidator();
 
     const [thread, setThread] = useState(loaderData.thread)
     const [formError, setFormError] = useState<string | null>(null)
@@ -197,6 +198,19 @@ function ThreadPage() {
     //         return searchParams;
     //     }, { replace: true });
     // }
+
+    useEffect(() => {
+        apiFetch(`/api/threads/${thread.id}/seen`, {
+            method: 'POST',
+        }).then((data) => {
+            if (data.ok) {
+                revalidator.revalidate();
+            }
+            else {
+                console.error(data.error)
+            }
+        })
+    }, [])
 
     // temporary 
     useEffect(() => {

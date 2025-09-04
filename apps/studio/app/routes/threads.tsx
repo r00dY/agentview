@@ -27,11 +27,36 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   }
 }
 
+export function ThreadCard({ thread, list }: { thread: Thread, list: string }) {
+  const date = thread.created_at;
+
+  const inboxItem = thread.inboxItems[0];
+  const isUnread = !inboxItem || inboxItem.isUnread;
+  
+  console.log('Session ' + thread.number + ' - unread?: ' + isUnread);
+  
+  // const inboxItem = thread.inboxItems[0];
+
+  // const isRead = inboxItem && (inboxItem.lastNotifiableEventId === null ? false : inboxItem.lastNotifiableEventId <= (inboxItem.lastReadEventId ?? 0));
+
+  return <div key={thread.id}>
+    <NavLink to={`/threads/${thread.id}?list=${list}`}>
+      {({ isActive }) => (
+      <div className={`p-3 border-b hover:bg-gray-50 transition-colors duration-50 ${isActive ? 'bg-gray-100' : ''}`}>
+        <div className="flex flex-col gap-1">
+              <div className={`text-sm  ${isUnread ? 'font-semibold' : ''}`}>Session {thread.number}</div>
+              <div className="text-xs text-gray-500">{timeAgoShort(date)}</div>
+        </div>
+      </div>
+      )}
+    </NavLink>
+  </div>
+}
+
 export default function Threads() {
   const { threads, userLocale, list } = useLoaderData<typeof clientLoader>();
 
-  console.log(threads.filter((thread) => thread.inboxItems.length > 0));
-
+  console.log('##### RENDER #####')
   return <div className="flex flex-row items-stretch h-full">
 
     <div className="basis-[335px] flex-shrink-0 flex-grow-0 border-r flex flex-col ">
@@ -44,22 +69,7 @@ export default function Threads() {
       </Header>
 
       <div className="flex-1 overflow-y-auto">
-        {threads.length > 0 && threads.map((thread) => {
-          const date = thread.created_at;
-
-          return <div key={thread.id}>
-            <NavLink to={`/threads/${thread.id}?list=${list}`}>
-              {({ isActive }) => (
-              <div className={`p-3 border-b hover:bg-gray-50 transition-colors duration-50 ${isActive ? 'bg-gray-100' : ''}`}>
-                <div className="flex flex-col gap-1">
-                      <div className="text-sm font-medium">Session {thread.number}</div>
-                      <div className="text-xs text-gray-500">{timeAgoShort(date)}</div>
-                </div>
-              </div>
-              )}
-            </NavLink>
-          </div>
-        })}
+        { threads.length > 0 && threads.map((thread) => <ThreadCard thread={thread} list={list} />)}
         { threads.length === 0 && <div className="px-3 py-4 text-muted-foreground">No threads available.</div>}
       </div>
 
