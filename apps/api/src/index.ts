@@ -315,7 +315,17 @@ app.openapi(threadsGETRoute, async (c) => {
 
     const threadInboxItem = thread.inboxItems.find((inboxItem) => inboxItem.activityId === null);
     const activityInboxItems = thread.inboxItems.filter((inboxItem) => inboxItem.activityId !== null);
+
+    
+    
     // const isThreadUnread = threadInboxItem && isInboxItemUnread(threadInboxItem);
+
+    /**
+     * THREAD: {
+     *  isRead: { ... }
+     *  isUnread: { ... }
+     * }
+     */
 
 
     return {
@@ -325,7 +335,8 @@ app.openapi(threadsGETRoute, async (c) => {
       //   isUnread: isInboxItemUnread(inboxItem)
       // })),
       notifications: {
-        isUnread: isInboxItemUnread(threadInboxItem),
+        unseenEvents: !isInboxItemUnread(threadInboxItem) ? [] : threadInboxItem?.render?.events ?? [],
+        // isUnread: isInboxItemUnread(threadInboxItem),
       }
     }
   })

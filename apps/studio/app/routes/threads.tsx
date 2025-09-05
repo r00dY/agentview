@@ -30,8 +30,9 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 export function ThreadCard({ thread, list }: { thread: Thread, list: string }) {
   const date = thread.created_at;
 
-  const isThreadUnread = thread.notifications.isUnread;
+  const isThreadUnread = thread.notifications.unseenEvents.length > 0;
 
+  // console.log('session', thread.number, 'isThreadUnread', isThreadUnread, 'events', thread.notifications.events);
   // const threadInboxItem = thread.inboxItems.find((inboxItem) => inboxItem.activityId === null);
   // const activityInboxItems = thread.inboxItems.filter((inboxItem) => inboxItem.activityId !== null);
   
