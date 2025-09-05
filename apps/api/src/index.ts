@@ -10,7 +10,7 @@ import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { swaggerUI } from '@hono/swagger-ui'
 import { db } from './db'
 import { client, thread, activity, run, email, commentMessages, commentMessageEdits, commentMentions, versions, scores, schemas, events, inboxItems } from './db/schema'
-import { eq, desc, and, inArray, ne, gt, isNull, isNotNull, or, gte, sql } from 'drizzle-orm'
+import { eq, desc, and, inArray, ne, gt, isNull, isNotNull, or, gte, sql, countDistinct } from 'drizzle-orm'
 import { response_data, response_error, body } from './hono_utils'
 import { isUUID } from './isUUID'
 import { extractMentions } from './utils'
@@ -22,7 +22,7 @@ import { getStudioURL } from './getStudioURL'
 
 // shared imports
 import { getAllActivities, getLastRun } from './shared/threadUtils'
-import { ClientSchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, RunSchema, ActivitySchema, type User, type Thread, type Activity, SchemaSchema, SchemaCreateSchema, InboxItemSchema, ClientCreateSchema, MemberSchema, MemberUpdateSchema, type InboxItem, SessionListSchema } from './shared/apiTypes'
+import { ClientSchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, RunSchema, ActivitySchema, type User, type Thread, type Activity, SchemaSchema, SchemaCreateSchema, InboxItemSchema, ClientCreateSchema, MemberSchema, MemberUpdateSchema, type InboxItem, SessionListSchema, type SessionList } from './shared/apiTypes'
 import { getSchema } from './getSchema'
 import type { BaseConfig } from './shared/configTypes'
 import { users } from './db/auth-schema'
@@ -311,13 +311,26 @@ const listsGETRoute = createRoute({
 })
 
 app.openapi(listsGETRoute, async (c) => {
-  await requireSession(c.req.raw.headers)
+  const session =await requireSession(c.req.raw.headers)
 
-  const lists = Object.entries(LISTS).map(([name, list]) => ({
-    name: name,
-    unseenCount: 0,
-    hasMentions: false,
-  }))
+  const lists : SessionList[] = []
+
+  for (const [name, list] of Object.entries(LISTS)) {
+    const result = await db
+      .select({
+        unreadThreads: countDistinct(inboxItems.threadId),
+      })
+      .from(inboxItems)
+      .where(
+        and(eq(inboxItems.userId, session.user.id), sql`${inboxItems.lastNotifiableEventId} > COALESCE(${inboxItems.lastReadEventId}, 0)`)
+      );
+
+    lists.push({
+      name: name,
+      unseenCount: result[0].unreadThreads,
+      hasMentions: false,
+    })
+  }
 
   return c.json(lists, 200);
 })

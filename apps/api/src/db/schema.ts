@@ -163,29 +163,14 @@ export const inboxItems = pgTable('inbox_items', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 
   userId: text('user_id').notNull().references(() => users.id),
-  activityId: uuid('activity_id').references(() => activity.id), // for now (user x activity) is the only possible "inbox item", later maybe (user x thread) will happen
+  activityId: uuid('activity_id').references(() => activity.id),
   threadId: uuid('thread_id').notNull().references(() => thread.id),
   
-  // lastEventId: bigint('last_event_id', { mode: 'number' }).references(() => events.id),
-
   lastReadEventId: bigint('last_read_event_id', { mode: 'number' }).references(() => events.id),
   lastNotifiableEventId: bigint('last_notifiable_event_id', { mode: 'number' }).references(() => events.id),
+
   render: jsonb('render').notNull(),
-
-  // unreadCount: integer('unread_count').notNull().default(0),
-  // firstActiveEventId: bigint('first_active_event_id', { mode: 'number' }).references(() => events.id),
-
-  // lastActiveEventId: bigint('last_active_event_id', { mode: 'number' }).references(() => events.id),
-
-  // lastReadEventId: bigint('last_read_event_id', { mode: 'number' }).references(() => events.id),
-  // lastEventId: bigint('last_event_id', { mode: 'number' }).references(() => events.id),
-
-  // payload: jsonb('payload').notNull(),
-
-  // lastEventAt: timestamp('last_event_at', { withTimezone: true }),
-
-  // unreadCount: integer('unread_count').notNull().default(0),
-  // attentionLevel: integer('attention_level').notNull().default(0), // 0: none, 1: low, 2: high (mention)
+  
 }, (table) => [
   unique().on(table.userId, table.activityId, table.threadId).nullsNotDistinct()
 ]);
