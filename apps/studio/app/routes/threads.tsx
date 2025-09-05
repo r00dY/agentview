@@ -9,6 +9,7 @@ import { apiFetch } from "~/lib/apiFetch";
 import type { Thread } from "~/lib/shared/apiTypes";
 import { getAllActivities } from "~/lib/shared/threadUtils";
 import { timeAgoShort } from "~/lib/timeAgo";
+import { useSessionContext } from "~/lib/session";
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const list = getThreadsList(request);
@@ -25,6 +26,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 }
 
 export function ThreadCard({ thread, list }: { thread: Thread, list: string }) {
+  const { user } = useSessionContext();
   const date = thread.created_at;
 
   const hasThreadUnreads = thread.unseenEvents.thread.length > 0;

@@ -16,12 +16,11 @@ import { FormField } from "./form";
 import { PropertyList } from "./PropertyList";
 import { Alert, AlertDescription } from "./ui/alert";
 import { TextEditor, textToElements } from "./wysiwyg/TextEditor";
+import { useSessionContext } from "~/lib/session";
 
 export type CommentThreadProps = {
     thread: Thread,
     activity: Activity,
-    user: User,
-    users: User[],
     collapsed?: boolean,
     singleLineMessageHeader?: boolean,
 }
@@ -34,8 +33,6 @@ export type CommentThreadFloatingBoxProps = CommentThreadProps & {
 export type CommentThreadFloatingButtonProps = CommentThreadFloatingBoxProps & {
     thread: Thread,
     activity: Activity,
-    userId: string | null,
-    users: any[],
     onSelect: (activity: any) => void,
 }
 
@@ -64,7 +61,7 @@ function getScoresInfo(thread: Thread, activity: Activity) {
     }
 }
 
-export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, activity, user, collapsed = false, users, singleLineMessageHeader = false }, ref) => {
+export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, activity, collapsed = false, singleLineMessageHeader = false }, ref) => {
     const fetcher = useFetcher();
 
     const visibleMessages = activity.commentMessages.filter((m: any) => !m.deletedAt) ?? []
@@ -75,6 +72,8 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
     // const [currentlyEditedItemId, setCurrentlyEditedItemId] = useState<string | null>("new" /*null*/); // "new" for new comment, comment id for edits
 
     const { scores, unassignedScoreConfigs, allScoreConfigs } = getScoresInfo(thread, activity);
+
+    const { members } = useSessionContext();
 
     useFetcherSuccess(fetcher, () => {
         // setCurrentlyEditedItemId(null);
@@ -140,13 +139,10 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                 return <CommentMessageItem
                     key={message.id}
                     message={message}
-                    userId={user.id}
                     fetcher={fetcher}
                     activity={activity}
                     thread={thread}
-                    user={users.find((user) => user.id === message.userId)}
                     compressionLevel={compressionLevel}
-                    users={users}
                     singleLineMessageHeader={singleLineMessageHeader}
                 />
             })}
@@ -201,9 +197,9 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                     <div>
                         { unassignedScoreConfigs.length > 0 && <div className="text-sm mb-1 text-gray-700">Comment</div>}
                         <TextEditor
-                            mentionItems={users.map(user => ({
-                                id: user.id,
-                                label: user.name
+                            mentionItems={members.map(member => ({
+                                id: member.id,
+                                label: member.name ?? "Unknown"
                             }))}
                             name="comment"
                             placeholder={(hasZeroVisisbleComments ? "Comment" : "Reply") + " or tag other, using @"}
@@ -288,7 +284,7 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
 
 
 
-export function CommentThreadFloatingBox({ thread, activity, user, selected = false, users, onSelect }: CommentThreadFloatingBoxProps) {
+export function CommentThreadFloatingBox({ thread, activity, selected = false, onSelect }: CommentThreadFloatingBoxProps) {
     const commentThreadRef = useRef<any>(null);
 
     useEffect(() => {
@@ -326,8 +322,6 @@ export function CommentThreadFloatingBox({ thread, activity, user, selected = fa
             <CommentThread
                 thread={thread}
                 activity={activity}
-                user={user}
-                users={users}
                 collapsed={!selected}
                 ref={commentThreadRef}
             />
@@ -384,13 +378,15 @@ export function CommentMessageHeader({ title, subtitle, actions, singleLineMessa
 type MessageCompressionLevel = "none" | "medium" | "high";
 
 // New subcomponent for comment message item with edit logic
-export function CommentMessageItem({ message, userId, activity, thread, user, users, compressionLevel = "none", singleLineMessageHeader = false }: { message: CommentMessage, userId: string | null, fetcher: any, activity: Activity, thread: Thread, user: any, users: any[], compressionLevel?: MessageCompressionLevel, singleLineMessageHeader?: boolean }) {
+export function CommentMessageItem({ message, activity, thread,compressionLevel = "none", singleLineMessageHeader = false }: { message: CommentMessage, fetcher: any, activity: Activity, thread: Thread,  compressionLevel?: MessageCompressionLevel, singleLineMessageHeader?: boolean }) {
     if (message.deletedAt) {
         throw new Error("Deleted messages don't have rendering code.")
     }
 
+    const { user, members } = useSessionContext();
+
     const fetcher = useFetcher();
-    const isOwn = userId && message.userId === userId;
+    const isOwn = message.userId === user.id;
     const formRef = useRef<HTMLFormElement>(null);
 
     const createdAt = timeAgoShort(message.createdAt);
@@ -465,9 +461,9 @@ export function CommentMessageItem({ message, userId, activity, thread, user, us
                         </div>}
 
                         <TextEditor
-                            mentionItems={users.map(user => ({
-                                id: user.id,
-                                label: user.name
+                            mentionItems={members.map(member => ({
+                                id: member.id,
+                                label: member.name ?? "Unknown"
                             }))}
                             name="comment"
                             placeholder={"Edit or tag others, using @"}
@@ -507,9 +503,9 @@ export function CommentMessageItem({ message, userId, activity, thread, user, us
                     </div>}
 
                     {message.content && <div className={`${compressionLevel === "high" ? "line-clamp-6" : compressionLevel === "medium" ? "line-clamp-3" : ""}`}>
-                        {textToElements(message.content, users.map((user: any) => ({
-                            id: user.id,
-                            label: user.name
+                        {textToElements(message.content, members.map((member) => ({
+                            id: member.id,
+                            label: member.name ?? "Unknown"
                         })))}
                     </div>}
                 </div>}

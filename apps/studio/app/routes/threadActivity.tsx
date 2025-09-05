@@ -11,7 +11,7 @@ import { useSessionContext } from "~/lib/session";
 export default function ThreadActivityPage() {
     const { thread } = useOutletContext<{ thread: Thread }>();
     const params = useParams();
-    const { user, members } = useSessionContext();
+    // const { user, members } = useSessionContext();
 
     const activities = getAllActivities(thread)
     const activity = activities.find((a) => a.id === params.activityId)
@@ -76,8 +76,8 @@ export default function ThreadActivityPage() {
 
                         <div><CommentThread
                             activity={activity}
-                            user={user}
-                            users={members}
+                            // user={user}
+                            // users={members}
                             thread={thread}
                             collapsed={false}
                             singleLineMessageHeader={true}
