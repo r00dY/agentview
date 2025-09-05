@@ -33,7 +33,7 @@ import { ChangePasswordDialog } from "~/components/ChangePasswordDialog";
 import { authClient } from "~/lib/auth-client";
 import { SessionContext } from "~/lib/session";
 import { apiFetch } from "~/lib/apiFetch";
-import type { Member } from "~/lib/shared/apiTypes";
+import type { Member, SessionList } from "~/lib/shared/apiTypes";
 
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
@@ -59,17 +59,26 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 
   const locale = request.headers.get('accept-language')?.split(',')[0] || 'en-US';
 
+  const listsResponse = await apiFetch<SessionList[]>('/api/lists');
+
+  if (!listsResponse.ok) {
+    throw data(listsResponse.error, { status: listsResponse.status });
+  }
+
   return {
     user: session.data.user,
     members: membersResponse.data,
     locale,
-    isDeveloper: true
+    isDeveloper: true,
+    lists: listsResponse.data
   };
 }
 
 export default function Layout() {
-  const { user, isDeveloper, members, locale } = useLoaderData<typeof clientLoader>()
+  const { user, isDeveloper, members, locale, lists } = useLoaderData<typeof clientLoader>()
   const logoutFetcher = useFetcher()
+
+  console.log(lists);
 
   const [editProfileOpen, setEditProfileOpen] = React.useState(false)
   const [changePasswordOpen, setChangePasswordOpen] = React.useState(false)

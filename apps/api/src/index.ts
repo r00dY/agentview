@@ -10,7 +10,7 @@ import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { swaggerUI } from '@hono/swagger-ui'
 import { db } from './db'
 import { client, thread, activity, run, email, commentMessages, commentMessageEdits, commentMentions, versions, scores, schemas, events, inboxItems } from './db/schema'
-import { eq, desc, and, inArray, ne, gt, isNull, or, gte, sql } from 'drizzle-orm'
+import { eq, desc, and, inArray, ne, gt, isNull, isNotNull, or, gte, sql } from 'drizzle-orm'
 import { response_data, response_error, body } from './hono_utils'
 import { isUUID } from './isUUID'
 import { extractMentions } from './utils'
@@ -22,7 +22,7 @@ import { getStudioURL } from './getStudioURL'
 
 // shared imports
 import { getAllActivities, getLastRun } from './shared/threadUtils'
-import { ClientSchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, RunSchema, ActivitySchema, type User, type Thread, type Activity, SchemaSchema, SchemaCreateSchema, InboxItemSchema, ClientCreateSchema, MemberSchema, MemberUpdateSchema, type InboxItem } from './shared/apiTypes'
+import { ClientSchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, RunSchema, ActivitySchema, type User, type Thread, type Activity, SchemaSchema, SchemaCreateSchema, InboxItemSchema, ClientCreateSchema, MemberSchema, MemberUpdateSchema, type InboxItem, SessionListSchema } from './shared/apiTypes'
 import { getSchema } from './getSchema'
 import type { BaseConfig } from './shared/configTypes'
 import { users } from './db/auth-schema'
@@ -266,9 +266,63 @@ app.openapi(apiClientsPUTRoute, async (c) => {
   return c.json(updatedClient, 200);
 })
 
+/* --------- LISTS --------- */
+
+const LISTS = {
+  real: {
+    filter: () => isNull(client.simulated_by)
+  },
+  simulated_private: {
+    filter: (user: User) => and(eq(client.simulated_by, user.id), eq(client.is_shared, false))
+  },
+  simulated_shared: {
+    filter: () => and(isNotNull(client.simulated_by), eq(client.is_shared, true))
+  }
+}
+
+// const LISTS : any[] = [
+//   {
+//     name: 'real',
+//     title: 'Real',
+//     filter: () => isNull(client.simulated_by)
+//   },
+//   {
+//     name: 'simulated_private',
+//     title: 'Simulated Private',
+//     filter: (user: User) => and(eq(client.simulated_by, user.id), eq(client.is_shared, false))
+//   },
+//   {
+//     name: 'simulated_shared',
+//     title: 'Simulated Shared',
+//     filter: () => and(
+//         isNotNull(client.simulated_by),
+//         eq(client.is_shared, true),
+//       )
+//   },
+// ]
+
+
+const listsGETRoute = createRoute({
+  method: 'get',
+  path: '/api/lists',
+  responses: {
+    200: response_data(z.array(SessionListSchema)),
+  },
+})
+
+app.openapi(listsGETRoute, async (c) => {
+  await requireSession(c.req.raw.headers)
+
+  const lists = Object.entries(LISTS).map(([name, list]) => ({
+    name: name,
+    unseenCount: 0,
+    hasMentions: false,
+  }))
+
+  return c.json(lists, 200);
+})
 
 /* --------- THREADS --------- */
-
 
 
 // Threads GET (list all threads with filtering)
@@ -277,7 +331,7 @@ const threadsGETRoute = createRoute({
   path: '/api/threads',
   request: {
     query: z.object({
-      list: z.enum(['real', 'simulated_private', 'simulated_shared']).optional(),
+      list: z.enum(Object.keys(LISTS)).optional(),
     }),
   },
   responses: {
@@ -289,9 +343,15 @@ const threadsGETRoute = createRoute({
 app.openapi(threadsGETRoute, async (c) => {
   const session = await requireSession(c.req.raw.headers)
 
-  const list = c.req.query().list || 'real';
+  const listName = c.req.query().list ?? "real";
+  const listFilter = LISTS[listName].filter(session.user);
+
+  const result = await db.select().from(thread).leftJoin(client, eq(thread.client_id, client.id)).where(listFilter);
+
+  const threadIds = result.map((row) => row.thread.id);
 
   const threadRows = await db.query.thread.findMany({
+    where: inArray(thread.id, threadIds),
     with: {
       client: true,
       inboxItems: {
@@ -301,20 +361,8 @@ app.openapi(threadsGETRoute, async (c) => {
     orderBy: (thread: any, { desc }: any) => [desc(thread.updated_at)],
   })
 
-  const threadRowsFiltered = threadRows.filter((thread: any) => {
-    if (list === "real") {
-      return thread.client.simulated_by === null;
-    } else if (list === "simulated_private") {
-      return thread.client.simulated_by !== null && thread.client.simulated_by === session.user.id && !thread.client.is_shared;
-    } else if (list === "simulated_shared") {
-      return thread.client.simulated_by !== null && thread.client.is_shared;
-    }
-  })
 
-
-
-  
-  const threadRowsFilteredWithInboxItems = threadRowsFiltered.map((thread) => {
+  const threadRowsFilteredWithInboxItems = threadRows.map((thread) => {
     const threadInboxItem = thread.inboxItems.find((inboxItem) => inboxItem.activityId === null);
     const activityInboxItems = thread.inboxItems.filter((inboxItem) => inboxItem.activityId !== null);
 

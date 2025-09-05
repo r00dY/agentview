@@ -164,3 +164,13 @@ export const MemberSchema = z.object({
   export type Member = z.infer<typeof MemberSchema>
 
   export type MemberUpdate = z.infer<typeof MemberUpdateSchema>
+
+
+export const SessionListSchema = z.object({
+    name: z.string(),
+    title: z.string(),
+    unseenCount: z.number(),
+    hasMentions: z.boolean(),
+})
+
+export type SessionList = z.infer<typeof SessionListSchema>
