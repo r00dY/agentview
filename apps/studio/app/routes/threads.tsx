@@ -10,6 +10,7 @@ import type { Thread } from "~/lib/shared/apiTypes";
 import { getAllActivities } from "~/lib/shared/threadUtils";
 import { timeAgoShort } from "~/lib/timeAgo";
 import { useSessionContext } from "~/lib/session";
+import { NotificationBadge } from "~/components/NotificationBadge";
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const list = getThreadsList(request);
@@ -50,29 +51,11 @@ export function ThreadCard({ thread, list }: { thread: Thread, list: string }) {
 
               <div className="flex flex-row gap-1 items-center">
                 <div className="text-xs text-gray-500">{timeAgoShort(date)}</div>
-                {activitiesEventsCount > 0 && (
-                  <div className="relative flex items-center">
-                    <span className="flex items-center justify-center rounded-full bg-cyan-600 text-white text-xs font-semibold size-5">
-                      {activitiesEventsCount}
-                    </span>
-                    {activitiesMentionsCount > 0 && (
-                      <span className="flex items-center justify-center rounded-full bg-cyan-600 text-white text-xs font-semibold size-5 ml-1">
-                        @
-                      </span>
-                    )}
-                  </div>
-                )}
-
+                {activitiesEventsCount > 0 && <NotificationBadge>{activitiesEventsCount}</NotificationBadge> }
+                { activitiesMentionsCount > 0 && <NotificationBadge>@</NotificationBadge> }
               </div>
 
             </div>
-            {/* <div className={`text-sm ${ hasUnreads ? 'font-semibold' : 'font-normal' }`}>Session {thread.number}</div>
-              <div className="flex flex-row gap-1 items-center">
-
-               <div className="text-xs text-gray-500">{timeAgoShort(date)}</div>
-
-              </div>
-              { activitiesEventsCount > 0 && <div className="text-xs text-gray-500">{activitiesEventsCount} events, {activitiesMentionsCount} mentions</div> } */}
           </div>
         </div>
       )}

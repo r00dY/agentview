@@ -321,13 +321,15 @@ app.openapi(listsGETRoute, async (c) => {
         unreadThreads: countDistinct(inboxItems.threadId),
       })
       .from(inboxItems)
+      .leftJoin(thread, eq(inboxItems.threadId, thread.id))
+      .leftJoin(client, eq(thread.client_id, client.id))
       .where(
-        and(eq(inboxItems.userId, session.user.id), sql`${inboxItems.lastNotifiableEventId} > COALESCE(${inboxItems.lastReadEventId}, 0)`)
-      );
+        and(eq(inboxItems.userId, session.user.id), sql`${inboxItems.lastNotifiableEventId} > COALESCE(${inboxItems.lastReadEventId}, 0)`, list.filter(session.user))
+      )
 
     lists.push({
       name: name,
-      unseenCount: result[0].unreadThreads,
+      unseenCount: result[0].unreadThreads ?? 0,
       hasMentions: false,
     })
   }

@@ -25,6 +25,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubItem,
   SidebarMenuSubButton,
+  SidebarMenuBadge,
 } from "../components/ui/sidebar"
 import type { Route } from "./+types/sidebar_layout";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
@@ -34,6 +35,7 @@ import { authClient } from "~/lib/auth-client";
 import { SessionContext } from "~/lib/session";
 import { apiFetch } from "~/lib/apiFetch";
 import type { Member, SessionList } from "~/lib/shared/apiTypes";
+import { NotificationBadge } from "~/components/NotificationBadge";
 
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
@@ -82,6 +84,14 @@ export default function Layout() {
 
   const [editProfileOpen, setEditProfileOpen] = React.useState(false)
   const [changePasswordOpen, setChangePasswordOpen] = React.useState(false)
+
+  const realList = lists.find((list) => list.name === "real")
+  const simulatedPrivateList = lists.find((list) => list.name === "simulated_private")
+  const simulatedSharedList = lists.find((list) => list.name === "simulated_shared")
+
+  const realListUnseenCount = realList?.unseenCount ?? 0
+  const simulatedPrivateListUnseenCount = simulatedPrivateList?.unseenCount ?? 0
+  const simulatedSharedListUnseenCount = simulatedSharedList?.unseenCount ?? 0
 
   return (<SessionContext.Provider value={{ user, members, locale }}>
     <SidebarProvider>
@@ -174,30 +184,35 @@ export default function Layout() {
                 <SidebarMenu>
                   <SidebarMenuItem>
                     <SidebarMenuButton>pdp_chat</SidebarMenuButton>
-                    <SidebarMenuSub>
-                      <SidebarMenuSubItem>
+                    <SidebarMenuSub className="mr-0">
+                      <SidebarMenuSubItem className="flex justify-between items-center">
                         <SidebarMenuSubButton asChild>
                           <Link to="/threads">
                             <MessageCircle className="mr-2 h-4 w-4" />
                             <span>Production</span>
                           </Link>
                         </SidebarMenuSubButton>
+                        { realListUnseenCount > 0 && <NotificationBadge>{realListUnseenCount}</NotificationBadge> }
                       </SidebarMenuSubItem>
-                      <SidebarMenuSubItem>
+                      <SidebarMenuSubItem className="flex justify-between items-center">
                         <SidebarMenuSubButton asChild>
                           <Link to="/threads?list=simulated_private">
                             <User className="mr-2 h-4 w-4" />
                             <span>Simulated Private</span>
                           </Link>
                         </SidebarMenuSubButton>
+                        
+                        { simulatedPrivateListUnseenCount > 0 && <NotificationBadge>{simulatedPrivateListUnseenCount}</NotificationBadge> }
                       </SidebarMenuSubItem>
-                      <SidebarMenuSubItem>
+                      <SidebarMenuSubItem className="flex justify-between items-center">
                         <SidebarMenuSubButton asChild>
                           <Link to="/threads?list=simulated_shared">
                             <Users className="mr-2 h-4 w-4" />
                             <span>Simulated Shared</span>
                           </Link>
                         </SidebarMenuSubButton>
+                        { simulatedSharedListUnseenCount > 0 && <NotificationBadge>{simulatedSharedListUnseenCount}</NotificationBadge> }
+
                       </SidebarMenuSubItem>
                     </SidebarMenuSub>
 
