@@ -44,16 +44,35 @@ export function ThreadCard({ thread, list }: { thread: Thread, list: string }) {
       {({ isActive }) => (
       <div className={`p-3 border-b hover:bg-gray-50 transition-colors duration-50 ${isActive ? 'bg-gray-100' : ''}`}>
         <div className="flex flex-col gap-1">
-              {/* <div className={`text-sm  ${isUnread ? 'font-semibold' : ''}`}>Session {thread.number}</div>
-              <div className="text-xs text-gray-500">{timeAgoShort(date)}</div> */}
-              <div className={`text-sm ${ hasUnreads ? 'font-semibold' : 'font-normal' }`}>Session {thread.number}</div>
+
+          <div className="flex flex-row gap-1 justify-between">
+            <div className={`text-sm ${ hasUnreads ? 'font-semibold' : 'font-normal' }`}>Session {thread.number}</div>
+
+            <div className="flex flex-row gap-1 items-center">
+              <div className="text-xs text-gray-500">{timeAgoShort(date)}</div>
+            {activitiesEventsCount > 0 && (
+              <div className="relative flex items-center">
+                <span className="flex items-center justify-center rounded-full bg-cyan-600 text-white text-xs font-semibold size-5">
+                  {activitiesEventsCount}
+                </span>
+                {activitiesMentionsCount > 0 && (
+                  <span className="flex items-center justify-center rounded-full bg-cyan-600 text-white text-xs font-semibold size-5 ml-1">
+                    @
+                  </span>
+                )}
+              </div>
+            )}
+
+            </div>
+
+          </div>
+              {/* <div className={`text-sm ${ hasUnreads ? 'font-semibold' : 'font-normal' }`}>Session {thread.number}</div>
               <div className="flex flex-row gap-1 items-center">
 
                <div className="text-xs text-gray-500">{timeAgoShort(date)}</div>
-               {/* {isThreadUnread ? <span className="inline-block size-1 rounded-full bg-gray-400" /> : null} */}
 
               </div>
-              { activitiesEventsCount > 0 && <div className="text-xs text-gray-500">{activitiesEventsCount} events, {activitiesMentionsCount} mentions</div> }
+              { activitiesEventsCount > 0 && <div className="text-xs text-gray-500">{activitiesEventsCount} events, {activitiesMentionsCount} mentions</div> } */}
         </div>
       </div>
       )}
