@@ -315,17 +315,17 @@ app.openapi(threadsGETRoute, async (c) => {
 
     const threadInboxItem = thread.inboxItems.find((inboxItem) => inboxItem.activityId === null);
     const activityInboxItems = thread.inboxItems.filter((inboxItem) => inboxItem.activityId !== null);
-    const isThreadUnread = !threadInboxItem || isInboxItemUnread(threadInboxItem);
+    // const isThreadUnread = threadInboxItem && isInboxItemUnread(threadInboxItem);
 
 
     return {
       ...thread,
-      inboxItems: thread.inboxItems.map((inboxItem) => ({
-        ...inboxItem,
-        isUnread: isInboxItemUnread(inboxItem)
-      })),
+      // inboxItems: thread.inboxItems.map((inboxItem) => ({
+      //   ...inboxItem,
+      //   isUnread: isInboxItemUnread(inboxItem)
+      // })),
       notifications: {
-        isUnread: isThreadUnread,
+        isUnread: isInboxItemUnread(threadInboxItem),
       }
     }
   })
@@ -438,20 +438,30 @@ app.openapi(threadSeenRoute, async (c) => {
 
   const session = await requireSession(c.req.raw.headers);
 
-  await db.insert(inboxItems).values({
-    userId: session.user.id,
-    threadId: thread_id,
-    activityId: null,
-    lastNotifiableEventId: null, // null + null is exception! It means "read, but never had any notifiable events before"
-    lastReadEventId: null,
-    render: { events: [] },
-  })
-    .onConflictDoUpdate({
-      target: [inboxItems.userId, inboxItems.activityId, inboxItems.threadId],
-      set: {
-        lastReadEventId: sql`${inboxItems.lastNotifiableEventId}`
-      }
-    }).returning();
+  await db.update(inboxItems).set({
+    lastReadEventId: sql`${inboxItems.lastNotifiableEventId}`,
+    updatedAt: new Date(),
+  }).where(and(
+    eq(inboxItems.userId, session.user.id),
+    eq(inboxItems.threadId, thread_id),
+    isNull(inboxItems.activityId),
+  ))
+  
+
+  // await db.insert(inboxItems).values({
+  //   userId: session.user.id,
+  //   threadId: thread_id,
+  //   activityId: null,
+  //   lastNotifiableEventId: null, // null + null is exception! It means "read, but never had any notifiable events before"
+  //   lastReadEventId: null,
+  //   render: { events: [] },
+  // })
+  //   .onConflictDoUpdate({
+  //     target: [inboxItems.userId, inboxItems.activityId, inboxItems.threadId],
+  //     set: {
+  //       lastReadEventId: sql`${inboxItems.lastNotifiableEventId}`
+  //     }
+  //   }).returning();
 
   return c.json({}, 200);
 })
