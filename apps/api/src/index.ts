@@ -4,7 +4,7 @@ import { HTTPException } from 'hono/http-exception'
 
 import { cors } from 'hono/cors'
 import { streamSSE } from 'hono/streaming'
-import { APIError } from "better-auth/api";
+import { APIError as BetterAuthAPIError } from "better-auth/api";
 
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { swaggerUI } from '@hono/swagger-ui'
@@ -22,7 +22,7 @@ import { getStudioURL } from './getStudioURL'
 
 // shared imports
 import { getAllActivities, getLastRun } from './shared/threadUtils'
-import { ClientSchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, RunSchema, ActivitySchema, type User, type Thread, type Activity, SchemaSchema, SchemaCreateSchema, InboxItemSchema, ClientCreateSchema } from './shared/apiTypes'
+import { ClientSchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, RunSchema, ActivitySchema, type User, type Thread, type Activity, SchemaSchema, SchemaCreateSchema, InboxItemSchema, ClientCreateSchema, MemberSchema, MemberUpdateSchema } from './shared/apiTypes'
 import { getSchema } from './getSchema'
 import type { BaseConfig } from './shared/configTypes'
 import { users } from './db/auth-schema'
@@ -47,6 +47,31 @@ export const app = new OpenAPIHono({
     }
   }
 })
+
+/** --------- ERROR HANDLING --------- */
+
+function handleError(c: any, error: any) {
+  console.error(error);
+  if (error instanceof BetterAuthAPIError) {
+    return c.json(error.body, error.statusCode);
+  }
+  else if (error instanceof HTTPException) {
+    return c.json({ message: error.message }, error.status);
+  }
+  else if (error instanceof Error) {
+    return c.json({ message: error.message }, 400);
+  }
+  else {
+    return c.json({ message: "Unexpected error" }, 400);
+  }
+}
+
+
+app.onError((err, c) => {
+  return handleError(c, err);
+});
+
+/** --------- CORS --------- */
 
 app.use('*', cors({
   origin: [getStudioURL()],
@@ -173,19 +198,15 @@ const apiClientsPOSTRoute = createRoute({
 })
 
 app.openapi(apiClientsPOSTRoute, async (c) => {
-  try {
-    const body = await c.req.json()
-    const session = await requireSession(c.req.raw.headers)
+  const body = await c.req.json()
+  const session = await requireSession(c.req.raw.headers)
 
-    const [newClient] = await db.insert(client).values({
-      simulated_by: session.user.id,
-      is_shared: body.is_shared,
-    }).returning();
+  const [newClient] = await db.insert(client).values({
+    simulated_by: session.user.id,
+    is_shared: body.is_shared,
+  }).returning();
 
-    return c.json(newClient, 201);
-  } catch (error: any) {
-    return errorToResponse(c, error);
-  }
+  return c.json(newClient, 201);
 })
 
 // Client GET
@@ -225,28 +246,24 @@ const apiClientsPUTRoute = createRoute({
     body: body(ClientCreateSchema)
   },
   responses: {
-    201: response_data(ClientSchema)
+    200: response_data(ClientSchema)
   },
 })
 
 app.openapi(apiClientsPUTRoute, async (c) => {
-  try {
-    const body = await c.req.json()
-    const { client_id } = c.req.param()
+  const body = await c.req.json()
+  const { client_id } = c.req.param()
 
-    const session = await requireSession(c.req.raw.headers)
-    const clientRow = await requireClient(client_id)
+  const session = await requireSession(c.req.raw.headers)
+  const clientRow = await requireClient(client_id)
 
-    if (clientRow.simulated_by !== session.user.id) {
-      throw new HTTPException(401, { message: "Unauthorized" });
-    }
-
-    const [updatedClient] = await db.update(client).set(body).where(eq(client.id, client_id)).returning();
-
-    return c.json(updatedClient, 200);
-  } catch (error: any) {
-    return errorToResponse(c, error);
+  if (clientRow.simulated_by !== session.user.id) {
+    throw new HTTPException(401, { message: "Unauthorized" });
   }
+
+  const [updatedClient] = await db.update(client).set(body).where(eq(client.id, client_id)).returning();
+
+  return c.json(updatedClient, 200);
 })
 
 
@@ -270,55 +287,50 @@ const threadsGETRoute = createRoute({
 })
 
 app.openapi(threadsGETRoute, async (c) => {
-  try {
-    const session = await requireSession(c.req.raw.headers)
+  const session = await requireSession(c.req.raw.headers)
 
-    const list = c.req.query().list || 'real';
+  const list = c.req.query().list || 'real';
 
-    const threadRows = await db.query.thread.findMany({
-      with: {
-        client: true,
-        inboxItems: {
-          where: eq(inboxItems.userId, session.user.id),
-        },
+  const threadRows = await db.query.thread.findMany({
+    with: {
+      client: true,
+      inboxItems: {
+        where: eq(inboxItems.userId, session.user.id),
       },
-      orderBy: (thread: any, { desc }: any) => [desc(thread.updated_at)]
-    })
+    },
+    orderBy: (thread: any, { desc }: any) => [desc(thread.updated_at)]
+  })
 
-    const threadRowsFiltered = threadRows.filter((thread: any) => {
-      if (list === "real") {
-        return thread.client.simulated_by === null;
-      } else if (list === "simulated_private") {
-        return thread.client.simulated_by !== null && thread.client.simulated_by === session.user.id && !thread.client.is_shared;
-      } else if (list === "simulated_shared") {
-        return thread.client.simulated_by !== null && thread.client.is_shared;
+  const threadRowsFiltered = threadRows.filter((thread: any) => {
+    if (list === "real") {
+      return thread.client.simulated_by === null;
+    } else if (list === "simulated_private") {
+      return thread.client.simulated_by !== null && thread.client.simulated_by === session.user.id && !thread.client.is_shared;
+    } else if (list === "simulated_shared") {
+      return thread.client.simulated_by !== null && thread.client.is_shared;
+    }
+  })
+
+  const threadRowsFilteredWithInboxItems = threadRowsFiltered.map((thread) => {
+
+    const threadInboxItem = thread.inboxItems.find((inboxItem) => inboxItem.activityId === null);
+    const activityInboxItems = thread.inboxItems.filter((inboxItem) => inboxItem.activityId !== null);
+    const isThreadUnread = !threadInboxItem || isInboxItemUnread(threadInboxItem);
+
+
+    return {
+      ...thread,
+      inboxItems: thread.inboxItems.map((inboxItem) => ({
+        ...inboxItem,
+        isUnread: isInboxItemUnread(inboxItem)
+      })),
+      notifications: {
+        isUnread: isThreadUnread,
       }
-    })
+    }
+  })
 
-    const threadRowsFilteredWithInboxItems = threadRowsFiltered.map((thread) => {
-
-      const threadInboxItem = thread.inboxItems.find((inboxItem) => inboxItem.activityId === null);
-      const activityInboxItems = thread.inboxItems.filter((inboxItem) => inboxItem.activityId !== null);
-      const isThreadUnread = !threadInboxItem || isInboxItemUnread(threadInboxItem);
-
-      
-
-      return {
-        ...thread,
-        inboxItems: thread.inboxItems.map((inboxItem) => ({
-          ...inboxItem,
-          isUnread: isInboxItemUnread(inboxItem)
-        })),
-        notifications: {
-          isUnread: isThreadUnread,
-        }
-      }
-    })
-
-    return c.json(threadRowsFilteredWithInboxItems, 200);
-  } catch (error: any) {
-    return errorToResponse(c, error);
-  }
+  return c.json(threadRowsFilteredWithInboxItems, 200);
 })
 
 // Threads POST
@@ -424,28 +436,24 @@ const threadSeenRoute = createRoute({
 app.openapi(threadSeenRoute, async (c) => {
   const { thread_id } = c.req.param()
 
-  try {
-    const session = await requireSession(c.req.raw.headers);
+  const session = await requireSession(c.req.raw.headers);
 
-    await db.insert(inboxItems).values({
-      userId: session.user.id,
-      threadId: thread_id,
-      activityId: null,
-      lastNotifiableEventId: null, // null + null is exception! It means "read, but never had any notifiable events before"
-      lastReadEventId: null,
-      render: { events: [] },
-    })
-      .onConflictDoUpdate({
-        target: [inboxItems.userId, inboxItems.activityId, inboxItems.threadId],
-        set: {
-          lastReadEventId: sql`${inboxItems.lastNotifiableEventId}`
-        }
-      }).returning();
+  await db.insert(inboxItems).values({
+    userId: session.user.id,
+    threadId: thread_id,
+    activityId: null,
+    lastNotifiableEventId: null, // null + null is exception! It means "read, but never had any notifiable events before"
+    lastReadEventId: null,
+    render: { events: [] },
+  })
+    .onConflictDoUpdate({
+      target: [inboxItems.userId, inboxItems.activityId, inboxItems.threadId],
+      set: {
+        lastReadEventId: sql`${inboxItems.lastNotifiableEventId}`
+      }
+    }).returning();
 
-    return c.json({}, 200);
-  } catch (error: any) {
-    return errorToResponse(c, error);
-  }
+  return c.json({}, 200);
 })
 
 
@@ -1238,18 +1246,6 @@ app.openapi(commentsPUTRoute, async (c) => {
 /* --------- MEMBERS --------- */
 
 
-const MemberSchema = z.object({
-  id: z.string(),
-  email: z.string(),
-  name: z.string().nullable(),
-  role: z.string(),
-  created_at: z.date(),
-})
-
-const MemberUpdateSchema = z.object({
-  role: z.enum(['admin', 'user']),
-})
-
 // Members GET (list all users)
 const membersGETRoute = createRoute({
   method: 'get',
@@ -1261,27 +1257,18 @@ const membersGETRoute = createRoute({
 })
 
 app.openapi(membersGETRoute, async (c) => {
-  try {
-    await requireSession(c.req.raw.headers);
+  await requireSession(c.req.raw.headers);
 
-    const userRows = await db.select({
-      id: users.id,
-      email: users.email,
-      name: users.name
-    }).from(users);
+  const userRows = await db.select({
+    id: users.id,
+    email: users.email,
+    name: users.name,
+    role: users.role,
+    created_at: users.createdAt
+  }).from(users);
 
-    // const users: User[] = response.users.map((user) => ({
-    //   id: user.id,
-    //   email: user.email,
-    //   name: user.name,
-    //   createdAt: user.createdAt,
-    //   updatedAt: user.updatedAt,
-    // }));
+  return c.json(userRows, 200);
 
-    return c.json(userRows, 200);
-  } catch (error: any) {
-    return errorToResponse(c, error);
-  }
 })
 
 // Member POST (update role)
@@ -1306,18 +1293,14 @@ app.openapi(memberPOSTRoute, async (c) => {
   const { memberId } = c.req.param()
   const body = await c.req.json()
 
-  try {
-    await requireAdminSession(c.req.raw.headers);
+  await requireAdminSession(c.req.raw.headers);
 
-    await auth.api.setRole({
-      headers: c.req.raw.headers,
-      body: { userId: memberId, role: body.role },
-    });
+  await auth.api.setRole({
+    headers: c.req.raw.headers,
+    body: { userId: memberId, role: body.role },
+  });
 
-    return c.json({}, 200);
-  } catch (error: any) {
-    return errorToResponse(c, error);
-  }
+  return c.json({}, 200);
 })
 
 // Member DELETE (delete user)
@@ -1340,34 +1323,17 @@ const memberDELETERoute = createRoute({
 app.openapi(memberDELETERoute, async (c) => {
   const { memberId } = c.req.param()
 
-  try {
-    await requireAdminSession(c.req.raw.headers);
+  await requireAdminSession(c.req.raw.headers);
 
-    await auth.api.removeUser({
-      headers: c.req.raw.headers,
-      body: { userId: memberId },
-    });
+  await auth.api.removeUser({
+    headers: c.req.raw.headers,
+    body: { userId: memberId },
+  });
 
-    return c.json({}, 200);
-  } catch (error: any) {
-    return errorToResponse(c, error);
-  }
+  return c.json({}, 200);
 })
 
 /* --------- INVITATIONS --------- */
-
-function errorToResponse(c: any, error: any) {
-  console.error(error);
-  if (error instanceof APIError) {
-    return c.json(error.body, error.statusCode);
-  }
-  else if (error instanceof Error) {
-    return c.json({ message: error.message }, 400);
-  }
-  else {
-    return c.json({ message: "Unexpected error" }, 400);
-  }
-}
 
 const InvitationSchema = z.object({
   id: z.string(),
@@ -1401,23 +1367,19 @@ const invitationsPOSTRoute = createRoute({
 app.openapi(invitationsPOSTRoute, async (c) => {
   const body = await c.req.json()
 
-  try {
-    const session = await requireAdminSession(c.req.raw.headers);
+  const session = await requireAdminSession(c.req.raw.headers);
 
-    await createInvitation(body.email, body.role, session.user.id);
+  await createInvitation(body.email, body.role, session.user.id);
 
-    // Get the created invitation to return it
-    const pendingInvitations = await getPendingInvitations();
-    const createdInvitation = pendingInvitations.find(inv => inv.email === body.email);
+  // Get the created invitation to return it
+  const pendingInvitations = await getPendingInvitations();
+  const createdInvitation = pendingInvitations.find(inv => inv.email === body.email);
 
-    if (!createdInvitation) {
-      return c.json({ message: "Failed to create invitation" }, 400);
-    }
-
-    return c.json(createdInvitation, 201);
-  } catch (error) {
-    return errorToResponse(c, error);
+  if (!createdInvitation) {
+    return c.json({ message: "Failed to create invitation" }, 400);
   }
+
+  return c.json(createdInvitation, 201);
 })
 
 // Invitations GET (get pending invitations)
@@ -1431,15 +1393,10 @@ const invitationsGETRoute = createRoute({
 })
 
 app.openapi(invitationsGETRoute, async (c) => {
-  try {
-    await requireAdminSession(c.req.raw.headers);
+  await requireAdminSession(c.req.raw.headers);
 
-    const pendingInvitations = await getPendingInvitations();
-    return c.json(pendingInvitations, 200);
-
-  } catch (error: any) {
-    return errorToResponse(c, error);
-  }
+  const pendingInvitations = await getPendingInvitations();
+  return c.json(pendingInvitations, 200);
 })
 
 // Invitation DELETE (cancel invitation)
@@ -1461,13 +1418,9 @@ const invitationDELETERoute = createRoute({
 app.openapi(invitationDELETERoute, async (c) => {
   const { id } = c.req.param()
 
-  try {
-    await requireAdminSession(c.req.raw.headers);
-    await cancelInvitation(id);
-    return c.json({}, 200);
-  } catch (error: any) {
-    return errorToResponse(c, error);
-  }
+  await requireAdminSession(c.req.raw.headers);
+  await cancelInvitation(id);
+  return c.json({}, 200);
 })
 
 // Invitation validation
@@ -1488,12 +1441,8 @@ const invitationValidateRoute = createRoute({
 app.openapi(invitationValidateRoute, async (c) => {
   const { invitationId } = c.req.param()
 
-  try {
-    const invitation = await getValidInvitation(invitationId);
-    return c.json(invitation, 200);
-  } catch (error: any) {
-    return errorToResponse(c, error);
-  }
+  const invitation = await getValidInvitation(invitationId);
+  return c.json(invitation, 200);
 })
 
 

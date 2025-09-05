@@ -23,12 +23,14 @@ export const ClientSchema = z.object({
     created_at: z.date(),
     updated_at: z.date(),
     simulatedBy: z.any().nullable(),
+    simulated_by: z.string().nullable(),
     is_shared: z.boolean(),
 })
 
 export type Client = z.infer<typeof ClientSchema>
 
 export const ClientCreateSchema = ClientSchema.pick({
+    simulated_by: true,
     is_shared: true,
 }).partial()
 
@@ -146,3 +148,20 @@ export const SchemaCreateSchema = SchemaSchema.pick({
 export const InboxItemSchema = z.any() // todo: fix this
   
 export type InboxItem = z.infer<typeof InboxItemSchema>
+
+
+export const MemberSchema = z.object({
+    id: z.string(),
+    email: z.string(),
+    name: z.string().nullable(),
+    role: z.string().nullable(),
+    created_at: z.date(),
+  })
+  
+  export const MemberUpdateSchema = z.object({
+    role: z.enum(['admin', 'user']),
+  })
+  
+  export type Member = z.infer<typeof MemberSchema>
+
+  export type MemberUpdate = z.infer<typeof MemberUpdateSchema>
