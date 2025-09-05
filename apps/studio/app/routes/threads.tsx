@@ -29,8 +29,20 @@ export function ThreadCard({ thread, list }: { thread: Thread, list: string }) {
   const { user } = useSessionContext();
   const date = thread.created_at;
 
-  const hasThreadUnreads = thread.unseenEvents.thread.length > 0;
-  const hasActivitiesUnread = Object.values(thread.unseenEvents.activities).some((events) => events.length > 0);
+  const unseenEvents = (thread as any).unseenEvents;
+
+  console.log('SESSION ' + thread.number)
+  console.log('unseenEvents', unseenEvents)
+
+
+  const hasThreadUnreads = unseenEvents.thread.length > 0;
+  const allActivityEvents = (Object.values(unseenEvents.activities) as any[]).flat() as any[];
+  
+  const hasActivitiesUnread = allActivityEvents.length > 0;
+
+
+  const activitiesEventsCount = allActivityEvents.length;
+  const activitiesMentionsCount = allActivityEvents.filter((event: any) => Array.isArray(event?.payload?.user_mentions) && (event.payload.user_mentions as any[]).includes(user.id)).length;
   const hasUnreads = hasThreadUnreads || hasActivitiesUnread;
 
   return <div key={thread.id}>
@@ -47,6 +59,7 @@ export function ThreadCard({ thread, list }: { thread: Thread, list: string }) {
                {/* {isThreadUnread ? <span className="inline-block size-1 rounded-full bg-gray-400" /> : null} */}
 
               </div>
+              { activitiesEventsCount > 0 && <div className="text-xs text-gray-500">{activitiesEventsCount} events, {activitiesMentionsCount} mentions</div> }
         </div>
       </div>
       )}

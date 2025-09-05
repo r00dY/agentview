@@ -1,4 +1,4 @@
-import { data, useLoaderData, useOutletContext, useParams } from "react-router";
+import { data, useLoaderData, useOutletContext, useParams, useRevalidator } from "react-router";
 import type { Route } from "./+types/threadActivity";
 import { Header, HeaderTitle } from "~/components/header";
 import type { Thread } from "~/lib/shared/apiTypes";
@@ -7,10 +7,12 @@ import { authClient } from "~/lib/auth-client";
 import { CommentThread } from "~/components/comments";
 import { apiFetch } from "~/lib/apiFetch";
 import { useSessionContext } from "~/lib/session";
+import { useEffect } from "react";
 
 export default function ThreadActivityPage() {
     const { thread } = useOutletContext<{ thread: Thread }>();
     const params = useParams();
+    const revalidator = useRevalidator();
     // const { user, members } = useSessionContext();
 
     const activities = getAllActivities(thread)
@@ -37,6 +39,19 @@ export default function ThreadActivityPage() {
     //     acc[score.name] = score;
     //     return acc;
     // }, {});
+
+    useEffect(() => {
+        apiFetch(`/api/threads/${thread.id}/activities/${activity.id}/seen`, {
+            method: 'POST',
+        }).then((data) => {
+            if (data.ok) {
+                revalidator.revalidate();
+            }
+            else {
+                console.error(data.error)
+            }
+        })
+    }, [])          
 
     return  <div className="flex-1  flex flex-col">  
         <Header>

@@ -317,10 +317,13 @@ app.openapi(threadsGETRoute, async (c) => {
     const activityInboxItems = thread.inboxItems.filter((inboxItem) => inboxItem.activityId !== null);
 
     function getUnseenEvents(inboxItem: InboxItem | null | undefined) {
-      return (isInboxItemUnread(inboxItem) && inboxItem?.render?.events) ?? [];
+      if (isInboxItemUnread(inboxItem)) {
+        return inboxItem?.render?.events ?? [];
+      }
+      return [];
     }
 
-    const unseenEvents = {
+    const unseenEvents : { thread: any[], activities: { [key: string]: any[] } } = {
       thread: getUnseenEvents(threadInboxItem),
       activities: {}
     }
@@ -452,22 +455,6 @@ app.openapi(threadSeenRoute, async (c) => {
     isNull(inboxItems.activityId),
   ))
   
-
-  // await db.insert(inboxItems).values({
-  //   userId: session.user.id,
-  //   threadId: thread_id,
-  //   activityId: null,
-  //   lastNotifiableEventId: null, // null + null is exception! It means "read, but never had any notifiable events before"
-  //   lastReadEventId: null,
-  //   render: { events: [] },
-  // })
-  //   .onConflictDoUpdate({
-  //     target: [inboxItems.userId, inboxItems.activityId, inboxItems.threadId],
-  //     set: {
-  //       lastReadEventId: sql`${inboxItems.lastNotifiableEventId}`
-  //     }
-  //   }).returning();
-
   return c.json({}, 200);
 })
 
@@ -863,6 +850,43 @@ app.openapi(runWatchRoute, async (c) => {
     }
   });
 });
+
+/* --------- ACTIVITIES --------- */
+
+
+const activitySeenRoute = createRoute({
+  method: 'post',
+  path: '/api/threads/{thread_id}/activities/{activity_id}/seen',
+  request: {
+    params: z.object({
+      thread_id: z.string(),
+      activity_id: z.string(),
+    }),
+  },
+  responses: {
+    200: response_data(z.object({})),
+    400: response_error(),
+    401: response_error(),
+    404: response_error(),
+  },
+})
+
+app.openapi(activitySeenRoute, async (c) => {
+  const { thread_id, activity_id } = c.req.param()
+
+  const session = await requireSession(c.req.raw.headers);
+
+  await db.update(inboxItems).set({
+    lastReadEventId: sql`${inboxItems.lastNotifiableEventId}`,
+    updatedAt: new Date(),
+  }).where(and(
+    eq(inboxItems.userId, session.user.id),
+    eq(inboxItems.threadId, thread_id),
+    eq(inboxItems.activityId, activity_id),
+  ))
+  
+  return c.json({}, 200);
+})
 
 
 
