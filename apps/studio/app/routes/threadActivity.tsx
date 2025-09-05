@@ -51,7 +51,7 @@ export default function ThreadActivityPage() {
                 console.error(data.error)
             }
         })
-    }, [])          
+    }, [activity.id]) // make sure /seen is called when switching activities
 
     return  <div className="flex-1  flex flex-col">  
         <Header>
