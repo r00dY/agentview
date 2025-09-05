@@ -298,7 +298,7 @@ app.openapi(threadsGETRoute, async (c) => {
         where: eq(inboxItems.userId, session.user.id),
       },
     },
-    orderBy: (thread: any, { desc }: any) => [desc(thread.updated_at)]
+    orderBy: (thread: any, { desc }: any) => [desc(thread.updated_at)],
   })
 
   const threadRowsFiltered = threadRows.filter((thread: any) => {
@@ -311,8 +311,10 @@ app.openapi(threadsGETRoute, async (c) => {
     }
   })
 
-  const threadRowsFilteredWithInboxItems = threadRowsFiltered.map((thread) => {
 
+
+  
+  const threadRowsFilteredWithInboxItems = threadRowsFiltered.map((thread) => {
     const threadInboxItem = thread.inboxItems.find((inboxItem) => inboxItem.activityId === null);
     const activityInboxItems = thread.inboxItems.filter((inboxItem) => inboxItem.activityId !== null);
 

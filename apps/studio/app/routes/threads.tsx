@@ -1,4 +1,4 @@
-import { redirect, useLoaderData, Outlet, Link, Form , data, NavLink} from "react-router";
+import { redirect, useLoaderData, Outlet, Link, Form, data, NavLink } from "react-router";
 import type { Route } from "./+types/threads";
 
 import { Button } from "~/components/ui/button";
@@ -32,7 +32,7 @@ export function ThreadCard({ thread, list }: { thread: Thread, list: string }) {
   const unseenEvents = (thread as any).unseenEvents;
   const hasThreadUnreads = unseenEvents.thread.length > 0;
   const allActivityEvents = (Object.values(unseenEvents.activities) as any[]).flat() as any[];
-  
+
   const hasActivitiesUnread = allActivityEvents.length > 0;
 
   const activitiesEventsCount = allActivityEvents.length;
@@ -42,39 +42,39 @@ export function ThreadCard({ thread, list }: { thread: Thread, list: string }) {
   return <div key={thread.id}>
     <NavLink to={`/threads/${thread.id}?list=${list}`}>
       {({ isActive }) => (
-      <div className={`p-3 border-b hover:bg-gray-50 transition-colors duration-50 ${isActive ? 'bg-gray-100' : ''}`}>
-        <div className="flex flex-col gap-1">
+        <div className={`p-3 border-b hover:bg-gray-50 transition-colors duration-50 ${isActive ? 'bg-gray-100' : ''}`}>
+          <div className="flex flex-col gap-1">
 
-          <div className="flex flex-row gap-1 justify-between">
-            <div className={`text-sm ${ hasUnreads ? 'font-semibold' : 'font-normal' }`}>Session {thread.number}</div>
+            <div className="flex flex-row gap-1 justify-between">
+              <div className={`text-sm ${hasUnreads ? 'font-semibold' : 'font-normal'}`}>Session {thread.number}</div>
 
-            <div className="flex flex-row gap-1 items-center">
-              <div className="text-xs text-gray-500">{timeAgoShort(date)}</div>
-            {activitiesEventsCount > 0 && (
-              <div className="relative flex items-center">
-                <span className="flex items-center justify-center rounded-full bg-cyan-600 text-white text-xs font-semibold size-5">
-                  {activitiesEventsCount}
-                </span>
-                {activitiesMentionsCount > 0 && (
-                  <span className="flex items-center justify-center rounded-full bg-cyan-600 text-white text-xs font-semibold size-5 ml-1">
-                    @
-                  </span>
+              <div className="flex flex-row gap-1 items-center">
+                <div className="text-xs text-gray-500">{timeAgoShort(date)}</div>
+                {activitiesEventsCount > 0 && (
+                  <div className="relative flex items-center">
+                    <span className="flex items-center justify-center rounded-full bg-cyan-600 text-white text-xs font-semibold size-5">
+                      {activitiesEventsCount}
+                    </span>
+                    {activitiesMentionsCount > 0 && (
+                      <span className="flex items-center justify-center rounded-full bg-cyan-600 text-white text-xs font-semibold size-5 ml-1">
+                        @
+                      </span>
+                    )}
+                  </div>
                 )}
+
               </div>
-            )}
 
             </div>
-
-          </div>
-              {/* <div className={`text-sm ${ hasUnreads ? 'font-semibold' : 'font-normal' }`}>Session {thread.number}</div>
+            {/* <div className={`text-sm ${ hasUnreads ? 'font-semibold' : 'font-normal' }`}>Session {thread.number}</div>
               <div className="flex flex-row gap-1 items-center">
 
                <div className="text-xs text-gray-500">{timeAgoShort(date)}</div>
 
               </div>
               { activitiesEventsCount > 0 && <div className="text-xs text-gray-500">{activitiesEventsCount} events, {activitiesMentionsCount} mentions</div> } */}
+          </div>
         </div>
-      </div>
       )}
     </NavLink>
   </div>
@@ -88,20 +88,20 @@ export default function Threads() {
     <div className="basis-[335px] flex-shrink-0 flex-grow-0 border-r flex flex-col ">
 
       <Header className="px-3">
-        <HeaderTitle title={`${list === "real" ? "Threads" : list === "simulated_private" ? "Private Sessions" : "Shared Sessions" }`} />
-        { list !== "real" && <div>
+        <HeaderTitle title={`${list === "real" ? "Threads" : list === "simulated_private" ? "Private Sessions" : "Shared Sessions"}`} />
+        {list !== "real" && <div>
           <Button variant="outline" size="sm" asChild><Link to={`/threads/new?list=${list}`}><PlusIcon />New thread</Link></Button>
         </div>}
       </Header>
 
       <div className="flex-1 overflow-y-auto">
-        { threads.length > 0 && threads.map((thread) => <ThreadCard thread={thread} list={list} />)}
-        { threads.length === 0 && <div className="px-3 py-4 text-muted-foreground">No threads available.</div>}
+        {threads.length > 0 && threads.map((thread) => <ThreadCard thread={thread} list={list} />)}
+        {threads.length === 0 && <div className="px-3 py-4 text-muted-foreground">No threads available.</div>}
       </div>
 
     </div>
 
-        <Outlet />
+    <Outlet />
 
     {/* <div className="flex-1 flex flex-col">  
       <Outlet />

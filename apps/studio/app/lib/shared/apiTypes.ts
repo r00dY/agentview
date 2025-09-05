@@ -22,7 +22,6 @@ export const ClientSchema = z.object({
     id: z.string(),
     created_at: z.date(),
     updated_at: z.date(),
-    simulatedBy: z.any().nullable(),
     simulated_by: z.string().nullable(),
     is_shared: z.boolean(),
 })
