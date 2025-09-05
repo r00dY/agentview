@@ -168,7 +168,6 @@ export const MemberSchema = z.object({
 
   export const SessionListSchema = z.object({
     name: z.string(),
-    title: z.string(),
     unseenCount: z.number(),
     hasMentions: z.boolean(),
 })

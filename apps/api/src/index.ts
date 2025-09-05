@@ -361,7 +361,6 @@ app.openapi(threadsGETRoute, async (c) => {
     orderBy: (thread: any, { desc }: any) => [desc(thread.updated_at)],
   })
 
-
   const threadRowsFilteredWithInboxItems = threadRows.map((thread) => {
     const threadInboxItem = thread.inboxItems.find((inboxItem) => inboxItem.activityId === null);
     const activityInboxItems = thread.inboxItems.filter((inboxItem) => inboxItem.activityId !== null);
