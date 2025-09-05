@@ -15,6 +15,7 @@ import { PropertyList } from "~/components/PropertyList";
 import { Share } from "lucide-react";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
 import { Badge } from "~/components/ui/badge";
+import { useSessionContext } from "~/lib/session";
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
     const response = await apiFetch<Thread>(`/api/threads/${params.id}`);
@@ -23,26 +24,11 @@ export async function clientLoader({ request, params }: Route.ClientLoaderArgs) 
         throw data(response.error, { status: response.status })
     }
 
-    // Get current user
-    const session = await authClient.getSession();
-    const userId = session.data!.user!.id;
-
-    // Get users for comments
-    const usersResponse = await apiFetch('/api/members');
-
-    if (!usersResponse.ok) {
-        throw data(usersResponse.error, {
-            status: usersResponse.status,
-        });
-    }
-
     const list = getThreadsList(request)
 
     return {
         list,
-        thread: response.data,
-        userId,
-        users: usersResponse.data
+        thread: response.data
     };
 }
 
@@ -160,6 +146,7 @@ function ThreadPage() {
     const params = useParams();
     const navigate = useNavigate();
     const revalidator = useRevalidator();
+    const { user } = useSessionContext();
 
     const [thread, setThread] = useState(loaderData.thread)
     const [formError, setFormError] = useState<string | null>(null)
@@ -385,7 +372,7 @@ function ThreadPage() {
 
         </div>
 
-        {thread.client.simulatedBy?.id === loaderData.userId && <div className="p-6 border-t">
+        {thread.client.simulatedBy?.id === user.id && <div className="p-6 border-t">
 
                 <form method="post" onSubmit={handleSubmit}>
                     <Textarea name="message" placeholder="Reply here..." rows={1} className="mb-2"/>

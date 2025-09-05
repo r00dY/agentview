@@ -6,28 +6,12 @@ import { getAllActivities } from "~/lib/shared/threadUtils";
 import { authClient } from "~/lib/auth-client";
 import { CommentThread } from "~/components/comments";
 import { apiFetch } from "~/lib/apiFetch";
-
-export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
-    const session = await authClient.getSession();
-
-    const usersResponse = await apiFetch('/api/members');
-
-    if (!usersResponse.ok) {
-        throw data(usersResponse.error, {
-            status: usersResponse.status,
-        });
-    }
-    
-    return {
-        user: session.data!.user,
-        users: usersResponse.data
-    };
-}
+import { useSessionContext } from "~/lib/session";
 
 export default function ThreadActivityPage() {
     const { thread } = useOutletContext<{ thread: Thread }>();
     const params = useParams();
-    const { user, users } = useLoaderData<typeof clientLoader>();
+    const { user, members } = useSessionContext();
 
     const activities = getAllActivities(thread)
     const activity = activities.find((a) => a.id === params.activityId)
@@ -93,7 +77,7 @@ export default function ThreadActivityPage() {
                         <div><CommentThread
                             activity={activity}
                             user={user}
-                            users={users}
+                            users={members}
                             thread={thread}
                             collapsed={false}
                             singleLineMessageHeader={true}

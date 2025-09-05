@@ -12,8 +12,6 @@ import { timeAgoShort } from "~/lib/timeAgo";
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const list = getThreadsList(request);
-  const userLocale = request.headers.get('accept-language')?.split(',')[0] || 'en-US';
-
   const threadsResponse = await apiFetch<Thread[]>(`/api/threads?list=${list}`);
 
   if (!threadsResponse.ok) {
@@ -22,7 +20,6 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 
   return {
     threads: threadsResponse.data,
-    userLocale: userLocale,
     list
   }
 }
@@ -56,7 +53,7 @@ export function ThreadCard({ thread, list }: { thread: Thread, list: string }) {
 }
 
 export default function Threads() {
-  const { threads, userLocale, list } = useLoaderData<typeof clientLoader>();
+  const { threads, list } = useLoaderData<typeof clientLoader>();
 
   console.log('##### RENDER #####')
   return <div className="flex flex-row items-stretch h-full">

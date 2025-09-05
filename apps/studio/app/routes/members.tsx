@@ -13,7 +13,6 @@ import { Plus } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Header, HeaderTitle } from "~/components/header";
 import { authClient } from "~/lib/auth-client";
-import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
 import { apiFetch } from "~/lib/apiFetch";
 
 

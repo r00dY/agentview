@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  data,
   Link,
   Outlet,
   redirect,
@@ -30,6 +31,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { EditProfileDialog } from "~/components/EditProfileDialog";
 import { ChangePasswordDialog } from "~/components/ChangePasswordDialog";
 import { authClient } from "~/lib/auth-client";
+import { SessionContext } from "~/lib/session";
+import { apiFetch } from "~/lib/apiFetch";
+import type { Member } from "~/lib/shared/apiTypes";
 
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
@@ -47,22 +51,30 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     }
   }
 
+  const membersResponse = await apiFetch<Member[]>('/api/members');
+
+  if (!membersResponse.ok) {
+    throw data(membersResponse.error, { status: membersResponse.status });
+  }
+
+  const locale = request.headers.get('accept-language')?.split(',')[0] || 'en-US';
+
   return {
-    session: session.data,
+    user: session.data.user,
+    members: membersResponse.data,
+    locale,
     isDeveloper: true
   };
 }
 
 export default function Layout() {
-  const { session, isDeveloper } = useLoaderData<typeof clientLoader>()
+  const { user, isDeveloper, members, locale } = useLoaderData<typeof clientLoader>()
   const logoutFetcher = useFetcher()
 
   const [editProfileOpen, setEditProfileOpen] = React.useState(false)
   const [changePasswordOpen, setChangePasswordOpen] = React.useState(false)
 
-  const user = session.user
-
-  return (
+  return (<SessionContext.Provider value={{ user, members, locale }}>
     <SidebarProvider>
       <div className="flex h-screen bg-background w-full">
         <Sidebar className="border-r">
@@ -146,7 +158,7 @@ export default function Layout() {
               </SidebarGroupContent>
             </SidebarGroup> */}
 
-            
+
             <SidebarGroup>
               <SidebarGroupLabel>Sessions</SidebarGroupLabel>
               <SidebarGroupContent>
@@ -332,5 +344,6 @@ export default function Layout() {
         </SidebarInset>
       </div>
     </SidebarProvider>
+  </SessionContext.Provider>
   );
 }
