@@ -30,16 +30,10 @@ export function ThreadCard({ thread, list }: { thread: Thread, list: string }) {
   const date = thread.created_at;
 
   const unseenEvents = (thread as any).unseenEvents;
-
-  console.log('SESSION ' + thread.number)
-  console.log('unseenEvents', unseenEvents)
-
-
   const hasThreadUnreads = unseenEvents.thread.length > 0;
   const allActivityEvents = (Object.values(unseenEvents.activities) as any[]).flat() as any[];
   
   const hasActivitiesUnread = allActivityEvents.length > 0;
-
 
   const activitiesEventsCount = allActivityEvents.length;
   const activitiesMentionsCount = allActivityEvents.filter((event: any) => Array.isArray(event?.payload?.user_mentions) && (event.payload.user_mentions as any[]).includes(user.id)).length;
@@ -70,7 +64,6 @@ export function ThreadCard({ thread, list }: { thread: Thread, list: string }) {
 export default function Threads() {
   const { threads, list } = useLoaderData<typeof clientLoader>();
 
-  console.log('##### RENDER #####')
   return <div className="flex flex-row items-stretch h-full">
 
     <div className="basis-[335px] flex-shrink-0 flex-grow-0 border-r flex flex-col ">
