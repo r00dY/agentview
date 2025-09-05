@@ -323,7 +323,7 @@ app.openapi(threadsGETRoute, async (c) => {
       return [];
     }
 
-    const unseenEvents : { thread: any[], activities: { [key: string]: any[] } } = {
+    const unseenEvents: { thread: any[], activities: { [key: string]: any[] } } = {
       thread: getUnseenEvents(threadInboxItem),
       activities: {}
     }
@@ -331,7 +331,7 @@ app.openapi(threadsGETRoute, async (c) => {
     activityInboxItems.forEach((inboxItem) => {
       unseenEvents.activities[inboxItem.activityId!] = getUnseenEvents(inboxItem);
     });
-    
+
     return {
       ...thread,
       unseenEvents
@@ -454,7 +454,7 @@ app.openapi(threadSeenRoute, async (c) => {
     eq(inboxItems.threadId, thread_id),
     isNull(inboxItems.activityId),
   ))
-  
+
   return c.json({}, 200);
 })
 
@@ -884,7 +884,7 @@ app.openapi(activitySeenRoute, async (c) => {
     eq(inboxItems.threadId, thread_id),
     eq(inboxItems.activityId, activity_id),
   ))
-  
+
   return c.json({}, 200);
 })
 
@@ -967,83 +967,77 @@ app.openapi(commentsPOSTRoute, async (c) => {
   const body = await c.req.json()
   const { thread_id, activity_id } = c.req.param()
 
-  try {
-    const session = await requireSession(c.req.raw.headers);
-    const thread = await requireThread(thread_id)
-    const activity = await requireActivity(thread, activity_id);
-    const schema = await requireSchema()
+  const session = await requireSession(c.req.raw.headers);
+  const thread = await requireThread(thread_id)
+  const activity = await requireActivity(thread, activity_id);
+  const schema = await requireSchema()
 
-    const inputScores = body.scores ?? {}
+  const inputScores = body.scores ?? {}
 
-    for (const [scoreName, scoreValue] of Object.entries(inputScores)) {
-      validateScore(schema, thread, activity, scoreName, scoreValue, { mustNotExist: true })
+  for (const [scoreName, scoreValue] of Object.entries(inputScores)) {
+    validateScore(schema, thread, activity, scoreName, scoreValue, { mustNotExist: true })
+  }
+
+  await db.transaction(async (tx) => {
+
+    // Add comment
+    const [newMessage] = await tx.insert(commentMessages).values({
+      activityId: activity_id,
+      userId: session.user.id,
+      content: body.comment ?? null,
+    }).returning();
+
+    let userMentions: string[] = [];
+
+    // Add comment mentions
+    if (body.comment) {
+      let mentions;
+
+      try {
+        mentions = extractMentions(body.comment);
+        userMentions = mentions.user_id || [];
+      } catch (error) {
+        return c.json({ message: `Invalid mention format: ${(error as Error).message}` }, 400)
+      }
+
+      if (userMentions.length > 0) {
+        await tx.insert(commentMentions).values(
+          userMentions.map((mentionedUserId: string) => ({
+            commentMessageId: newMessage.id,
+            mentionedUserId,
+          }))
+        );
+      }
     }
 
-    await db.transaction(async (tx) => {
-
-      // Add comment
-      const [newMessage] = await tx.insert(commentMessages).values({
+    // add scores
+    for (const [scoreName, scoreValue] of Object.entries(inputScores)) {
+      await tx.insert(scores).values({
         activityId: activity_id,
-        userId: session.user.id,
-        content: body.comment ?? null,
-      }).returning();
+        name: scoreName,
+        value: scoreValue,
+        commentId: newMessage.id,
+        createdBy: session.user.id,
+      })
+    }
 
-      let userMentions: string[] = [];
-
-      // Add comment mentions
-      if (body.comment) {
-        let mentions;
-
-        try {
-          mentions = extractMentions(body.comment);
-          userMentions = mentions.user_id || [];
-        } catch (error) {
-          return c.json({ message: `Invalid mention format: ${(error as Error).message}` }, 400)
-        }
-
-        if (userMentions.length > 0) {
-          await tx.insert(commentMentions).values(
-            userMentions.map((mentionedUserId: string) => ({
-              commentMessageId: newMessage.id,
-              mentionedUserId,
-            }))
-          );
-        }
+    // add event
+    const [event] = await tx.insert(events).values({
+      type: 'comment_created',
+      authorId: session.user.id,
+      payload: {
+        comment_id: newMessage.id, // never gets deleted
+        has_comment: body.comment ? true : false,
+        user_mentions: userMentions,
+        scores: inputScores,
       }
+    }).returning();
 
-      // add scores
-      for (const [scoreName, scoreValue] of Object.entries(inputScores)) {
-        await tx.insert(scores).values({
-          activityId: activity_id,
-          name: scoreName,
-          value: scoreValue,
-          commentId: newMessage.id,
-          createdBy: session.user.id,
-        })
-      }
+    await updateInboxes(tx, event, thread, activity);
 
-      // add event
-      const [event] = await tx.insert(events).values({
-        type: 'comment_created',
-        authorId: session.user.id,
-        payload: {
-          comment_id: newMessage.id, // never gets deleted
-          has_comment: body.comment ? true : false,
-          user_mentions: userMentions,
-          scores: inputScores,
-        }
-      }).returning();
+  })
 
-      await updateInboxes(tx, event, thread, activity);
-
-    })
-
-    return c.json({}, 201);
-
-  } catch (error: any) {
-    console.error('Error creating comment:', error);
-    return c.json({ message: "Failed to create comment: " + error.message }, 400);
-  }
+  return c.json({}, 201);
 })
 
 
@@ -1069,37 +1063,33 @@ const commentsDELETERoute = createRoute({
 app.openapi(commentsDELETERoute, async (c) => {
   const { comment_id, thread_id, activity_id } = c.req.param()
 
-  try {
-    const session = await requireSession(c.req.raw.headers);
-    const thread = await requireThread(thread_id)
-    const activity = await requireActivity(thread, activity_id);
-    const commentMessage = await requireCommentMessageFromUser(thread, activity, comment_id, session.user);
+  const session = await requireSession(c.req.raw.headers);
+  const thread = await requireThread(thread_id)
+  const activity = await requireActivity(thread, activity_id);
+  const commentMessage = await requireCommentMessageFromUser(thread, activity, comment_id, session.user);
 
-    await db.transaction(async (tx) => {
-      await tx.delete(commentMentions).where(eq(commentMentions.commentMessageId, commentMessage.id));
-      await tx.delete(scores).where(eq(scores.commentId, commentMessage.id));
-      await tx.update(commentMessages).set({
-        deletedAt: new Date(),
-        deletedBy: session.user.id
-      }).where(eq(commentMessages.id, commentMessage.id));
+  await db.transaction(async (tx) => {
+    await tx.delete(commentMentions).where(eq(commentMentions.commentMessageId, commentMessage.id));
+    await tx.delete(scores).where(eq(scores.commentId, commentMessage.id));
+    await tx.update(commentMessages).set({
+      deletedAt: new Date(),
+      deletedBy: session.user.id
+    }).where(eq(commentMessages.id, commentMessage.id));
 
-      // add event
-      const [event] = await tx.insert(events).values({
-        type: 'comment_deleted',
-        authorId: session.user.id,
-        payload: {
-          comment_id
-        }
-      }).returning();
+    // add event
+    const [event] = await tx.insert(events).values({
+      type: 'comment_deleted',
+      authorId: session.user.id,
+      payload: {
+        comment_id
+      }
+    }).returning();
 
-      await updateInboxes(tx, event, thread, activity);
+    await updateInboxes(tx, event, thread, activity);
 
-    });
-    return c.json({}, 200);
+  });
+  return c.json({}, 200);
 
-  } catch (error: any) {
-    return c.json({ message: "Failed to delete comment: " + error.message }, 400);
-  }
 })
 
 
@@ -1130,155 +1120,149 @@ app.openapi(commentsPUTRoute, async (c) => {
   const { thread_id, activity_id, comment_id } = c.req.param()
   const body = await c.req.json()
 
-  try {
-    const schema = await requireSchema()
-    const session = await requireSession(c.req.raw.headers);
-    const thread = await requireThread(thread_id)
-    const activity = await requireActivity(thread, activity_id);
-    const commentMessage = await requireCommentMessageFromUser(thread, activity, comment_id, session.user);
+  const schema = await requireSchema()
+  const session = await requireSession(c.req.raw.headers);
+  const thread = await requireThread(thread_id)
+  const activity = await requireActivity(thread, activity_id);
+  const commentMessage = await requireCommentMessageFromUser(thread, activity, comment_id, session.user);
 
-    const inputScores = body.scores ?? {}
+  const inputScores = body.scores ?? {}
 
-    for (const [scoreName, scoreValue] of Object.entries(inputScores)) {
-      validateScore(schema, thread, activity, scoreName, scoreValue, { mustNotExist: false })
+  for (const [scoreName, scoreValue] of Object.entries(inputScores)) {
+    validateScore(schema, thread, activity, scoreName, scoreValue, { mustNotExist: false })
+  }
+
+  await db.transaction(async (tx) => {
+
+    /** EDIT COMMENT **/
+
+    // Extract mentions from new content
+    let newMentions, previousMentions;
+    let newUserMentions: string[] = [], previousUserMentions: string[] = [];
+
+    try {
+      newMentions = extractMentions(body.comment ?? "");
+      previousMentions = extractMentions(commentMessage.content ?? "");
+      newUserMentions = newMentions.user_id || [];
+      previousUserMentions = previousMentions.user_id || [];
+    } catch (error) {
+      return c.json({ message: `Invalid mention format: ${(error as Error).message}` }, 400);
     }
 
-    await db.transaction(async (tx) => {
-
-      /** EDIT COMMENT **/
-
-      // Extract mentions from new content
-      let newMentions, previousMentions;
-      let newUserMentions: string[] = [], previousUserMentions: string[] = [];
-
-      try {
-        newMentions = extractMentions(body.comment ?? "");
-        previousMentions = extractMentions(commentMessage.content ?? "");
-        newUserMentions = newMentions.user_id || [];
-        previousUserMentions = previousMentions.user_id || [];
-      } catch (error) {
-        return c.json({ message: `Invalid mention format: ${(error as Error).message}` }, 400);
-      }
-
-      // Store previous content in edit history
-      await tx.insert(commentMessageEdits).values({
-        commentMessageId: commentMessage.id,
-        previousContent: commentMessage.content,
-      });
-
-      // Update the comment message
-      await tx.update(commentMessages)
-        .set({ content: body.comment ?? null, updatedAt: new Date() })
-        .where(eq(commentMessages.id, commentMessage.id));
-
-      // Handle mentions for edits
-      if (newUserMentions.length > 0 || previousUserMentions.length > 0) {
-        // Get existing mentions for this message
-        const existingMentions = await db
-          .select()
-          .from(commentMentions)
-          .where(eq(commentMentions.commentMessageId, commentMessage.id));
-
-        const existingMentionedUserIds = existingMentions.map((m: any) => m.mentionedUserId);
-
-        // // Find mentions to keep (existed before and still exist)
-        // const mentionsToKeep = newUserMentions.filter((mention: string) =>
-        //   previousUserMentions.includes(mention) && existingMentionedUserIds.includes(mention)
-        // );
-
-        // Find new mentions to add
-        const newMentionsToAdd = newUserMentions.filter((mention: string) =>
-          !existingMentionedUserIds.includes(mention)
-        );
-
-        // Find mentions to remove (existed before but not in new content)
-        const mentionsToRemove = existingMentionedUserIds.filter((mention: string) =>
-          !newUserMentions.includes(mention)
-        );
-
-        // Remove mentions that are no longer present
-        if (mentionsToRemove.length > 0) {
-          await tx.delete(commentMentions)
-            .where(and(
-              eq(commentMentions.commentMessageId, commentMessage.id),
-              inArray(commentMentions.mentionedUserId, mentionsToRemove)
-            ));
-        }
-
-        // Add new mentions
-        if (newMentionsToAdd.length > 0) {
-          await tx.insert(commentMentions).values(
-            newMentionsToAdd.map((mentionedUserId: string) => ({
-              commentMessageId: commentMessage.id,
-              mentionedUserId,
-            }))
-          );
-        }
-      }
-
-      /** EDIT SCORES **/
-
-      // Get existing scores for this comment
-      const existingScores = commentMessage.scores ?? [];
-
-      // Find scores to delete (exist in database but not in inputScores)
-      const scoresToDelete = existingScores.filter(score =>
-        !Object.keys(inputScores).includes(score.name)
-      );
-
-      // Delete scores that are no longer present
-      if (scoresToDelete.length > 0) {
-        await tx.delete(scores)
-          .where(inArray(scores.id, scoresToDelete.map(s => s.id)));
-      }
-
-      // Update or insert scores from inputScores
-      for (const [scoreName, scoreValue] of Object.entries(inputScores)) {
-        const existingScore = existingScores.find(s => s.name === scoreName);
-
-        if (existingScore) {
-          // Update existing score
-          await tx.update(scores)
-            .set({
-              value: scoreValue,
-              updatedAt: new Date()
-            })
-            .where(eq(scores.id, existingScore.id));
-        } else {
-          // Insert new score
-          await tx.insert(scores).values({
-            activityId: activity_id,
-            name: scoreName,
-            value: scoreValue,
-            commentId: commentMessage.id,
-            createdBy: session.user.id,
-          });
-        }
-      }
-
-      /** ADD EVENT **/
-      const [event] = await tx.insert(events).values({
-        type: 'comment_edited',
-        authorId: session.user.id,
-        payload: {
-          comment_id, // never gets deleted
-          has_comment: body.comment ? true : false,
-          user_mentions: newUserMentions,
-          scores: inputScores,
-        }
-      }).returning();
-
-      await updateInboxes(tx, event, thread, activity);
-
-
+    // Store previous content in edit history
+    await tx.insert(commentMessageEdits).values({
+      commentMessageId: commentMessage.id,
+      previousContent: commentMessage.content,
     });
 
-    return c.json({}, 200);
+    // Update the comment message
+    await tx.update(commentMessages)
+      .set({ content: body.comment ?? null, updatedAt: new Date() })
+      .where(eq(commentMessages.id, commentMessage.id));
 
-  } catch (error: any) {
-    console.error('Error editing comment:', error);
-    return c.json({ message: "Failed to edit comment: " + error.message }, 400);
-  }
+    // Handle mentions for edits
+    if (newUserMentions.length > 0 || previousUserMentions.length > 0) {
+      // Get existing mentions for this message
+      const existingMentions = await db
+        .select()
+        .from(commentMentions)
+        .where(eq(commentMentions.commentMessageId, commentMessage.id));
+
+      const existingMentionedUserIds = existingMentions.map((m: any) => m.mentionedUserId);
+
+      // // Find mentions to keep (existed before and still exist)
+      // const mentionsToKeep = newUserMentions.filter((mention: string) =>
+      //   previousUserMentions.includes(mention) && existingMentionedUserIds.includes(mention)
+      // );
+
+      // Find new mentions to add
+      const newMentionsToAdd = newUserMentions.filter((mention: string) =>
+        !existingMentionedUserIds.includes(mention)
+      );
+
+      // Find mentions to remove (existed before but not in new content)
+      const mentionsToRemove = existingMentionedUserIds.filter((mention: string) =>
+        !newUserMentions.includes(mention)
+      );
+
+      // Remove mentions that are no longer present
+      if (mentionsToRemove.length > 0) {
+        await tx.delete(commentMentions)
+          .where(and(
+            eq(commentMentions.commentMessageId, commentMessage.id),
+            inArray(commentMentions.mentionedUserId, mentionsToRemove)
+          ));
+      }
+
+      // Add new mentions
+      if (newMentionsToAdd.length > 0) {
+        await tx.insert(commentMentions).values(
+          newMentionsToAdd.map((mentionedUserId: string) => ({
+            commentMessageId: commentMessage.id,
+            mentionedUserId,
+          }))
+        );
+      }
+    }
+
+    /** EDIT SCORES **/
+
+    // Get existing scores for this comment
+    const existingScores = commentMessage.scores ?? [];
+
+    // Find scores to delete (exist in database but not in inputScores)
+    const scoresToDelete = existingScores.filter(score =>
+      !Object.keys(inputScores).includes(score.name)
+    );
+
+    // Delete scores that are no longer present
+    if (scoresToDelete.length > 0) {
+      await tx.delete(scores)
+        .where(inArray(scores.id, scoresToDelete.map(s => s.id)));
+    }
+
+    // Update or insert scores from inputScores
+    for (const [scoreName, scoreValue] of Object.entries(inputScores)) {
+      const existingScore = existingScores.find(s => s.name === scoreName);
+
+      if (existingScore) {
+        // Update existing score
+        await tx.update(scores)
+          .set({
+            value: scoreValue,
+            updatedAt: new Date()
+          })
+          .where(eq(scores.id, existingScore.id));
+      } else {
+        // Insert new score
+        await tx.insert(scores).values({
+          activityId: activity_id,
+          name: scoreName,
+          value: scoreValue,
+          commentId: commentMessage.id,
+          createdBy: session.user.id,
+        });
+      }
+    }
+
+    /** ADD EVENT **/
+    const [event] = await tx.insert(events).values({
+      type: 'comment_edited',
+      authorId: session.user.id,
+      payload: {
+        comment_id, // never gets deleted
+        has_comment: body.comment ? true : false,
+        user_mentions: newUserMentions,
+        scores: inputScores,
+      }
+    }).returning();
+
+    await updateInboxes(tx, event, thread, activity);
+
+
+  });
+
+  return c.json({}, 200);
 })
 
 
