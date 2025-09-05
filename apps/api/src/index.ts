@@ -22,7 +22,7 @@ import { getStudioURL } from './getStudioURL'
 
 // shared imports
 import { getAllActivities, getLastRun } from './shared/threadUtils'
-import { ClientSchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, RunSchema, ActivitySchema, type User, type Thread, type Activity, SchemaSchema, SchemaCreateSchema, InboxItemSchema, ClientCreateSchema, MemberSchema, MemberUpdateSchema } from './shared/apiTypes'
+import { ClientSchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, RunSchema, ActivitySchema, type User, type Thread, type Activity, SchemaSchema, SchemaCreateSchema, InboxItemSchema, ClientCreateSchema, MemberSchema, MemberUpdateSchema, type InboxItem } from './shared/apiTypes'
 import { getSchema } from './getSchema'
 import type { BaseConfig } from './shared/configTypes'
 import { users } from './db/auth-schema'
@@ -316,28 +316,22 @@ app.openapi(threadsGETRoute, async (c) => {
     const threadInboxItem = thread.inboxItems.find((inboxItem) => inboxItem.activityId === null);
     const activityInboxItems = thread.inboxItems.filter((inboxItem) => inboxItem.activityId !== null);
 
+    function getUnseenEvents(inboxItem: InboxItem | null | undefined) {
+      return (isInboxItemUnread(inboxItem) && inboxItem?.render?.events) ?? [];
+    }
+
+    const unseenEvents = {
+      thread: getUnseenEvents(threadInboxItem),
+      activities: {}
+    }
+
+    activityInboxItems.forEach((inboxItem) => {
+      unseenEvents.activities[inboxItem.activityId!] = getUnseenEvents(inboxItem);
+    });
     
-    
-    // const isThreadUnread = threadInboxItem && isInboxItemUnread(threadInboxItem);
-
-    /**
-     * THREAD: {
-     *  isRead: { ... }
-     *  isUnread: { ... }
-     * }
-     */
-
-
     return {
       ...thread,
-      // inboxItems: thread.inboxItems.map((inboxItem) => ({
-      //   ...inboxItem,
-      //   isUnread: isInboxItemUnread(inboxItem)
-      // })),
-      notifications: {
-        unseenEvents: !isInboxItemUnread(threadInboxItem) ? [] : threadInboxItem?.render?.events ?? [],
-        // isUnread: isInboxItemUnread(threadInboxItem),
-      }
+      unseenEvents
     }
   })
 
