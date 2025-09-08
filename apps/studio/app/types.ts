@@ -1,5 +1,4 @@
-import type { z } from "zod";
-import type { BaseScoreConfig, BaseActivityConfig, BaseThreadConfig, BaseConfig } from "./shared/configTypes";
+import type { BaseScoreConfig, BaseActivityConfig, BaseThreadConfig, BaseConfig } from "./lib/shared/configTypes";
 
 export type FormInputProps<T=any> = {
   id: string,

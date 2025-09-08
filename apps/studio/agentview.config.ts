@@ -1,4 +1,4 @@
-import type { AgentViewConfig } from "./app/lib/types";
+import type { AgentViewConfig } from "./app/types";
 import { z } from "zod";
 import { ThumbsDown, ThumbsUp } from "lucide-react";
 import { TextInput, ToggleBooleanInput } from "./app/components/form";

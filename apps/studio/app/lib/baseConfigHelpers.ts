@@ -1,5 +1,5 @@
 import { config } from "../../agentview.config";
-import type { AgentViewConfig } from "./types";
+import type { AgentViewConfig } from "../types";
 import * as z from "zod"
 import type { BaseConfig } from "./shared/configTypes";
 
