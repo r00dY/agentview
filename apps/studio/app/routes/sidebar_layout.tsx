@@ -25,7 +25,6 @@ import {
   SidebarMenuSub,
   SidebarMenuSubItem,
   SidebarMenuSubButton,
-  SidebarMenuBadge,
 } from "../components/ui/sidebar"
 import type { Route } from "./+types/sidebar_layout";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
@@ -79,9 +78,6 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 export default function Layout() {
   const { user, isDeveloper, members, locale, lists } = useLoaderData<typeof clientLoader>()
   const logoutFetcher = useFetcher()
-
-  console.log(lists);
-
   const [editProfileOpen, setEditProfileOpen] = React.useState(false)
   const [changePasswordOpen, setChangePasswordOpen] = React.useState(false)
 
