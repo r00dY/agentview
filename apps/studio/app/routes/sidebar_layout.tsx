@@ -185,7 +185,7 @@ export default function Layout() {
                   <SidebarMenuItem>
                     <SidebarMenuButton>pdp_chat</SidebarMenuButton>
                     <SidebarMenuSub className="mr-0">
-                      <SidebarMenuSubItem className="flex justify-between items-center">
+                      <SidebarMenuSubItem className={realListUnseenCount > 0 ? "flex justify-between items-center" : ""}>
                         <SidebarMenuSubButton asChild>
                           <Link to="/threads">
                             <MessageCircle className="mr-2 h-4 w-4" />
@@ -194,7 +194,7 @@ export default function Layout() {
                         </SidebarMenuSubButton>
                         { realListUnseenCount > 0 && <NotificationBadge>{realListUnseenCount}</NotificationBadge> }
                       </SidebarMenuSubItem>
-                      <SidebarMenuSubItem className="flex justify-between items-center">
+                      <SidebarMenuSubItem className={simulatedPrivateListUnseenCount > 0 ? "flex justify-between items-center" : ""}>
                         <SidebarMenuSubButton asChild>
                           <Link to="/threads?list=simulated_private">
                             <User className="mr-2 h-4 w-4" />
@@ -204,7 +204,7 @@ export default function Layout() {
                         
                         { simulatedPrivateListUnseenCount > 0 && <NotificationBadge>{simulatedPrivateListUnseenCount}</NotificationBadge> }
                       </SidebarMenuSubItem>
-                      <SidebarMenuSubItem className="flex justify-between items-center">
+                      <SidebarMenuSubItem className={simulatedSharedListUnseenCount > 0 ? "flex justify-between items-center" : ""}>
                         <SidebarMenuSubButton asChild>
                           <Link to="/threads?list=simulated_shared">
                             <Users className="mr-2 h-4 w-4" />
