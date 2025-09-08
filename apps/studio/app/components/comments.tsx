@@ -1,7 +1,7 @@
 import { AlertCircleIcon, EllipsisVerticalIcon, Gauge, GaugeIcon, Reply, ReplyIcon } from "lucide-react";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useFetcher } from "react-router";
-import { config } from "~/agentview.config";
+import { config } from "agentview.config";
 import type { Activity, CommentMessage, Thread, User } from "~/lib/shared/apiTypes";
 import { Button } from "~/components/ui/button";
 import {

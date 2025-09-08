@@ -4,7 +4,7 @@ import type { Route } from "./+types/schemas";
 import { Header, HeaderTitle } from "~/components/header";
 import { apiFetch } from "~/lib/apiFetch";
 import { Button } from "~/components/ui/button";
-import { config } from "~/agentview.config";
+import { config } from "agentview.config";
 import { serializeBaseConfig, getBaseConfig } from "~/lib/baseConfigHelpers";
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {

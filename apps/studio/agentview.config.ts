@@ -1,8 +1,8 @@
-import type { AgentViewConfig } from "./lib/types";
+import type { AgentViewConfig } from "./app/lib/types";
 import { z } from "zod";
-import { TextInput, ToggleBooleanInput } from "./components/form";
 import { ThumbsDown, ThumbsUp } from "lucide-react";
-import { DisplayBooleanComponent, DisplayTextComponent } from "./components/display";
+import { TextInput, ToggleBooleanInput } from "./app/components/form";
+import { DisplayBooleanComponent, DisplayTextComponent } from "./app/components/display";
 
 export const config : AgentViewConfig = {
     threads: [
