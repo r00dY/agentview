@@ -41,7 +41,7 @@ export const config : AgentViewConfig = {
                         },
                         {
                             name: "whatever",
-                            title: "Whatever",
+                            title: "Whatever",  
                             schema: z.string(),
                             input: TextInput,
                             display: DisplayTextComponent
@@ -52,4 +52,3 @@ export const config : AgentViewConfig = {
         }
     ]
 }
-
