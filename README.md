@@ -1,13 +1,11 @@
 <div align="center">
   <a href="#">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="apps/studio/public/logo.svg" height="40">
+      <source media="(prefers-color-scheme: dark)" srcset="apps/studio/public/logo_light.svg" height="40">
       <img alt="agentview logo" src="apps/studio/public/logo.svg" height="40">
     </picture>
   </a>
   <br/><br/>
-  <!-- <h1>agentview</h1> -->
-
 </div>
 
 Agent View is an open-source UI and middleware layer for building, debugging, and managing your own conversational agents. Framework-agnostic and fully customizable.
