@@ -33,20 +33,3 @@ export function betterAuthErrorToBaseError(error: BetterAuthError): BaseError {
         message: error.message ?? "Undefined error from better-auth",
     }
 }
-
-
-// export interface ErrorResponse {
-//     status: "success";
-//     data: any;
-// }
-
-// export interface FormActionDataError {
-//     status: "error";
-//     error: {
-//         message: string;
-//         fieldErrors?: Record<string, string>;
-//         data?: any;
-//     };
-// }
-
-// export type FormActionData = FormActionDataSuccess | FormActionDataError;

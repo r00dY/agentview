@@ -21,22 +21,3 @@ export function useFetcherSuccess(
     prevState.current = fetcher.state;
   }, [fetcher.state, fetcher.data, cb]);
 }
-
-// export function useFetcherSuccess<T>(
-//   fetcher: FetcherWithComponents<T>,
-//   cb: (data: T) => void
-// ) {
-//   const prevState = useRef(fetcher.state);
-
-//   useEffect(() => {
-//     const justFinishedSuccessfully =
-//       (prevState.current === "loading" || prevState.current === "submitting") &&
-//       fetcher.state === "idle" &&
-//       fetcher.data &&
-//       fetcher.data.status === "success";
-
-//     if (justFinishedSuccessfully) cb(fetcher.data.data as T);
-
-//     prevState.current = fetcher.state;
-//   }, [fetcher.state, fetcher.data, fetcher.error, cb]);
-// }

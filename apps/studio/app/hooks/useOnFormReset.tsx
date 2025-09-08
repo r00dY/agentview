@@ -19,7 +19,6 @@ export function useOnFormReset(callback: () => void) {
       
       if (closestForm) {        
         const handleReset = (e: Event) => {
-          console.log('RESET!!!')
           callback();
         };
   

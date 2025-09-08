@@ -34,7 +34,6 @@ export function ChangePasswordDialog({
           method="post"
           className="space-y-4"
         >
-
           <DialogHeader>
             <DialogTitle>Change Password</DialogTitle>
           </DialogHeader>
