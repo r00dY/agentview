@@ -166,6 +166,20 @@ async function requireCommentMessageFromUser(thread: Thread, activity: Activity,
   return comment
 }
 
+/* --------- LISTS --------- */
+
+const LISTS : Record<string, { filter: any }>= {
+  real: {
+    filter: () => isNull(client.simulated_by)
+  },
+  simulated_private: {
+    filter: (user: User) => and(eq(client.simulated_by, user.id), eq(client.is_shared, false))
+  },
+  simulated_shared: {
+    filter: () => and(isNotNull(client.simulated_by), eq(client.is_shared, true))
+  }
+}
+
 // async function getInboxItemOrCreateEmpty(user: User, thread_id: string, activity_id?: string) {
 //   const [inboxItem] = await db.insert(inboxItems).values({
 //     userId: user.id,
@@ -265,20 +279,6 @@ app.openapi(apiClientsPUTRoute, async (c) => {
 
   return c.json(updatedClient, 200);
 })
-
-/* --------- LISTS --------- */
-
-const LISTS = {
-  real: {
-    filter: () => isNull(client.simulated_by)
-  },
-  simulated_private: {
-    filter: (user: User) => and(eq(client.simulated_by, user.id), eq(client.is_shared, false))
-  },
-  simulated_shared: {
-    filter: () => and(isNotNull(client.simulated_by), eq(client.is_shared, true))
-  }
-}
 
 // const LISTS : any[] = [
 //   {
@@ -836,6 +836,8 @@ const runWatchRoute = createRoute({
 
 
 // Activities Watch (SSE)
+
+// @ts-ignore don't know how to fix this with hono yet
 app.openapi(runWatchRoute, async (c) => {
   const { thread_id } = c.req.param()
 
@@ -874,9 +876,12 @@ app.openapi(runWatchRoute, async (c) => {
      */
     while (running) {
       const threadRow = await fetchThread(thread_id);
+      if (!threadRow) {
+        throw new Error('Thread not found');
+      }
       const lastRun = getLastRun(threadRow)
 
-      if (!threadRow || !lastRun) {
+      if (!lastRun) {
         throw new Error('unreachable');
       }
 

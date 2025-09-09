@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { email as emailTable } from "./db/schema";
-import type { EmailPayload } from "./shared/types";
+import type { EmailPayload } from "./types";
 
 export async function addEmail(emailPayload: EmailPayload, userId: string) {
   const to = Array.isArray(emailPayload.to) ? emailPayload.to.join(', ') : emailPayload.to;
