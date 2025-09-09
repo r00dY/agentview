@@ -1,5 +1,3 @@
-const AGENT_API_URL = process.env.AGENT_API_URL ?? 'http://localhost:8000/run_stream'
-
 export interface AgentErrorResponse {
   message: string
   [key: string]: any
@@ -24,7 +22,7 @@ export async function* callAgentAPI(request: { thread: any }): AsyncGenerator<Ag
   let response : Response;
 
   try {
-    response = await fetch(AGENT_API_URL, {
+    response = await fetch('http://localhost:8000/run_stream', {  // TODO: make this in Schema Config!!!
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
