@@ -23,16 +23,18 @@ services:
       - ./docker/pg-admin/servers.json:/pgadmin4/servers.json
 
   api:
-    build:
-      context: ./api
-      dockerfile: Dockerfile
+    build: .
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres-db:5432/postgres
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
       STUDIO_URL: http://localhost:1989
     ports:
-      - "8080:8080"
+      - "8080:8080"    
     depends_on:
-      - postgres-db
+      postgres-db:
+        condition: service_healthy
+
     restart: unless-stopped
 
 volumes:
