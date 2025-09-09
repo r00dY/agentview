@@ -1,6 +1,6 @@
 {
   "name": "api",
-  "version": "0.0.4-beta.2",
+  "version": "0.0.4-beta.3",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
