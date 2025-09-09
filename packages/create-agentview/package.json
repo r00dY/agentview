@@ -1,6 +1,6 @@
 {
   "name": "create-agentview",
-  "version": "0.0.2",
+  "version": "0.0.3-test.0",
   "description": "Create a new Agentview app.",
   "type": "module",
   "bin": {
