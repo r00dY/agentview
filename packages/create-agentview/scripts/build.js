@@ -55,7 +55,7 @@ async function buildTemplate() {
     throw new Error('AGENTVIEW_API_VERSION is not set');
   }
 
-  env = `VITE_AGENTVIEW_API_BASE_URL=http://localhost:8080
+  const envContent = `VITE_AGENTVIEW_API_BASE_URL=http://localhost:8080
 AGENTVIEW_API_IMAGE=${process.env.AGENTVIEW_API_IMAGE}
 AGENTVIEW_API_VERSION=${process.env.AGENTVIEW_API_VERSION}
 `;
