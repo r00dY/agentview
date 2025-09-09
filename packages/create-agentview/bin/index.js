@@ -33,18 +33,14 @@ async function ensureEmptyDirectory(targetPath) {
 }
 
 async function main() {
-  const targetArg = process.argv[2];
-  if (!targetArg) {
-    console.error('Usage: npm create agentview@latest <directory>');
-    process.exit(1);
-  }
+  const targetArg = process.argv[2] ?? 'agentview-app';
 
   const cwd = process.cwd();
   const targetDir = path.resolve(cwd, targetArg);
 
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const packageDir = path.resolve(__dirname, '..');
-  const templateDir = path.join(packageDir, 'template');
+  const templateDir = path.join(packageDir, 'dist/template');
 
   await ensureEmptyDirectory(targetDir);
 

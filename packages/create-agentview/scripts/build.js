@@ -1,7 +1,7 @@
 import { cp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execSync } from 'node:child_process';
+// import { execSync } from 'node:child_process';
 
 function isExcluded(relativePath) {
   if (!relativePath || relativePath === '.') return false;
@@ -31,7 +31,7 @@ async function buildTemplate() {
   const repoRoot = path.resolve(packageDir, '..', '..');
 
   const studioSrc = path.join(repoRoot, 'apps', 'studio');
-  const templateDest = path.join(packageDir, 'template');
+  const templateDest = path.join(packageDir, 'dist/template');
 
   if (await pathExists(templateDest)) {
     await rm(templateDest, { recursive: true, force: true });
@@ -55,9 +55,10 @@ async function buildTemplate() {
   await writeFile(pkgJsonPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
 }
 
-async function publish() {
-  execSync('npm publish', { stdio: 'inherit' });
-}
+// async function publish() {
+//   execSync('npm version prerelease --preid=test', { stdio: 'inherit' });
+//   execSync('npm publish --tag test', { stdio: 'inherit' });
+// }
 
 (async () => {
   await buildTemplate();
