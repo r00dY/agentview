@@ -4,6 +4,15 @@ import { execSync } from 'node:child_process';
 import path from 'node:path';
 
 const REPO_ROOT = process.cwd();
+
+// Packages whose versions should be kept in sync with the root version
+const ALL_PACKAGES = [
+  'apps/studio',
+  'apps/api',
+  'packages/create-agentview',
+];
+
+// Packages to build and publish
 const PACKAGES = [
   'packages/create-agentview',
 ];
@@ -69,7 +78,7 @@ async function getRootVersion() {
 }
 
 async function setPackagesVersion(version) {
-  for (const rel of PACKAGES) {
+  for (const rel of ALL_PACKAGES) {
     const pkgPath = path.join(REPO_ROOT, rel, 'package.json');
     try {
       const pkg = await readJSON(pkgPath);
@@ -86,7 +95,7 @@ async function buildPackages() {
 }
 
 async function gitCommitAndTag(version) {
-  const filesToAdd = ['package.json', ...PACKAGES.map(p => path.join(p, 'package.json'))];
+  const filesToAdd = ['package.json', ...ALL_PACKAGES.map(p => path.join(p, 'package.json'))];
   for (const f of filesToAdd) {
     try { run(`git add ${f}`, { cwd: REPO_ROOT }); } catch {}
   }
