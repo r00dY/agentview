@@ -1,7 +1,7 @@
 {
   "name": "agentview-monorepo",
   "private": true,
-  "version": "0.0.3-test.0",
+  "version": "0.0.3-test.1",
   "scripts": {
     "publish": "node ./publish.mjs"
   }
