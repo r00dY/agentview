@@ -10,17 +10,21 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
-  postgres-admin:
-    image: dpage/pgadmin4
+  api:
+    build: rudzienki/agentview-api:latest
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@admin.com
-      PGADMIN_DEFAULT_PASSWORD: admin
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      STUDIO_URL: http://localhost:1989
     ports:
-      - "5433:80"   # Expose pgAdmin on localhost:5433
+      - "8080:8080"    
     depends_on:
       - postgres-db
-    volumes:
-      - ./docker/pg-admin/servers.json:/pgadmin4/servers.json
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    restart: unless-stopped
 
 volumes:
   pgdata:
