@@ -11,7 +11,7 @@ services:
       - pgdata:/var/lib/postgresql/data
 
   api:
-    build: ${AGENTVIEW_API_IMAGE}:${AGENTVIEW_API_VERSION}
+    image: ${AGENTVIEW_API_IMAGE}:${AGENTVIEW_API_VERSION}
     environment:
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
