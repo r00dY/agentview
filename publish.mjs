@@ -12,6 +12,17 @@ function run(cmd, opts = {}) {
   return execSync(cmd, { stdio: 'inherit', ...opts });
 }
 
+function isRepoClean() {
+  try {
+    const out = execSync('git status --porcelain', { cwd: REPO_ROOT, stdio: ['ignore', 'pipe', 'pipe'] })
+      .toString()
+      .trim();
+    return out.length === 0;
+  } catch {
+    return false;
+  }
+}
+
 async function readJSON(filePath) {
   const raw = await readFile(filePath, 'utf8');
   return JSON.parse(raw);
@@ -91,6 +102,11 @@ async function publishPackages(version) {
 }
 
 (async () => {
+  if (!isRepoClean()) {
+    console.error('Refusing to publish: repository has uncommitted changes. Commit or stash first.');
+    process.exit(1);
+  }
+
   const bumpType = process.argv[2] || 'patch';
   const preid = process.argv[3] || '';
   const valid = new Set(['patch', 'minor', 'major', 'prerelease']);
@@ -110,7 +126,7 @@ async function publishPackages(version) {
 
   await gitCommitAndTag(version);
 
-//   await publishPackages(version);
+  await publishPackages(version);
 
   console.log(`\nPublished v${version}`);
 })();
