@@ -26,6 +26,7 @@ import {
   inboxItemsRelations,
   usersRelations
 } from "./schemas/schema";
+import { databaseURL } from './databaseURL';
 
 export const schema = {
   users,
@@ -58,6 +59,6 @@ export const schema = {
   usersRelations
 }
 
-export const db = drizzle(process.env.DATABASE_URL!, {
+export const db = drizzle(databaseURL, {
   schema
 });

@@ -19,6 +19,8 @@ COPY tsconfig.json ./
 COPY src ./src
 COPY drizzle.config.ts ./drizzle.config.ts
 COPY scripts ./scripts
+
+# no build for now, we'll just run start-ts
 RUN npm run build
 
 # ---------- Runtime ----------
@@ -36,11 +38,16 @@ RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/drizzle.config.ts ./drizzle.config.ts
 
+# Copy sources for no-build start-ts
+COPY --from=build /app/src ./src
+
 # Use non-root user
 RUN useradd -m nodeuser && chown -R nodeuser:nodeuser /app
 USER nodeuser
 
 # EXPOSE 8080
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["npx", "drizzle-kit", "push"]
-CMD ["npm", "start"]
+# CMD ["npx", "drizzle-kit", "push"]
+# CMD ["npm", "run", "start-ts"]
+
+CMD ["sh", "-c", "npx drizzle-kit push && npm run start-ts"]
