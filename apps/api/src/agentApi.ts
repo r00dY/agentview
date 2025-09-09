@@ -22,7 +22,7 @@ export async function* callAgentAPI(request: { thread: any }): AsyncGenerator<Ag
   let response : Response;
 
   try {
-    response = await fetch('http://localhost:8000/run_stream', {  // TODO: make this in Schema Config!!!
+    response = await fetch('http://host.docker.internal:8000/run_stream', {  // TODO: make this in Schema Config!!!
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
