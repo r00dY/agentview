@@ -8,7 +8,7 @@
   },
   "files": [
     "bin",
-    "template",
+    "dist",
     "README.md",
     "LICENSE.md"
   ],
