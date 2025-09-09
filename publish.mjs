@@ -92,10 +92,11 @@ async function setPackagesVersion(version) {
   }
 }
 
-function buildCreateAgentviewTemplate() {
+function buildCreateAgentviewTemplate(apiImageRepo, version) {
   const cwd = path.join(REPO_ROOT, 'packages/create-agentview');
   run('npm run build', {
-    cwd
+    cwd,
+    env: { ...process.env, AGENTVIEW_API_IMAGE: apiImageRepo, AGENTVIEW_API_VERSION: version },
   });
 }
 
@@ -175,7 +176,7 @@ async function publishPackages(version) {
   buildAndPushApiDockerImage(apiImageRepo, version);
 
   // 4) Build create-agentview template (writes docker-compose.yml pointing at the image above)
-  buildCreateAgentviewTemplate();
+  buildCreateAgentviewTemplate(apiImageRepo, version);
 
   // 5) Commit and tag
   await gitCommitAndTag(version);

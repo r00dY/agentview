@@ -16,29 +16,21 @@ function isExcluded(relativePath) {
   return false;
 }
 
-async function pathExists(p) {
-  try {
-    await stat(p);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 async function buildTemplate() {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const packageDir = path.resolve(__dirname, '..');
   const repoRoot = path.resolve(packageDir, '..', '..');
 
   const studioSrc = path.join(repoRoot, 'apps', 'studio');
-  const templateDest = path.join(packageDir, 'dist/template');
+  const distDir = path.join(packageDir, 'dist/');
+  const templateDir = path.join(packageDir, 'dist/template');
 
-  if (await pathExists(templateDest)) {
-    await rm(templateDest, { recursive: true, force: true });
-  }
-  await mkdir(templateDest, { recursive: true });
+  // clean
+  await rm(distDir, { recursive: true, force: true });
+  await mkdir(templateDir, { recursive: true });
 
-  await cp(studioSrc, templateDest, {
+  // copy files
+  await cp(studioSrc, templateDir, {
     recursive: true,
     filter: (src) => {
       const rel = path.relative(studioSrc, src);
@@ -46,7 +38,8 @@ async function buildTemplate() {
     },
   });
 
-  const pkgJsonPath = path.join(templateDest, 'package.json');
+  // set package.json
+  const pkgJsonPath = path.join(templateDir, 'package.json');
   const pkgRaw = await readFile(pkgJsonPath, 'utf8');
   const pkg = JSON.parse(pkgRaw);
   pkg.name = 'my-agentview-app';
@@ -54,9 +47,20 @@ async function buildTemplate() {
   if (pkg.private) delete pkg.private;
   await writeFile(pkgJsonPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
 
-  // Provide default .env pointing studio to the API exposed by docker-compose
-  const envContent = `VITE_AGENTVIEW_API_BASE_URL=http://localhost:8080\n`;
-  await writeFile(path.join(templateDest, '.env'), envContent, 'utf8');
+  // build .env
+  if (!process.env.AGENTVIEW_API_IMAGE) {
+    throw new Error('AGENTVIEW_API_IMAGE is not set');
+  }
+  if (!process.env.AGENTVIEW_API_VERSION) {
+    throw new Error('AGENTVIEW_API_VERSION is not set');
+  }
+
+  env = `VITE_AGENTVIEW_API_BASE_URL=http://localhost:8080
+AGENTVIEW_API_IMAGE=${process.env.AGENTVIEW_API_IMAGE}
+AGENTVIEW_API_VERSION=${process.env.AGENTVIEW_API_VERSION}
+`;
+
+  await writeFile(path.join(templateDir, '.env'), envContent, 'utf8');
 }
 
 (async () => {
