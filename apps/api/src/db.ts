@@ -1,5 +1,5 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { users, sessions, accounts, verifications } from "./db/auth-schema";
+import { users, sessions, accounts, verifications } from "./schemas/auth-schema";
 import {
   invitations,
   email,
@@ -25,7 +25,7 @@ import {
   inboxItems,
   inboxItemsRelations,
   usersRelations
-} from "./db/schema";
+} from "./schemas/schema";
 
 export const schema = {
   users,

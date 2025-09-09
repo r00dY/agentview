@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { schemas } from "./db/schema";
+import { schemas } from "./schemas/schema";
 import { desc } from "drizzle-orm";
 import { convertJsonSchemaToZod } from 'zod-from-json-schema';
 import type { BaseConfig } from "./shared/configTypes";

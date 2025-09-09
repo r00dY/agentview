@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "./db"
-import { thread } from "./db/schema"
+import { thread } from "./schemas/schema"
 import type { Transaction } from "./types";
 
 export async function fetchThreads(thread_id?: string, tx?: Transaction) {

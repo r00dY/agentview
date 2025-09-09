@@ -1,4 +1,4 @@
-import { events } from "./db/schema";
+import { events } from "./schemas/schema";
 import { db } from "./db";
 import { desc } from "drizzle-orm";
 

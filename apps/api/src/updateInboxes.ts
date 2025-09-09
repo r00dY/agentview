@@ -1,8 +1,8 @@
-import { events } from "./db/schema";
+import { events } from "./schemas/schema";
 import { inArray, type InferSelectModel, sql } from "drizzle-orm";
 import type { Activity, Thread } from "./shared/apiTypes";
 import { db } from "./db";
-import { inboxItems } from "./db/schema";
+import { inboxItems } from "./schemas/schema";
 import { getLastEvent } from "./events";
 import type { Transaction } from "./types";
 import { isInboxItemUnread } from "./inboxItems";
