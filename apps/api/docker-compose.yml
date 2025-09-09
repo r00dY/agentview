@@ -30,7 +30,7 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@postgres-db:5432/postgres
       STUDIO_URL: http://localhost:1989
     ports:
-      - "1990:1990"
+      - "8080:8080"
     depends_on:
       - postgres-db
     restart: unless-stopped

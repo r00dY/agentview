@@ -1731,7 +1731,7 @@ app.get('/', (c) => c.text('Hello Agent View!'))
 
 const port = (() => {
   // Get the port from API_PORT
-  const apiPort = process.env.API_PORT ?? "1990";
+  const apiPort = process.env.API_PORT ?? "8080";
   // if (!apiPort) throw new Error('API_PORT is not set');
 
   try {
