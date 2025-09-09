@@ -54,14 +54,25 @@ async function buildTemplate() {
   if (pkg.private) delete pkg.private;
   await writeFile(pkgJsonPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
 
-  // Generate docker-compose.yml into the template to run backend easily
+  // Generate docker-compose.yml by reading apps/api/docker-compose.yml and replacing api.build with api.image
   const version = process.env.AGENTVIEW_VERSION || 'latest';
-  const apiImageRepo = process.env.AGENTVIEW_API_IMAGE || '';
+  const apiImageRepo = process.env.AGENTVIEW_API_IMAGE || 'rudzienki/agentview-api';
 
-  if (apiImageRepo) {
-    const compose = `services:\n  postgres-db:\n    image: postgres:15\n    environment:\n      POSTGRES_DB: postgres\n      POSTGRES_USER: postgres\n      POSTGRES_PASSWORD: postgres\n    ports:\n      - \"5432:5432\"\n    volumes:\n      - pgdata:/var/lib/postgresql/data\n\n  api:\n    image: ${apiImageRepo}:${version}\n    environment:\n      POSTGRES_DB: postgres\n      POSTGRES_USER: postgres\n      POSTGRES_PASSWORD: postgres\n      STUDIO_URL: http://localhost:1989\n    ports:\n      - \"8080:8080\"\n    depends_on:\n      - postgres-db\n    extra_hosts:\n      - \"host.docker.internal:host-gateway\"\n\n    restart: unless-stopped\n\nvolumes:\n  pgdata:\n`;
+  const apiComposePath = path.join(repoRoot, 'apps', 'api', 'docker-compose.yml');
+  try {
+    let composeSrc = await readFile(apiComposePath, 'utf8');
 
-    await writeFile(path.join(templateDest, 'docker-compose.yml'), compose, 'utf8');
+    // Replace only the build directive under the api service with image: <repo>:<version>
+    // This regex finds the line with two-space indent '  api:' and then replaces the first occurrence of a
+    // line matching '    build: .' within that service block.
+    composeSrc = composeSrc.replace(/(^\s*api:\s*[\s\S]*?)(^\s*build:\s*\.)/m, (match, prefix, buildLine) => {
+      const imageLine = `    image: ${apiImageRepo}:${version}`;
+      return match.replace(buildLine, imageLine);
+    });
+
+    await writeFile(path.join(templateDest, 'docker-compose.yml'), composeSrc, 'utf8');
+  } catch (e) {
+    // If reading or transforming fails, skip writing docker-compose.yml
   }
 
   // Provide default .env pointing studio to the API exposed by docker-compose

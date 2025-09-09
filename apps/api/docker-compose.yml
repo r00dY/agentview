@@ -23,6 +23,7 @@ services:
       - ./docker/pg-admin/servers.json:/pgadmin4/servers.json
 
   api:
+    image: rudzienki/agentview-api:latest
     build: .
     environment:
       POSTGRES_DB: postgres
