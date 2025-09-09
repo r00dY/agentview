@@ -53,6 +53,20 @@ async function buildTemplate() {
   pkg.version = '0.0.1';
   if (pkg.private) delete pkg.private;
   await writeFile(pkgJsonPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
+
+  // Generate docker-compose.yml into the template to run backend easily
+  const version = process.env.AGENTVIEW_VERSION || 'latest';
+  const apiImageRepo = process.env.AGENTVIEW_API_IMAGE || '';
+
+  if (apiImageRepo) {
+    const compose = `services:\n  postgres-db:\n    image: postgres:15\n    environment:\n      POSTGRES_DB: postgres\n      POSTGRES_USER: postgres\n      POSTGRES_PASSWORD: postgres\n    ports:\n      - \"5432:5432\"\n    volumes:\n      - pgdata:/var/lib/postgresql/data\n\n  api:\n    image: ${apiImageRepo}:${version}\n    environment:\n      POSTGRES_DB: postgres\n      POSTGRES_USER: postgres\n      POSTGRES_PASSWORD: postgres\n      STUDIO_URL: http://localhost:1989\n    ports:\n      - \"8080:8080\"\n    depends_on:\n      - postgres-db\n    extra_hosts:\n      - \"host.docker.internal:host-gateway\"\n\n    restart: unless-stopped\n\nvolumes:\n  pgdata:\n`;
+
+    await writeFile(path.join(templateDest, 'docker-compose.yml'), compose, 'utf8');
+  }
+
+  // Provide default .env pointing studio to the API exposed by docker-compose
+  const envContent = `VITE_AGENTVIEW_API_BASE_URL=http://localhost:8080\n`;
+  await writeFile(path.join(templateDest, '.env'), envContent, 'utf8');
 }
 
 // async function publish() {

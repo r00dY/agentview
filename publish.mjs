@@ -12,7 +12,7 @@ const ALL_PACKAGES = [
   'packages/create-agentview',
 ];
 
-// Packages to build and publish
+// Packages to build and publish (npm)
 const PACKAGES = [
   'packages/create-agentview',
 ];
@@ -45,6 +45,10 @@ function getDistTagFromVersion(version) {
   if (!version.includes('-')) return 'latest';
   const m = version.match(/^[0-9]+\.[0-9]+\.[0-9]+-([A-Za-z0-9]+)/);
   return m ? m[1] : 'latest';
+}
+
+function isPrerelease(version) {
+  return version.includes('-');
 }
 
 async function ensureRootPackageJson() {
@@ -88,9 +92,43 @@ async function setPackagesVersion(version) {
   }
 }
 
-async function buildPackages() {
-  for (const rel of PACKAGES) {
-    run('npm run build', { cwd: path.join(REPO_ROOT, rel) });
+function buildCreateAgentviewTemplate({ version, apiImageRepo }) {
+  const cwd = path.join(REPO_ROOT, 'packages/create-agentview');
+  run('npm run build', {
+    cwd,
+    env: { ...process.env, AGENTVIEW_VERSION: version, AGENTVIEW_API_IMAGE: apiImageRepo },
+  });
+}
+
+function getApiDockerImageRepo() {
+//   const repo = process.env.AGENTVIEW_API_IMAGE;
+//   if (!repo) {
+//     console.error('\nAGENTVIEW_API_IMAGE is not set. Please set it to your Docker image repo, e.g.:');
+//     console.error('  export AGENTVIEW_API_IMAGE="your-dockerhub-username/agentview-api"\n');
+//     process.exit(1);
+//   }
+//   return repo;
+    return 'rudzienki/agentview-api';
+}
+
+function buildAndPushApiDockerImage(apiImageRepo, version) {
+  const apiDir = path.join(REPO_ROOT, 'apps/api');
+  const fullTag = `${apiImageRepo}:${version}`;
+
+  console.log(`\nBuilding API Docker image: ${fullTag}`);
+  run(`docker build -t ${fullTag} ${apiDir}`);
+
+  if (!isPrerelease(version)) {
+    const latestTag = `${apiImageRepo}:latest`;
+    run(`docker tag ${fullTag} ${latestTag}`);
+  }
+
+  console.log(`\nPushing API Docker image: ${fullTag}`);
+  run(`docker push ${fullTag}`);
+
+  if (!isPrerelease(version)) {
+    const latestTag = `${apiImageRepo}:latest`;
+    run(`docker push ${latestTag}`);
   }
 }
 
@@ -126,15 +164,24 @@ async function publishPackages(version) {
 
   await ensureRootPackageJson();
 
-  await buildPackages();
-
+  // 1) Bump versions first so builds can embed the correct version
   bumpRootVersion(bumpType, preid);
   const version = await getRootVersion();
 
+  // 2) Sync package versions
   await setPackagesVersion(version);
 
+  // 3) Build and push API Docker image
+  const apiImageRepo = getApiDockerImageRepo();
+  buildAndPushApiDockerImage(apiImageRepo, version);
+
+  // 4) Build create-agentview template (writes docker-compose.yml pointing at the image above)
+  buildCreateAgentviewTemplate({ version, apiImageRepo });
+
+  // 5) Commit and tag
   await gitCommitAndTag(version);
 
+  // 6) Publish npm packages
   await publishPackages(version);
 
   console.log(`\nPublished v${version}`);

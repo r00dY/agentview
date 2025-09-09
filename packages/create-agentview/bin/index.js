@@ -61,6 +61,7 @@ async function main() {
   console.log('Next steps:');
   console.log(`  cd ${path.relative(cwd, targetDir) || '.'}`);
   console.log('  npm install');
+  console.log('  docker compose up -d');
   console.log('  npm run dev');
 }
 
