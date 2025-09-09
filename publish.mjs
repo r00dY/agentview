@@ -94,7 +94,9 @@ async function setPackagesVersion(version) {
 
 function buildCreateAgentviewTemplate() {
   const cwd = path.join(REPO_ROOT, 'packages/create-agentview');
-  run('npm run build', { cwd });
+  run('npm run build', {
+    cwd
+  });
 }
 
 function getApiDockerImageRepo() {
