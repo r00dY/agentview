@@ -35,6 +35,7 @@ import { SessionContext } from "~/lib/session";
 import { apiFetch } from "~/lib/apiFetch";
 import type { Member, SessionList } from "~/lib/shared/apiTypes";
 import { NotificationBadge } from "~/components/NotificationBadge";
+import { createOrUpdateSchema } from "~/lib/schema";
 
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
@@ -51,6 +52,8 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
       return redirect('/login');
     }
   }
+  
+  await createOrUpdateSchema(); // update schema on every page load
 
   const membersResponse = await apiFetch<Member[]>('/api/members');
 
@@ -296,7 +299,7 @@ export default function Layout() {
                     <SidebarMenuButton asChild>
                       <Link to="/schemas">
                         <Database className="mr-2 h-4 w-4" />
-                        <span>Schemas</span>
+                        <span>Schema</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
