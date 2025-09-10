@@ -96,7 +96,7 @@ function buildCreateAgentviewTemplate(apiImageRepo, version) {
   const cwd = path.join(REPO_ROOT, 'packages/create-agentview');
   run('npm run build', {
     cwd,
-    env: { ...process.env, AGENTVIEW_API_IMAGE: apiImageRepo, AGENTVIEW_API_VERSION: version },
+    env: { ...process.env, AGENTVIEW_API_IMAGE: `${apiImageRepo}:${version}` },
   });
 }
 
