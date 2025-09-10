@@ -58,13 +58,12 @@ function ActivityView({ activity, onSelect, selected = false }: { activity: any,
 
 function ThreadDetails({ thread }: { thread: Thread }) {
     const versions = getVersions(thread);
-
     const threadConfig = config.threads.find((threadConfig) => threadConfig.type === thread.type);
 
     if (!threadConfig) {
         throw new Error("Thread config not found");
     }
-    
+
     return (
         <div className="w-full">
             <PropertyList.Root>
