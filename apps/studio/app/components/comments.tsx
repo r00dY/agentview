@@ -224,7 +224,6 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                             disabled={fetcher.state !== 'idle'}
                         >
                             {fetcher.state !== 'idle' ? 'Posting...' : 'Submit'}
-
                         </Button>
                     </div>
                 </fetcher.Form>

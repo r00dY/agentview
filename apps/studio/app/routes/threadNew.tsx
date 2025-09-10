@@ -12,6 +12,7 @@ import { config } from "../../agentview.config";
 import { AlertCircleIcon } from "lucide-react";
 import { useRef } from "react";
 import { FormField } from "~/components/form";
+import { parseFormData } from "~/lib/parseFormData";
 
 const threadConfig = config.threads[0];
 
@@ -65,35 +66,39 @@ export async function clientAction({ request, params }: Route.ClientActionArgs):
   }
 
   // Validate and collect metadata fields
-  const metadata: Record<string, any> = {};
-  const fieldErrors: Record<string, string> = {};
 
-  if (threadConfig.metadata && threadConfig.metadata.length > 0) {
-    for (const metafield of threadConfig.metadata) {
-      const fieldValue = formData.get(metafield.name);
+
+  const { data: metadata, errors: fieldErrors } = parseFormData(formData, 'metadata');
+  
+  // const metadata: Record<string, any> = {};
+  // const fieldErrors: Record<string, string> = {};
+
+  // if (threadConfig.metadata && threadConfig.metadata.length > 0) {
+  //   for (const metafield of threadConfig.metadata) {
+  //     const fieldValue = formData.get(metafield.name);
       
-      try {
-        // Parse JSON value if it exists
-        const parsedValue = fieldValue ? JSON.parse(fieldValue as string) : undefined;
+  //     try {
+  //       // Parse JSON value if it exists
+  //       const parsedValue = fieldValue ? JSON.parse(fieldValue as string) : undefined;
         
-        // Validate using the schema
-        const validationResult = metafield.schema.safeParse(parsedValue);
+  //       // Validate using the schema
+  //       const validationResult = metafield.schema.safeParse(parsedValue);
         
-        if (!validationResult.success) {
-          fieldErrors[metafield.name] = validationResult.error.errors[0]?.message || `Invalid ${metafield.name}`;
-        } else {
-          metadata[metafield.name] = validationResult.data;
-        }
-      } catch (error) {
-        fieldErrors[metafield.name] = `Invalid format for ${metafield.name}`;
-      }
-    }
+  //       if (!validationResult.success) {
+  //         fieldErrors[metafield.name] = validationResult.error.errors[0]?.message || `Invalid ${metafield.name}`;
+  //       } else {
+  //         metadata[metafield.name] = validationResult.data;
+  //       }
+  //     } catch (error) {
+  //       fieldErrors[metafield.name] = `Invalid format for ${metafield.name}`;
+  //     }
+  //   }
 
     // Return validation errors if any
     if (Object.keys(fieldErrors).length > 0) {
       return { ok: false, error: { message: "Validation failed", fieldErrors } };
     }
-  }
+  // }
 
   // Create a client first
   const clientResponse = await apiFetch('/api/clients', {
@@ -123,7 +128,6 @@ export async function clientAction({ request, params }: Route.ClientActionArgs):
 
   // Redirect to the new thread
   return redirect(`/threads/${threadResponse.data.id}?list=${list}`);
-
 }
 
 export default function ThreadNew() {
@@ -166,8 +170,8 @@ function Content() {
             key={metafield.name}
             id={metafield.name}
             label={metafield.title ?? metafield.name}
-            error={fetcher.data?.error?.fieldErrors?.[metafield.name]}
-            name={metafield.name}
+            error={fetcher.data?.error?.fieldErrors?.[`metadata.${metafield.name}`]}
+            name={'metadata.' + metafield.name}
             defaultValue={undefined}
             // defaultValue={scores[metafield.name] ?? undefined}
             InputComponent={metafield.input}

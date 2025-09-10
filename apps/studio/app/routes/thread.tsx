@@ -16,6 +16,7 @@ import { Share } from "lucide-react";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
 import { Badge } from "~/components/ui/badge";
 import { useSessionContext } from "~/lib/session";
+import { config } from "../../agentview.config";
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
     const response = await apiFetch<Thread>(`/api/threads/${params.id}`);
@@ -55,9 +56,15 @@ function ActivityView({ activity, onSelect, selected = false }: { activity: any,
     </div>
 }
 
-function ThreadDetails({ thread }: { thread: any }) {
+function ThreadDetails({ thread }: { thread: Thread }) {
     const versions = getVersions(thread);
 
+    const threadConfig = config.threads.find((threadConfig) => threadConfig.type === thread.type);
+
+    if (!threadConfig) {
+        throw new Error("Thread config not found");
+    }
+    
     return (
         <div className="w-full">
             <PropertyList.Root>
@@ -101,18 +108,22 @@ function ThreadDetails({ thread }: { thread: any }) {
                     <PropertyList.Title>
                         {versions.length > 1 ? "Versions" : "Version"}
                     </PropertyList.Title>
-                    <PropertyList.TextValue isMonospace>
-                        {versions.map(version => (version?.version ?? "") + "." + (version?.env ?? "")).join(", ")}
+                    <PropertyList.TextValue>
+                        {versions.length > 0 ? versions.map(version => (version?.version ?? "") + "." + (version?.env ?? "")).join(", ") : "-"}
                     </PropertyList.TextValue>
                 </PropertyList.Item>
-                {thread.metadata && (
+
+
+                {(threadConfig.metadata ?? []).map((metafield: any) => (
                     <PropertyList.Item className="items-start">
-                        <PropertyList.Title>Metadata</PropertyList.Title>
+                        <PropertyList.Title>{metafield.title ?? metafield.name}</PropertyList.Title>
+                        <PropertyList.TextValue><metafield.display value={thread.metadata[metafield.name]} options={metafield.options} /></PropertyList.TextValue>
+{/* 
                         <pre className="text-sm bg-muted p-2 rounded mt-1 overflow-x-auto">
                             {JSON.stringify(thread.metadata, null, 2)}
-                        </pre>
+                        </pre> */}
                     </PropertyList.Item>
-                )}
+                ))}
             </PropertyList.Root>
         </div>
     );
@@ -268,7 +279,6 @@ function ThreadPage() {
         }
 
     }, [lastRun?.state])
-
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault()
