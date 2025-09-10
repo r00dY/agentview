@@ -44,7 +44,7 @@ export default function SchemasPage() {
 
   return <div>
     <Header>
-      <HeaderTitle title="Schemas" />
+      <HeaderTitle title="Schema" />
     </Header>
 
     <div className="p-6 max-w-6xl">
@@ -54,7 +54,11 @@ export default function SchemasPage() {
           </Button>
         </fetcher.Form>
         { !schema && <div>No schema found</div> }
-        { schema && <div>{JSON.stringify(schema)}</div> }
+        { schema && (
+          <pre className="bg-gray-100 p-4 rounded overflow-x-auto text-sm">
+            {JSON.stringify(schema, null, 2)}
+          </pre>
+        ) }
     </div>
   </div>
 } 
