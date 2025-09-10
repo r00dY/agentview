@@ -15,6 +15,7 @@ export interface BaseActivityConfig<ScoreConfigType> {
 
 export interface BaseThreadConfig<ActivityType> {
     type: string;
+    url: string;
     metadata?: z.ZodType;
     activities: ActivityType[];
 }

@@ -8,6 +8,7 @@ export const config : AgentViewConfig = {
     threads: [
         {
             type: "pdp_chat",
+            url: "http://127.0.0.1:8000/run_stream",
             metadata: z.object({
                 product_id: z.string()
             }),

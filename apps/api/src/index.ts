@@ -683,7 +683,7 @@ app.openapi(runsPOSTRoute, async (c) => {
 
     try {
       // Try streaming first, fallback to non-streaming
-      const runOutput = callAgentAPI(input)
+      const runOutput = callAgentAPI(input, threadConfig.url)
       let versionId: string | null = null;
 
       let firstItem = true;

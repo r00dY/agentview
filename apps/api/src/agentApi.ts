@@ -18,11 +18,11 @@ export type AgentAPIEvent = {
   data: any
 }
 
-export async function* callAgentAPI(request: { thread: any }): AsyncGenerator<AgentAPIEvent, void, unknown> {
+export async function* callAgentAPI(request: { thread: any }, url: string): AsyncGenerator<AgentAPIEvent, void, unknown> {
   let response : Response;
 
   try {
-    response = await fetch('http://host.docker.internal:8000/run_stream', {  // TODO: make this in Schema Config!!!
+    response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

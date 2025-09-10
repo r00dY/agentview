@@ -8,6 +8,7 @@ function parseSchema(schema: any): BaseConfig {
     return {
         threads: schema.threads.map((thread: any) => ({
             type: thread.type,
+            url: thread.url,
             metadata: thread.metadata ? convertJsonSchemaToZod(thread.metadata) : undefined,
             activities: thread.activities?.map((activity: any) => ({
                 ...activity,
