@@ -29,10 +29,7 @@ import { users } from './schemas/auth-schema'
 import { getUsersCount } from './users'
 import { updateInboxes } from './updateInboxes'
 import { isInboxItemUnread } from './inboxItems'
-import { getLastEvent } from './events'
-// import { config } from './shared/agentview.config'
 
-// import { buildConflictUpdateColumns } from './buildConflictUpdateColumns'
 
 
 export const app = new OpenAPIHono({

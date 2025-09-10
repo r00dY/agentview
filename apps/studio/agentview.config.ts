@@ -9,9 +9,15 @@ export const config : AgentViewConfig = {
         {
             type: "pdp_chat",
             url: "http://127.0.0.1:8000/run_stream",
-            metadata: z.object({
-                product_id: z.string() // same as score...?
-            }),
+            metadata: [
+                {
+                    name: "product_id",
+                    title: "Product ID",
+                    schema: z.string(),
+                    input: TextInput,
+                    display: DisplayTextComponent
+                }
+            ],
             activities: [
                 {
                     type: "message",

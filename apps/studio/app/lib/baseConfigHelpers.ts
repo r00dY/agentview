@@ -5,20 +5,7 @@ import type { BaseConfig } from "./shared/configTypes";
 
 
 export function serializeBaseConfig(config: BaseConfig): any {
-  return {
-    threads: config.threads.map((thread) => ({
-      ...thread,
-      metadata: thread.metadata ? z.toJSONSchema(thread.metadata) : undefined,
-      activities: thread.activities.map((activity) => ({
-        ...activity,
-        content: z.toJSONSchema(activity.content),
-        scores: activity.scores?.map((score) => ({
-          ...score,
-          schema: z.toJSONSchema(score.schema),
-        }))
-      }))
-    }))
-  }
+  return serializeObject(config);
 }
 
 export function getBaseConfig(config: AgentViewConfig): BaseConfig {
@@ -28,7 +15,7 @@ export function getBaseConfig(config: AgentViewConfig): BaseConfig {
       url: thread.url,
       metadata: thread.metadata,
       activities: thread.activities.map((activity) => ({
-        type: activity.type,
+      type: activity.type,
         role: activity.role,
         content: activity.content,
         scores: activity.scores?.map((score) => ({
@@ -39,6 +26,34 @@ export function getBaseConfig(config: AgentViewConfig): BaseConfig {
       }))
     }))
   }
+}
+
+function serializeObject(obj: any): any {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+
+  // Handle Zod schemas
+  if (z instanceof z.ZodObject) {
+    return z.toJSONSchema(obj);
+  }
+
+  // Handle arrays
+  if (Array.isArray(obj)) {
+    return obj.map(serializeObject);
+  }
+
+  // Handle objects
+  if (typeof obj === "object") {
+    const result: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      result[key] = serializeObject(value);
+    }
+    return result;
+  }
+
+  // Primitives
+  return obj;
 }
 
 // Helper function to check if a value is a React component
