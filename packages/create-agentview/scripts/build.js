@@ -54,6 +54,7 @@ async function buildTemplate() {
 
   const envContent = `VITE_AGENTVIEW_API_BASE_URL=http://localhost:8080
 AGENTVIEW_API_IMAGE=${process.env.AGENTVIEW_API_IMAGE}
+AGENTVIEW_STUDIO_URL=http://localhost:1989
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=postgres
 POSTGRES_DB=postgres
