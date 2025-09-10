@@ -999,6 +999,8 @@ function validateScore(schema: BaseConfig, thread: Thread, activity: Activity, s
     }
   }
 
+  console.log(scoreConfig)
+  
   // Validate value against the schema
   try {
     scoreConfig.schema.parse(scoreValue);

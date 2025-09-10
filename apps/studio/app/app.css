@@ -9,13 +9,16 @@
 @custom-variant dark (&:is(.dark *)); */
 
 @theme {
-  --font-sans: "system-ui", ui-sans-serif, system-ui, sans-serif,
+  --font-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 }
 
 html,
 body {
-  font-family: "system-ui", ui-sans-serif, system-ui, sans-serif,
+  font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   /* @apply bg-white dark:bg-gray-950;
 
   @media (prefers-color-scheme: dark) {

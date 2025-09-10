@@ -34,7 +34,7 @@ function serializeObject(obj: any): any {
   }
 
   // Handle Zod schemas
-  if (z instanceof z.ZodObject) {
+  if (obj instanceof z.ZodType) {
     return z.toJSONSchema(obj);
   }
 
@@ -47,6 +47,9 @@ function serializeObject(obj: any): any {
   if (typeof obj === "object") {
     const result: any = {};
     for (const [key, value] of Object.entries(obj)) {
+      if (isFunction(value) || isReactComponent(value)) {
+        continue;
+      }
       result[key] = serializeObject(value);
     }
     return result;
