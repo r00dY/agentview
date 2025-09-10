@@ -10,20 +10,20 @@ export const config : AgentViewConfig = {
             type: "pdp_chat",
             url: "http://127.0.0.1:8000/run_stream",
             metadata: z.object({
-                product_id: z.string()
+                product_id: z.string() // same as score...?
             }),
             activities: [
                 {
                     type: "message",
                     role: "user",
-                    content: z.string()
+                    content: z.string(),
                 },
                 {
                     type: "message",
                     role: "assistant",
                     content: z.string(),
                     scores: [
-                        {
+                        { 
                             name: "user_reaction",
                             title: "Reaction",
                             schema: z.boolean(),

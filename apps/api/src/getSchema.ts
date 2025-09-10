@@ -22,7 +22,6 @@ function parseSchema(schema: any): BaseConfig {
     }
 }
 
-
 export async function getSchema() {
   const schemaRows = await db.select().from(schemas).orderBy(desc(schemas.createdAt)).limit(1)
   if (schemaRows.length === 0) {
