@@ -59,10 +59,40 @@ export async function clientLoader({ request, params }: Route.ClientLoaderArgs) 
 export async function clientAction({ request, params }: Route.ClientActionArgs): Promise<ActionResponse | Response> {
   const list = getThreadsList(request);
   const formData = await request.formData();
-  const product_id = formData.get("product_id");
 
-  if (!product_id || typeof product_id !== 'string') {
-    return { ok: false, error: { message: "Product ID is required" } };
+  if (!threadConfig) {
+    return { ok: false, error: { message: "No threads available in the config object." } };
+  }
+
+  // Validate and collect metadata fields
+  const metadata: Record<string, any> = {};
+  const fieldErrors: Record<string, string> = {};
+
+  if (threadConfig.metadata && threadConfig.metadata.length > 0) {
+    for (const metafield of threadConfig.metadata) {
+      const fieldValue = formData.get(metafield.name);
+      
+      try {
+        // Parse JSON value if it exists
+        const parsedValue = fieldValue ? JSON.parse(fieldValue as string) : undefined;
+        
+        // Validate using the schema
+        const validationResult = metafield.schema.safeParse(parsedValue);
+        
+        if (!validationResult.success) {
+          fieldErrors[metafield.name] = validationResult.error.errors[0]?.message || `Invalid ${metafield.name}`;
+        } else {
+          metadata[metafield.name] = validationResult.data;
+        }
+      } catch (error) {
+        fieldErrors[metafield.name] = `Invalid format for ${metafield.name}`;
+      }
+    }
+
+    // Return validation errors if any
+    if (Object.keys(fieldErrors).length > 0) {
+      return { ok: false, error: { message: "Validation failed", fieldErrors } };
+    }
   }
 
   // Create a client first
@@ -77,15 +107,13 @@ export async function clientAction({ request, params }: Route.ClientActionArgs):
 
   const client_id = clientResponse.data.id;
 
-  // Then create the thread with the new client_id
+  // Then create the thread with the new client_id and all metadata
   const threadResponse = await apiFetch('/api/threads', {
     method: 'POST',
     body: {
-      type: "pdp_chat",
+      type: threadConfig.type,
       client_id: client_id,
-      metadata: {
-        product_id: product_id
-      }
+      metadata: metadata
     }
   });
 
