@@ -26,7 +26,6 @@ RUN npm run build
 # ---------- Runtime ----------
 FROM base AS runtime
 ENV NODE_ENV=production
-# ENV API_PORT=8080
 
 WORKDIR /app
 
@@ -45,7 +44,7 @@ COPY --from=build /app/src ./src
 RUN useradd -m nodeuser && chown -R nodeuser:nodeuser /app
 USER nodeuser
 
-# EXPOSE 8080
+# EXPOSE 80
 ENTRYPOINT ["/usr/bin/tini", "--"]
 # CMD ["npx", "drizzle-kit", "push"]
 # CMD ["npm", "run", "start-ts"]

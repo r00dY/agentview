@@ -1,26 +1,34 @@
 services:
   postgres-db:
-    image: postgres:15
+    image: postgres:17
     environment:
-      POSTGRES_DB: postgres
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
   api:
-    image: ${AGENTVIEW_API_IMAGE}:${AGENTVIEW_API_VERSION}
+    image: ${AGENTVIEW_API_IMAGE}
     environment:
-      POSTGRES_DB: postgres
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      STUDIO_URL: http://localhost:1989
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      AGENTVIEW_STUDIO_URL: ${AGENTVIEW_STUDIO_URL}
     ports:
-      - "8080:8080"    
+      - "8080:80"
     depends_on:
-      - postgres-db
+      postgres-db:
+        condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

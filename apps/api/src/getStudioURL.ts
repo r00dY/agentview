@@ -1,6 +1,6 @@
 export function getStudioURL() {
-    if (!process.env.STUDIO_URL) {
-        throw new Error('STUDIO_URL is not set');
+    if (!process.env.AGENTVIEW_STUDIO_URL) {
+        throw new Error('AGENTVIEW_STUDIO_URL is not set');
     }
-    return process.env.STUDIO_URL;
+    return process.env.AGENTVIEW_STUDIO_URL;
 }
