@@ -10,7 +10,7 @@ import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { swaggerUI } from '@hono/swagger-ui'
 import { db } from './db'
 import { client, thread, activity, run, email, commentMessages, commentMessageEdits, commentMentions, versions, scores, schemas, events, inboxItems } from './schemas/schema'
-import { eq, desc, and, inArray, ne, gt, isNull, isNotNull, or, gte, sql, countDistinct } from 'drizzle-orm'
+import { eq, desc, and, inArray, ne, gt, isNull, isNotNull, or, gte, sql, countDistinct, DrizzleQueryError } from 'drizzle-orm'
 import { response_data, response_error, body } from './hono_utils'
 import { isUUID } from './isUUID'
 import { extractMentions } from './utils'
@@ -55,8 +55,11 @@ function handleError(c: any, error: any) {
   if (error instanceof BetterAuthAPIError) {
     return c.json(error.body, error.statusCode);
   }
+  else if (error instanceof DrizzleQueryError) {
+    return c.json({ ...error, message: "DB error. Is db running?" }, 400);
+  }
   else if (error instanceof HTTPException) {
-    return c.json({ message: error.message }, error.status);
+    return c.json(error, 500);
   }
   else if (error instanceof Error) {
     return c.json({ message: error.message }, 400);
