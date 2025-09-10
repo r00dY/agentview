@@ -4,7 +4,7 @@ import { ThumbsDown, ThumbsUp } from "lucide-react";
 import { TextInput, ToggleBooleanInput } from "./app/components/form";
 import { DisplayBooleanComponent, DisplayTextComponent } from "./app/components/display";
 
-export const config : AgentViewConfig = {
+export const config: AgentViewConfig = {
     threads: [
         {
             type: "pdp_chat",
@@ -29,7 +29,7 @@ export const config : AgentViewConfig = {
                     role: "assistant",
                     content: z.string(),
                     scores: [
-                        { 
+                        {
                             name: "user_reaction",
                             title: "Reaction",
                             schema: z.boolean(),
@@ -48,7 +48,7 @@ export const config : AgentViewConfig = {
                         },
                         {
                             name: "whatever",
-                            title: "Whatever",  
+                            title: "Whatever",
                             schema: z.string(),
                             input: TextInput,
                             display: DisplayTextComponent

@@ -116,7 +116,7 @@ function ThreadDetails({ thread }: { thread: Thread }) {
                 {(threadConfig.metadata ?? []).map((metafield: any) => (
                     <PropertyList.Item className="items-start">
                         <PropertyList.Title>{metafield.title ?? metafield.name}</PropertyList.Title>
-                        <PropertyList.TextValue><metafield.display value={thread.metadata[metafield.name]} options={metafield.options} /></PropertyList.TextValue>
+                        <PropertyList.TextValue><metafield.display value={thread.metadata?.[metafield.name]} options={metafield.options} /></PropertyList.TextValue>
 {/* 
                         <pre className="text-sm bg-muted p-2 rounded mt-1 overflow-x-auto">
                             {JSON.stringify(thread.metadata, null, 2)}
