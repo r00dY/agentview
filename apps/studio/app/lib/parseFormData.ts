@@ -1,49 +1,43 @@
-export function parseFormData(formData: FormData, prefix: string): { data: Record<string, any>, errors: Record<string, string> } {
+export function parseFormData(formData: FormData, options?: { excludedFields?: string[] }): Record<string, any> {
     const data: Record<string, any> = {};
-    const errors: Record<string, string> = {};
+    const fieldErrors: Record<string, string> = {};
 
-    // Get all form fields that are scores (they will be JSON strings)
     for (const [key, value] of formData.entries()) {
-        if (key.startsWith(prefix + ".")) {
-            const scoreName = key.replace(prefix + ".", "");
+        if (key.startsWith("agentview__") || options?.excludedFields?.includes(key)) {
+            continue;
+        }
 
-            if (value === "") {
-                continue;
-            }
+        if (value === "") {
+            continue;
+        }
 
-            try {
-                const parsedValue = JSON.parse(value as string);
-                // Only add score if value is not undefined
-                if (parsedValue !== undefined) {
-                    data[scoreName] = parsedValue;
+        const path = key.split(".");
+        let current = data;
+
+        try {
+            const parsedValue = JSON.parse(value as string);
+
+            // Traverse the path, creating sub-objects as needed
+            for (let i = 0; i < path.length; i++) {
+                const part = path[i];
+                if (i === path.length - 1) {
+                    current[part] = parsedValue;
+                } else {
+                    if (!(part in current) || typeof current[part] !== "object" || current[part] === null) {
+                        current[part] = {};
+                    }
+                    current = current[part];
                 }
-            } catch (error) {
-                errors[key] = "Invalid JSON value";
             }
+        } catch (error) {
+            fieldErrors[key] = "Invalid JSON value";
         }
     }
 
-    return { data, errors };
+    if (Object.keys(fieldErrors).length > 0) {
+        throw new Error("Invalid JSON values in form data");
+    }
+
+    return data;
 }
 
-
-
-// export function parseFormDataForRequiredFields(formData: FormData, field: string) {
-//     const value = formData.get(field);
-//     if (!value) {
-//         throw new Error(`Field ${field} doesn't exist in formData`);
-//     }
-//     if (typeof value !== "string") {
-//         throw new Error(`Field ${field} is not a string in formData`);
-//     }
-
-//     try {
-//         const parsedValue = JSON.parse(value);
-        
-//         if (parsedValue !== undefined) {
-//             return { data: parsedValue, error: undefined }
-//         }
-//     } catch (error) {
-//         return { data: undefined, error: "Invalid JSON value" }
-//     }
-// }

@@ -66,39 +66,7 @@ export async function clientAction({ request, params }: Route.ClientActionArgs):
   }
 
   // Validate and collect metadata fields
-
-
-  const { data: metadata, errors: fieldErrors } = parseFormData(formData, 'metadata');
-  
-  // const metadata: Record<string, any> = {};
-  // const fieldErrors: Record<string, string> = {};
-
-  // if (threadConfig.metadata && threadConfig.metadata.length > 0) {
-  //   for (const metafield of threadConfig.metadata) {
-  //     const fieldValue = formData.get(metafield.name);
-      
-  //     try {
-  //       // Parse JSON value if it exists
-  //       const parsedValue = fieldValue ? JSON.parse(fieldValue as string) : undefined;
-        
-  //       // Validate using the schema
-  //       const validationResult = metafield.schema.safeParse(parsedValue);
-        
-  //       if (!validationResult.success) {
-  //         fieldErrors[metafield.name] = validationResult.error.errors[0]?.message || `Invalid ${metafield.name}`;
-  //       } else {
-  //         metadata[metafield.name] = validationResult.data;
-  //       }
-  //     } catch (error) {
-  //       fieldErrors[metafield.name] = `Invalid format for ${metafield.name}`;
-  //     }
-  //   }
-
-    // Return validation errors if any
-    if (Object.keys(fieldErrors).length > 0) {
-      return { ok: false, error: { message: "Validation failed", fieldErrors } };
-    }
-  // }
+  const data = parseFormData(formData);
 
   // Create a client first
   const clientResponse = await apiFetch('/api/clients', {
@@ -118,7 +86,7 @@ export async function clientAction({ request, params }: Route.ClientActionArgs):
     body: {
       type: threadConfig.type,
       client_id: client_id,
-      metadata: metadata
+      metadata: data.metadata
     }
   });
 
