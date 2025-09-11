@@ -447,7 +447,5 @@ function InputForm({ thread }: { thread: Thread }) {
 
             </div>
         </form>
-
-        {/* {formError && <div className="text-red-500">{formError}</div>} */}
     </div>
 }
