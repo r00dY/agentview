@@ -1000,7 +1000,7 @@ function validateScore(schema: BaseConfig, thread: Thread, activity: Activity, s
   }
 
   console.log(scoreConfig)
-  
+
   // Validate value against the schema
   try {
     scoreConfig.schema.parse(scoreValue);
@@ -1597,7 +1597,7 @@ const schemasGETRoute = createRoute({
 })
 
 app.openapi(schemasGETRoute, async (c) => {
-  await requireAdminSession(c.req.raw.headers)
+  await requireSession(c.req.raw.headers)
 
   const schemaRows = await db.select().from(schemas).orderBy(desc(schemas.createdAt)).limit(1)
   if (schemaRows.length === 0) {

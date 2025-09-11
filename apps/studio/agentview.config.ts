@@ -23,6 +23,9 @@ export const config: AgentViewConfig = {
                     type: "message",
                     role: "user",
                     content: z.string(),
+                    isInput: true,
+                    input: TextInput,
+                    display: DisplayTextComponent
                 },
                 {
                     type: "message",
