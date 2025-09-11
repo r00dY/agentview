@@ -20,6 +20,7 @@ import { config } from "../../agentview.config";
 import type { ThreadConfig } from "~/types";
 import { FormField } from "~/components/form";
 import { parseFormData } from "~/lib/parseFormData";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs";
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
     const response = await apiFetch<Thread>(`/api/threads/${params.id}`);
@@ -97,7 +98,7 @@ function ThreadDetails({ thread }: { thread: Thread }) {
                 <PropertyList.Item>
                     <PropertyList.Title>Source</PropertyList.Title>
                     <PropertyList.TextValue>
-                        {thread.client.simulatedBy ? "Simulated by " + thread.client.simulatedBy.name : "Real"}
+                        {thread.client.simulated_by ? "Simulated by " + thread.client.simulated_by : "Real"}
                     </PropertyList.TextValue>
                 </PropertyList.Item>
                 {/* <PropertyList.Item>
@@ -340,13 +341,14 @@ function ThreadPage() {
 
             </div>
 
-            {thread.client.simulatedBy?.id === user.id && <InputForm thread={thread} />}
+            {thread.client.simulated_by === user.id && <InputForm thread={thread} />}
 
         </div>
 
         <Outlet context={{ thread }} />
     </>
 }
+
 
 function InputForm({ thread }: { thread: Thread }) {
     const [formError, setFormError] = useState<string | null>(null)
@@ -411,29 +413,75 @@ function InputForm({ thread }: { thread: Thread }) {
         })
     }
 
-    const inputActivityConfig = threadConfig.activities.find((activity) => activity.isInput)!
+    const inputConfigs = threadConfig.activities.filter((activity) => activity.isInput)
 
     return <div className="p-6 border-t">
 
+        { inputConfigs.length === 0 && <div className="text-sm text-muted-foreground">No input fields</div>}
+
         <form method="post" onSubmit={handleSubmit}>
 
-            <FormField
-                id={"inputFormValue"}
-                // error={fetcher.data?.error?.fieldErrors?.[`metadata.${metafield.name}`]}
-                name={"inputFormValue"}
-                defaultValue={undefined}
-                // defaultValue={scores[metafield.name] ?? undefined}
-                InputComponent={inputActivityConfig.input}
-                options={inputActivityConfig.options}
-            />
+            { inputConfigs.length === 1 ? (
+                // Single input config - no tabs
+                <div>
+                    {inputConfigs[0].input && (
+                        <FormField
+                            id={"inputFormValue"}
+                            // error={fetcher.data?.error?.fieldErrors?.[`metadata.${metafield.name}`]}
+                            name={"inputFormValue"}
+                            defaultValue={undefined}
+                            // defaultValue={scores[metafield.name] ?? undefined}
+                            InputComponent={inputConfigs[0].input}
+                            options={inputConfigs[0].options}
+                        />
+                    )}
+                </div>
+            ) : (
+                // Multiple input configs - use tabs
+                <Tabs defaultValue={`${inputConfigs[0].type}-${inputConfigs[0].role || 'default'}`}>
+                    <TabsList>
+                        {inputConfigs.map((inputConfig, index) => {
+                            const tabName = inputConfig.title || (inputConfig.role 
+                                ? `${inputConfig.type} / ${inputConfig.role}`
+                                : inputConfig.type)
+                            const tabValue = `${inputConfig.type}-${inputConfig.role || 'default'}`;
+                            
+                            return (
+                                <TabsTrigger key={index} value={tabValue}>
+                                    {tabName}
+                                </TabsTrigger>
+                            );
+                        })}
+                    </TabsList>
+                    
+                    {inputConfigs.map((inputConfig, index) => {
+                        const tabValue = `${inputConfig.type}-${inputConfig.role || 'default'}`;
+                        
+                        return (
+                            <TabsContent key={index} value={tabValue}>
+                                {inputConfig.input && (
+                                    <FormField
+                                        id={"inputFormValue"}
+                                        // error={fetcher.data?.error?.fieldErrors?.[`metadata.${metafield.name}`]}
+                                        name={"inputFormValue"}
+                                        defaultValue={undefined}
+                                        // defaultValue={scores[metafield.name] ?? undefined}
+                                        InputComponent={inputConfig.input}
+                                        options={inputConfig.options}
+                                    />
+                                )}
+                            </TabsContent>
+                        );
+                    })}
+                </Tabs>
+            )}
 
             {/* <Textarea name="message" placeholder="Reply here..." rows={1} className="mb-2" /> */}
 
             <div className="flex flex-row gap-2 items-center mt-2">
 
                 { lastRun?.state !== 'in_progress' && <Button type="submit">Send <SendHorizonalIcon /></Button>}
-
-                {lastRun?.state === 'in_progress' && <Button type="button" onClick={() => {
+                { lastRun?.state === 'in_progress' && <Button type="button" onClick={() => {
                     handleCancel()
                 }}>Cancel <SquareIcon /></Button>}
 

@@ -19,7 +19,11 @@ export type ScoreConfig<T=any> = BaseScoreConfig & {
   display: React.ComponentType<DisplayComponentProps<T>>;
 }
 
-export type ActivityConfig = BaseActivityConfig<ScoreConfig>;
+export type ActivityConfig = BaseActivityConfig<ScoreConfig> & {
+  isInput?: boolean;
+  input?: React.ComponentType<FormInputProps>;
+  options?: any;
+};
 
 export type ThreadConfig = BaseThreadConfig<ActivityConfig>;
   
