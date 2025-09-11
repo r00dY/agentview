@@ -12,7 +12,7 @@ import { getLastRun, getAllActivities, getVersions } from "~/lib/shared/threadUt
 import { type Thread } from "~/lib/shared/apiTypes";
 import { getThreadsList } from "~/lib/utils";
 import { PropertyList } from "~/components/PropertyList";
-import { Share } from "lucide-react";
+import { SendHorizonalIcon, Share, SquareIcon } from "lucide-react";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
 import { Badge } from "~/components/ui/badge";
 import { useSessionContext } from "~/lib/session";
@@ -431,11 +431,11 @@ function InputForm({ thread }: { thread: Thread }) {
 
             <div className="flex flex-row gap-2 items-center mt-2">
 
-                { lastRun?.state !== 'in_progress' && <Button type="submit">Send</Button>}
+                { lastRun?.state !== 'in_progress' && <Button type="submit">Send <SendHorizonalIcon /></Button>}
 
                 {lastRun?.state === 'in_progress' && <Button type="button" onClick={() => {
                     handleCancel()
-                }}>Cancel</Button>}
+                }}>Cancel <SquareIcon /></Button>}
 
                 <div className="gap-2 text-sm text-muted-foreground">
                     {!formError && <div>
