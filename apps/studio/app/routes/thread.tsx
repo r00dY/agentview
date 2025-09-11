@@ -19,6 +19,7 @@ import { useSessionContext } from "~/lib/session";
 import { config } from "../../agentview.config";
 import type { ThreadConfig } from "~/types";
 import { FormField } from "~/components/form";
+import { parseFormData } from "~/lib/parseFormData";
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
     const response = await apiFetch<Thread>(`/api/threads/${params.id}`);
@@ -366,9 +367,9 @@ function InputForm({ thread }: { thread: Thread }) {
         setFormError(null)
 
         const formData = new FormData(e.target as HTMLFormElement)
-        const value = JSON.parse(formData.get("inputFormValue") as string)
+        const data = parseFormData(formData)
 
-        if (value) {
+        if (data.inputFormValue) {
             try {
                 const response = await apiFetch(`/api/threads/${thread.id}/runs`, {
                     method: 'POST',
@@ -376,7 +377,7 @@ function InputForm({ thread }: { thread: Thread }) {
                         input: {
                             type: "message",
                             role: "user",
-                            content: value
+                            content: data.inputFormValue
                         }
                     }
                 });

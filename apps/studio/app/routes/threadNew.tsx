@@ -157,7 +157,6 @@ function Content() {
           disabled={fetcher.state !== 'idle'}
         >
           {fetcher.state !== 'idle' ? 'Posting...' : 'Submit'}
-
         </Button>
         <Button
           type="reset"
