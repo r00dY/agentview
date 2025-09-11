@@ -193,7 +193,7 @@ function Content() {
         </Button>
         <Button
           type="reset"
-          variant="ghost"
+          variant="secondary"
           size="sm"
           onClick={(e) => {
             formRef.current?.reset();

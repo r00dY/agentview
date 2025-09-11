@@ -128,12 +128,12 @@ function ThreadDetails({ thread }: { thread: Thread }) {
     );
 }
 
-function ShareForm({ thread }: { thread: Thread }) {
+function ShareForm({ thread, list }: { thread: Thread, list: string }) {
     const fetcher = useFetcher();
     const navigate = useNavigate();
     
     useFetcherSuccess(fetcher, () => {
-        navigate(`/threads/${thread.id}?list=simulated_shared`);
+        navigate(`/threads/${thread.id}?list=${list}`);
     });
     
     if (thread.client.is_shared) {
@@ -332,7 +332,7 @@ function ThreadPage() {
         <Header>
             <HeaderTitle title={`Thread ${thread.number}`} />
 
-            <ShareForm thread={thread} />
+            <ShareForm thread={thread} list={loaderData.list} />
         </Header>
         <div className="flex-1 overflow-y-auto">
 
