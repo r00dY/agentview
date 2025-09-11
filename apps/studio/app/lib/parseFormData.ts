@@ -25,3 +25,25 @@ export function parseFormData(formData: FormData, prefix: string): { data: Recor
 
     return { data, errors };
 }
+
+
+
+// export function parseFormDataForRequiredFields(formData: FormData, field: string) {
+//     const value = formData.get(field);
+//     if (!value) {
+//         throw new Error(`Field ${field} doesn't exist in formData`);
+//     }
+//     if (typeof value !== "string") {
+//         throw new Error(`Field ${field} is not a string in formData`);
+//     }
+
+//     try {
+//         const parsedValue = JSON.parse(value);
+        
+//         if (parsedValue !== undefined) {
+//             return { data: parsedValue, error: undefined }
+//         }
+//     } catch (error) {
+//         return { data: undefined, error: "Invalid JSON value" }
+//     }
+// }

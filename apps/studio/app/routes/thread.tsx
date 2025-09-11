@@ -366,9 +366,9 @@ function InputForm({ thread }: { thread: Thread }) {
         setFormError(null)
 
         const formData = new FormData(e.target as HTMLFormElement)
-        const message = formData.get("message")
+        const value = JSON.parse(formData.get("inputFormValue") as string)
 
-        if (message) {
+        if (value) {
             try {
                 const response = await apiFetch(`/api/threads/${thread.id}/runs`, {
                     method: 'POST',
@@ -376,7 +376,7 @@ function InputForm({ thread }: { thread: Thread }) {
                         input: {
                             type: "message",
                             role: "user",
-                            content: message
+                            content: value
                         }
                     }
                 });
@@ -410,12 +410,32 @@ function InputForm({ thread }: { thread: Thread }) {
         })
     }
 
+    const inputActivityConfig = threadConfig.activities.find((activity) => activity.isInput)!
+
     return <div className="p-6 border-t">
 
         <form method="post" onSubmit={handleSubmit}>
-            <Textarea name="message" placeholder="Reply here..." rows={1} className="mb-2" />
 
-            <div className="flex flex-row justify-between">
+            <FormField
+                id={"inputFormValue"}
+                // error={fetcher.data?.error?.fieldErrors?.[`metadata.${metafield.name}`]}
+                name={"inputFormValue"}
+                defaultValue={undefined}
+                // defaultValue={scores[metafield.name] ?? undefined}
+                InputComponent={inputActivityConfig.input}
+                options={inputActivityConfig.options}
+            />
+
+            {/* <Textarea name="message" placeholder="Reply here..." rows={1} className="mb-2" /> */}
+
+            <div className="flex flex-row gap-2 items-center mt-2">
+
+                { lastRun?.state !== 'in_progress' && <Button type="submit">Send</Button>}
+
+                {lastRun?.state === 'in_progress' && <Button type="button" onClick={() => {
+                    handleCancel()
+                }}>Cancel</Button>}
+
                 <div className="gap-2 text-sm text-muted-foreground">
                     {!formError && <div>
                         {threadStatus === "in_progress" && <div>Running...</div>}
@@ -424,13 +444,6 @@ function InputForm({ thread }: { thread: Thread }) {
                     {formError && <div className="text-red-500">{formError}</div>}
                 </div>
 
-                <div className="flex flex-row gap-2 justify-end">
-                    <Button type="submit" disabled={lastRun?.state === 'in_progress'}>Send</Button>
-
-                    {lastRun?.state === 'in_progress' && <Button type="button" onClick={() => {
-                        handleCancel()
-                    }}>Cancel</Button>}
-                </div>
             </div>
         </form>
 

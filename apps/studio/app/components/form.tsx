@@ -12,7 +12,7 @@ import {
 export type FormFieldBaseProps = {
     id: string,
     children: ReactNode
-    label: string;
+    label?: string;
     description?: string;
     error?: string;
 };
@@ -20,7 +20,7 @@ export type FormFieldBaseProps = {
 export function FormFieldBase<T=any>(props: FormFieldBaseProps) {
     const { id, label,description, error, children } = props;
     return <div className="flex flex-row gap-4">
-        <label className="text-sm text-gray-700 w-[170px] flex-shrink-0 truncate" htmlFor={id}>{label}</label>
+        {label && <label className="text-sm text-gray-700 w-[170px] flex-shrink-0 truncate" htmlFor={id}>{label}</label>}
         {<div>
             <div>
                 {children}
