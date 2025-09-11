@@ -25,10 +25,7 @@ export const config: AgentViewConfig = {
                     content: z.string(),
                     isInput: true,
                     input: TextInput,
-                    display: DisplayTextComponent,
-                    options: {
-                        placeholder: "Enter your message"
-                    }
+                    display: DisplayTextComponent
                 },
                 {
                     type: "message",
