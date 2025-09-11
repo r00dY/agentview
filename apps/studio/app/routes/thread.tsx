@@ -424,7 +424,6 @@ function InputForm({ thread }: { thread: Thread }) {
                     {formError && <div className="text-red-500">{formError}</div>}
                 </div>
 
-
                 <div className="flex flex-row gap-2 justify-end">
                     <Button type="submit" disabled={lastRun?.state === 'in_progress'}>Send</Button>
 
@@ -432,8 +431,6 @@ function InputForm({ thread }: { thread: Thread }) {
                         handleCancel()
                     }}>Cancel</Button>}
                 </div>
-
-
             </div>
         </form>
 
