@@ -8,7 +8,7 @@ export interface BaseScoreConfig {
 
 export interface BaseActivityConfig<ScoreConfigType> {
     type: string;
-    role: string;
+    role?: string;
     content: z.ZodType;
     scores?: ScoreConfigType[];
 }

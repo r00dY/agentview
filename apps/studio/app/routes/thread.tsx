@@ -74,18 +74,10 @@ function ThreadDetails({ thread }: { thread: Thread }) {
     return (
         <div className="w-full">
             <PropertyList.Root>
-                {/* <PropertyList.Item>
-                    <PropertyList.Title>ID</PropertyList.Title>
-                    <PropertyList.TextValue isMonospace>{thread.id}</PropertyList.TextValue>
-                </PropertyList.Item> */}
                 <PropertyList.Item>
                     <PropertyList.Title>Agent</PropertyList.Title>
                     <PropertyList.TextValue>{thread.type}</PropertyList.TextValue>
                 </PropertyList.Item>
-                {/* <PropertyList.Item>
-                    <PropertyList.Title>Client ID</PropertyList.Title>
-                    <PropertyList.TextValue isMonospace>{thread.client_id}</PropertyList.TextValue>
-                </PropertyList.Item> */}
                 <PropertyList.Item>
                     <PropertyList.Title>Created</PropertyList.Title>
                     <PropertyList.TextValue>
@@ -104,12 +96,6 @@ function ThreadDetails({ thread }: { thread: Thread }) {
                         {simulatedBy ? <>Simulated by <span className="text-cyan-700">{simulatedBy.name}</span></> : "Real"}
                     </PropertyList.TextValue>
                 </PropertyList.Item>
-                {/* <PropertyList.Item>
-                    <PropertyList.Title>State</PropertyList.Title>
-                    <PropertyList.TextValue isMonospace>
-                        {thread.lastRun?.state === "completed" ? "idle" : (thread.lastRun?.state ?? "idle")}
-                    </PropertyList.TextValue>
-                </PropertyList.Item> */}
                 <PropertyList.Item>
                     <PropertyList.Title>
                         {versions.length > 1 ? "Versions" : "Version"}
@@ -124,10 +110,6 @@ function ThreadDetails({ thread }: { thread: Thread }) {
                     <PropertyList.Item className="items-start">
                         <PropertyList.Title>{metafield.title ?? metafield.name}</PropertyList.Title>
                         <PropertyList.TextValue><metafield.display value={thread.metadata?.[metafield.name]} options={metafield.options} /></PropertyList.TextValue>
-                        {/* 
-                        <pre className="text-sm bg-muted p-2 rounded mt-1 overflow-x-auto">
-                            {JSON.stringify(thread.metadata, null, 2)}
-                        </pre> */}
                     </PropertyList.Item>
                 ))}
             </PropertyList.Root>

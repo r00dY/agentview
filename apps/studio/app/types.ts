@@ -22,6 +22,8 @@ export type ScoreConfig<T=any> = BaseScoreConfig & {
 export type ActivityConfig = BaseActivityConfig<ScoreConfig> & {
   isInput?: boolean;
   input?: React.ComponentType<FormInputProps>;
+  display: React.ComponentType<DisplayComponentProps>;
+  title?: string;
   options?: any;
 };
 

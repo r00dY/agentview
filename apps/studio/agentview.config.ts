@@ -40,6 +40,7 @@ export const config: AgentViewConfig = {
                     type: "message",
                     role: "assistant",
                     content: z.string(),
+                    display: DisplayTextComponent,
                     scores: [
                         {
                             name: "user_reaction",
