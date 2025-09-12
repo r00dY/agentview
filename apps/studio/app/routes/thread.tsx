@@ -63,10 +63,13 @@ function ActivityView({ activity, onSelect, selected = false }: { activity: any,
 function ThreadDetails({ thread }: { thread: Thread }) {
     const versions = getVersions(thread);
     const threadConfig = config.threads?.find((threadConfig) => threadConfig.type === thread.type);
+    const { members } = useSessionContext();
 
     if (!threadConfig) {
         throw new Error(`Thread config not found for type "${thread.type}"`);
     }
+
+    const simulatedBy = members.find((member) => member.id === thread.client.simulated_by);
 
     return (
         <div className="w-full">
@@ -98,7 +101,7 @@ function ThreadDetails({ thread }: { thread: Thread }) {
                 <PropertyList.Item>
                     <PropertyList.Title>Source</PropertyList.Title>
                     <PropertyList.TextValue>
-                        {thread.client.simulated_by ? <>Simulated by <span className="text-cyan-700">{thread.client.simulatedBy.name}</span></> : "Real"}
+                        {simulatedBy ? <>Simulated by <span className="text-cyan-700">{simulatedBy.name}</span></> : "Real"}
                     </PropertyList.TextValue>
                 </PropertyList.Item>
                 {/* <PropertyList.Item>

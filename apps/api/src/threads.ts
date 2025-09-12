@@ -7,11 +7,12 @@ export async function fetchThreads(thread_id?: string, tx?: Transaction) {
     const threadRows = await (tx || db).query.thread.findMany({
       where: thread_id ? eq(thread.id, thread_id) : undefined,
       with: {
-        client: {
-          with: {
-            simulatedBy: true
-          }
-        },
+        client: true,
+        // client: {
+        //   with: {
+        //     simulatedBy: true
+        //   }
+        // },
         runs: {
           orderBy: (run, { asc }) => [asc(run.created_at)],
           with: {
