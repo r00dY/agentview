@@ -347,6 +347,7 @@ const threadsGETRoute = createRoute({
   request: {
     query: z.object({
       list: z.enum(Object.keys(LISTS)).optional(),
+      type: z.string(),
     }),
   },
   responses: {
@@ -359,6 +360,8 @@ app.openapi(threadsGETRoute, async (c) => {
   const session = await requireSession(c.req.raw.headers)
 
   const listName = c.req.query().list ?? "real";
+  const type = c.req.query().type;
+
   const listFilter = LISTS[listName].filter(session.user);
 
   const result = await db.select().from(thread).leftJoin(client, eq(thread.client_id, client.id)).where(listFilter);
@@ -366,7 +369,7 @@ app.openapi(threadsGETRoute, async (c) => {
   const threadIds = result.map((row) => row.thread.id);
 
   const threadRows = await db.query.thread.findMany({
-    where: inArray(thread.id, threadIds),
+    where: and(inArray(thread.id, threadIds), eq(thread.type, type)),
     with: {
       client: true,
       inboxItems: {

@@ -1,4 +1,4 @@
-import { redirect, Form, useActionData, useFetcher, data } from "react-router";
+import { redirect, Form, useActionData, useFetcher, data, useLoaderData } from "react-router";
 import type { Route } from "./+types/threadNew";
 import { Header, HeaderTitle } from "~/components/header";
 import { Button } from "~/components/ui/button";
@@ -6,7 +6,7 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { apiFetch } from "~/lib/apiFetch";
-import { getThreadsList } from "~/lib/utils";
+import { getThreadListParams } from "~/lib/utils";
 import { type ActionResponse } from "~/lib/errors";
 import { config } from "../../agentview.config";
 import { AlertCircleIcon } from "lucide-react";
@@ -14,17 +14,19 @@ import { useRef } from "react";
 import { FormField } from "~/components/form";
 import { parseFormData } from "~/lib/parseFormData";
 
-const threadConfig = config.threads[0];
-
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
+  const listParams = getThreadListParams(request);
+  const threadConfig = config.threads?.find((threadConfig) => threadConfig.type === listParams.type);
+
   if (!threadConfig) {
-    throw new Error("No threads available in the config object.");
+    throw new Error(`Thread config not found for type "${listParams.type}"`);
   }
 
-  const list = getThreadsList(request);
-
   if (threadConfig.metadata && (threadConfig.metadata?.length > 0)) {
-    return {}
+    return {
+      threadConfig,
+      listParams
+    }
   }
 
   /** NO METADATA CASE **/
@@ -52,20 +54,18 @@ export async function clientLoader({ request, params }: Route.ClientLoaderArgs) 
     throw data(threadResponse.error, { status: threadResponse.status });
   }
 
-  return redirect(`/threads/${threadResponse.data.id}?list=${list}`);
-
+  return redirect(`/threads/${threadResponse.data.id}?list=${listParams.list}&type=${listParams.type}`);
 }
 
-
 export async function clientAction({ request, params }: Route.ClientActionArgs): Promise<ActionResponse | Response> {
-  const list = getThreadsList(request);
-  const formData = await request.formData();
+  const listParams = getThreadListParams(request);
+  const threadConfig = config.threads?.find((threadConfig) => threadConfig.type === listParams.type);
 
   if (!threadConfig) {
-    return { ok: false, error: { message: "No threads available in the config object." } };
+    throw new Error(`Thread config not found for type "${listParams.type}"`);
   }
 
-  // Validate and collect metadata fields
+  const formData = await request.formData();
   const data = parseFormData(formData);
 
   // Create a client first
@@ -95,7 +95,7 @@ export async function clientAction({ request, params }: Route.ClientActionArgs):
   }
 
   // Redirect to the new thread
-  return redirect(`/threads/${threadResponse.data.id}?list=${list}`);
+  return redirect(`/threads/${threadResponse.data.id}?list=${listParams.list}&type=${listParams.type}`);
 }
 
 export default function ThreadNew() {
@@ -115,6 +115,8 @@ export default function ThreadNew() {
 }
 
 function Content() {
+  const { threadConfig } = useLoaderData<typeof clientLoader>();
+
   const fetcher = useFetcher();
   const formRef = useRef<HTMLFormElement>(null);
 
