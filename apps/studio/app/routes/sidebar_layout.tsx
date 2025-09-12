@@ -36,7 +36,7 @@ import { apiFetch } from "~/lib/apiFetch";
 import type { Member, SessionList } from "~/lib/shared/apiTypes";
 import { NotificationBadge } from "~/components/NotificationBadge";
 import { createOrUpdateSchema } from "~/lib/schema";
-
+import { config } from "../../agentview.config";
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const session = await authClient.getSession()
@@ -92,12 +92,15 @@ export default function Layout() {
   const simulatedPrivateListUnseenCount = simulatedPrivateList?.unseenCount ?? 0
   const simulatedSharedListUnseenCount = simulatedSharedList?.unseenCount ?? 0
 
+
   return (<SessionContext.Provider value={{ user, members, locale }}>
     <SidebarProvider>
       <div className="flex h-screen bg-background w-full">
         <Sidebar className="border-r">
           <SidebarHeader className="px-3 py-3">
-            <img src="/logo.svg" alt="AgentView Logo" className="max-w-[100px]" />
+            <Link to="/">
+              <img src="/logo.svg" alt="AgentView Logo" className="max-w-[100px]" />
+            </Link>
 
             {/* <Button variant={"outline"} className="w-full justify-start gap-2 mt-5" asChild>
 
@@ -109,7 +112,7 @@ export default function Layout() {
           </SidebarHeader>
 
           <SidebarContent>
-            <SidebarGroup>
+            {/* <SidebarGroup>
               <SidebarGroupContent>
                 <SidebarMenu>
                   <SidebarMenuItem>
@@ -123,7 +126,7 @@ export default function Layout() {
                   </SidebarMenuItem>
                 </SidebarMenu>
               </SidebarGroupContent>
-            </SidebarGroup>
+            </SidebarGroup> */}
 
             {/* <SidebarGroup>
               <SidebarGroupLabel>pdp_chat</SidebarGroupLabel>
@@ -181,12 +184,20 @@ export default function Layout() {
               <SidebarGroupLabel>Sessions</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
+
+                { (!config.threads || config.threads.length === 0) && (
                   <SidebarMenuItem>
-                    <SidebarMenuButton>pdp_chat</SidebarMenuButton>
+                    <SidebarMenuButton className="text-muted-foreground">You don't have any agents yet</SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
+
+                  {config.threads?.map((thread) => ( 
+                  <SidebarMenuItem>
+                    <SidebarMenuButton>{thread.type}</SidebarMenuButton>
                     <SidebarMenuSub className="mr-0">
                       <SidebarMenuSubItem className={realListUnseenCount > 0 ? "flex justify-between items-center" : ""}>
                         <SidebarMenuSubButton asChild>
-                          <Link to="/threads">
+                          <Link to={`/threads?type=${thread.type}`}>
                             <MessageCircle className="mr-2 h-4 w-4" />
                             <span>Production</span>
                           </Link>
@@ -195,7 +206,7 @@ export default function Layout() {
                       </SidebarMenuSubItem>
                       <SidebarMenuSubItem className={simulatedPrivateListUnseenCount > 0 ? "flex justify-between items-center" : ""}>
                         <SidebarMenuSubButton asChild>
-                          <Link to="/threads?list=simulated_private">
+                          <Link to={`/threads?type=${thread.type}&list=simulated_private`}>
                             <User className="mr-2 h-4 w-4" />
                             <span>Simulated Private</span>
                           </Link>
@@ -205,7 +216,7 @@ export default function Layout() {
                       </SidebarMenuSubItem>
                       <SidebarMenuSubItem className={simulatedSharedListUnseenCount > 0 ? "flex justify-between items-center" : ""}>
                         <SidebarMenuSubButton asChild>
-                          <Link to="/threads?list=simulated_shared">
+                          <Link to={`/threads?type=${thread.type}&list=simulated_shared`}>
                             <Users className="mr-2 h-4 w-4" />
                             <span>Simulated Shared</span>
                           </Link>
@@ -217,7 +228,7 @@ export default function Layout() {
 
 
                   </SidebarMenuItem>
-
+                  ))}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>

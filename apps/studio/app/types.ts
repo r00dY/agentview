@@ -28,5 +28,5 @@ export type ActivityConfig = BaseActivityConfig<ScoreConfig> & {
 export type ThreadConfig = BaseThreadConfig<ActivityConfig>;
   
 export type AgentViewConfig = {
-  threads: ThreadConfig[],  
+  threads?: ThreadConfig[],  
 }

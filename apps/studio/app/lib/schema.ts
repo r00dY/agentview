@@ -36,8 +36,8 @@ export async function createOrUpdateSchema() {
     const remoteConfig = remoteSchema?.schema ?? null;
     const currentConfig = serializeBaseConfig(getBaseConfig(config));
 
-    console.log('base config', getBaseConfig(config).threads[0].metadata[0])
-    console.log('serialized', currentConfig.threads[0].metadata[0])
+    // console.log('base config', getBaseConfig(config).threads[0].metadata[0])
+    // console.log('serialized', currentConfig.threads[0].metadata[0])
 
     if (!equalJSON(remoteConfig, currentConfig)) {
         console.log('Schema change detected! Updating schema...')

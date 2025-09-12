@@ -10,7 +10,7 @@ export function serializeBaseConfig(config: BaseConfig): any {
 
 export function getBaseConfig(config: AgentViewConfig): BaseConfig {
   return {
-    threads: config.threads.map((thread) => ({
+    threads: (config.threads ?? []).map((thread) => ({
       type: thread.type,
       url: thread.url,
       metadata: thread.metadata,
