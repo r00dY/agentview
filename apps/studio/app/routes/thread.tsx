@@ -12,7 +12,7 @@ import { getLastRun, getAllActivities, getVersions } from "~/lib/shared/threadUt
 import { type Thread } from "~/lib/shared/apiTypes";
 import { getThreadListParams } from "~/lib/utils";
 import { PropertyList } from "~/components/PropertyList";
-import { SendHorizonalIcon, Share, SquareIcon } from "lucide-react";
+import { SendHorizonalIcon, Share, SquareIcon, UserIcon } from "lucide-react";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
 import { Badge } from "~/components/ui/badge";
 import { useSessionContext } from "~/lib/session";
@@ -62,10 +62,10 @@ function ActivityView({ activity, onSelect, selected = false }: { activity: any,
 
 function ThreadDetails({ thread }: { thread: Thread }) {
     const versions = getVersions(thread);
-    const threadConfig = config.threads.find((threadConfig) => threadConfig.type === thread.type);
+    const threadConfig = config.threads?.find((threadConfig) => threadConfig.type === thread.type);
 
     if (!threadConfig) {
-        throw new Error("Thread config not found");
+        throw new Error(`Thread config not found for type "${thread.type}"`);
     }
 
     return (
@@ -98,7 +98,7 @@ function ThreadDetails({ thread }: { thread: Thread }) {
                 <PropertyList.Item>
                     <PropertyList.Title>Source</PropertyList.Title>
                     <PropertyList.TextValue>
-                        {thread.client.simulated_by ? "Simulated by " + thread.client.simulated_by : "Real"}
+                        {thread.client.simulated_by ? <>Simulated by <span className="text-cyan-700">{thread.client.simulatedBy.name}</span></> : "Real"}
                     </PropertyList.TextValue>
                 </PropertyList.Item>
                 {/* <PropertyList.Item>
