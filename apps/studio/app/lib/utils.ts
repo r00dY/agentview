@@ -66,14 +66,20 @@ export function extractMentions(content: string): Record<string, string[]> {
 // Returns: { "user_id": ["abc123", "def456"] }
 
 
-export function getThreadsList(request: Request) {
+export function getThreadListParams(request: Request) {
   const url = new URL(request.url);
-  const type = url.searchParams.get('list') ?? "real";
-  const allowedTypes = ["simulated_shared", "simulated_private", "real"];
+  const list = url.searchParams.get('list') ?? "real";
+  const allowedLists = ["simulated_shared", "simulated_private", "real"];
 
-  if (!allowedTypes.includes(type)) {
-    throw new Error(`Invalid thread type: ${type}. Allowed types are: ${allowedTypes.join(", ")}`);
+  if (!allowedLists.includes(list)) {
+    throw new Error(`Invalid thread list: ${list}. Allowed types are: ${allowedLists.join(", ")}`);
   }
 
-  return type
+  const type = url.searchParams.get('type');
+
+  if (!type) {
+    throw new Error(`Thread type is required`);
+  }
+
+  return { list, type }
 }

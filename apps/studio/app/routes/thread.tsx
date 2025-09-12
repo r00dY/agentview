@@ -10,7 +10,7 @@ import { apiFetch } from "~/lib/apiFetch";
 import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
 import { getLastRun, getAllActivities, getVersions } from "~/lib/shared/threadUtils";
 import { type Thread } from "~/lib/shared/apiTypes";
-import { getThreadsList } from "~/lib/utils";
+import { getThreadListParams } from "~/lib/utils";
 import { PropertyList } from "~/components/PropertyList";
 import { SendHorizonalIcon, Share, SquareIcon } from "lucide-react";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
@@ -29,10 +29,10 @@ export async function clientLoader({ request, params }: Route.ClientLoaderArgs) 
         throw data(response.error, { status: response.status })
     }
 
-    const list = getThreadsList(request)
+    const listParams = getThreadListParams(request)
 
     return {
-        list,
+        listParams,
         thread: response.data
     };
 }
@@ -132,12 +132,12 @@ function ThreadDetails({ thread }: { thread: Thread }) {
     );
 }
 
-function ShareForm({ thread, list }: { thread: Thread, list: string }) {
+function ShareForm({ thread, listParams }: { thread: Thread, listParams: ReturnType<typeof getThreadListParams> }) {
     const fetcher = useFetcher();
     const navigate = useNavigate();
 
     useFetcherSuccess(fetcher, () => {
-        navigate(`/threads/${thread.id}?list=${list}`);
+        navigate(`/threads/${thread.id}?list=${listParams.list}&type=${listParams.type}`);
     });
 
     if (thread.client.is_shared) {
@@ -165,6 +165,7 @@ function ThreadPage() {
     const [thread, setThread] = useState(loaderData.thread)
     const [isStreaming, setStreaming] = useState(false)
 
+    const listParams = loaderData.listParams
     // const users = loaderData.users
 
     // const [searchParams, setSearchParams] = useSearchParams();
@@ -292,7 +293,7 @@ function ThreadPage() {
             <Header>
                 <HeaderTitle title={`Thread ${thread.number}`} />
 
-                <ShareForm thread={thread} list={loaderData.list} />
+                <ShareForm thread={thread} listParams={listParams} />
             </Header>
             <div className="flex-1 overflow-y-auto">
 
@@ -301,13 +302,11 @@ function ThreadPage() {
                 </div>
 
                 <div className="p-6">
-
-
                     <div className="flex flex-col gap-4">
                         {activeActivities.map((activity) => {
                             return <ActivityView
                                 activity={activity}
-                                onSelect={(a) => { navigate(`/threads/${thread.id}/activities/${a?.id}?list=${loaderData.list}`) }}
+                                onSelect={(a) => { navigate(`/threads/${thread.id}/activities/${a?.id}?list=${listParams.list}&type=${listParams.type}`) }}
                                 selected={params.activityId === activity.id}
                             />
                         })}

@@ -4,7 +4,7 @@ import type { Route } from "./+types/threads";
 import { Button } from "~/components/ui/button";
 import { Circle, CircleCheck, PlusIcon } from "lucide-react";
 import { Header, HeaderTitle } from "~/components/header";
-import { getThreadsList } from "~/lib/utils";
+import { getThreadListParams } from "~/lib/utils";
 import { apiFetch } from "~/lib/apiFetch";
 import type { Thread } from "~/lib/shared/apiTypes";
 import { getAllActivities } from "~/lib/shared/threadUtils";
@@ -13,8 +13,8 @@ import { useSessionContext } from "~/lib/session";
 import { NotificationBadge } from "~/components/NotificationBadge";
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
-  const list = getThreadsList(request);
-  const threadsResponse = await apiFetch<Thread[]>(`/api/threads?list=${list}`);
+  const listParams = getThreadListParams(request);
+  const threadsResponse = await apiFetch<Thread[]>(`/api/threads?list=${listParams.list}&type=${listParams.type}`);
 
   if (!threadsResponse.ok) {
     throw data(threadsResponse.error, { status: threadsResponse.status });
@@ -22,11 +22,11 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 
   return {
     threads: threadsResponse.data,
-    list
+    listParams
   }
 }
 
-export function ThreadCard({ thread, list }: { thread: Thread, list: string }) {
+export function ThreadCard({ thread, listParams }: { thread: Thread, listParams: ReturnType<typeof getThreadListParams> }) {
   const { user } = useSessionContext();
   const date = thread.created_at;
 
@@ -41,7 +41,7 @@ export function ThreadCard({ thread, list }: { thread: Thread, list: string }) {
   const hasUnreads = hasThreadUnreads || hasActivitiesUnread;
 
   return <div key={thread.id}>
-    <NavLink to={`/threads/${thread.id}?list=${list}`}>
+    <NavLink to={`/threads/${thread.id}?list=${listParams.list}&type=${listParams.type}`}>
       {({ isActive }) => (
         <div className={`p-3 border-b hover:bg-gray-50 transition-colors duration-50 ${isActive ? 'bg-gray-100' : ''}`}>
           <div className="flex flex-col gap-1">
@@ -64,21 +64,21 @@ export function ThreadCard({ thread, list }: { thread: Thread, list: string }) {
 }
 
 export default function Threads() {
-  const { threads, list } = useLoaderData<typeof clientLoader>();
+  const { threads, listParams } = useLoaderData<typeof clientLoader>();
 
   return <div className="flex flex-row items-stretch h-full">
 
     <div className="basis-[335px] flex-shrink-0 flex-grow-0 border-r flex flex-col ">
 
       <Header className="px-3">
-        <HeaderTitle title={`${list === "real" ? "Threads" : list === "simulated_private" ? "Private Sessions" : "Shared Sessions"}`} />
-        {list !== "real" && <div>
-          <Button variant="outline" size="sm" asChild><Link to={`/threads/new?list=${list}`}><PlusIcon />New thread</Link></Button>
+        <HeaderTitle title={`${listParams.list === "real" ? "Threads" : listParams.list === "simulated_private" ? "Private Sessions" : "Shared Sessions"}`} />
+        {listParams.list !== "real" && <div>
+          <Button variant="outline" size="sm" asChild><Link to={`/threads/new?list=${listParams.list}&type=${listParams.type}`}><PlusIcon />New thread</Link></Button>
         </div>}
       </Header>
 
       <div className="flex-1 overflow-y-auto">
-        {threads.length > 0 && threads.map((thread) => <ThreadCard thread={thread} list={list} />)}
+        {threads.length > 0 && threads.map((thread) => <ThreadCard thread={thread} listParams={listParams} />)}
         {threads.length === 0 && <div className="px-3 py-4 text-muted-foreground">No threads available.</div>}
       </div>
 
