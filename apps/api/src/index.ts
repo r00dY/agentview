@@ -964,7 +964,7 @@ app.openapi(activitySeenRoute, async (c) => {
 /* --------- FEED --------- */
 
 
-function validateScore(schema: BaseConfig, thread: Thread, activity: Activity, scoreName: string, scoreValue: any, options?: { mustNotExist?: boolean }) {
+function validateScore(schema: BaseConfig, thread: Thread, activity: Activity, user: User, scoreName: string, scoreValue: any, options?: { mustNotExist?: boolean }) {
   // Find the thread config
   const threadConfig = schema.threads.find((threadConfig) => threadConfig.type === thread.type);
   if (!threadConfig) {
@@ -993,7 +993,7 @@ function validateScore(schema: BaseConfig, thread: Thread, activity: Activity, s
     for (const message of activity.commentMessages) {
       if (message.scores) {
         for (const score of message.scores) {
-          if (score.name === scoreName && !score.deletedAt) {
+          if (score.name === scoreName && !score.deletedAt && score.createdBy === user.id) {
             throw new HTTPException(400, { message: `A score with name '${scoreName}' already exists.` });
           }
         }
@@ -1046,7 +1046,7 @@ app.openapi(commentsPOSTRoute, async (c) => {
   const inputScores = body.scores ?? {}
 
   for (const [scoreName, scoreValue] of Object.entries(inputScores)) {
-    validateScore(schema, thread, activity, scoreName, scoreValue, { mustNotExist: true })
+    validateScore(schema, thread, activity, session.user, scoreName, scoreValue, { mustNotExist: true })
   }
 
   await db.transaction(async (tx) => {
@@ -1200,7 +1200,7 @@ app.openapi(commentsPUTRoute, async (c) => {
   const inputScores = body.scores ?? {}
 
   for (const [scoreName, scoreValue] of Object.entries(inputScores)) {
-    validateScore(schema, thread, activity, scoreName, scoreValue, { mustNotExist: false })
+    validateScore(schema, thread, activity, session.user, scoreName, scoreValue, { mustNotExist: false })
   }
 
   await db.transaction(async (tx) => {

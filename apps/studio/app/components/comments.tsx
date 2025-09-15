@@ -36,30 +36,79 @@ export type CommentThreadFloatingButtonProps = CommentThreadFloatingBoxProps & {
     onSelect: (activity: any) => void,
 }
 
-function getScoresInfo(thread: Thread, activity: Activity) {
-    const threadConfig = config.threads.find((t: any) => t.type === thread.type);
+function getAllScoreConfigs(thread: Thread, activity: Activity) {
+    const threadConfig = config.threads?.find((t: any) => t.type === thread.type);
+    if (!threadConfig) {
+        throw new Error("Thread config not found");
+    }
+
     const activityConfig = threadConfig?.activities.find((a: any) =>
         a.type === activity.type && a.role === activity.role
     );
     const allScoreConfigs = activityConfig?.scores || [];
 
-    const visibleMessages = activity.commentMessages.filter((m: any) => !m.deletedAt) ?? []
-
-    const scores: Record<string, any> = {};
-    for (const message of visibleMessages) {
-        for (const score of message.scores ?? []) {
-            scores[score.name] = score.value;
-        }
-    }
-
-    const unassignedScoreConfigs = allScoreConfigs.filter((scoreConfig) => scores[scoreConfig.name] === undefined || scores[scoreConfig.name] === null);
-
-    return {
-        allScoreConfigs,
-        scores,
-        unassignedScoreConfigs
-    }
+    return allScoreConfigs;
 }
+
+// function getScoresInfo(thread: Thread, activity: Activity) {
+//     const threadConfig = config.threads?.find((t: any) => t.type === thread.type);
+//     if (!threadConfig) {
+//         throw new Error("Thread config not found");
+//     }
+
+//     const activityConfig = threadConfig?.activities.find((a: any) =>
+//         a.type === activity.type && a.role === activity.role
+//     );
+//     const allScoreConfigs = activityConfig?.scores || [];
+
+//     const visibleMessages = activity.commentMessages.filter((m: any) => !m.deletedAt) ?? []
+
+//     const scores: Record<string, any> = {};
+//     for (const message of visibleMessages) {
+//         for (const score of message.scores ?? []) {
+//             scores[score.name] = score.value;
+//         }
+//     }
+
+
+//     return {
+//         allScoreConfigs,
+//         scores,
+//     }
+// }
+
+
+// function getScoresInfo2(thread: Thread, activity: Activity, user: User) {
+//     const threadConfig = config.threads?.find((t: any) => t.type === thread.type);
+//     if (!threadConfig) {
+//         throw new Error("Thread config not found");
+//     }
+
+//     const activityConfig = threadConfig?.activities.find((a: any) =>
+//         a.type === activity.type && a.role === activity.role
+//     );
+//     const allScoreConfigs = activityConfig?.scores || [];
+
+//     const visibleMessages = activity.commentMessages.filter((m: any) => !m.deletedAt) ?? []
+
+//     const scores: Record<string, any> = {};
+//     for (const message of visibleMessages) {
+//         for (const score of message.scores ?? []) {
+//             if (score.createdBy !== user.id) {
+//                 continue;
+//             }
+//             scores[score.name] = score.value;
+//         }
+//     }
+
+//     const unassignedScoreConfigs = allScoreConfigs.filter((scoreConfig) => scores[scoreConfig.name] === undefined || scores[scoreConfig.name] === null);
+
+//     return {
+//         allScoreConfigs,
+//         scores,
+//         unassignedScoreConfigs
+//     }
+// }
 
 export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, activity, collapsed = false, singleLineMessageHeader = false }, ref) => {
     const fetcher = useFetcher();
@@ -68,12 +117,27 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
     const hasZeroVisisbleComments = visibleMessages.length === 0
 
     const formRef = useRef<HTMLFormElement>(null);
+    const { members, user } = useSessionContext();
+
 
     // const [currentlyEditedItemId, setCurrentlyEditedItemId] = useState<string | null>("new" /*null*/); // "new" for new comment, comment id for edits
 
-    const { scores, unassignedScoreConfigs, allScoreConfigs } = getScoresInfo(thread, activity);
+    const allScoreConfigs = getAllScoreConfigs(thread, activity);
 
-    const { members } = useSessionContext();
+    const scores : Record<string, any> = {};
+    for (const messageItem of visibleMessages) {
+        for (const score of messageItem.scores ?? []) {
+            if (score.deletedAt || score.createdBy !== user.id) {
+                continue;
+            }
+            scores[score.name] = score.value;
+        }
+    }
+
+    const unassignedScoreConfigs = allScoreConfigs.filter((scoreConfig) => scores[scoreConfig.name] === undefined || scores[scoreConfig.name] === null);
+
+    // const { scores, unassignedScoreConfigs, allScoreConfigs } = getScoresInfo(thread, activity, user);
+
 
     useFetcherSuccess(fetcher, () => {
         // setCurrentlyEditedItemId(null);
@@ -383,9 +447,13 @@ export function CommentMessageItem({ message, activity, thread,compressionLevel 
     }
 
     const { user, members } = useSessionContext();
+    const author = members.find((m) => m.id === message.userId);
+    if (!author) {
+        throw new Error("Author not found");
+    }
 
     const fetcher = useFetcher();
-    const isOwn = message.userId === user.id;
+    const isOwn = author.id === user.id;
     const formRef = useRef<HTMLFormElement>(null);
 
     const createdAt = timeAgoShort(message.createdAt);
@@ -393,13 +461,29 @@ export function CommentMessageItem({ message, activity, thread,compressionLevel 
 
     const [isEditing, setIsEditing] = useState(false);
 
-    const { scores, allScoreConfigs } = getScoresInfo(thread, activity);
+
+    const allScoreConfigs = getAllScoreConfigs(thread, activity);
+
+    const scores : Record<string, any> = {};
+    for (const score of message.scores ?? []) {
+        if (score.deletedAt !== null) {
+            continue;
+        }
+        scores[score.name] = score.value;
+    }
+
+
+    // const { scores, allScoreConfigs } = getScoresInfo(thread, activity, user);
 
     const messageScoreConfigs = allScoreConfigs.filter(
         (scoreConfig) =>
             message.scores &&
             message.scores.some((score) => score.name === scoreConfig.name)
     );
+
+
+
+    
 
     useFetcherSuccess(fetcher, () => {
         setIsEditing(false);
@@ -408,7 +492,7 @@ export function CommentMessageItem({ message, activity, thread,compressionLevel 
     return (
         <div>
 
-            <CommentMessageHeader title={user.name} subtitle={subtitle} singleLineMessageHeader={singleLineMessageHeader} actions={
+            <CommentMessageHeader title={author.name ?? author.email} subtitle={subtitle} singleLineMessageHeader={singleLineMessageHeader} actions={
                 isOwn && (<DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button size="icon" variant="ghost">

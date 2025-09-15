@@ -139,9 +139,9 @@ export const scores = pgTable('scores', {
   // Soft delete fields
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
   deletedBy: text('deleted_by').references(() => users.id, { onDelete: 'set null' }),
-}, (table) => ({
-  activityNameUnique: uniqueIndex('scores_activity_name_unique').on(table.activityId, table.name),
-}));
+}, (table) => [
+  unique().on(table.activityId, table.name, table.createdBy)
+]);
 
 
 
