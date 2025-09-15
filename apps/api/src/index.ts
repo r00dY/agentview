@@ -690,9 +690,9 @@ app.openapi(runsPOSTRoute, async (c) => {
 
         // The first yield MUST be a manifest
         if (firstItem && event.name !== 'manifest') {
-          throw {
+          throw new AgentAPIError({
             message: "No 'manifest' was sent by the agent."
-          };
+          });
         }
 
         if (event.name === 'manifest') {
@@ -1000,8 +1000,6 @@ function validateScore(schema: BaseConfig, thread: Thread, activity: Activity, s
       }
     }
   }
-
-  console.log(scoreConfig)
 
   // Validate value against the schema
   try {

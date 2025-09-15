@@ -37,3 +37,6 @@ dmypy.json
 
 # fastapi/uvicorn specific
 *.db
+
+# envs
+.env
