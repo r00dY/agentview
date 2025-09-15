@@ -37,37 +37,32 @@ export async function clientLoader({ request, params }: Route.ClientLoaderArgs) 
     };
 }
 
-function ActivityMessage({ activity, isWhite = false, selected = false, onClick = () => { } }: { activity: any, isWhite?: boolean, selected?: boolean, onClick?: () => void }) {
-    return <div className={`border p-3 rounded-lg hover:border-gray-300 ${isWhite ? "bg-white" : "bg-muted"} ${selected ? "border-gray-300" : ""}`} onClick={onClick} data-item={true}>
-        <div dangerouslySetInnerHTML={{ __html: (activity.content as unknown as string) }}></div>
-    </div>
-}
+// function ActivityMessage({ activity, isWhite = false, selected = false, onClick = () => { } }: { activity: any, isWhite?: boolean, selected?: boolean, onClick?: () => void }) {
+//     return <div className={`border p-3 rounded-lg hover:border-gray-300 ${isWhite ? "bg-white" : "bg-muted"} ${selected ? "border-gray-300" : ""}`} onClick={onClick} data-item={true}>
+//         <div dangerouslySetInnerHTML={{ __html: (activity.content as unknown as string) }}></div>
+//     </div>
+// }
 
-function ActivityView({ activity, onSelect, selected = false }: { activity: any, onSelect: (activity: any) => void, selected: boolean }) {
-    return <div key={activity.id} className="relative">
-        <div className={`relative flex flex-col ${activity.role === "user" ? "pl-[10%] justify-end" : "pr-[10%] justify-start"}`}>
-            <div className="relative">
+// function ActivityView({ activity, onSelect, selected = false }: { activity: any, onSelect: (activity: any) => void, selected: boolean }) {
+//     return <div key={activity.id} className="relative">
+//         <div className={`relative flex flex-col ${activity.role === "user" ? "pl-[10%] justify-end" : "pr-[10%] justify-start"}`}>
+//             <div className="relative">
 
-                <ActivityMessage activity={activity} isWhite={activity.role === "user"} selected={selected} onClick={() => onSelect(activity)} />
+//                 <ActivityMessage activity={activity} isWhite={activity.role === "user"} selected={selected} onClick={() => onSelect(activity)} />
 
-                {/* { selected && !activity.commentThread && <div className="absolute top-2 -right-[16px]">
-                <Button variant="outline" size="icon" onClick={onNewComment}>
-                    <MessageCirclePlusIcon className="w-[32px] h-[32px]" />
-                </Button>
-            </div>} */}
-            </div>
-        </div>
-    </div>
-}
+//                 {/* { selected && !activity.commentThread && <div className="absolute top-2 -right-[16px]">
+//                 <Button variant="outline" size="icon" onClick={onNewComment}>
+//                     <MessageCirclePlusIcon className="w-[32px] h-[32px]" />
+//                 </Button>
+//             </div>} */}
+//             </div>
+//         </div>
+//     </div>
+// }
 
-function ThreadDetails({ thread }: { thread: Thread }) {
+function ThreadDetails({ thread, threadConfig }: { thread: Thread, threadConfig: ThreadConfig }) {
     const versions = getVersions(thread);
-    const threadConfig = config.threads?.find((threadConfig) => threadConfig.type === thread.type);
     const { members } = useSessionContext();
-
-    if (!threadConfig) {
-        throw new Error(`Thread config not found for type "${thread.type}"`);
-    }
 
     const simulatedBy = members.find((member) => member.id === thread.client.simulated_by);
 
@@ -157,6 +152,13 @@ function ThreadPage() {
     // const activities = getAllActivities(thread)
     const activeActivities = getAllActivities(thread, { activeOnly: true })
     const lastRun = getLastRun(thread)
+
+    const threadConfig = config.threads?.find((threadConfig) => threadConfig.type === thread.type);
+    if (!threadConfig) {
+        throw new Error(`Thread config not found for type "${thread.type}"`);
+    }
+
+
     // const selectedActivityId = activities.find((a: any) => a.id === searchParams.get('activityId'))?.id ?? undefined;
 
     // const threadStatus = lastRun?.state === "completed" ? "idle" : (lastRun?.state ?? "idle")
@@ -283,17 +285,33 @@ function ThreadPage() {
             <div className="flex-1 overflow-y-auto">
 
                 <div className="p-6 border-b">
-                    <ThreadDetails thread={thread} />
+                    <ThreadDetails thread={thread} threadConfig={threadConfig}/>
                 </div>
 
-                <div className="p-6">
-                    <div className="flex flex-col gap-4">
+                <div className="">
+                    <div className="flex flex-col">
                         {activeActivities.map((activity) => {
-                            return <ActivityView
-                                activity={activity}
-                                onSelect={(a) => { navigate(`/threads/${thread.id}/activities/${a?.id}?list=${listParams.list}&type=${listParams.type}`) }}
-                                selected={params.activityId === activity.id}
-                            />
+
+                            let content : React.ReactNode = null;
+
+                            const activityConfig = threadConfig.activities.find((a) => a.type === activity.type && a.role === activity.role);
+                            if (!activityConfig) {
+                                content = <div className="text-red-500">Activity config not found for type "{activity.type}" and role "{activity.role}"</div>
+                            }
+                            else {
+                                content = <activityConfig.display value={activity.content} options={activityConfig.options} />
+                            }
+
+                            return <div className={`px-6 py-4  ${params.activityId === activity.id ? "bg-stone-50" : "hover:bg-gray-50"}`} onClick={() => { navigate(`/threads/${thread.id}/activities/${activity.id}?list=${listParams.list}&type=${listParams.type}`) }}>
+                                {content}
+                            </div>
+
+
+                            // return <ActivityView
+                            //     activity={activity}
+                            //     onSelect={(a) => { navigate(`/threads/${thread.id}/activities/${a?.id}?list=${listParams.list}&type=${listParams.type}`) }}
+                            //     selected={params.activityId === activity.id}
+                            // />
                         })}
                     </div>
 
@@ -325,7 +343,7 @@ function ThreadPage() {
 
             </div>
 
-            {thread.client.simulated_by === user.id && <InputForm thread={thread} />}
+            {thread.client.simulated_by === user.id && <InputForm thread={thread} threadConfig={threadConfig} />}
 
         </div>
 
@@ -334,13 +352,8 @@ function ThreadPage() {
 }
 
 
-function InputForm({ thread }: { thread: Thread }) {
+function InputForm({ thread, threadConfig }: { thread: Thread, threadConfig: ThreadConfig }) {
     const [formError, setFormError] = useState<string | null>(null)
-
-    const threadConfig = config.threads.find((threadConfig) => threadConfig.type === thread.type);
-    if (!threadConfig) {
-        throw new Error("Thread config not found");
-    }
 
     const lastRun = getLastRun(thread)
     const threadStatus = lastRun?.state === "completed" ? "idle" : (lastRun?.state ?? "idle")

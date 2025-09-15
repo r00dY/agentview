@@ -2,7 +2,7 @@ import type { AgentViewConfig } from "./app/types";
 import { z } from "zod";
 import { ThumbsDown, ThumbsUp } from "lucide-react";
 import { TextInput, ToggleBooleanInput } from "./app/components/form";
-import { DisplayBooleanComponent, DisplayTextComponent } from "./app/components/display";
+import { ActivityAssistantMessageComponent, ActivityUserMessageComponent, DisplayBooleanComponent, DisplayTextComponent } from "./app/components/display";
 
 export const config: AgentViewConfig = {
     threads: [
@@ -26,7 +26,7 @@ export const config: AgentViewConfig = {
                     content: z.string(),
                     isInput: true,
                     input: TextInput,
-                    display: DisplayTextComponent
+                    display: ActivityUserMessageComponent
                 },
                 {
                     type: "dupa",
@@ -40,7 +40,7 @@ export const config: AgentViewConfig = {
                     type: "message",
                     role: "assistant",
                     content: z.string(),
-                    display: DisplayTextComponent,
+                    display: ActivityAssistantMessageComponent,
                     scores: [
                         {
                             name: "user_reaction",

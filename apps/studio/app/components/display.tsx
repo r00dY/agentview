@@ -10,7 +10,7 @@ export function DisplayBooleanComponent({ value, options }: DisplayComponentProp
     if (value === true) {
         const TrueIcon = options?.true?.icon ?? null;
         const trueLabel = options?.true?.label ?? null;
-        
+
         return (
             <Badge variant="default" className="text-xs">
                 {TrueIcon && <TrueIcon className="h-3 w-3" />}
@@ -20,7 +20,7 @@ export function DisplayBooleanComponent({ value, options }: DisplayComponentProp
     } else if (value === false) {
         const FalseIcon = options?.false?.icon ?? null;
         const falseLabel = options?.false?.label ?? null;
-        
+
         return (
             <Badge variant="secondary" className="text-xs">
                 {FalseIcon && <FalseIcon className="h-3 w-3" />}
@@ -31,4 +31,19 @@ export function DisplayBooleanComponent({ value, options }: DisplayComponentProp
     else {
         return <div className="text-sm">Undefined</div>
     }
+}
+export function ActivityUserMessageComponent({ value, options }: DisplayComponentProps<string>) {
+    return <div className="relative pl-[10%]">
+        <div className="border p-3 rounded-lg bg-white">
+            <div dangerouslySetInnerHTML={{ __html: value }}></div>
+        </div>
+    </div>
+}
+
+export function ActivityAssistantMessageComponent({ value, options }: DisplayComponentProps<string>) {
+    return <div className="relative pr-[10%]">
+        <div className="border p-3 rounded-lg bg-muted">
+            <div dangerouslySetInnerHTML={{ __html: value }}></div>
+        </div>
+    </div>
 }

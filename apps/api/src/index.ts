@@ -121,7 +121,6 @@ async function requireThreadConfig(schema: BaseConfig, threadType: string) {
   return threadConfig
 }
 
-
 async function requireThread(thread_id: string) {
   const thread = await fetchThread(thread_id)
   if (!thread) {
