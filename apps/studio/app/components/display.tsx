@@ -1,5 +1,6 @@
 import type { DisplayComponentProps } from "~/types";
 import { Badge } from "./ui/badge";
+import { marked } from "marked";
 
 export function DisplayTextComponent({ value, options }: DisplayComponentProps<string>) {
     return <div className="text-sm">{value}</div>
@@ -32,10 +33,23 @@ export function DisplayBooleanComponent({ value, options }: DisplayComponentProp
         return <div className="text-sm">Undefined</div>
     }
 }
+
+function newLinesIntoBr(text: string) {
+    return text
+        .split('\n')
+        .map(line => line.trim())
+        .join('<br>')
+}
+
+
 export function ActivityUserMessageComponent({ value, options }: DisplayComponentProps<string>) {
     return <div className="relative pl-[10%]">
         <div className="border p-3 rounded-lg bg-white">
-            <div dangerouslySetInnerHTML={{ __html: value }}></div>
+            <div
+                dangerouslySetInnerHTML={{
+                    __html: newLinesIntoBr(value)
+                }}
+            ></div>
         </div>
     </div>
 }
@@ -43,7 +57,7 @@ export function ActivityUserMessageComponent({ value, options }: DisplayComponen
 export function ActivityAssistantMessageComponent({ value, options }: DisplayComponentProps<string>) {
     return <div className="relative pr-[10%]">
         <div className="border p-3 rounded-lg bg-muted">
-            <div dangerouslySetInnerHTML={{ __html: value }}></div>
+            <div className="prose prose-ul:list-disc prose-ol:list-decimal prose-a:underline" dangerouslySetInnerHTML={{__html: marked.parse(value, { async: false })}}></div>
         </div>
     </div>
 }

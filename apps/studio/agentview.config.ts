@@ -3,19 +3,20 @@ import { z } from "zod";
 import { ThumbsDown, ThumbsUp } from "lucide-react";
 import { TextInput, ToggleBooleanInput } from "./app/components/form";
 import { ActivityAssistantMessageComponent, ActivityUserMessageComponent, DisplayBooleanComponent, DisplayTextComponent } from "./app/components/display";
+import { ProductDisplay, ProductSelect } from "product_components";
 
 export const config: AgentViewConfig = {
     threads: [
         {
             type: "pdp_chat",
-            url: "http://127.0.0.1:8000/chat",
+            url: "http://127.0.0.1:8000/product_chat",
             metadata: [
                 {
                     name: "product_id",
-                    title: "Product ID",
+                    title: "Product",
                     schema: z.string(),
-                    input: TextInput,
-                    display: DisplayTextComponent
+                    input: ProductSelect,
+                    display: ProductDisplay
                 }
             ],
             activities: [
