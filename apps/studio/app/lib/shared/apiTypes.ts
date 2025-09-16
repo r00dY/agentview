@@ -168,8 +168,9 @@ export const MemberSchema = z.object({
 
   export const SessionListSchema = z.object({
     name: z.string(),
+    threadType: z.string(),
     unseenCount: z.number(),
     hasMentions: z.boolean(),
-})
+  })
 
 export type SessionList = z.infer<typeof SessionListSchema>

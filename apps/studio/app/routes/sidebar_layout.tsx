@@ -84,13 +84,11 @@ export default function Layout() {
   const [editProfileOpen, setEditProfileOpen] = React.useState(false)
   const [changePasswordOpen, setChangePasswordOpen] = React.useState(false)
 
-  const realList = lists.find((list) => list.name === "real")
-  const simulatedPrivateList = lists.find((list) => list.name === "simulated_private")
-  const simulatedSharedList = lists.find((list) => list.name === "simulated_shared")
-
-  const realListUnseenCount = realList?.unseenCount ?? 0
-  const simulatedPrivateListUnseenCount = simulatedPrivateList?.unseenCount ?? 0
-  const simulatedSharedListUnseenCount = simulatedSharedList?.unseenCount ?? 0
+  // Helper function to get unseen count for a specific thread type and list name
+  const getUnseenCount = (threadType: string, listName: string) => {
+    const list = lists.find((list) => list.name === listName && list.threadType === threadType)
+    return list?.unseenCount ?? 0
+  }
 
 
   return (<SessionContext.Provider value={{ user, members, locale }}>
@@ -191,44 +189,48 @@ export default function Layout() {
                   </SidebarMenuItem>
                 )}
 
-                  {config.threads?.map((thread) => ( 
-                  <SidebarMenuItem>
-                    <SidebarMenuButton>{thread.type}</SidebarMenuButton>
-                    <SidebarMenuSub className="mr-0">
-                      <SidebarMenuSubItem className={realListUnseenCount > 0 ? "flex justify-between items-center" : ""}>
-                        <SidebarMenuSubButton asChild>
-                          <Link to={`/threads?type=${thread.type}`}>
-                            <MessageCircle className="mr-2 h-4 w-4" />
-                            <span>Production</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                        { realListUnseenCount > 0 && <NotificationBadge>{realListUnseenCount}</NotificationBadge> }
-                      </SidebarMenuSubItem>
-                      <SidebarMenuSubItem className={simulatedPrivateListUnseenCount > 0 ? "flex justify-between items-center" : ""}>
-                        <SidebarMenuSubButton asChild>
-                          <Link to={`/threads?type=${thread.type}&list=simulated_private`}>
-                            <User className="mr-2 h-4 w-4" />
-                            <span>Simulated Private</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                        
-                        { simulatedPrivateListUnseenCount > 0 && <NotificationBadge>{simulatedPrivateListUnseenCount}</NotificationBadge> }
-                      </SidebarMenuSubItem>
-                      <SidebarMenuSubItem className={simulatedSharedListUnseenCount > 0 ? "flex justify-between items-center" : ""}>
-                        <SidebarMenuSubButton asChild>
-                          <Link to={`/threads?type=${thread.type}&list=simulated_shared`}>
-                            <Users className="mr-2 h-4 w-4" />
-                            <span>Simulated Shared</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                        { simulatedSharedListUnseenCount > 0 && <NotificationBadge>{simulatedSharedListUnseenCount}</NotificationBadge> }
+                  {config.threads?.map((thread) => {
+                    const realUnseenCount = getUnseenCount(thread.type, "real")
+                    const simulatedPrivateUnseenCount = getUnseenCount(thread.type, "simulated_private")
+                    const simulatedSharedUnseenCount = getUnseenCount(thread.type, "simulated_shared")
+                    
+                    return (
+                      <SidebarMenuItem key={thread.type}>
+                        <SidebarMenuButton>{thread.type}</SidebarMenuButton>
+                        <SidebarMenuSub className="mr-0">
+                          <SidebarMenuSubItem className={realUnseenCount > 0 ? "flex justify-between items-center" : ""}>
+                            <SidebarMenuSubButton asChild>
+                              <Link to={`/threads?type=${thread.type}`}>
+                                <MessageCircle className="mr-2 h-4 w-4" />
+                                <span>Production</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                            { realUnseenCount > 0 && <NotificationBadge>{realUnseenCount}</NotificationBadge> }
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem className={simulatedPrivateUnseenCount > 0 ? "flex justify-between items-center" : ""}>
+                            <SidebarMenuSubButton asChild>
+                              <Link to={`/threads?type=${thread.type}&list=simulated_private`}>
+                                <User className="mr-2 h-4 w-4" />
+                                <span>Simulated Private</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                            
+                            { simulatedPrivateUnseenCount > 0 && <NotificationBadge>{simulatedPrivateUnseenCount}</NotificationBadge> }
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem className={simulatedSharedUnseenCount > 0 ? "flex justify-between items-center" : ""}>
+                            <SidebarMenuSubButton asChild>
+                              <Link to={`/threads?type=${thread.type}&list=simulated_shared`}>
+                                <Users className="mr-2 h-4 w-4" />
+                                <span>Simulated Shared</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                            { simulatedSharedUnseenCount > 0 && <NotificationBadge>{simulatedSharedUnseenCount}</NotificationBadge> }
 
-                      </SidebarMenuSubItem>
-                    </SidebarMenuSub>
-
-
-                  </SidebarMenuItem>
-                  ))}
+                          </SidebarMenuSubItem>
+                        </SidebarMenuSub>
+                      </SidebarMenuItem>
+                    )
+                  })}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>

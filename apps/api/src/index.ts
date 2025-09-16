@@ -311,26 +311,37 @@ const listsGETRoute = createRoute({
 
 app.openapi(listsGETRoute, async (c) => {
   const session = await requireSession(c.req.raw.headers)
+  const schema = await requireSchema()
 
   const lists : SessionList[] = []
 
-  for (const [name, list] of Object.entries(LISTS)) {
-    const result = await db
-      .select({
-        unreadThreads: countDistinct(inboxItems.threadId),
-      })
-      .from(inboxItems)
-      .leftJoin(thread, eq(inboxItems.threadId, thread.id))
-      .leftJoin(client, eq(thread.client_id, client.id))
-      .where(
-        and(eq(inboxItems.userId, session.user.id), sql`${inboxItems.lastNotifiableEventId} > COALESCE(${inboxItems.lastReadEventId}, 0)`, list.filter(session.user))
-      )
+  // For each thread type in the schema
+  for (const threadConfig of schema.threads) {
+    // For each list type (real, simulated_private, simulated_shared)
+    for (const [listName, list] of Object.entries(LISTS)) {
+      const result = await db
+        .select({
+          unreadThreads: countDistinct(inboxItems.threadId),
+        })
+        .from(inboxItems)
+        .leftJoin(thread, eq(inboxItems.threadId, thread.id))
+        .leftJoin(client, eq(thread.client_id, client.id))
+        .where(
+          and(
+            eq(inboxItems.userId, session.user.id), 
+            sql`${inboxItems.lastNotifiableEventId} > COALESCE(${inboxItems.lastReadEventId}, 0)`, 
+            list.filter(session.user),
+            eq(thread.type, threadConfig.type)
+          )
+        )
 
-    lists.push({
-      name: name,
-      unseenCount: result[0].unreadThreads ?? 0,
-      hasMentions: false,
-    })
+      lists.push({
+        name: listName,
+        threadType: threadConfig.type,
+        unseenCount: result[0].unreadThreads ?? 0,
+        hasMentions: false,
+      })
+    }
   }
 
   return c.json(lists, 200);
