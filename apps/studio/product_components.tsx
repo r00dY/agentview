@@ -59,9 +59,7 @@ export function ProductDisplay({ value }: { value: string }) {
   
   if (!product) {
     return (
-      <div className="flex items-center space-x-3 px-3 py-2 border border-input bg-background rounded-md h-10">
-        <span className="text-muted-foreground">No product selected</span>
-      </div>
+      <div className="text-muted-foreground">No product selected</div>
     )
   }
 
