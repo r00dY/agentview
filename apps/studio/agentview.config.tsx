@@ -71,6 +71,23 @@ export const config: AgentViewConfig = {
                     },
                     scores: [
                         {
+                            name: "user_reaction",
+                            title: "Reaction",
+                            schema: z.boolean(),
+                            input: ToggleBooleanInput,
+                            display: DisplayBooleanComponent,
+                            options: {
+                                true: {
+                                    icon: ThumbsUp,
+                                    label: "Like"
+                                },
+                                false: {
+                                    icon: ThumbsDown,
+                                    label: "Don't like"
+                                }
+                            }
+                        },
+                        {
                             name: "recommended_score",
                             title: "Your score",
                             schema: z.string(),

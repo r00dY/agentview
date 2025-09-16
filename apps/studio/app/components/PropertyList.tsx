@@ -46,7 +46,7 @@ const PropertyListTitle: React.FC<PropertyListTitleProps> = ({
   width = "w-32" 
 }) => {
   return (
-    <span className={cn("text-sm text-gray-700 w-[170px] flex-shrink-0 truncate", className)}>
+    <span className={cn("text-sm text-gray-600 w-[170px] flex-shrink-0 truncate", className)}>
       {children}
     </span>
   );
