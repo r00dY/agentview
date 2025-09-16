@@ -310,7 +310,7 @@ const listsGETRoute = createRoute({
 })
 
 app.openapi(listsGETRoute, async (c) => {
-  const session =await requireSession(c.req.raw.headers)
+  const session = await requireSession(c.req.raw.headers)
 
   const lists : SessionList[] = []
 

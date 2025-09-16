@@ -10,6 +10,46 @@ import { ProductDisplay, ProductSelect } from "product_components";
 export const config: AgentViewConfig = {
     threads: [
         {
+            type: "simple_chat",
+            url: "http://127.0.0.1:8000/simple_chat",
+            activities: [
+                {
+                    isInput: true,
+                    type: "message",
+                    role: "user",
+                    title: "Message",
+                    content: z.string(),
+                    input: TextareaInput,
+                    display: ActivityUserMessageComponent
+                },
+                {
+                    type: "message",
+                    role: "assistant",
+                    content: z.string(),
+                    display: ActivityAssistantMessageComponent,
+                    scores: [
+                        {
+                            name: "user_reaction",
+                            title: "Can it go to client?",
+                            schema: z.boolean(),
+                            input: ToggleBooleanInput,
+                            display: DisplayBooleanComponent,
+                            options: {
+                                true: {
+                                    icon: ThumbsUp,
+                                    label: "Yes"
+                                },
+                                false: {
+                                    icon: ThumbsDown,
+                                    label: "No"
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
             type: "pdp_chat",
             url: "http://127.0.0.1:8000/product_chat",
             metadata: [

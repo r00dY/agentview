@@ -17,10 +17,11 @@ import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
 import { Badge } from "~/components/ui/badge";
 import { useSessionContext } from "~/lib/session";
 import { config } from "../../agentview.config";
-import type { ThreadConfig } from "~/types";
+import type { ActivityConfig, ThreadConfig } from "~/types";
 import { FormField } from "~/components/form";
 import { parseFormData } from "~/lib/parseFormData";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs";
+import type { BaseActivityConfig } from "~/lib/shared/configTypes";
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
     const response = await apiFetch<Thread>(`/api/threads/${params.id}`);
@@ -287,14 +288,14 @@ function ThreadPage() {
             <div className="flex-1 overflow-y-auto">
 
                 <div className="p-6 border-b">
-                    <ThreadDetails thread={thread} threadConfig={threadConfig}/>
+                    <ThreadDetails thread={thread} threadConfig={threadConfig} />
                 </div>
 
                 <div className="">
                     <div className="flex flex-col">
                         {activeActivities.map((activity) => {
 
-                            let content : React.ReactNode = null;
+                            let content: React.ReactNode = null;
 
                             const activityConfig = threadConfig.activities.find((a) => a.type === activity.type && (!a.role || a.role === activity.role));
                             if (!activityConfig) {
@@ -418,14 +419,18 @@ function InputForm({ thread, threadConfig }: { thread: Thread, threadConfig: Thr
 
     return <div className="p-6 border-t">
 
-        { inputConfigs.length === 0 && <div className="text-sm text-muted-foreground">No input fields</div>}
+        {inputConfigs.length === 0 && <div className="text-sm text-muted-foreground">No input fields</div>}
 
         <form method="post" onSubmit={handleSubmit}>
 
-            { inputConfigs.length === 1 ? (
+            {inputConfigs.length === 1 ? (
                 // Single input config - no tabs
                 <div>
+
+                    <InputFormFields inputConfig={inputConfigs[0]} />
+{/* 
                     {inputConfigs[0].input && (
+
                         <FormField
                             id={"inputFormValue"}
                             // error={fetcher.data?.error?.fieldErrors?.[`metadata.${metafield.name}`]}
@@ -435,18 +440,18 @@ function InputForm({ thread, threadConfig }: { thread: Thread, threadConfig: Thr
                             InputComponent={inputConfigs[0].input}
                             options={inputConfigs[0].options}
                         />
-                    )}
+                    )} */}
                 </div>
             ) : (
                 // Multiple input configs - use tabs
                 <Tabs defaultValue={`${inputConfigs[0].type}-${inputConfigs[0].role || 'default'}`}>
                     <TabsList>
                         {inputConfigs.map((inputConfig, index) => {
-                            const tabName = inputConfig.title || (inputConfig.role 
+                            const tabName = inputConfig.title || (inputConfig.role
                                 ? `${inputConfig.type} / ${inputConfig.role}`
                                 : inputConfig.type)
                             const tabValue = `${inputConfig.type}-${inputConfig.role || 'default'}`;
-                            
+
                             return (
                                 <TabsTrigger key={index} value={tabValue}>
                                     {tabName}
@@ -454,26 +459,13 @@ function InputForm({ thread, threadConfig }: { thread: Thread, threadConfig: Thr
                             );
                         })}
                     </TabsList>
-                    
+
                     {inputConfigs.map((inputConfig, index) => {
                         const tabValue = `${inputConfig.type}-${inputConfig.role || 'default'}`;
-                        
+
                         return (
                             <TabsContent key={index} value={tabValue}>
-                                <input type="hidden" name="type" value={inputConfig.type} />
-                                <input type="hidden" name="role" value={inputConfig.role} />
-
-                                {inputConfig.input && (
-                                    <FormField
-                                        id={"inputFormValue"}
-                                        // error={fetcher.data?.error?.fieldErrors?.[`metadata.${metafield.name}`]}
-                                        name={"value"}
-                                        defaultValue={undefined}
-                                        // defaultValue={scores[metafield.name] ?? undefined}
-                                        InputComponent={inputConfig.input}
-                                        options={inputConfig.options}
-                                    />
-                                )}
+                                <InputFormFields inputConfig={inputConfig} />
                             </TabsContent>
                         );
                     })}
@@ -484,8 +476,8 @@ function InputForm({ thread, threadConfig }: { thread: Thread, threadConfig: Thr
 
             <div className="flex flex-row gap-2 items-center mt-2">
 
-                { lastRun?.state !== 'in_progress' && <Button type="submit">Send <SendHorizonalIcon /></Button>}
-                { lastRun?.state === 'in_progress' && <Button type="button" onClick={() => {
+                {lastRun?.state !== 'in_progress' && <Button type="submit">Send <SendHorizonalIcon /></Button>}
+                {lastRun?.state === 'in_progress' && <Button type="button" onClick={() => {
                     handleCancel()
                 }}>Cancel <SquareIcon /></Button>}
 
@@ -500,4 +492,23 @@ function InputForm({ thread, threadConfig }: { thread: Thread, threadConfig: Thr
             </div>
         </form>
     </div>
+}
+
+function InputFormFields({ inputConfig }: { inputConfig: ActivityConfig }) {
+    return <>
+        <input type="hidden" name="type" value={inputConfig.type} />
+        <input type="hidden" name="role" value={inputConfig.role} />
+
+        {inputConfig.input && (
+            <FormField
+                id={"inputFormValue"}
+                // error={fetcher.data?.error?.fieldErrors?.[`metadata.${metafield.name}`]}
+                name={"value"}
+                defaultValue={undefined}
+                // defaultValue={scores[metafield.name] ?? undefined}
+                InputComponent={inputConfig.input}
+                options={inputConfig.options}
+            />
+        )}
+    </>
 }
