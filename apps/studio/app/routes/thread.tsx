@@ -23,6 +23,8 @@ import { parseFormData } from "~/lib/parseFormData";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs";
 import type { BaseActivityConfig } from "~/lib/shared/configTypes";
 import { Loader } from "~/components/Loader";
+import { ItemsWithCommentsLayout } from "~/components/ItemsWithCommentsLayout";
+import { CommentThreadFloatingBox } from "~/components/comments";
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
     const response = await apiFetch<Thread>(`/api/threads/${params.id}`);
@@ -38,29 +40,6 @@ export async function clientLoader({ request, params }: Route.ClientLoaderArgs) 
         thread: response.data
     };
 }
-
-// function ActivityMessage({ activity, isWhite = false, selected = false, onClick = () => { } }: { activity: any, isWhite?: boolean, selected?: boolean, onClick?: () => void }) {
-//     return <div className={`border p-3 rounded-lg hover:border-gray-300 ${isWhite ? "bg-white" : "bg-muted"} ${selected ? "border-gray-300" : ""}`} onClick={onClick} data-item={true}>
-//         <div dangerouslySetInnerHTML={{ __html: (activity.content as unknown as string) }}></div>
-//     </div>
-// }
-
-// function ActivityView({ activity, onSelect, selected = false }: { activity: any, onSelect: (activity: any) => void, selected: boolean }) {
-//     return <div key={activity.id} className="relative">
-//         <div className={`relative flex flex-col ${activity.role === "user" ? "pl-[10%] justify-end" : "pr-[10%] justify-start"}`}>
-//             <div className="relative">
-
-//                 <ActivityMessage activity={activity} isWhite={activity.role === "user"} selected={selected} onClick={() => onSelect(activity)} />
-
-//                 {/* { selected && !activity.commentThread && <div className="absolute top-2 -right-[16px]">
-//                 <Button variant="outline" size="icon" onClick={onNewComment}>
-//                     <MessageCirclePlusIcon className="w-[32px] h-[32px]" />
-//                 </Button>
-//             </div>} */}
-//             </div>
-//         </div>
-//     </div>
-// }
 
 function ThreadDetails({ thread, threadConfig }: { thread: Thread, threadConfig: ThreadConfig }) {
     const versions = getVersions(thread);
@@ -151,7 +130,7 @@ function ThreadPage() {
     const listParams = loaderData.listParams
     // const users = loaderData.users
 
-    // const [searchParams, setSearchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     // const activities = getAllActivities(thread)
     const activeActivities = getAllActivities(thread, { activeOnly: true })
     const lastRun = getLastRun(thread)
@@ -161,33 +140,33 @@ function ThreadPage() {
         throw new Error(`Thread config not found for type "${thread.type}"`);
     }
 
-    // const selectedActivityId = activities.find((a: any) => a.id === searchParams.get('activityId'))?.id ?? undefined;
+    const selectedActivityId = activeActivities.find((a: any) => a.id === searchParams.get('activityId'))?.id ?? undefined;
 
     // const threadStatus = lastRun?.state === "completed" ? "idle" : (lastRun?.state ?? "idle")
 
     // console.log(thread)
 
 
-    // const setSelectedActivityId = (id: string | undefined) => {
-    //     if (id === selectedActivityId) {
-    //         return // prevents unnecessary revalidation of the page
-    //     }
+    const setSelectedActivityId = (id: string | undefined) => {
+        if (id === selectedActivityId) {
+            return // prevents unnecessary revalidation of the page
+        }
 
-    //     setSearchParams((searchParams) => {
-    //         const currentActivityId = searchParams.get('activityId') ?? undefined;
+        setSearchParams((searchParams) => {
+            const currentActivityId = searchParams.get('activityId') ?? undefined;
 
-    //         if (currentActivityId === id) {
-    //             return searchParams;
-    //         }
+            if (currentActivityId === id) {
+                return searchParams;
+            }
 
-    //         if (id) {
-    //             searchParams.set("activityId", id);
-    //         } else {
-    //             searchParams.delete("activityId");
-    //         }
-    //         return searchParams;
-    //     }, { replace: true });
-    // }
+            if (id) {
+                searchParams.set("activityId", id);
+            } else {
+                searchParams.delete("activityId");
+            }
+            return searchParams;
+        }, { replace: true });
+    }
 
     useEffect(() => {
         apiFetch(`/api/threads/${thread.id}/seen`, {
@@ -273,7 +252,9 @@ function ThreadPage() {
     }, [lastRun?.state])
 
     return <>
-        <div className="basis-[720px] flex-shrink-0 flex-grow-0 border-r  flex flex-col">
+        {/* <div className="basis-[720px] flex-shrink-0 flex-grow-0 border-r  flex flex-col"> */}
+        <div className="basis-[1200px] flex-shrink-0 flex-grow-0 border-r  flex flex-col">
+
             <Header>
                 <HeaderTitle title={`Thread ${thread.number}`} />
 
@@ -285,8 +266,8 @@ function ThreadPage() {
                     <ThreadDetails thread={thread} threadConfig={threadConfig} />
                 </div>
 
-                <div className="">
-                    <div className="flex flex-col pb-16">
+                <div className="pr-6">
+                    {/* <div className="flex flex-col pb-16">
                         {activeActivities.map((activity) => {
 
                             let content: React.ReactNode = null;
@@ -314,31 +295,36 @@ function ThreadPage() {
                         {lastRun?.state === "in_progress" && <div className="px-6 gap-2 pt-3 flex flex-row items-end text-muted-foreground">
                             <Loader />
                         </div>}
-                    </div>
+                    </div> */}
 
-                    {/* <ItemsWithCommentsLayout items={activeActivities.map((activity) => {
+                    <ItemsWithCommentsLayout items={activeActivities.map((activity) => {
+                        const hasComments = activity.commentMessages.filter((m: any) => !m.deletedAt).length > 0
 
-                    const hasComments = activity.commentMessages.filter((m: any) => !m.deletedAt).length > 0
+                        let content: React.ReactNode = null;
 
-                    return {
-                        id: activity.id,
-                        itemComponent: <ActivityView
-                            activity={activity}
-                            onSelect={(a) => { setSelectedActivityId(a?.id) }}
-                            selected={selectedActivityId === activity.id}
-                        />,
-                        commentsComponent: (hasComments || (selectedActivityId === activity.id)) ?
-                            <CommentThreadFloatingBox
-                                activity={activity}
-                                userId={loaderData.userId}
-                                selected={selectedActivityId === activity.id}
-                                users={users}
-                                onSelect={(a) => { setSelectedActivityId(a?.id) }}
-                                thread={thread}
-                            /> : undefined
-                    }
-                })} selectedItemId={selectedActivityId}
-                /> */}
+                        const activityConfig = threadConfig.activities.find((a) => a.type === activity.type && (!a.role || a.role === activity.role));
+                        if (!activityConfig) {
+                            content = <div className="text-muted-foreground italic">No component (type: "{activity.type}")</div>
+                        }
+                        else {
+                            content = <activityConfig.display value={activity.content} options={activityConfig.options} />
+                        }
+
+                        return {
+                            id: activity.id,
+                            itemComponent: <div className={`px-6 py-4  ${params.activityId === activity.id ? "bg-stone-50" : "hover:bg-gray-50"}`} /*onClick={() => { navigate(`/threads/${thread.id}/activities/${activity.id}?list=${listParams.list}&type=${listParams.type}`) }}*/>
+                                {content}
+                            </div>,
+                            commentsComponent: (hasComments || (selectedActivityId === activity.id)) ?
+                                <CommentThreadFloatingBox
+                                    activity={activity}
+                                    thread={thread}
+                                    selected={selectedActivityId === activity.id}
+                                    onSelect={(a) => { setSelectedActivityId(a?.id) }}
+                                /> : undefined
+                        }
+                    })} selectedItemId={selectedActivityId}
+                    />
 
                 </div>
 
@@ -426,7 +412,7 @@ function InputForm({ thread, threadConfig }: { thread: Thread, threadConfig: Thr
                 <div>
 
                     <InputFormFields inputConfig={inputConfigs[0]} />
-{/* 
+                    {/* 
                     {inputConfigs[0].input && (
 
                         <FormField

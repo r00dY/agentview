@@ -143,7 +143,7 @@ export function ItemsWithCommentsLayout({ items, selectedItemId }: ItemsWithComm
 
     return (
         <div className="flex flex-row gap-4 relative">
-            <div className="flex-1 flex flex-col gap-4">
+            <div className="flex-1 flex flex-col">
                 {items.map((item) => (
                     <div
                         key={item.id}
@@ -158,7 +158,7 @@ export function ItemsWithCommentsLayout({ items, selectedItemId }: ItemsWithComm
 
                 <div ref={bottomSpacerRef}/>
             </div>
-            <div ref={containerRef} className="w-[300px] flex-none relative overflow-hidden">
+            <div ref={containerRef} className="w-[400px] flex-none relative overflow-hidden">
                 {items.map((item) => {
                     if (!item.commentsComponent) {
                         return null;

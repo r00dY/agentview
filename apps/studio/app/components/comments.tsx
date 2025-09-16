@@ -23,6 +23,7 @@ export type CommentThreadProps = {
     activity: Activity,
     collapsed?: boolean,
     singleLineMessageHeader?: boolean,
+    small?: boolean,
 }
 
 export type CommentThreadFloatingBoxProps = CommentThreadProps & {
@@ -50,7 +51,7 @@ function getAllScoreConfigs(thread: Thread, activity: Activity) {
     return allScoreConfigs;
 }
 
-export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, activity, collapsed = false, singleLineMessageHeader = false }, ref) => {
+export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, activity, collapsed = false, singleLineMessageHeader = false, small=false }, ref) => {
     const fetcher = useFetcher();
 
     const visibleMessages = activity.commentMessages.filter((m: any) => !m.deletedAt) ?? []
@@ -58,9 +59,6 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
 
     const formRef = useRef<HTMLFormElement>(null);
     const { members, user } = useSessionContext();
-
-
-    // const [currentlyEditedItemId, setCurrentlyEditedItemId] = useState<string | null>("new" /*null*/); // "new" for new comment, comment id for edits
 
     const allScoreConfigs = getAllScoreConfigs(thread, activity);
 
@@ -76,9 +74,6 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
 
     const unassignedScoreConfigs = allScoreConfigs.filter((scoreConfig) => scores[scoreConfig.name] === undefined || scores[scoreConfig.name] === null);
 
-    // const { scores, unassignedScoreConfigs, allScoreConfigs } = getScoresInfo(thread, activity, user);
-
-
     useFetcherSuccess(fetcher, () => {
         // setCurrentlyEditedItemId(null);
         // console.log('resetting form')
@@ -92,23 +87,8 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
         }
     }));
 
-
-    console.log('---');
-    console.log('activity number', activity.number)
-    console.log('all score configs', allScoreConfigs)
-    console.log('unassigned score configs', unassignedScoreConfigs)
-    // const messageScoresMap : Record<string, Score[]> = {}
-
-    // for (const score of activity.scores ?? []) {
-    //     if (score.commentId === null) {
-    //         continue
-    //     }
-    //     messageScoresMap[score.commentId].push(score)
-    // }
-
     return (<div ref={ref}>
-        {/* Hot reload test comment */}
-        { visibleMessages.length > 0 && <div className="flex flex-col gap-4 p-6 max-w-2xl">
+        { visibleMessages.length > 0 && <div className={`flex flex-col gap-4 ${small ? "p-4" : "p-6"}`}>
 
             {/* Display comments */}
             {visibleMessages.map((message: any, index: number) => {
@@ -157,9 +137,9 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
 
         </div> }
 
-        { !collapsed && visibleMessages.length > 0 && <div className="border-t px-4 max-w-2xl"></div>}
+        { !collapsed && visibleMessages.length > 0 && <div className={`border-t ${small ? "px-3" : "px-4"} max-w-2xl`}></div>}
 
-        {!collapsed && <div className={`max-w-2xl p-6`}>
+        {!collapsed && <div className={`max-w-2xl ${small ? "p-4" : "p-6"}`}>
 
 
             <div className="flex flex-row gap-2">
@@ -183,7 +163,6 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                         <AlertDescription>{fetcher.data.error.message}</AlertDescription>
                     </Alert>
                 )}
-
 
                 <fetcher.Form method="post" action={`/threads/${thread.id}/activities/${activity.id}/comments`} ref={formRef}>
 
@@ -241,50 +220,6 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
             </div>
         </div>}
 
-        {/* {!collapsed && <div className="">
-                {hasZeroVisisbleComments && <CommentMessageHeader title={users.find((u) => u.id === user.id)?.name || "You"} singleLineMessageHeader={singleLineMessageHeader}/>}
-
-                {(hasZeroVisisbleComments || currentlyEditedItemId === "new" || currentlyEditedItemId === null) && <fetcher.Form method="post" action={`/threads/${thread.id}/comments`} className="mt-4" ref={formRef}>
-                    <TextEditor
-                        mentionItems={users.map(user => ({
-                            id: user.id,
-                            label: user.name
-                        }))}
-                        name="content"
-                        placeholder={(hasZeroVisisbleComments ? "Comment" : "Reply") + " or tag other, using @"}
-                        className="min-h-[10px] resize-none mb-0"
-                        onFocus={() => {
-                            setCurrentlyEditedItemId("new");
-                        }}
-                    />
-
-                    <input type="hidden" name="activityId" value={activity.id} />
-                    <div className={`gap-2 justify-end mt-2 ${(currentlyEditedItemId === "new" || hasZeroVisisbleComments) ? "flex" : "hidden"}`}>
-                        <Button
-                            type="reset"
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                                setCurrentlyEditedItemId(null);
-                            }}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            type="submit"
-                            size="sm"
-                            disabled={fetcher.state !== 'idle'}
-                        >
-                            {fetcher.state !== 'idle' ? 'Posting...' : 'Comment'}
-                        </Button>
-                    </div>
-                    {fetcher.data?.error && (
-                        <div className="text-sm text-red-500">{fetcher.data.error}</div>
-                    )}
-                </fetcher.Form>}
-            </div>} */}
-
-
     </div>
     );
 });
@@ -321,7 +256,7 @@ export function CommentThreadFloatingBox({ thread, activity, selected = false, o
     }, []);
 
     return (
-        <div className={`py-3 px-3 rounded-lg ${selected ? "bg-white border" : "bg-muted"}`} data-comment={true} onClick={(e) => {
+        <div className={`rounded-lg ${selected ? "bg-white border" : "bg-muted"}`} data-comment={true} onClick={(e) => {
             if (!selected) {
                 onSelect(activity)
             }
@@ -331,6 +266,8 @@ export function CommentThreadFloatingBox({ thread, activity, selected = false, o
                 activity={activity}
                 collapsed={!selected}
                 ref={commentThreadRef}
+                small={true}
+                singleLineMessageHeader={true}
             />
         </div>
     );
