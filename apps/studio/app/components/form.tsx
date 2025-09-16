@@ -8,6 +8,7 @@ import {
   ToggleGroup,
   ToggleGroupItem,
 } from "./ui/toggle-group"
+import { Textarea } from "./ui/textarea";
 
 export type FormFieldBaseProps = {
     id: string,
@@ -21,7 +22,7 @@ export function FormFieldBase<T=any>(props: FormFieldBaseProps) {
     const { id, label,description, error, children } = props;
     return <div className="flex flex-row gap-4">
         {label && <label className="text-sm text-gray-700 w-[170px] flex-shrink-0 truncate" htmlFor={id}>{label}</label>}
-        {<div>
+        {<div className="flex-1">
             <div>
                 {children}
             </div>
@@ -65,6 +66,10 @@ export function FormField<T=any>(props: FormFieldProps<T>) {
 
 export const TextInput : React.ComponentType<FormInputProps<string | undefined>> = ({ value, onChange, name, id })=> {
     return <Input value={value ?? ""} placeholder={"Enter value"} onChange={(e) => onChange(e.target.value === "" ? undefined : e.target.value)} name={name} id={id}/>
+}
+
+export const TextareaInput : React.ComponentType<FormInputProps<string | undefined>> = ({ value, onChange, name, id })=> {
+    return <Textarea value={value ?? ""} placeholder={"Enter value"} onChange={(e) => onChange(e.target.value === "" ? undefined : e.target.value)} name={name} id={id}/>
 }
 
 export const SwitchInput : React.ComponentType<FormInputProps<boolean>> = ({ value, onChange, name, id })=> {

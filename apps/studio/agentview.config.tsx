@@ -1,7 +1,7 @@
 import type { AgentViewConfig } from "./app/types";
 import { z } from "zod";
 import { ThumbsDown, ThumbsUp } from "lucide-react";
-import { TextInput, ToggleBooleanInput } from "./app/components/form";
+import { TextareaInput, TextInput, ToggleBooleanInput } from "./app/components/form";
 import { ActivityAssistantMessageComponent, ActivityUserMessageComponent, DisplayBooleanComponent, DisplayTextComponent } from "./app/components/display";
 import { marked } from "marked";
 import { ProductDisplay, ProductSelect } from "product_components";
@@ -28,7 +28,7 @@ export const config: AgentViewConfig = {
                     title: "Message",
                     content: z.string(),
                     isInput: true,
-                    input: TextInput,
+                    input: TextareaInput,
                     display: ActivityUserMessageComponent
                 },
                 {
@@ -44,8 +44,7 @@ export const config: AgentViewConfig = {
                     display: ({ value }) => <div className="flex flex-row items-center justify-end gap-2"><div className="text-muted-foreground">Changed page to</div><ProductDisplay value={value?.product_id} /></div>
                 },
                 {
-                    type: "product_page_comment",
-                    title: "Product comment",
+                    type: "change_page_output",
                     content: z.object({
                         score: z.enum(["best_fit", "great_option", "optional", "not_recommended"]),
                         comment: z.string()
