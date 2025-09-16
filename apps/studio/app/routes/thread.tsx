@@ -1,30 +1,25 @@
-import { redirect, useLoaderData, useFetcher, Outlet, Link, Form, data, useParams, useSearchParams, useNavigate, useRevalidator } from "react-router";
+import { useLoaderData, useFetcher, Outlet, Link, Form, data, useParams, useSearchParams, useNavigate, useRevalidator } from "react-router";
 import type { Route } from "./+types/thread";
 import { Button } from "~/components/ui/button";
 import { Header, HeaderTitle } from "~/components/header";
-import { Textarea } from "~/components/ui/textarea";
 import { useEffect, useState } from "react";
 import { parseSSE } from "~/lib/parseSSE";
-import { authClient } from "~/lib/auth-client";
 import { apiFetch } from "~/lib/apiFetch";
 import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
 import { getLastRun, getAllActivities, getVersions } from "~/lib/shared/threadUtils";
 import { type Thread } from "~/lib/shared/apiTypes";
 import { getThreadListParams } from "~/lib/utils";
 import { PropertyList } from "~/components/PropertyList";
-import { Loader2, LoaderCircleIcon, SendHorizonalIcon, Share, SquareIcon, UserIcon, UsersIcon } from "lucide-react";
+import { MessageCircleIcon, MessageSquareTextIcon, SendHorizonalIcon, Share, SquareIcon, UserIcon, UsersIcon } from "lucide-react";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
-import { Badge } from "~/components/ui/badge";
 import { useSessionContext } from "~/lib/session";
-import { config } from "../../agentview.config";
 import type { ActivityConfig, ThreadConfig } from "~/types";
 import { FormField } from "~/components/form";
 import { parseFormData } from "~/lib/parseFormData";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs";
-import type { BaseActivityConfig } from "~/lib/shared/configTypes";
-import { Loader } from "~/components/Loader";
 import { ItemsWithCommentsLayout } from "~/components/ItemsWithCommentsLayout";
 import { CommentThreadFloatingBox } from "~/components/comments";
+import { config } from "../../agentview.config";
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
     const response = await apiFetch<Thread>(`/api/threads/${params.id}`);
@@ -266,7 +261,7 @@ function ThreadPage() {
                     <ThreadDetails thread={thread} threadConfig={threadConfig} />
                 </div>
 
-                <div className="pr-6">
+                <div className="">
                     {/* <div className="flex flex-col pb-16">
                         {activeActivities.map((activity) => {
 
@@ -312,16 +307,27 @@ function ThreadPage() {
 
                         return {
                             id: activity.id,
-                            itemComponent: <div className={`px-6 py-4  ${params.activityId === activity.id ? "bg-stone-50" : "hover:bg-gray-50"}`} /*onClick={() => { navigate(`/threads/${thread.id}/activities/${activity.id}?list=${listParams.list}&type=${listParams.type}`) }}*/>
+                            itemComponent: <div className={`relative pl-6 py-2 pr-[444px] group`} /*onClick={() => { navigate(`/threads/${thread.id}/activities/${activity.id}?list=${listParams.list}&type=${listParams.type}`) }}*/>
                                 {content}
+                                { !hasComments && <div className="absolute top-[8px] right-[408px] opacity-0 group-hover:opacity-100">
+                                    <Button variant="outline" size="icon_xs" onClick={() => { setSelectedActivityId(activity.id) }}><MessageSquareTextIcon /></Button>
+                                </div>}
                             </div>,
-                            commentsComponent: (hasComments || (selectedActivityId === activity.id)) ?
-                                <CommentThreadFloatingBox
+                            // commentsComponent: <div className="relative pt-2 pl-4 pr-6">
+                            //     <div className="text-xs bg-amber-700 text-white p-2 rounded-md">
+                            //         Comments
+                            //     </div>
+                            //     {/* <Button variant="outline" size="sm" onClick={() => { setSelectedActivityId(activity.id) }}>
+                            //         <MessageCircleIcon />
+                            //     </Button> */}
+                            // </div>
+                            commentsComponent: (hasComments || (selectedActivityId === activity.id)) ? 
+                            <div className="relative pt-2 pr-4"><CommentThreadFloatingBox
                                     activity={activity}
                                     thread={thread}
                                     selected={selectedActivityId === activity.id}
                                     onSelect={(a) => { setSelectedActivityId(a?.id) }}
-                                /> : undefined
+                                /></div> : undefined
                         }
                     })} selectedItemId={selectedActivityId}
                     />

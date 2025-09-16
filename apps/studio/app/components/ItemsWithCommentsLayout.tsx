@@ -141,6 +141,8 @@ export function ItemsWithCommentsLayout({ items, selectedItemId }: ItemsWithComm
         updateCommentPositions()
     }, [updateCommentPositions]);
 
+    const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+
     return (
         <div className="flex flex-row gap-4 relative">
             <div className="flex-1 flex flex-col">
@@ -148,7 +150,9 @@ export function ItemsWithCommentsLayout({ items, selectedItemId }: ItemsWithComm
                     <div
                         key={item.id}
                         ref={(el) => { itemRefs.current[item.id] = el; }}
-                        style={{display: 'grid'}}
+                        style={{display: 'grid', backgroundColor: (hoveredItem === item.id || selectedItemId === item.id) ? 'rgba(0, 0, 0, 0.02)' : 'transparent'}}
+                        onMouseEnter={() => { setHoveredItem(item.id) }}
+                        onMouseLeave={() => { setHoveredItem(null) }}
                     >
                         {item.itemComponent}
                     </div>
@@ -158,7 +162,8 @@ export function ItemsWithCommentsLayout({ items, selectedItemId }: ItemsWithComm
 
                 <div ref={bottomSpacerRef}/>
             </div>
-            <div ref={containerRef} className="w-[400px] flex-none relative overflow-hidden">
+
+            <div ref={containerRef} className="w-[400px] absolute right-0 top-0 overflow-hidden h-full pointer-events-none">
                 {items.map((item) => {
                     if (!item.commentsComponent) {
                         return null;
@@ -169,7 +174,9 @@ export function ItemsWithCommentsLayout({ items, selectedItemId }: ItemsWithComm
                             key={item.id}
                             ref={(el) => { commentRefs.current[item.id] = el; }}    
                             className="invisible"
-                            style={{position: 'absolute', transition: 'top 0.35s cubic-bezier(0.16, 1, 0.3, 1)', width: "100%"}}
+                            style={{position: 'absolute', transition: 'top 0.35s cubic-bezier(0.16, 1, 0.3, 1)', width: "100%", pointerEvents: 'auto'}}
+                            onMouseEnter={() => { setHoveredItem(item.id) }}
+                            onMouseLeave={() => { setHoveredItem(null) }}
                         >
                             {item.commentsComponent}
                         </div>
