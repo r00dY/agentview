@@ -313,14 +313,15 @@ function ThreadPage() {
                                     <Button variant="outline" size="icon_xs" onClick={() => { setSelectedActivityId(activity.id) }}><MessageSquareTextIcon /></Button>
                                 </div>} */}
                             </div>,
-                            // commentsComponent: <div className="relative pt-2 pl-4 pr-6">
-                            //     <div className="text-xs bg-amber-700 text-white p-2 rounded-md">
-                            //         Comments
-                            //     </div>
-                            //     {/* <Button variant="outline" size="sm" onClick={() => { setSelectedActivityId(activity.id) }}>
-                            //         <MessageCircleIcon />
-                            //     </Button> */}
-                            // </div>
+                            // itemComponent: <div 
+                            //     className={`relative pl-6 py-2 pr-[444px] group ${params.activityId === activity.id ? "bg-gray-50" : "hover:bg-gray-50"}`} 
+                            //     onClick={() => { navigate(`/threads/${thread.id}/activities/${activity?.id}?list=${listParams.list}&type=${listParams.type}`) }}>
+
+                            //     {content}
+                            //     {/* { !hasComments && <div className="absolute top-[8px] right-[408px] opacity-0 group-hover:opacity-100">
+                            //         <Button variant="outline" size="icon_xs" onClick={() => { setSelectedActivityId(activity.id) }}><MessageSquareTextIcon /></Button>
+                            //     </div>} */}
+                            // </div>,
                             commentsComponent: (hasComments || (selectedActivityId === activity.id)) ? 
                             <div className="relative pt-2 pr-4"><CommentThreadFloatingBox
                                     activity={activity}
