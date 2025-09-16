@@ -12,7 +12,7 @@ import { getLastRun, getAllActivities, getVersions } from "~/lib/shared/threadUt
 import { type Thread } from "~/lib/shared/apiTypes";
 import { getThreadListParams } from "~/lib/utils";
 import { PropertyList } from "~/components/PropertyList";
-import { SendHorizonalIcon, Share, SquareIcon, UserIcon, UsersIcon } from "lucide-react";
+import { Loader2, LoaderCircleIcon, SendHorizonalIcon, Share, SquareIcon, UserIcon, UsersIcon } from "lucide-react";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
 import { Badge } from "~/components/ui/badge";
 import { useSessionContext } from "~/lib/session";
@@ -22,6 +22,7 @@ import { FormField } from "~/components/form";
 import { parseFormData } from "~/lib/parseFormData";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs";
 import type { BaseActivityConfig } from "~/lib/shared/configTypes";
+import { Loader } from "~/components/Loader";
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
     const response = await apiFetch<Thread>(`/api/threads/${params.id}`);
@@ -160,7 +161,6 @@ function ThreadPage() {
         throw new Error(`Thread config not found for type "${thread.type}"`);
     }
 
-
     // const selectedActivityId = activities.find((a: any) => a.id === searchParams.get('activityId'))?.id ?? undefined;
 
     // const threadStatus = lastRun?.state === "completed" ? "idle" : (lastRun?.state ?? "idle")
@@ -272,12 +272,6 @@ function ThreadPage() {
 
     }, [lastRun?.state])
 
-
-    console.log(activeActivities)
-
-    {/* <div className="flex-1 flex flex-col">  
-      <Outlet />
-    </div> */}
     return <>
         <div className="basis-[720px] flex-shrink-0 flex-grow-0 border-r  flex flex-col">
             <Header>
@@ -292,7 +286,7 @@ function ThreadPage() {
                 </div>
 
                 <div className="">
-                    <div className="flex flex-col">
+                    <div className="flex flex-col pb-16">
                         {activeActivities.map((activity) => {
 
                             let content: React.ReactNode = null;
@@ -316,6 +310,10 @@ function ThreadPage() {
                             //     selected={params.activityId === activity.id}
                             // />
                         })}
+
+                        {lastRun?.state === "in_progress" && <div className="px-6 gap-2 pt-3 flex flex-row items-end text-muted-foreground">
+                            <Loader />
+                        </div>}
                     </div>
 
                     {/* <ItemsWithCommentsLayout items={activeActivities.map((activity) => {
