@@ -1,7 +1,7 @@
 import type { AgentViewConfig } from "./app/types";
 import { z } from "zod";
 import { ThumbsDown, ThumbsUp } from "lucide-react";
-import { TextareaInput, TextInput, ToggleBooleanInput } from "./app/components/form";
+import { SelectInput, TextareaInput, TextInput, ToggleBooleanInput } from "./app/components/form";
 import { ActivityAssistantMessageComponent, ActivityUserMessageComponent, DisplayBooleanComponent, DisplayTextComponent } from "./app/components/display";
 import { marked } from "marked";
 import { ProductDisplay, ProductSelect } from "product_components";
@@ -68,7 +68,24 @@ export const config: AgentViewConfig = {
                                 </div>
                             </div>
                         );
-                    }
+                    },
+                    scores: [
+                        {
+                            name: "recommended_score",
+                            title: "Your score",
+                            schema: z.string(),
+                            input: SelectInput,
+                            display: ({ value }) => <ScoreBadge score={value} />,
+                            options: {
+                                items: [
+                                    { value: "best_fit", label: "Best Fit" },
+                                    { value: "great_option", label: "Great Option" },
+                                    { value: "optional", label: "Optional" },
+                                    { value: "not_recommended", label: "Not Recommended" }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 {
                     type: "message",
@@ -92,14 +109,14 @@ export const config: AgentViewConfig = {
                                     label: "Don't like"
                                 }
                             }
-                        },
-                        {
-                            name: "whatever",
-                            title: "Whatever",
-                            schema: z.string(),
-                            input: TextInput,
-                            display: DisplayTextComponent
                         }
+                        // {
+                        //     name: "whatever",
+                        //     title: "Whatever",
+                        //     schema: z.string(),
+                        //     input: TextInput,
+                        //     display: DisplayTextComponent
+                        // }
                     ]
                 }
             ]
@@ -112,9 +129,9 @@ function ScoreBadge({ score }: { score: string }) {
     const getScoreStyles = (score: string) => {
         switch (score) {
             case "best_fit":
-                return "bg-green-800 text-white"; // Dark green
+                return "bg-green-900 text-white"; // Dark green
             case "great_option":
-                return "bg-green-500 text-white"; // Green
+                return "bg-green-600 text-white"; // Green
             case "optional":
                 return "bg-yellow-500 text-white"; // Yellow
             case "not_recommended":
@@ -140,7 +157,7 @@ function ScoreBadge({ score }: { score: string }) {
     };
 
     return (
-        <span className={`inline-flex items-center justify-center rounded-md border px-2 py-0.5 text-xs font-medium w-fit whitespace-nowrap shrink-0 ${getScoreStyles(score)}`}>
+        <span className={`inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-medium w-fit whitespace-nowrap shrink-0 ${getScoreStyles(score)}`}>
             {getScoreLabel(score)}
         </span>
     );

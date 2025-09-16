@@ -43,72 +43,12 @@ function getAllScoreConfigs(thread: Thread, activity: Activity) {
     }
 
     const activityConfig = threadConfig?.activities.find((a: any) =>
-        a.type === activity.type && a.role === activity.role
+        a.type === activity.type && (!a.role || a.role === activity.role)   
     );
     const allScoreConfigs = activityConfig?.scores || [];
 
     return allScoreConfigs;
 }
-
-// function getScoresInfo(thread: Thread, activity: Activity) {
-//     const threadConfig = config.threads?.find((t: any) => t.type === thread.type);
-//     if (!threadConfig) {
-//         throw new Error("Thread config not found");
-//     }
-
-//     const activityConfig = threadConfig?.activities.find((a: any) =>
-//         a.type === activity.type && a.role === activity.role
-//     );
-//     const allScoreConfigs = activityConfig?.scores || [];
-
-//     const visibleMessages = activity.commentMessages.filter((m: any) => !m.deletedAt) ?? []
-
-//     const scores: Record<string, any> = {};
-//     for (const message of visibleMessages) {
-//         for (const score of message.scores ?? []) {
-//             scores[score.name] = score.value;
-//         }
-//     }
-
-
-//     return {
-//         allScoreConfigs,
-//         scores,
-//     }
-// }
-
-
-// function getScoresInfo2(thread: Thread, activity: Activity, user: User) {
-//     const threadConfig = config.threads?.find((t: any) => t.type === thread.type);
-//     if (!threadConfig) {
-//         throw new Error("Thread config not found");
-//     }
-
-//     const activityConfig = threadConfig?.activities.find((a: any) =>
-//         a.type === activity.type && a.role === activity.role
-//     );
-//     const allScoreConfigs = activityConfig?.scores || [];
-
-//     const visibleMessages = activity.commentMessages.filter((m: any) => !m.deletedAt) ?? []
-
-//     const scores: Record<string, any> = {};
-//     for (const message of visibleMessages) {
-//         for (const score of message.scores ?? []) {
-//             if (score.createdBy !== user.id) {
-//                 continue;
-//             }
-//             scores[score.name] = score.value;
-//         }
-//     }
-
-//     const unassignedScoreConfigs = allScoreConfigs.filter((scoreConfig) => scores[scoreConfig.name] === undefined || scores[scoreConfig.name] === null);
-
-//     return {
-//         allScoreConfigs,
-//         scores,
-//         unassignedScoreConfigs
-//     }
-// }
 
 export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, activity, collapsed = false, singleLineMessageHeader = false }, ref) => {
     const fetcher = useFetcher();
@@ -153,6 +93,10 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
     }));
 
 
+    console.log('---');
+    console.log('activity number', activity.number)
+    console.log('all score configs', allScoreConfigs)
+    console.log('unassigned score configs', unassignedScoreConfigs)
     // const messageScoresMap : Record<string, Score[]> = {}
 
     // for (const score of activity.scores ?? []) {

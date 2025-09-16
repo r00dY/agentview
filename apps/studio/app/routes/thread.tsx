@@ -12,7 +12,7 @@ import { getLastRun, getAllActivities, getVersions } from "~/lib/shared/threadUt
 import { type Thread } from "~/lib/shared/apiTypes";
 import { getThreadListParams } from "~/lib/utils";
 import { PropertyList } from "~/components/PropertyList";
-import { SendHorizonalIcon, Share, SquareIcon, UserIcon } from "lucide-react";
+import { SendHorizonalIcon, Share, SquareIcon, UserIcon, UsersIcon } from "lucide-react";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
 import { Badge } from "~/components/ui/badge";
 import { useSessionContext } from "~/lib/session";
@@ -121,7 +121,8 @@ function ShareForm({ thread, listParams }: { thread: Thread, listParams: ReturnT
     });
 
     if (thread.client.is_shared) {
-        return <Badge>Public</Badge>
+        return <div className="flex flex-row gap-1 items-center text-xs text-white bg-cyan-700 px-2 py-1 rounded-md font-medium"><UsersIcon className="size-3" />Shared</div>
+        // return <Badge>Public</Badge>
     }
 
     return <fetcher.Form method="put" action={`/clients/${thread.client.id}/share`}>

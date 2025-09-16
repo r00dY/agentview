@@ -5,10 +5,11 @@ import type { FormInputProps } from "~/types";
 import { Input } from "./ui/input";
 import { Switch } from "./ui/switch";
 import {
-  ToggleGroup,
-  ToggleGroupItem,
+    ToggleGroup,
+    ToggleGroupItem,
 } from "./ui/toggle-group"
 import { Textarea } from "./ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
 export type FormFieldBaseProps = {
     id: string,
@@ -18,8 +19,8 @@ export type FormFieldBaseProps = {
     error?: string;
 };
 
-export function FormFieldBase<T=any>(props: FormFieldBaseProps) {
-    const { id, label,description, error, children } = props;
+export function FormFieldBase<T = any>(props: FormFieldBaseProps) {
+    const { id, label, description, error, children } = props;
     return <div className="flex flex-row gap-4">
         {label && <label className="text-sm text-gray-700 w-[170px] flex-shrink-0 truncate" htmlFor={id}>{label}</label>}
         {<div className="flex-1">
@@ -32,14 +33,14 @@ export function FormFieldBase<T=any>(props: FormFieldBaseProps) {
     </div>
 }
 
-export type FormFieldProps<T=any> = Omit<FormFieldBaseProps, "children"> & {
+export type FormFieldProps<T = any> = Omit<FormFieldBaseProps, "children"> & {
     name: string,
     defaultValue: T,
     options?: any,
     InputComponent: React.ComponentType<FormInputProps<T>>,
 }
 
-export function FormField<T=any>(props: FormFieldProps<T>) {
+export function FormField<T = any>(props: FormFieldProps<T>) {
     const { id, label, description, error, name, defaultValue, InputComponent, options } = props;
     const [fieldValue, setFieldValue] = useState<T>(defaultValue);
 
@@ -54,29 +55,29 @@ export function FormField<T=any>(props: FormFieldProps<T>) {
     // }, [error]);
 
     return <>
-        <input type="hidden" name={name} value={JSON.stringify(fieldValue) ?? ""} ref={inputRef}/>
+        <input type="hidden" name={name} value={JSON.stringify(fieldValue) ?? ""} ref={inputRef} />
         <FormFieldBase id={id} label={label} description={description} error={error}>
             <InputComponent id={id} name={`agentview__${name}`} value={fieldValue} options={options} onChange={(newValue) => {
                 setFieldValue(newValue);
                 // setFieldError(undefined);
-            }}/>
+            }} />
         </FormFieldBase>
     </>
 }
 
-export const TextInput : React.ComponentType<FormInputProps<string | undefined>> = ({ value, onChange, name, id })=> {
-    return <Input value={value ?? ""} placeholder={"Enter value"} onChange={(e) => onChange(e.target.value === "" ? undefined : e.target.value)} name={name} id={id}/>
+export const TextInput: React.ComponentType<FormInputProps<string | undefined>> = ({ value, onChange, name, id }) => {
+    return <Input value={value ?? ""} placeholder={"Enter value"} onChange={(e) => onChange(e.target.value === "" ? undefined : e.target.value)} name={name} id={id} />
 }
 
-export const TextareaInput : React.ComponentType<FormInputProps<string | undefined>> = ({ value, onChange, name, id })=> {
-    return <Textarea value={value ?? ""} placeholder={"Enter value"} onChange={(e) => onChange(e.target.value === "" ? undefined : e.target.value)} name={name} id={id}/>
+export const TextareaInput: React.ComponentType<FormInputProps<string | undefined>> = ({ value, onChange, name, id }) => {
+    return <Textarea value={value ?? ""} placeholder={"Enter value"} onChange={(e) => onChange(e.target.value === "" ? undefined : e.target.value)} name={name} id={id} />
 }
 
-export const SwitchInput : React.ComponentType<FormInputProps<boolean>> = ({ value, onChange, name, id })=> {
-    return <Switch checked={value ?? false} onCheckedChange={(checked) => onChange(checked)} name={name} id={id}/>
+export const SwitchInput: React.ComponentType<FormInputProps<boolean>> = ({ value, onChange, name, id }) => {
+    return <Switch checked={value ?? false} onCheckedChange={(checked) => onChange(checked)} name={name} id={id} />
 }
 
-export const ToggleBooleanInput : React.ComponentType<FormInputProps<boolean | undefined>> = ({ value, onChange, name, id, options })=> {
+export const ToggleBooleanInput: React.ComponentType<FormInputProps<boolean | undefined>> = ({ value, onChange, name, id, options }) => {
     const toggleValue = value === true ? "true" : value === false ? "false" : "";
 
     const TrueIcon = options?.true?.icon ?? null;
@@ -86,21 +87,37 @@ export const ToggleBooleanInput : React.ComponentType<FormInputProps<boolean | u
     const falseLabel = FalseIcon ? null : options?.false?.label ?? "False";
 
     return (
-    <ToggleGroup type="single" variant="outline" size="sm" value={toggleValue} onValueChange={(value) => {
-        if (value === "") {
-            onChange(undefined);
-        } else {
-            onChange(value === "true");
-        }
-    }}>
-        <ToggleGroupItem value="true" aria-label="Toggle true">
-            {TrueIcon ? <TrueIcon className="h-2 w-2" /> : null}
-            {trueLabel}
-        </ToggleGroupItem>
-        <ToggleGroupItem value="false" aria-label="Toggle false">
-            {FalseIcon ? <FalseIcon className="h-2 w-2" /> : null}
-            {falseLabel}
-        </ToggleGroupItem>
-    </ToggleGroup>
+        <ToggleGroup type="single" variant="outline" size="sm" value={toggleValue} onValueChange={(value) => {
+            if (value === "") {
+                onChange(undefined);
+            } else {
+                onChange(value === "true");
+            }
+        }}>
+            <ToggleGroupItem value="true" aria-label="Toggle true">
+                {TrueIcon ? <TrueIcon className="h-2 w-2" /> : null}
+                {trueLabel}
+            </ToggleGroupItem>
+            <ToggleGroupItem value="false" aria-label="Toggle false">
+                {FalseIcon ? <FalseIcon className="h-2 w-2" /> : null}
+                {falseLabel}
+            </ToggleGroupItem>
+        </ToggleGroup>
     )
+}
+
+export const SelectInput: React.ComponentType<FormInputProps<string | undefined>> = ({ value, onChange, name, id, options }) => {
+    return <Select onValueChange={(value) => onChange(value === "" ? undefined : value)} defaultValue={value}>
+        <SelectTrigger>
+            <SelectValue placeholder="Pick option" />
+        </SelectTrigger>
+        <SelectContent>
+            { options.items.map((item: any) => {
+                const value = typeof item === 'string' ? item : item.value;
+                const label = typeof item === 'string' ? item : (item.label ?? item.value)
+
+                return <SelectItem value={item.value}>{item.label}</SelectItem>
+            })}
+        </SelectContent>
+    </Select>
 }

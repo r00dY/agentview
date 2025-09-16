@@ -686,9 +686,6 @@ app.openapi(runsPOSTRoute, async (c) => {
           return
         }
 
-        console.log('event!')
-        console.log(event)
-
         // The first yield MUST be a manifest
         if (firstItem && event.name !== 'manifest') {
           throw new AgentAPIError({
@@ -1000,7 +997,7 @@ function validateScore(schema: BaseConfig, thread: Thread, activity: Activity, u
 
   // Find the activity config for this thread/activity
   const activityConfig = threadConfig.activities.find(
-    (activityConfig) => activityConfig.type === activity.type && activityConfig.role === activity.role
+    (activityConfig) => activityConfig.type === activity.type && (!activityConfig.role || activityConfig.role === activity.role)
   );
 
   const activityTypeCuteName = `${activity.type}' / '${activity.role}`
