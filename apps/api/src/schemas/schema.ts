@@ -65,7 +65,7 @@ export const activity = pgTable("activity", {
   thread_id: uuid("thread_id").notNull().references(() => thread.id, { onDelete: 'cascade' }),
   run_id: uuid("run_id").notNull().references(() => run.id, { onDelete: 'set null' }),
   type: varchar({ length: 255 }).notNull(),
-  role: varchar({ length: 255 }).notNull(),
+  role: varchar({ length: 255 }),
 
   channel_id: uuid("channel_id").references(() => channels.id, { onDelete: 'set null' }),
   channel_activity_id: varchar({ length: 255 }),

@@ -78,7 +78,7 @@ export const ActivitySchema = z.object({
     content: z.any(),
     thread_id: z.string(),
     type: z.string(),
-    role: z.string(),
+    role: z.string().optional(),
     commentMessages: z.array(CommentMessageSchema),
 })
 

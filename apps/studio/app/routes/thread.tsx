@@ -271,6 +271,7 @@ function ThreadPage() {
     }, [lastRun?.state])
 
 
+    console.log(activeActivities)
 
     {/* <div className="flex-1 flex flex-col">  
       <Outlet />
@@ -294,9 +295,9 @@ function ThreadPage() {
 
                             let content : React.ReactNode = null;
 
-                            const activityConfig = threadConfig.activities.find((a) => a.type === activity.type && a.role === activity.role);
+                            const activityConfig = threadConfig.activities.find((a) => a.type === activity.type && (!a.role || a.role === activity.role));
                             if (!activityConfig) {
-                                content = <div className="text-red-500">Activity config not found for type "{activity.type}" and role "{activity.role}"</div>
+                                content = <div className="text-muted-foreground italic">No component (type: "{activity.type}")</div>
                             }
                             else {
                                 content = <activityConfig.display value={activity.content} options={activityConfig.options} />
@@ -366,17 +367,20 @@ function InputForm({ thread, threadConfig }: { thread: Thread, threadConfig: Thr
         setFormError(null)
 
         const formData = new FormData(e.target as HTMLFormElement)
-        const data = parseFormData(formData)
+        const data = parseFormData(formData, { excludedFields: ['type', 'role'] })
 
-        if (data.inputFormValue) {
+        const type = formData.get('type') as string;
+        const role = formData.get('role') === "" ? undefined : formData.get('role') as string;
+
+        if (data.value) {
             try {
                 const response = await apiFetch(`/api/threads/${thread.id}/runs`, {
                     method: 'POST',
                     body: {
                         input: {
-                            type: "message",
-                            role: "user",
-                            content: data.inputFormValue
+                            type,
+                            role,
+                            content: data.value
                         }
                     }
                 });
@@ -388,7 +392,6 @@ function InputForm({ thread, threadConfig }: { thread: Thread, threadConfig: Thr
                 else {
                     revalidator.revalidate();
                 }
-
 
                 // else {
                 //     console.log('activity pushed successfully')
@@ -456,11 +459,14 @@ function InputForm({ thread, threadConfig }: { thread: Thread, threadConfig: Thr
                         
                         return (
                             <TabsContent key={index} value={tabValue}>
+                                <input type="hidden" name="type" value={inputConfig.type} />
+                                <input type="hidden" name="role" value={inputConfig.role} />
+
                                 {inputConfig.input && (
                                     <FormField
                                         id={"inputFormValue"}
                                         // error={fetcher.data?.error?.fieldErrors?.[`metadata.${metafield.name}`]}
-                                        name={"inputFormValue"}
+                                        name={"value"}
                                         defaultValue={undefined}
                                         // defaultValue={scores[metafield.name] ?? undefined}
                                         InputComponent={inputConfig.input}

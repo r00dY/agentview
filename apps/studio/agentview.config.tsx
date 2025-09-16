@@ -30,11 +30,21 @@ export const config: AgentViewConfig = {
                     display: ActivityUserMessageComponent
                 },
                 {
-                    type: "dupa",
+                    type: "change_page",
                     title: "Change page",
-                    content: z.string(),
+                    content: z.object({
+                        product_id: z.string(),
+                    }),
                     isInput: true,
-                    input: TextInput,
+                    input: ({ value, onChange }) => {
+                        return <ProductSelect value={value?.product_id} onChange={(product_id) => { onChange({ product_id }) }} />
+                    },
+                    display: ({ value }) => <div className="flex flex-row items-center justify-end gap-2"><div className="text-muted-foreground">Page changed to</div><ProductDisplay value={value?.product_id} /></div>
+                },
+                {
+                    type: "product_comment",
+                    title: "Product comment",
+                    content: z.string(),
                     display: DisplayTextComponent
                 },
                 {

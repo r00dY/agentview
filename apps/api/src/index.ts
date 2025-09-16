@@ -555,19 +555,12 @@ app.openapi(runsPOSTRoute, async (c) => {
   const schema = await requireSchema()
 
   // Find thread configuration by type
-  const threadConfig = schema.threads.find((threadConfig) => threadConfig.type === threadRow.type);
-  if (!threadConfig) {
-    return c.json({ message: `Thread type '${threadRow.type}' not found in configuration` }, 400);
-  }
-
-  if (role !== "user") {
-    return c.json({ message: "Only activities with role 'user' are allowed" }, 400);
-  }
+  const threadConfig = await requireThreadConfig(schema, threadRow.type)
 
   // Find activity configuration by type and role
   const activityConfig = threadConfig.activities.find((activityConfig) => activityConfig.type === type && activityConfig.role === role);
   if (!activityConfig) {
-    return c.json({ message: `Activity type '${type}' with role '${role}' not found in configuration` }, 400);
+    throw new HTTPException(400, { message: `Activity type '${type}' with role '${role}' not found in configuration` });
   }
 
   // Validate content against the schema
@@ -632,20 +625,20 @@ app.openapi(runsPOSTRoute, async (c) => {
       }
     }
 
-    function validateActivity(activity: any) {
-      const activitySchemas = threadConfig!.activities
-        .filter((activityConfig) => activityConfig.role !== 'user') // Exclude user activities from output validation
-        .map((activityConfig) =>
-          z.object({
-            type: z.literal(activityConfig.type),
-            role: z.literal(activityConfig.role),
-            content: activityConfig.content
-          })
-        );
+    // function validateActivity(activity: any) {
+    //   const activitySchemas = threadConfig!.activities
+    //     .filter((activityConfig) => activityConfig.role !== 'user') // Exclude user activities from output validation
+    //     .map((activityConfig) =>
+    //       z.object({
+    //         type: z.literal(activityConfig.type),
+    //         role: z.literal(activityConfig.role),
+    //         content: activityConfig.content
+    //       })
+    //     );
 
-      const schema = z.union(activitySchemas);
-      schema.parse(activity);
-    }
+    //   const schema = z.union(activitySchemas);
+    //   schema.parse(activity);
+    // }
 
     async function isStillRunning() {
       const currentRun = await db.query.run.findFirst({ where: eq(run.id, userActivity.run_id) });
@@ -655,38 +648,46 @@ app.openapi(runsPOSTRoute, async (c) => {
       return false
     }
 
-    async function validateAndInsertActivity(activityData: any) {
-      try {
-        validateActivity(activityData);
-      }
-      catch (error: any) {
-        throw {
-          error: error.message,
-        }
-      }
+    // async function validateAndInsertActivity(activityData: any) {
+    //   try {
+    //     validateActivity(activityData);
+    //   }
+    //   catch (error: any) {
+    //     throw {
+    //       error: error.message,
+    //     }
+    //   }
 
-      if (!(await isStillRunning())) {
-        throw new Error('Run is not in progress')
-      }
+    //   if (!(await isStillRunning())) {
+    //     throw new Error('Run is not in progress')
+    //   }
 
-      const [newActivity] = await db.insert(activity).values({
-        thread_id,
-        type: activityData.type,
-        role: activityData.role,
-        content: activityData.content,
-        run_id: userActivity.run_id,
-      }).returning();
+    //   const [newActivity] = await db.insert(activity).values({
+    //     thread_id,
+    //     type: activityData.type,
+    //     role: activityData.role,
+    //     content: activityData.content,
+    //     run_id: userActivity.run_id,
+    //   }).returning();
 
-      return newActivity;
-    }
+    //   return newActivity;
+    // }
 
     try {
       // Try streaming first, fallback to non-streaming
       const runOutput = callAgentAPI(input, threadConfig.url)
+      
       let versionId: string | null = null;
 
       let firstItem = true;
       for await (const event of runOutput) {
+
+        if (!(await isStillRunning())) {
+          return
+        }
+
+        console.log('event!')
+        console.log(event)
 
         // The first yield MUST be a manifest
         if (firstItem && event.name !== 'manifest') {
@@ -721,8 +722,33 @@ app.openapi(runsPOSTRoute, async (c) => {
           continue; // Skip this item as it's not an activity
         }
         else if (event.name === 'activity') {
-          // This is a regular activity
-          await validateAndInsertActivity(event.data)
+
+          const parsedActivity = z.object({
+            type: z.string(),
+            role: z.string().optional(),
+            content: z.any(),
+          }).safeParse(event.data)
+
+          if (!parsedActivity.success) {
+            throw new AgentAPIError({
+              message: "Invalid activity",
+              details: event.data
+            });
+          }
+
+          await db.insert(activity).values({
+            thread_id,
+            type: parsedActivity.data.type,
+            role: parsedActivity.data.role,
+            content: parsedActivity.data.content,
+            run_id: userActivity.run_id,
+          })
+
+          // return newActivity;
+
+          // await db.insert(activity).values(activity)
+          // // This is a regular activity
+          // await validateAndInsertActivity(event.data)
         }
         else {
           throw {
@@ -753,6 +779,7 @@ app.openapi(runsPOSTRoute, async (c) => {
         failReason = error.object
       }
       else {
+        console.error(error)
         failReason = {
           message: "AgentView internal error, please report to the team"
         }
