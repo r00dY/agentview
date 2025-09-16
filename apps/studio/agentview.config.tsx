@@ -53,18 +53,20 @@ export const config: AgentViewConfig = {
                     display: ({ value }) => {
                         return (
                             <div className="relative pr-[10%]">
-                                { !value && <div className="text-muted-foreground">No comment</div> }
-                                { value && <div className="border p-3 rounded-lg bg-muted">
-                                    <div className="mb-2">
-                                        <ScoreBadge score={value.score} />
-                                    </div>
-                                    <div 
-                                        className="prose prose-ul:list-disc prose-ol:list-decimal prose-a:underline" 
-                                        dangerouslySetInnerHTML={{
-                                            __html: marked.parse(value.comment, { async: false })
-                                        }}
-                                    />
-                                </div> }
+                                <div className="border p-3 rounded-lg bg-muted">
+                                    { !value && <div className="text-muted-foreground italic">Not enough user info to show product comment</div> }
+                                    {value && <>
+                                        <div className="mb-2">
+                                            <ScoreBadge score={value.score} />
+                                        </div>
+                                        <div
+                                            className="prose prose-ul:list-disc prose-ol:list-decimal prose-a:underline"
+                                            dangerouslySetInnerHTML={{
+                                                __html: marked.parse(value.comment, { async: false })
+                                            }}
+                                        />
+                                    </>}
+                                </div>
                             </div>
                         );
                     }
