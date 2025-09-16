@@ -141,7 +141,7 @@ export function ItemsWithCommentsLayout({ items, selectedItemId }: ItemsWithComm
         updateCommentPositions()
     }, [updateCommentPositions]);
 
-    const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+    // const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
     return (
         <div className="flex flex-row gap-4 relative">
@@ -150,9 +150,10 @@ export function ItemsWithCommentsLayout({ items, selectedItemId }: ItemsWithComm
                     <div
                         key={item.id}
                         ref={(el) => { itemRefs.current[item.id] = el; }}
-                        style={{display: 'grid', backgroundColor: (hoveredItem === item.id || selectedItemId === item.id) ? 'rgba(0, 0, 0, 0.02)' : 'transparent'}}
-                        onMouseEnter={() => { setHoveredItem(item.id) }}
-                        onMouseLeave={() => { setHoveredItem(null) }}
+                        style={{display: 'grid'}}
+                        // style={{display: 'grid', backgroundColor: (hoveredItem === item.id || selectedItemId === item.id) ? 'rgba(0, 0, 0, 0.02)' : 'transparent'}}
+                        // onMouseEnter={() => { setHoveredItem(item.id) }}
+                        // onMouseLeave={() => { setHoveredItem(null) }}
                     >
                         {item.itemComponent}
                     </div>
@@ -175,8 +176,8 @@ export function ItemsWithCommentsLayout({ items, selectedItemId }: ItemsWithComm
                             ref={(el) => { commentRefs.current[item.id] = el; }}    
                             className="invisible"
                             style={{position: 'absolute', transition: 'top 0.35s cubic-bezier(0.16, 1, 0.3, 1)', width: "100%", pointerEvents: 'auto'}}
-                            onMouseEnter={() => { setHoveredItem(item.id) }}
-                            onMouseLeave={() => { setHoveredItem(null) }}
+                            // onMouseEnter={() => { setHoveredItem(item.id) }}
+                            // onMouseLeave={() => { setHoveredItem(null) }}
                         >
                             {item.commentsComponent}
                         </div>

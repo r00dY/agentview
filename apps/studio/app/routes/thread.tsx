@@ -307,11 +307,11 @@ function ThreadPage() {
 
                         return {
                             id: activity.id,
-                            itemComponent: <div className={`relative pl-6 py-2 pr-[444px] group`} /*onClick={() => { navigate(`/threads/${thread.id}/activities/${activity.id}?list=${listParams.list}&type=${listParams.type}`) }}*/>
+                            itemComponent: <div className={`relative pl-6 py-2 pr-[444px] group ${selectedActivityId === activity.id ? "bg-gray-50" : "hover:bg-gray-50"}`} onClick={() => { setSelectedActivityId(activity?.id) }}>
                                 {content}
-                                { !hasComments && <div className="absolute top-[8px] right-[408px] opacity-0 group-hover:opacity-100">
+                                {/* { !hasComments && <div className="absolute top-[8px] right-[408px] opacity-0 group-hover:opacity-100">
                                     <Button variant="outline" size="icon_xs" onClick={() => { setSelectedActivityId(activity.id) }}><MessageSquareTextIcon /></Button>
-                                </div>}
+                                </div>} */}
                             </div>,
                             // commentsComponent: <div className="relative pt-2 pl-4 pr-6">
                             //     <div className="text-xs bg-amber-700 text-white p-2 rounded-md">
