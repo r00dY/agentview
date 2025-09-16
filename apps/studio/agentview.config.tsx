@@ -49,11 +49,12 @@ export const config: AgentViewConfig = {
                     content: z.object({
                         score: z.enum(["best_fit", "great_option", "optional", "not_recommended"]),
                         comment: z.string()
-                    }),
+                    }).nullable(),
                     display: ({ value }) => {
                         return (
                             <div className="relative pr-[10%]">
-                                <div className="border p-3 rounded-lg bg-muted">
+                                { !value && <div className="text-muted-foreground">No comment</div> }
+                                { value && <div className="border p-3 rounded-lg bg-muted">
                                     <div className="mb-2">
                                         <ScoreBadge score={value.score} />
                                     </div>
@@ -63,7 +64,7 @@ export const config: AgentViewConfig = {
                                             __html: marked.parse(value.comment, { async: false })
                                         }}
                                     />
-                                </div>
+                                </div> }
                             </div>
                         );
                     }
