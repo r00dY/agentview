@@ -63,21 +63,21 @@ export const config: AgentViewConfig = {
             ],
             activities: [
                 {
+                    isInput: true,
                     type: "message",
                     role: "user",
                     title: "Message",
                     content: z.string(),
-                    isInput: true,
                     input: TextareaInput,
                     display: ActivityUserMessageComponent
                 },
                 {
+                    isInput: true,
                     type: "change_page",
                     title: "Change page",
                     content: z.object({
                         product_id: z.string(),
                     }),
-                    isInput: true,
                     input: ({ value, onChange }) => {
                         return <ProductSelect value={value?.product_id} onChange={(product_id) => { onChange({ product_id }) }} />
                     },
