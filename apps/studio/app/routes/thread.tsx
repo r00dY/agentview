@@ -248,7 +248,7 @@ function ThreadPage() {
 
     return <>
         {/* <div className="basis-[720px] flex-shrink-0 flex-grow-0 border-r  flex flex-col"> */}
-        <div className="basis-[1200px] flex-shrink-0 flex-grow-0 border-r  flex flex-col">
+        <div className="basis-[1080px] flex-shrink-0 flex-grow-0 border-r  flex flex-col">
 
             <Header>
                 <HeaderTitle title={`Session ${thread.number}`} />
@@ -308,7 +308,7 @@ function ThreadPage() {
                         return {
                             id: activity.id,
                             itemComponent: <div 
-                                className={`relative pl-6 py-2 pr-[444px] group ${selectedActivityId === activity.id ? "bg-gray-50" : "hover:bg-gray-50"}`} 
+                                className={`relative pl-6 py-2 pr-[420px] group ${selectedActivityId === activity.id ? "bg-gray-50" : "hover:bg-gray-50"}`} 
                                 onClick={() => {
                                      if (selectedActivityId === activity.id) { 
                                         setSelectedActivityId(undefined) 
