@@ -18,7 +18,7 @@ export type AgentAPIEvent = {
   data: any
 }
 
-export async function* callAgentAPI(request: { thread: any }, url: string): AsyncGenerator<AgentAPIEvent, void, unknown> {
+export async function* callAgentAPI(request: { session: any }, url: string): AsyncGenerator<AgentAPIEvent, void, unknown> {
   let response : Response;
 
   try {
@@ -71,11 +71,11 @@ export async function* callAgentAPI(request: { thread: any }, url: string): Asyn
       }
     }
 
-    if (data.activities) {
-      for (const activity of data.activities) {
+    if (data.items) {
+      for (const item of data.items) {
         yield {
-          name: "activity",
-          data: activity
+          name: "item",
+          data: item
         }
       }
     }

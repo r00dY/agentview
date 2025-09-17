@@ -625,31 +625,16 @@ app.openapi(runsPOSTRoute, async (c) => {
   (async () => {
 
     const input = {
-      thread: {
+      session: {
         id: threadRow.id,
         created_at: threadRow.created_at,
         updated_at: threadRow.updated_at,
         metadata: threadRow.metadata,
         client_id: threadRow.client_id,
         type: threadRow.type,
-        activities: [...getAllActivities(threadRow), userActivity]
+        items: [...getAllActivities(threadRow), userActivity]
       }
     }
-
-    // function validateActivity(activity: any) {
-    //   const activitySchemas = threadConfig!.activities
-    //     .filter((activityConfig) => activityConfig.role !== 'user') // Exclude user activities from output validation
-    //     .map((activityConfig) =>
-    //       z.object({
-    //         type: z.literal(activityConfig.type),
-    //         role: z.literal(activityConfig.role),
-    //         content: activityConfig.content
-    //       })
-    //     );
-
-    //   const schema = z.union(activitySchemas);
-    //   schema.parse(activity);
-    // }
 
     async function isStillRunning() {
       const currentRun = await db.query.run.findFirst({ where: eq(run.id, userActivity.run_id) });
@@ -658,31 +643,6 @@ app.openapi(runsPOSTRoute, async (c) => {
       }
       return false
     }
-
-    // async function validateAndInsertActivity(activityData: any) {
-    //   try {
-    //     validateActivity(activityData);
-    //   }
-    //   catch (error: any) {
-    //     throw {
-    //       error: error.message,
-    //     }
-    //   }
-
-    //   if (!(await isStillRunning())) {
-    //     throw new Error('Run is not in progress')
-    //   }
-
-    //   const [newActivity] = await db.insert(activity).values({
-    //     thread_id,
-    //     type: activityData.type,
-    //     role: activityData.role,
-    //     content: activityData.content,
-    //     run_id: userActivity.run_id,
-    //   }).returning();
-
-    //   return newActivity;
-    // }
 
     try {
       // Try streaming first, fallback to non-streaming
@@ -729,26 +689,26 @@ app.openapi(runsPOSTRoute, async (c) => {
           firstItem = false;
           continue; // Skip this item as it's not an activity
         }
-        else if (event.name === 'activity') {
+        else if (event.name === 'item') {
 
-          const parsedActivity = z.object({
+          const parsedItem = z.object({
             type: z.string(),
             role: z.string().optional(),
             content: z.any(),
           }).safeParse(event.data)
 
-          if (!parsedActivity.success) {
+          if (!parsedItem.success) {
             throw new AgentAPIError({
-              message: "Invalid activity",
+              message: "Invalid item",
               details: event.data
             });
           }
 
           await db.insert(activity).values({
             thread_id,
-            type: parsedActivity.data.type,
-            role: parsedActivity.data.role,
-            content: parsedActivity.data.content,
+            type: parsedItem.data.type,
+            role: parsedItem.data.role,
+            content: parsedItem.data.content,
             run_id: userActivity.run_id,
           })
 

@@ -71,7 +71,7 @@ export default function Threads() {
     <div className="basis-[335px] flex-shrink-0 flex-grow-0 border-r flex flex-col ">
 
       <Header className="px-3">
-        <HeaderTitle title={`${listParams.list === "real" ? "Threads" : listParams.list === "simulated_private" ? "Private Sessions" : "Shared Sessions"}`} />
+        <HeaderTitle title={`${listParams.list === "real" ? "Sessions" : listParams.list === "simulated_private" ? "Private Sessions" : "Shared Sessions"}`} />
         {listParams.list !== "real" && <div>
           <Button variant="outline" size="sm" asChild><Link to={`/threads/new?list=${listParams.list}&type=${listParams.type}`}><PlusIcon />New thread</Link></Button>
         </div>}
@@ -79,7 +79,7 @@ export default function Threads() {
 
       <div className="flex-1 overflow-y-auto">
         {threads.length > 0 && threads.map((thread) => <ThreadCard thread={thread} listParams={listParams} />)}
-        {threads.length === 0 && <div className="px-3 py-4 text-muted-foreground">No threads available.</div>}
+        {threads.length === 0 && <div className="px-3 py-4 text-muted-foreground">No sessions available.</div>}
       </div>
 
     </div>
