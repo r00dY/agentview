@@ -1,6 +1,6 @@
 {
   "name": "@agentview/studio",
-  "version": "0.0.4-beta.7",
+  "version": "0.0.4-beta.8",
   "type": "module",
   "scripts": {
     "build": "react-router build",
