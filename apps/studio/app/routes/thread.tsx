@@ -307,7 +307,16 @@ function ThreadPage() {
 
                         return {
                             id: activity.id,
-                            itemComponent: <div className={`relative pl-6 py-2 pr-[444px] group ${selectedActivityId === activity.id ? "bg-gray-50" : "hover:bg-gray-50"}`} onClick={() => { setSelectedActivityId(activity?.id) }}>
+                            itemComponent: <div 
+                                className={`relative pl-6 py-2 pr-[444px] group ${selectedActivityId === activity.id ? "bg-gray-50" : "hover:bg-gray-50"}`} 
+                                onClick={() => {
+                                     if (selectedActivityId === activity.id) { 
+                                        setSelectedActivityId(undefined) 
+                                    } else { 
+                                        setSelectedActivityId(activity?.id) 
+                                    }
+                                }}
+                            >
                                 {content}
                                 {/* { !hasComments && <div className="absolute top-[8px] right-[408px] opacity-0 group-hover:opacity-100">
                                     <Button variant="outline" size="icon_xs" onClick={() => { setSelectedActivityId(activity.id) }}><MessageSquareTextIcon /></Button>
