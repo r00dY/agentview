@@ -103,7 +103,7 @@ export default function ThreadNew() {
 
   return <div className="flex-1">
     <Header>
-      <HeaderTitle title={`New Thread`} />
+      <HeaderTitle title={`New Session`} />
     </Header>
 
     <div className="flex-1 overflow-y-auto">

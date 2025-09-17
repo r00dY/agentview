@@ -1,6 +1,6 @@
 import { AlertCircleIcon, EllipsisVerticalIcon, Gauge, GaugeIcon, Reply, ReplyIcon } from "lucide-react";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { useFetcher } from "react-router";
+import { useFetcher, useRevalidator } from "react-router";
 import { config } from "agentview.config";
 import type { Activity, CommentMessage, Thread, User } from "~/lib/shared/apiTypes";
 import { Button } from "~/components/ui/button";
@@ -17,6 +17,7 @@ import { PropertyList } from "./PropertyList";
 import { Alert, AlertDescription } from "./ui/alert";
 import { TextEditor, textToElements } from "./wysiwyg/TextEditor";
 import { useSessionContext } from "~/lib/session";
+import { apiFetch } from "~/lib/apiFetch";
 
 export type CommentThreadProps = {
     thread: Thread,
@@ -228,10 +229,24 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
 
 export function CommentThreadFloatingBox({ thread, activity, selected = false, onSelect }: CommentThreadFloatingBoxProps) {
     const commentThreadRef = useRef<any>(null);
+    const revalidator = useRevalidator();
 
     useEffect(() => {
         if (!selected) {
             commentThreadRef.current?.reset();
+        }
+
+        if (selected) {
+            apiFetch(`/api/threads/${thread.id}/activities/${activity.id}/seen`, {
+                method: 'POST',
+            }).then((data) => {
+                if (data.ok) {
+                    revalidator.revalidate();
+                }
+                else {
+                    console.error(data.error)
+                }
+            })
         }
     }, [selected])
 

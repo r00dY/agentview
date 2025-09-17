@@ -73,7 +73,7 @@ export default function Threads() {
       <Header className="px-3">
         <HeaderTitle title={`${listParams.list === "real" ? "Sessions" : listParams.list === "simulated_private" ? "Private Sessions" : "Shared Sessions"}`} />
         {listParams.list !== "real" && <div>
-          <Button variant="outline" size="sm" asChild><Link to={`/threads/new?list=${listParams.list}&type=${listParams.type}`}><PlusIcon />New thread</Link></Button>
+          <Button variant="outline" size="sm" asChild><Link to={`/threads/new?list=${listParams.list}&type=${listParams.type}`}><PlusIcon />New Session</Link></Button>
         </div>}
       </Header>
 

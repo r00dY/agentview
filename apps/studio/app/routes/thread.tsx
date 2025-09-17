@@ -251,7 +251,7 @@ function ThreadPage() {
         <div className="basis-[1200px] flex-shrink-0 flex-grow-0 border-r  flex flex-col">
 
             <Header>
-                <HeaderTitle title={`Thread ${thread.number}`} />
+                <HeaderTitle title={`Session ${thread.number}`} />
 
                 <ShareForm thread={thread} listParams={listParams} />
             </Header>
