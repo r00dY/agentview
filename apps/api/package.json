@@ -1,10 +1,10 @@
 {
   "name": "api",
-  "version": "0.0.4-beta.5",
+  "version": "0.0.4-beta.6",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "",
     "start": "node dist/src/index.js",
     "start-ts": "tsx src/index.ts",
     "reset": "tsx scripts/reset.ts"
