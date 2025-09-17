@@ -185,7 +185,7 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                     <div>
                         { unassignedScoreConfigs.length > 0 && <div className="text-sm mb-1 text-gray-700">Comment</div>}
                         <TextEditor
-                            mentionItems={members.map(member => ({
+                            mentionItems={members.filter((member) => member.id !== user.id).map(member => ({
                                 id: member.id,
                                 label: member.name ?? "Unknown"
                             }))}
@@ -440,7 +440,7 @@ export function CommentMessageItem({ message, activity, thread,compressionLevel 
                         </div>}
 
                         <TextEditor
-                            mentionItems={members.map(member => ({
+                            mentionItems={members.filter((member) => member.id !== user.id).map(member => ({
                                 id: member.id,
                                 label: member.name ?? "Unknown"
                             }))}
