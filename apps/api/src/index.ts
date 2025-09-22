@@ -29,7 +29,7 @@ import { users } from './schemas/auth-schema'
 import { getUsersCount } from './users'
 import { updateInboxes } from './updateInboxes'
 import { isInboxItemUnread } from './inboxItems'
-
+import packageJson from '../package.json'
 
 
 export const app = new OpenAPIHono({
@@ -1723,8 +1723,8 @@ app.openapi(statusRoute, async (c) => {
 app.doc('/openapi', {
   openapi: '3.0.0',
   info: {
-    version: '1.0.0',
-    title: 'My API',
+    version: packageJson.version,
+    title: "agentview API",
   },
 })
 

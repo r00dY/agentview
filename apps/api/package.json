@@ -1,5 +1,5 @@
 {
-  "name": "api",
+  "name": "@agentview/api",
   "version": "0.0.4-beta.8",
   "type": "module",
   "scripts": {
