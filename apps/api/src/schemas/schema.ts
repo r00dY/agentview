@@ -149,7 +149,7 @@ export const events = pgTable('events', {
 
   // sessionItemId: uuid('session_item_id').references(() => sessionItems.id), // this is derived and temporary!!! Allows us easily to fetch inbox_items with events.
   // commentId: uuid('comment_id').references(() => commentMessages.id),
-  // threadId: uuid('session_id').references(() => sessions.id),
+  // sessionId: uuid('session_id').references(() => sessions.id),
 });
 
 export const inboxItems = pgTable('inbox_items', {
@@ -358,7 +358,7 @@ export const schema = {
   commentMessagesRelations,
   commentMentionsRelations,
   commentMessageEditsRelations,
-  
+
   scoresRelations,
   inboxItemsRelations,
   usersRelations,

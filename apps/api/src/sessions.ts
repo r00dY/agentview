@@ -36,12 +36,12 @@ export async function fetchSessions(session_id?: string, tx?: Transaction) {
     return sessionRows;
   }
   
-  export async function fetchSession(thread_id: string, tx? : Transaction) {
-    const threads = await fetchSessions(thread_id, tx)
+  export async function fetchSession(session_id: string, tx? : Transaction) {
+    const sessions = await fetchSessions(session_id, tx)
 
-    if (threads.length === 0) {
+    if (sessions.length === 0) {
       return undefined;
     }
 
-    return threads[0]
+    return sessions[0]
   }

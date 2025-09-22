@@ -55,20 +55,3 @@ export function extractMentions(content: string): Record<string, string[]> {
   
   return mentions;
 }
-
-// Example usage:
-// extractMentions("Hello @[user_id:abc123] and @[user_id:def456]!") 
-// Returns: { "user_id": ["abc123", "def456"] }
-
-
-export function getThreadsList(request: Request) {
-  const url = new URL(request.url);
-  const type = url.searchParams.get('list') ?? "real";
-  const allowedTypes = ["simulated_shared", "simulated_private", "real"];
-
-  if (!allowedTypes.includes(type)) {
-    throw new Error(`Invalid thread type: ${type}. Allowed types are: ${allowedTypes.join(", ")}`);
-  }
-
-  return type
-}
