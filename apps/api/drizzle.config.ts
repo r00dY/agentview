@@ -1,8 +1,5 @@
-// import 'dotenv/config';
 import { defineConfig } from 'drizzle-kit';
 import { getDatabaseURL } from './src/getDatabaseURL';
-
-console.log('DB', getDatabaseURL());
 
 export default defineConfig({
   out: './drizzle',

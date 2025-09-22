@@ -1,63 +1,6 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { users, sessions, accounts, verifications } from "./schemas/auth-schema";
-import {
-  invitations,
-  email,
-  client,
-  thread,
-  activity,
-  threadRelations,
-  activityRelations,
-  run,
-  runRelations,
-  commentMessages,
-  commentMentions,
-  commentMessagesRelations,
-  channels,
-  channelsRelations,
-  clientRelations,
-  versions,
-  versionsRelations,
-  scores,
-  scoresRelations,
-  schemas,
-  events,
-  inboxItems,
-  inboxItemsRelations,
-  usersRelations
-} from "./schemas/schema";
+import { schema } from "./schemas/schema";
 import { getDatabaseURL } from './getDatabaseURL';
-
-export const schema = {
-  users,
-  sessions,
-  accounts,
-  verifications,
-  invitations,
-  email,
-  client,
-  thread,
-  activity,
-  run,
-  threadRelations,
-  activityRelations,
-  runRelations,
-  commentMessages,
-  commentMentions,
-  commentMessagesRelations,
-  channels,
-  channelsRelations,
-  clientRelations,
-  versions,
-  versionsRelations,
-  scores,
-  scoresRelations,
-  schemas,
-  events,
-  inboxItems,
-  inboxItemsRelations,
-  usersRelations
-}
 
 export const db = drizzle(getDatabaseURL(), {
   schema

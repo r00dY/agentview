@@ -1,8 +1,8 @@
 import { pgTable, text, timestamp, uuid, varchar, jsonb, boolean, uniqueIndex, integer, bigserial, bigint, serial, unique } from "drizzle-orm/pg-core";
-import { users } from "./auth-schema";
+import { users, accounts, verifications, userSessions } from "./auth-schema";
 import { relations, sql } from "drizzle-orm";
 
-export const invitations = pgTable("invitation", {
+export const invitations = pgTable("invitations", {
   id: text('id').primaryKey(),
   email: varchar({ length: 255 }).notNull(),
   role: varchar({ length: 255 }).notNull(),
@@ -23,7 +23,7 @@ export const channels = pgTable("channels", {
   updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const email = pgTable("email", {
+export const emails = pgTable("emails", {
   id: text('id').primaryKey(),
   user_id: text('user_id').references(() => users.id),
   to: varchar({ length: 255 }).notNull(),
@@ -38,7 +38,7 @@ export const email = pgTable("email", {
   updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const client = pgTable("client", {
+export const clients = pgTable("clients", {
   id: uuid("id").primaryKey().defaultRandom(),
   created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -46,32 +46,30 @@ export const client = pgTable("client", {
   is_shared: boolean("is_shared").notNull().default(false),
 });
 
-export const thread = pgTable("thread", {
+export const sessions = pgTable("sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
   number: serial("string").notNull(),
   created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   metadata: jsonb("data"),
-  client_id: uuid("client_id").notNull().references(() => client.id, { onDelete: 'cascade' }),
+  client_id: uuid("client_id").notNull().references(() => clients.id, { onDelete: 'cascade' }),
   type: varchar({ length: 255 }).notNull(),
 });
 
-export const activity = pgTable("activity", {
+export const sessionItems = pgTable("session_items", {
   id: uuid("id").primaryKey().defaultRandom(),
   number: serial("string").notNull(),
   created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   content: jsonb("content"),
-  thread_id: uuid("thread_id").notNull().references(() => thread.id, { onDelete: 'cascade' }),
-  run_id: uuid("run_id").notNull().references(() => run.id, { onDelete: 'set null' }),
+  session_id: uuid("session_id").notNull().references(() => sessions.id, { onDelete: 'cascade' }),
+  run_id: uuid("run_id").notNull().references(() => runs.id, { onDelete: 'set null' }),
   type: varchar({ length: 255 }).notNull(),
   role: varchar({ length: 255 }),
 
   channel_id: uuid("channel_id").references(() => channels.id, { onDelete: 'set null' }),
-  channel_activity_id: varchar({ length: 255 }),
-}, (table) => ({
-  channelActivityUnique: uniqueIndex('channel_activity_unique').on(table.channel_id, table.channel_activity_id),
-}));
+  channel_session_item_id: varchar({ length: 255 }),
+}, (table) => [uniqueIndex('channel_session_item_unique').on(table.channel_id, table.channel_session_item_id)]);
 
 export const versions = pgTable("versions", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -79,24 +77,22 @@ export const versions = pgTable("versions", {
   env: varchar({ length: 255 }).notNull().default("dev"),
   metadata: jsonb("metadata"),
   created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (table) => ({
-  versionEnvUnique: uniqueIndex('version_env_unique').on(table.version, table.env),
-}));
+}, (table) => [uniqueIndex('version_env_unique').on(table.version, table.env)]);
 
-export const run = pgTable("run", {
+export const runs = pgTable("runs", {
   id: uuid("id").primaryKey().defaultRandom(),
   created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   finished_at: timestamp("finished_at", { withTimezone: true }),
-  thread_id: uuid("thread_id").notNull().references(() => thread.id, { onDelete: 'cascade' }),
+  session_id: uuid("session_id").notNull().references(() => sessions.id, { onDelete: 'cascade' }),
   version_id: uuid("version_id").references(() => versions.id), // version is nullable because when run is created, version is not yet created yet (no `run` was made)
   state: varchar({ length: 255 }).notNull(),
   fail_reason: jsonb("fail_reason"),
 });
 
-// Comment messages within threads
+// Comment messages within sessions
 export const commentMessages = pgTable('comment_messages', {
   id: uuid('id').primaryKey().defaultRandom(),
-  activityId: uuid('activity_id').notNull().references(() => activity.id, { onDelete: 'cascade' }),
+  sessionItemId: uuid('session_item_id').notNull().references(() => sessionItems.id, { onDelete: 'cascade' }),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   content: text('content'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -115,7 +111,6 @@ export const commentMentions = pgTable('comment_mentions', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
 
-
 // Edit history for comment messages
 export const commentMessageEdits = pgTable('comment_message_edits', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -126,7 +121,7 @@ export const commentMessageEdits = pgTable('comment_message_edits', {
 
 export const scores = pgTable('scores', {
   id: uuid('id').primaryKey().defaultRandom(),
-  activityId: uuid('activity_id').notNull().references(() => activity.id, { onDelete: 'cascade' }),
+  sessionItemId: uuid('session_item_id').notNull().references(() => sessionItems.id, { onDelete: 'cascade' }),
 
   name: varchar('type', { length: 255 }).notNull(),
   value: jsonb('value').notNull(),
@@ -140,7 +135,7 @@ export const scores = pgTable('scores', {
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
   deletedBy: text('deleted_by').references(() => users.id, { onDelete: 'set null' }),
 }, (table) => [
-  unique().on(table.activityId, table.name, table.createdBy)
+  unique().on(table.sessionItemId, table.name, table.createdBy)
 ]);
 
 
@@ -152,9 +147,9 @@ export const events = pgTable('events', {
   type: varchar('type', { length: 256 }).notNull(),  // "comment_created", "comment_edited", "comment_deleted", etc...
   payload: jsonb('payload').notNull(),
 
-  // activityId: uuid('activity_id').references(() => activity.id), // this is derived and temporary!!! Allows us easily to fetch inbox_items with events.
+  // sessionItemId: uuid('session_item_id').references(() => sessionItems.id), // this is derived and temporary!!! Allows us easily to fetch inbox_items with events.
   // commentId: uuid('comment_id').references(() => commentMessages.id),
-  // threadId: uuid('thread_id').references(() => thread.id),
+  // threadId: uuid('session_id').references(() => sessions.id),
 });
 
 export const inboxItems = pgTable('inbox_items', {
@@ -163,8 +158,8 @@ export const inboxItems = pgTable('inbox_items', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 
   userId: text('user_id').notNull().references(() => users.id),
-  activityId: uuid('activity_id').references(() => activity.id),
-  threadId: uuid('thread_id').notNull().references(() => thread.id),
+  sessionItemId: uuid('session_item_id').references(() => sessionItems.id),
+  sessionId: uuid('session_id').notNull().references(() => sessions.id),
   
   lastReadEventId: bigint('last_read_event_id', { mode: 'number' }).references(() => events.id),
   lastNotifiableEventId: bigint('last_notifiable_event_id', { mode: 'number' }).references(() => events.id),
@@ -172,68 +167,67 @@ export const inboxItems = pgTable('inbox_items', {
   render: jsonb('render').notNull(),
   
 }, (table) => [
-  unique().on(table.userId, table.activityId, table.threadId).nullsNotDistinct()
+  unique().on(table.userId, table.sessionItemId, table.sessionId).nullsNotDistinct()
 ]);
 
 
-
-// Schemas
-export const schemas = pgTable('schemas', {
+export const configs = pgTable('configs', {
   id: uuid('id').primaryKey().defaultRandom(),
-  schema: jsonb('value').notNull(),
+  config: jsonb('value').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   createdBy: text('created_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
 });
 
-export const threadRelations = relations(thread, ({ many, one }) => ({
-  activities: many(activity),
-  runs: many(run),
-  client: one(client, {
-    fields: [thread.client_id],
-    references: [client.id],
+
+export const sessionRelations = relations(sessions, ({ many, one }) => ({
+  sessionItems: many(sessionItems),
+  runs: many(runs),
+  client: one(clients, {
+    fields: [sessions.client_id],
+    references: [clients.id],
   }),
   inboxItems: many(inboxItems),
 }));
 
-export const clientRelations = relations(client, ({ many, one }) => ({
-  threads: many(thread),
+export const clientRelations = relations(clients, ({ many, one }) => ({
+  sessions: many(sessions),
   simulatedBy: one(users, {
-    fields: [client.simulated_by],
+    fields: [clients.simulated_by],
     references: [users.id],
   }),
 }));
 
 export const channelsRelations = relations(channels, ({ many }) => ({
-  activities: many(activity),
+  sessionItems: many(sessionItems),
 }));
 
 export const versionsRelations = relations(versions, ({ many }) => ({
-  runs: many(run),
+  runs: many(runs),
 }));
 
-export const runRelations = relations(run, ({ one, many }) => ({
-  thread: one(thread, {
-    fields: [run.thread_id],
-    references: [thread.id],
+export const runRelations = relations(runs, ({ one, many }) => ({
+  session: one(sessions, {
+    fields: [runs.session_id],
+    references: [sessions.id],
   }),
   version: one(versions, {
-    fields: [run.version_id],
+    fields: [runs.version_id],
     references: [versions.id],
   }),
-  activities: many(activity)
+  sessionItems: many(sessionItems)
 }));
 
-export const activityRelations = relations(activity, ({ one, many }) => ({
-  thread: one(thread, {
-    fields: [activity.thread_id],
-    references: [thread.id],
+export const sessionItemsRelations = relations(sessionItems, ({ one, many }) => ({
+  session: one(sessions, {
+    fields: [sessionItems.session_id],
+    references: [sessions.id],
   }),
-  run: one(run, {
-    fields: [activity.run_id],
-    references: [run.id],
+  run: one(runs, {
+    fields: [sessionItems.run_id],
+    references: [runs.id],
   }),
   channel: one(channels, {
-    fields: [activity.channel_id],
+    fields: [sessionItems.channel_id],
     references: [channels.id],
   }),
   commentMessages: many(commentMessages),
@@ -241,9 +235,9 @@ export const activityRelations = relations(activity, ({ one, many }) => ({
 }));
 
 export const commentMessagesRelations = relations(commentMessages, ({ one, many }) => ({
-  activity: one(activity, {
-    fields: [commentMessages.activityId],
-    references: [activity.id],
+  sessionItem: one(sessionItems, {
+    fields: [commentMessages.sessionItemId],
+    references: [sessionItems.id],
   }),
   user: one(users, {
     fields: [commentMessages.userId],
@@ -273,9 +267,9 @@ export const commentMessageEditsRelations = relations(commentMessageEdits, ({ on
 }));
 
 export const scoresRelations = relations(scores, ({ one }) => ({
-  activity: one(activity, {
-    fields: [scores.activityId],
-    references: [activity.id],
+  sessionItem: one(sessionItems, {
+    fields: [scores.sessionItemId],
+    references: [sessionItems.id],
   }),
   comment: one(commentMessages, {
     fields: [scores.commentId],
@@ -292,13 +286,13 @@ export const scoresRelations = relations(scores, ({ one }) => ({
 }));
 
 export const inboxItemsRelations = relations(inboxItems, ({ one, many }) => ({
-  activity: one(activity, {
-    fields: [inboxItems.activityId],
-    references: [activity.id],
+  sessionItem: one(sessionItems, {
+    fields: [inboxItems.sessionItemId],
+    references: [sessionItems.id],
   }),
-  thread: one(thread, {
-    fields: [inboxItems.threadId],
-    references: [thread.id],
+  session: one(sessions, {
+    fields: [inboxItems.sessionId],
+    references: [sessions.id],
 
   }),
   user: one(users, {
@@ -327,3 +321,45 @@ export const inboxItemsRelations = relations(inboxItems, ({ one, many }) => ({
 export const usersRelations = relations(users, ({ many }) => ({
   inboxItems: many(inboxItems),
 }));
+
+
+export const schema = {
+  users,
+  userSessions,
+  accounts,
+  verifications,
+  invitations,
+
+  emails,
+
+  clients,
+  sessions,
+  sessionItems,
+  versions,
+  runs,
+  commentMessages,
+  commentMentions,
+  commentMessageEdits,
+  scores,
+
+  events,
+  inboxItems,
+  configs,
+
+
+  sessionRelations,
+  clientRelations,
+  channelsRelations,
+  versionsRelations,
+  runRelations,
+  sessionItemsRelations,
+
+
+  commentMessagesRelations,
+  commentMentionsRelations,
+  commentMessageEditsRelations,
+  
+  scoresRelations,
+  inboxItemsRelations,
+  usersRelations,
+}

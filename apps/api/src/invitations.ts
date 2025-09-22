@@ -1,15 +1,15 @@
 import { db } from "./db";
-import { invitations as invitationTable } from "./schemas/schema";
+import { invitations } from "./schemas/schema";
 import { eq } from "drizzle-orm";
 import { addEmail } from "./email";
 
 export async function getInvitation(invitationId: string) {
-  const invitationRows = await db.select().from(invitationTable).where(eq(invitationTable.id, invitationId));
+  const invitationRows = await db.select().from(invitations).where(eq(invitations.id, invitationId));
   return invitationRows[0];
 }
 
 export async function getValidInvitation(invitationId: string) {
-    const invitationRows = await db.select().from(invitationTable).where(eq(invitationTable.id, invitationId));
+    const invitationRows = await db.select().from(invitations).where(eq(invitations.id, invitationId));
     
     if (invitationRows.length === 0) {
       throw new Error("Invitation not found.");
@@ -29,17 +29,17 @@ export async function getValidInvitation(invitationId: string) {
   }
 
 export async function acceptInvitation(invitationId: string) {
-  await db.update(invitationTable).set({
+  await db.update(invitations).set({
     status: "accepted"
-  }).where(eq(invitationTable.id, invitationId));
+  }).where(eq(invitations.id, invitationId));
 }
 
 export async function getPendingInvitations() {
-  return await db.select().from(invitationTable).where(eq(invitationTable.status, "pending"));
+  return await db.select().from(invitations).where(eq(invitations.status, "pending"));
 }
 
 export async function cancelInvitation(invitationId: string) {
-  await db.delete(invitationTable).where(eq(invitationTable.id, invitationId));
+  await db.delete(invitations).where(eq(invitations.id, invitationId));
 }
 
 export async function createInvitation(email: string, role: string, invitedById: string) {
@@ -75,7 +75,7 @@ export async function createInvitation(email: string, role: string, invitedById:
 
   const newId = crypto.randomUUID();
 
-  await db.insert(invitationTable).values({
+  await db.insert(invitations).values({
     id: newId,
     email,
     role,

@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { email as emailTable } from "./schemas/schema";
+import { emails } from "./schemas/schema";
 import type { EmailPayload } from "./types";
 
 export async function addEmail(emailPayload: EmailPayload, userId: string) {
@@ -7,7 +7,7 @@ export async function addEmail(emailPayload: EmailPayload, userId: string) {
   const cc = emailPayload.cc ? (Array.isArray(emailPayload.cc) ? emailPayload.cc.join(', ') : emailPayload.cc) : undefined;
   const bcc = emailPayload.bcc ? (Array.isArray(emailPayload.bcc) ? emailPayload.bcc.join(', ') : emailPayload.bcc) : undefined;
 
-  await db.insert(emailTable).values({
+  await db.insert(emails).values({
     id: crypto.randomUUID(),
     user_id: userId,
     to,

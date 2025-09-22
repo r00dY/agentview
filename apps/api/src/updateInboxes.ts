@@ -1,9 +1,7 @@
 import { events } from "./schemas/schema";
-import { inArray, type InferSelectModel, sql } from "drizzle-orm";
-import type { Activity, Thread } from "./shared/apiTypes";
-import { db } from "./db";
+import { type InferSelectModel, sql } from "drizzle-orm";
+import type { SessionItem, Session } from "./shared/apiTypes";
 import { inboxItems } from "./schemas/schema";
-import { getLastEvent } from "./events";
 import type { Transaction } from "./types";
 import { isInboxItemUnread } from "./inboxItems";
 
@@ -30,17 +28,17 @@ type EventType = InferSelectModel<typeof events> & { payload: any }
 export async function updateInboxes(
     tx: Transaction,
     newEvent: EventType,
-    thread: Thread,
-    activity: Activity | null,
+    session: Session,
+    item: SessionItem | null,
 ) {
-    if (!['comment_created', 'comment_edited', 'comment_deleted', 'thread_created'].includes(newEvent.type)) {
+    if (!['comment_created', 'comment_edited', 'comment_deleted', 'session_created'].includes(newEvent.type)) {
         throw new Error(`Incorrect event type: "${newEvent.type}"`);
     }
 
     const allUsers = await tx.query.users.findMany({
         with: {
             inboxItems: {
-                where: ((inboxItems, { eq, and, isNull }) => activity ? eq(inboxItems.activityId, activity.id) : and(eq(inboxItems.threadId, thread.id), isNull(inboxItems.activityId))),
+                where: ((inboxItems, { eq, and, isNull }) => item ? eq(inboxItems.sessionItemId, item.id) : and(eq(inboxItems.sessionId, session.id), isNull(inboxItems.sessionItemId))),
             }
         }
     });
@@ -58,14 +56,14 @@ export async function updateInboxes(
             continue;
         }
 
-        if (newEvent.type === 'thread_created') {
+        if (newEvent.type === 'session_created') {
             if (inboxItem) {
-                throw new Error("[Internal Error] `thread_created` event encountered inbox item for this thread, shouldn't happen");
+                throw new Error("[Internal Error] `session_created` event encountered inbox item for this session, shouldn't happen");
             }
 
             newInboxItemValues.push({
                 userId: user.id,
-                threadId: newEvent.payload.thread_id,
+                sessionId: newEvent.payload.session_id,
                 lastNotifiableEventId: newEvent.id,
                 render: {
                     events: [newEvent]
@@ -73,15 +71,15 @@ export async function updateInboxes(
             });
         }
         else if (newEvent.type === 'comment_created') {
-            if (!activity) {
-                throw new Error("Activity is required for comment_created event");
+            if (!item) {
+                throw new Error("Session item is required for comment_created event");
             }
 
             if (!inboxItem) {
                 newInboxItemValues.push({
                     userId: user.id,
-                    activityId: activity.id,
-                    threadId: activity.thread_id,
+                    sessionItemId: item.id,
+                    sessionId: item.session_id,
                     lastNotifiableEventId: newEvent.id,
                     render: {
                         events: [newEvent]
@@ -161,7 +159,7 @@ export async function updateInboxes(
 
     if (newInboxItemValues.length > 0) {
         await tx.insert(inboxItems).values(newInboxItemValues).onConflictDoUpdate({
-            target: [inboxItems.userId, inboxItems.threadId, inboxItems.activityId],
+            target: [inboxItems.userId, inboxItems.sessionId, inboxItems.sessionItemId],
             set: {
                 updatedAt: new Date(),
                 lastNotifiableEventId: sql.raw(`excluded.${inboxItems.lastNotifiableEventId.name}`),

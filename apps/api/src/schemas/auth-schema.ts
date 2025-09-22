@@ -3,7 +3,6 @@ import {
   text,
   timestamp,
   boolean,
-  integer,
 } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
@@ -26,7 +25,7 @@ export const users = pgTable("users", {
   banExpires: timestamp("ban_expires"),
 });
 
-export const sessions = pgTable("sessions", {
+export const userSessions = pgTable("user_sessions", {
   id: text("id").primaryKey(),
   expiresAt: timestamp("expires_at").notNull(),
   token: text("token").notNull().unique(),

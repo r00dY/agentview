@@ -22,6 +22,9 @@ export const auth = betterAuth({
         // },
         usePlural: true
     }),
+    session: {
+        modelName: "user_sessions"
+    },
     emailAndPassword: {
         enabled: true
     },

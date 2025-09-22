@@ -9,22 +9,22 @@ import { APIError as BetterAuthAPIError } from "better-auth/api";
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { swaggerUI } from '@hono/swagger-ui'
 import { db } from './db'
-import { client, thread, activity, run, email, commentMessages, commentMessageEdits, commentMentions, versions, scores, schemas, events, inboxItems } from './schemas/schema'
+import { clients, sessions, sessionItems, runs, emails, commentMessages, commentMessageEdits, commentMentions, versions, scores, configs, events, inboxItems } from './schemas/schema'
 import { eq, desc, and, inArray, ne, gt, isNull, isNotNull, or, gte, sql, countDistinct, DrizzleQueryError } from 'drizzle-orm'
 import { response_data, response_error, body } from './hono_utils'
 import { isUUID } from './isUUID'
 import { extractMentions } from './utils'
 import { auth } from './auth'
 import { createInvitation, cancelInvitation, getPendingInvitations, getValidInvitation } from './invitations'
-import { fetchThread } from './threads'
+import { fetchSession } from './sessions'
 import { callAgentAPI, AgentAPIError } from './agentApi'
 import { getStudioURL } from './getStudioURL'
 
 // shared imports
-import { getAllActivities, getLastRun } from './shared/threadUtils'
-import { ClientSchema, ThreadSchema, ThreadCreateSchema, ActivityCreateSchema, RunSchema, ActivitySchema, type User, type Thread, type Activity, SchemaSchema, SchemaCreateSchema, InboxItemSchema, ClientCreateSchema, MemberSchema, MemberUpdateSchema, type InboxItem, SessionListSchema, type SessionList } from './shared/apiTypes'
-import { getSchema } from './getSchema'
-import type { BaseConfig } from './shared/configTypes'
+import { getAllSessionItems, getLastRun } from './shared/sessionUtils'
+import { ClientSchema, SessionSchema, SessionCreateSchema, SessionItemCreateSchema, RunSchema, SessionItemSchema, type User, type Session, type SessionItem, ConfigSchema, ConfigCreateSchema, InboxItemSchema, ClientCreateSchema, MemberSchema, MemberUpdateSchema, type InboxItem, SessionListSchema, type SessionList } from './shared/apiTypes'
+import { getConfig } from './getConfig'
+import type { BaseConfig, BaseSessionConfig } from './shared/configTypes'
 import { users } from './schemas/auth-schema'
 import { getUsersCount } from './users'
 import { updateInboxes } from './updateInboxes'
@@ -87,16 +87,16 @@ app.on(["POST", "GET"], "/api/auth/*", (c) => {
 /** --------- UTILS --------- */
 
 
-async function requireSession(headers: Headers) {
-  const session = await auth.api.getSession({ headers })
-  if (!session) {
+async function requireAuthSession(headers: Headers) {
+  const userSession = await auth.api.getSession({ headers })
+  if (!userSession) {
     throw new HTTPException(401, { message: "Unauthorized" });
   }
-  return session
+  return userSession
 }
 
 async function requireAdminSession(headers: Headers) {
-  const session = await requireSession(headers)
+  const session = await requireAuthSession(headers)
 
   if (session.user.role !== "admin") {
     throw new HTTPException(401, { message: "Unauthorized" });
@@ -105,36 +105,50 @@ async function requireAdminSession(headers: Headers) {
   return session;
 }
 
-async function requireSchema() {
-  const schema = await getSchema()
-  if (!schema) {
-    throw new HTTPException(404, { message: "Schema not found" });
+async function requireConfig() {
+  const config = await getConfig()
+  if (!config) {
+    throw new HTTPException(404, { message: "Config not found" });
   }
-  return schema
+  return config
 }
 
-async function requireThreadConfig(schema: BaseConfig, threadType: string) {
-  const threadConfig = schema.threads.find((threadConfig) => threadConfig.type === threadType);
-  if (!threadConfig) {
-    throw new HTTPException(404, { message: `Thread type '${threadType}' not found in schema.` });
+function requireSessionConfig(config: BaseConfig, sessionType: string) {
+  const sessionConfig = config.sessions.find((sessionConfig) => sessionConfig.type === sessionType);
+  if (!sessionConfig) {
+    throw new HTTPException(404, { message: `Session type '${sessionType}' not found in schema.` });
   }
-  return threadConfig
+  return sessionConfig
 }
 
-async function requireThread(thread_id: string) {
-  const thread = await fetchThread(thread_id)
-  if (!thread) {
-    throw new HTTPException(404, { message: "Thread not found" });
+function requireItemConfig(sessionConfig: ReturnType<typeof requireSessionConfig>, type: string, role?: string) {
+  const itemConfig = sessionConfig.items.find(
+    (itemConfig) => itemConfig.type === type && (!itemConfig.role || itemConfig.role === role)
+  );
+
+  const itemTypeCuteName = `${type}' / '${role}`
+
+  if (!itemConfig) {
+    throw new HTTPException(400, { message: `Item '${itemTypeCuteName}' not found in configuration for session type '${sessionConfig.type}'` });
   }
-  return thread
+
+  return itemConfig
 }
 
-async function requireActivity(thread: Thread, activity_id: string) {
-  const activity = getAllActivities(thread).find((a) => a.id === activity_id)
-  if (!activity) {
-    throw new HTTPException(404, { message: "Activity not found" });
+async function requireSession(session_id: string) {
+  const session = await fetchSession(session_id)
+  if (!session) {
+    throw new HTTPException(404, { message: "Session not found" });
   }
-  return activity
+  return session
+}
+
+async function requireSessionItem(session: Session, item_id: string) {
+  const item = getAllSessionItems(session).find((a) => a.id === item_id)
+  if (!item) {
+    throw new HTTPException(404, { message: "Session item not found" });
+  }
+  return item
 }
 
 async function requireClient(client_id: string) {
@@ -142,8 +156,8 @@ async function requireClient(client_id: string) {
     throw new HTTPException(400, { message: `Invalid client id: ${client_id}` });
   }
 
-  const clientRow = await db.query.client.findFirst({
-    where: eq(client.id, client_id),
+  const clientRow = await db.query.clients.findFirst({
+    where: eq(clients.id, client_id),
   });
 
   if (!clientRow) {
@@ -152,8 +166,8 @@ async function requireClient(client_id: string) {
   return clientRow
 }
 
-async function requireCommentMessageFromUser(thread: Thread, activity: Activity, comment_id: string, user: User) {
-  const comment = activity.commentMessages?.find((m) => m.id === comment_id && m.deletedAt === null)
+async function requireCommentMessageFromUser(item: SessionItem, comment_id: string, user: User) {
+  const comment = item.commentMessages?.find((m) => m.id === comment_id && m.deletedAt === null)
   if (!comment) {
     throw new HTTPException(404, { message: "Comment not found" });
   }
@@ -169,32 +183,15 @@ async function requireCommentMessageFromUser(thread: Thread, activity: Activity,
 
 const LISTS : Record<string, { filter: any }>= {
   real: {
-    filter: () => isNull(client.simulated_by)
+    filter: () => isNull(clients.simulated_by)
   },
   simulated_private: {
-    filter: (user: User) => and(eq(client.simulated_by, user.id), eq(client.is_shared, false))
+    filter: (user: User) => and(eq(clients.simulated_by, user.id), eq(clients.is_shared, false))
   },
   simulated_shared: {
-    filter: () => and(isNotNull(client.simulated_by), eq(client.is_shared, true))
+    filter: () => and(isNotNull(clients.simulated_by), eq(clients.is_shared, true))
   }
 }
-
-// async function getInboxItemOrCreateEmpty(user: User, thread_id: string, activity_id?: string) {
-//   const [inboxItem] = await db.insert(inboxItems).values({
-//     userId: user.id,
-//     threadId: thread_id,
-//     activityId: activity_id ?? null,
-//     lastNotifiableEventId: null,
-//     lastReadEventId: null,
-//     render: { events: [] },
-//   })
-//   .onConflictDoNothing({
-//     target: [inboxItems.userId, inboxItems.activityId, inboxItems.threadId],
-//   }).returning();
-
-//   return inboxItem;
-// }
-
 
 /* --------- CLIENTS --------- */
 
@@ -212,9 +209,9 @@ const apiClientsPOSTRoute = createRoute({
 
 app.openapi(apiClientsPOSTRoute, async (c) => {
   const body = await c.req.json()
-  const session = await requireSession(c.req.raw.headers)
+  const session = await requireAuthSession(c.req.raw.headers)
 
-  const [newClient] = await db.insert(client).values({
+  const [newClient] = await db.insert(clients).values({
     simulated_by: session.user.id,
     is_shared: body.is_shared,
   }).returning();
@@ -240,8 +237,8 @@ const clientGETRoute = createRoute({
 app.openapi(clientGETRoute, async (c) => {
   const { id } = c.req.param()
 
-  const clientRow = await db.query.client.findFirst({
-    where: eq(client.id, id),
+  const clientRow = await db.query.clients.findFirst({
+    where: eq(clients.id, id),
   });
 
   if (!clientRow) {
@@ -267,38 +264,17 @@ app.openapi(apiClientsPUTRoute, async (c) => {
   const body = await c.req.json()
   const { client_id } = c.req.param()
 
-  const session = await requireSession(c.req.raw.headers)
+  const session = await requireAuthSession(c.req.raw.headers)
   const clientRow = await requireClient(client_id)
 
   if (clientRow.simulated_by !== session.user.id) {
     throw new HTTPException(401, { message: "Unauthorized" });
   }
 
-  const [updatedClient] = await db.update(client).set(body).where(eq(client.id, client_id)).returning();
+  const [updatedClient] = await db.update(clients).set(body).where(eq(clients.id, client_id)).returning();
 
   return c.json(updatedClient, 200);
 })
-
-// const LISTS : any[] = [
-//   {
-//     name: 'real',
-//     title: 'Real',
-//     filter: () => isNull(client.simulated_by)
-//   },
-//   {
-//     name: 'simulated_private',
-//     title: 'Simulated Private',
-//     filter: (user: User) => and(eq(client.simulated_by, user.id), eq(client.is_shared, false))
-//   },
-//   {
-//     name: 'simulated_shared',
-//     title: 'Simulated Shared',
-//     filter: () => and(
-//         isNotNull(client.simulated_by),
-//         eq(client.is_shared, true),
-//       )
-//   },
-// ]
 
 
 const listsGETRoute = createRoute({
@@ -310,35 +286,35 @@ const listsGETRoute = createRoute({
 })
 
 app.openapi(listsGETRoute, async (c) => {
-  const session = await requireSession(c.req.raw.headers)
-  const schema = await requireSchema()
+  const session = await requireAuthSession(c.req.raw.headers)
+  const config = await requireConfig()
 
   const lists : SessionList[] = []
 
-  // For each thread type in the schema
-  for (const threadConfig of schema.threads) {
+  // For each session type in the schema
+  for (const sessionConfig of config.sessions) {
     // For each list type (real, simulated_private, simulated_shared)
     for (const [listName, list] of Object.entries(LISTS)) {
       const result = await db
         .select({
-          unreadThreads: countDistinct(inboxItems.threadId),
+          unreadSessions: countDistinct(inboxItems.sessionId),
         })
         .from(inboxItems)
-        .leftJoin(thread, eq(inboxItems.threadId, thread.id))
-        .leftJoin(client, eq(thread.client_id, client.id))
+        .leftJoin(sessions, eq(inboxItems.sessionId, sessions.id))
+        .leftJoin(clients, eq(sessions.client_id, clients.id))
         .where(
           and(
             eq(inboxItems.userId, session.user.id), 
             sql`${inboxItems.lastNotifiableEventId} > COALESCE(${inboxItems.lastReadEventId}, 0)`, 
             list.filter(session.user),
-            eq(thread.type, threadConfig.type)
+            eq(sessions.type, sessionConfig.type)
           )
         )
 
       lists.push({
         name: listName,
-        threadType: threadConfig.type,
-        unseenCount: result[0].unreadThreads ?? 0,
+        agent: sessionConfig.type,
+        unseenCount: result[0].unreadSessions ?? 0,
         hasMentions: false,
       })
     }
@@ -347,13 +323,11 @@ app.openapi(listsGETRoute, async (c) => {
   return c.json(lists, 200);
 })
 
-/* --------- THREADS --------- */
+/* --------- SESSIONS --------- */
 
-
-// Threads GET (list all threads with filtering)
-const threadsGETRoute = createRoute({
+const sessionsGETRoute = createRoute({
   method: 'get',
-  path: '/api/threads',
+  path: '/api/sessions',
   request: {
     query: z.object({
       list: z.enum(Object.keys(LISTS)).optional(),
@@ -361,37 +335,37 @@ const threadsGETRoute = createRoute({
     }),
   },
   responses: {
-    200: response_data(z.array(ThreadSchema)),
+    200: response_data(z.array(SessionSchema)),
     401: response_error(),
   },
 })
 
-app.openapi(threadsGETRoute, async (c) => {
-  const session = await requireSession(c.req.raw.headers)
+app.openapi(sessionsGETRoute, async (c) => {
+  const authSession = await requireAuthSession(c.req.raw.headers)
 
   const listName = c.req.query().list ?? "real";
   const type = c.req.query().type;
 
-  const listFilter = LISTS[listName].filter(session.user);
+  const listFilter = LISTS[listName].filter(authSession.user);
 
-  const result = await db.select().from(thread).leftJoin(client, eq(thread.client_id, client.id)).where(listFilter);
+  const result = await db.select().from(sessions).leftJoin(clients, eq(sessions.client_id, clients.id)).where(listFilter);
 
-  const threadIds = result.map((row) => row.thread.id);
+  const sessionIds = result.map((row) => row.sessions.id);
 
-  const threadRows = await db.query.thread.findMany({
-    where: and(inArray(thread.id, threadIds), eq(thread.type, type)),
+  const sessionRows = await db.query.sessions.findMany({
+    where: and(inArray(sessions.id, sessionIds), eq(sessions.type, type)),
     with: {
       client: true,
       inboxItems: {
-        where: eq(inboxItems.userId, session.user.id),
+        where: eq(inboxItems.userId, authSession.user.id),
       },
     },
-    orderBy: (thread: any, { desc }: any) => [desc(thread.updated_at)],
+    orderBy: (session: any, { desc }: any) => [desc(session.updated_at)],
   })
 
-  const threadRowsFilteredWithInboxItems = threadRows.map((thread) => {
-    const threadInboxItem = thread.inboxItems.find((inboxItem) => inboxItem.activityId === null);
-    const activityInboxItems = thread.inboxItems.filter((inboxItem) => inboxItem.activityId !== null);
+  const sessionRowsFilteredWithInboxItems = sessionRows.map((session) => {
+    const sessionInboxItem = session.inboxItems.find((inboxItem) => inboxItem.sessionItemId === null);
+    const itemInboxItems = session.inboxItems.filter((inboxItem) => inboxItem.sessionItemId !== null);
 
     function getUnseenEvents(inboxItem: InboxItem | null | undefined) {
       if (isInboxItemUnread(inboxItem)) {
@@ -400,114 +374,111 @@ app.openapi(threadsGETRoute, async (c) => {
       return [];
     }
 
-    const unseenEvents: { thread: any[], activities: { [key: string]: any[] } } = {
-      thread: getUnseenEvents(threadInboxItem),
-      activities: {}
+    const unseenEvents: { session: any[], items: { [key: string]: any[] } } = {
+      session: getUnseenEvents(sessionInboxItem),
+      items: {}
     }
 
-    activityInboxItems.forEach((inboxItem) => {
-      unseenEvents.activities[inboxItem.activityId!] = getUnseenEvents(inboxItem);
+    itemInboxItems.forEach((inboxItem) => {
+      unseenEvents.items[inboxItem.sessionItemId!] = getUnseenEvents(inboxItem);
     });
 
     return {
-      ...thread,
+      ...session,
       unseenEvents
     }
   })
 
-  return c.json(threadRowsFilteredWithInboxItems, 200);
+  return c.json(sessionRowsFilteredWithInboxItems, 200);
 })
 
-// Threads POST
-const threadsPOSTRoute = createRoute({
+const sessionsPOSTRoute = createRoute({
   method: 'post',
-  path: '/api/threads',
+  path: '/api/sessions',
   request: {
-    body: body(ThreadCreateSchema)
+    body: body(SessionCreateSchema)
   },
   responses: {
-    201: response_data(ThreadSchema),
+    201: response_data(SessionSchema),
     400: response_error()
   },
 })
 
-app.openapi(threadsPOSTRoute, async (c) => {
+app.openapi(sessionsPOSTRoute, async (c) => {
   const body = await c.req.json()
 
-  const schema = await requireSchema()
+  const config = await requireConfig()
   const client = await requireClient(body.client_id)
-  const threadConfig = await requireThreadConfig(schema, body.type)
-  const session = await requireSession(c.req.raw.headers)
+  const sessionConfig = await requireSessionConfig(config, body.type)
+  const authSession = await requireAuthSession(c.req.raw.headers)
 
   // Validate metadata against the schema
   try {
-    threadConfig.metadata?.parse(body.metadata);
+    sessionConfig.metadata?.parse(body.metadata);
   } catch (error: any) {
     return c.json({ message: error.message }, 400);
   }
 
-
-  const newThread = await db.transaction(async (tx) => {
-    const [newThreadRow] = await tx.insert(thread).values(body).returning();
+  const newSession = await db.transaction(async (tx) => {
+    const [newSessionRow] = await tx.insert(sessions).values(body).returning();
 
     // add event
     const [event] = await tx.insert(events).values({
-      type: 'thread_created',
-      authorId: session.user.id,
+      type: 'session_created',
+      authorId: authSession.user.id,
       payload: {
-        thread_id: newThreadRow.id,
+        session_id: newSessionRow.id,
       }
     }).returning();
 
-    const newThread = await fetchThread(newThreadRow.id, tx);
-    if (!newThread) {
-      throw new Error("[Internal Error] Thread not found");
+    const newSession = await fetchSession(newSessionRow.id, tx);
+    if (!newSession) {
+      throw new Error("[Internal Error] Session not found");
     }
 
-    await updateInboxes(tx, event, newThread, null);
+    await updateInboxes(tx, event, newSession, null);
 
-    return newThread;
+    return newSession;
   });
 
-  return c.json(newThread, 201);
+  return c.json(newSession, 201);
 })
 
-// Thread GET
-const threadGETRoute = createRoute({
+const sessionGETRoute = createRoute({
   method: 'get',
-  path: '/api/threads/{thread_id}',
+  path: '/api/sessions/{session_id}',
   request: {
     params: z.object({
-      thread_id: z.string(),
+      session_id: z.string(),
     }),
   },
   responses: {
-    200: response_data(ThreadSchema),
+    200: response_data(SessionSchema),
     404: response_error()
   },
 })
 
 
 
-app.openapi(threadGETRoute, async (c) => {
-  const { thread_id } = c.req.param()
+app.openapi(sessionGETRoute, async (c) => {
+  const { session_id } = c.req.param()
 
-  const threadRow = await fetchThread(thread_id);
+  const session = await fetchSession(session_id);
 
-  if (!threadRow) {
-    return c.json({ message: "Thread not found" }, 404);
+  if (!session) {
+    return c.json({ message: "Session not found" }, 404);
   }
 
-  return c.json(threadRow, 200);
+  return c.json(session, 200);
 })
 
 
-const threadSeenRoute = createRoute({
+const sessionSeenRoute = createRoute({
   method: 'post',
-  path: '/api/threads/{thread_id}/seen',
+  path: '/api/sessions/{session_id}/seen',
   request: {
     params: z.object({
-      thread_id: z.string(),
+      session_id: z.string(),
     }),
   },
   responses: {
@@ -518,18 +489,18 @@ const threadSeenRoute = createRoute({
   },
 })
 
-app.openapi(threadSeenRoute, async (c) => {
-  const { thread_id } = c.req.param()
+app.openapi(sessionSeenRoute, async (c) => {
+  const { session_id } = c.req.param()
 
-  const session = await requireSession(c.req.raw.headers);
+  const authSession = await requireAuthSession(c.req.raw.headers);
 
   await db.update(inboxItems).set({
     lastReadEventId: sql`${inboxItems.lastNotifiableEventId}`,
     updatedAt: new Date(),
   }).where(and(
-    eq(inboxItems.userId, session.user.id),
-    eq(inboxItems.threadId, thread_id),
-    isNull(inboxItems.activityId),
+    eq(inboxItems.userId, authSession.user.id),
+    eq(inboxItems.sessionId, session_id),
+    isNull(inboxItems.sessionItemId),
   ))
 
   return c.json({}, 200);
@@ -542,13 +513,13 @@ app.openapi(threadSeenRoute, async (c) => {
 // Create run
 const runsPOSTRoute = createRoute({
   method: 'post',
-  path: '/api/threads/{thread_id}/runs',
+  path: '/api/sessions/{session_id}/runs',
   request: {
     params: z.object({
-      thread_id: z.string(),
+      session_id: z.string(),
     }),
     body: body(z.object({
-      input: ActivityCreateSchema
+      input: SessionItemCreateSchema
     }))
   },
   responses: {
@@ -559,56 +530,44 @@ const runsPOSTRoute = createRoute({
 })
 
 app.openapi(runsPOSTRoute, async (c) => {
-  const { thread_id } = c.req.param()
+  const { session_id } = c.req.param()
   const { input: { type, role, content } } = await c.req.json()
 
-  const threadRow = await requireThread(thread_id)
-  const schema = await requireSchema()
-
-  // Find thread configuration by type
-  const threadConfig = await requireThreadConfig(schema, threadRow.type)
-
-  // Find activity configuration by type and role
-  const activityConfig = threadConfig.activities.find((activityConfig) => activityConfig.type === type && activityConfig.role === role);
-  if (!activityConfig) {
-    throw new HTTPException(400, { message: `Activity type '${type}' with role '${role}' not found in configuration` });
-  }
+  const session = await requireSession(session_id)
+  const config = await requireConfig()
+  const sessionConfig = requireSessionConfig(config, session.type)
+  const itemConfig = requireItemConfig(sessionConfig, type, role)
 
   // Validate content against the schema
   try {
-    activityConfig.content.parse(content);
+    itemConfig.content.parse(content);
   } catch (error: any) {
     return c.json({ message: `Invalid content: ${error.message}` }, 400);
   }
 
-  const lastRun = getLastRun(threadRow)
+  const lastRun = getLastRun(session)
 
-  // Check thread status conditions
   if (lastRun?.state === 'in_progress') {
-    return c.json({ message: `Cannot add user activity when thread is in 'in_progress' state.` }, 400);
+    return c.json({ message: `Cannot add user item when session is in 'in_progress' state.` }, 400);
   }
 
-  // Create user activity and run
-  const userActivity = await db.transaction(async (tx) => {
+  // Create user item and run
+  const userItem = await db.transaction(async (tx) => {
 
-    // Create a new run with status 'in_progress' and set trigger_activity_id
-    const [newRun] = await tx.insert(run).values({
-      thread_id,
+    const [newRun] = await tx.insert(runs).values({
+      session_id,
       state: 'in_progress',
     }).returning();
 
-    // Thread status is 'idle', so we can proceed
-    // First create the activity
-    const [userActivity] = await tx.insert(activity).values({
-      thread_id,
+    const [userItem] = await tx.insert(sessionItems).values({
+      session_id,
       type,
       role,
       content,
       run_id: newRun.id,
     }).returning();
 
-    // Return the activity with the run_id
-    return userActivity;
+    return userItem;
   });
 
   /*** 
@@ -626,18 +585,18 @@ app.openapi(runsPOSTRoute, async (c) => {
 
     const input = {
       session: {
-        id: threadRow.id,
-        created_at: threadRow.created_at,
-        updated_at: threadRow.updated_at,
-        metadata: threadRow.metadata,
-        client_id: threadRow.client_id,
-        type: threadRow.type,
-        items: [...getAllActivities(threadRow), userActivity]
+        id: session.id,
+        created_at: session.created_at,
+        updated_at: session.updated_at,
+        metadata: session.metadata,
+        client_id: session.client_id,
+        type: session.type,
+        items: [...getAllSessionItems(session), userItem]
       }
     }
 
     async function isStillRunning() {
-      const currentRun = await db.query.run.findFirst({ where: eq(run.id, userActivity.run_id) });
+      const currentRun = await db.query.runs.findFirst({ where: eq(runs.id, userItem.run_id) });
       if (currentRun && currentRun.state === 'in_progress') {
         return true
       }
@@ -646,7 +605,7 @@ app.openapi(runsPOSTRoute, async (c) => {
 
     try {
       // Try streaming first, fallback to non-streaming
-      const runOutput = callAgentAPI(input, threadConfig.url)
+      const runOutput = callAgentAPI(input, sessionConfig.url)
       
       let versionId: string | null = null;
 
@@ -680,14 +639,14 @@ app.openapi(runsPOSTRoute, async (c) => {
           versionId = version.id;
 
           // Update the run with version_id
-          if (userActivity.run_id) {
-            await db.update(run)
+          if (userItem.run_id) {
+            await db.update(runs)
               .set({ version_id: versionId })
-              .where(eq(run.id, userActivity.run_id));
+              .where(eq(runs.id, userItem.run_id));
           }
 
           firstItem = false;
-          continue; // Skip this item as it's not an activity
+          continue; // Skip this item as it's not an item
         }
         else if (event.name === 'item') {
 
@@ -704,19 +663,13 @@ app.openapi(runsPOSTRoute, async (c) => {
             });
           }
 
-          await db.insert(activity).values({
-            thread_id,
+          await db.insert(sessionItems).values({
+            session_id,
             type: parsedItem.data.type,
             role: parsedItem.data.role,
             content: parsedItem.data.content,
-            run_id: userActivity.run_id,
+            run_id: userItem.run_id,
           })
-
-          // return newActivity;
-
-          // await db.insert(activity).values(activity)
-          // // This is a regular activity
-          // await validateAndInsertActivity(event.data)
         }
         else {
           throw {
@@ -729,12 +682,12 @@ app.openapi(runsPOSTRoute, async (c) => {
         return
       }
 
-      await db.update(run)
+      await db.update(runs)
         .set({
           state: 'completed',
           finished_at: new Date(),
         })
-        .where(eq(run.id, userActivity.run_id));
+        .where(eq(runs.id, userItem.run_id));
     }
     catch (error: unknown) {
       if (!(await isStillRunning())) {
@@ -753,19 +706,19 @@ app.openapi(runsPOSTRoute, async (c) => {
         }
       }
 
-      await db.update(run)
+      await db.update(runs)
         .set({
           state: 'failed',
           finished_at: new Date(),
           fail_reason: failReason
         })
-        .where(eq(run.id, userActivity.run_id));
+        .where(eq(runs.id, userItem.run_id));
     }
 
   })();
 
-  const thread = await fetchThread(thread_id);
-  const newRun = getLastRun(thread!);
+  const newSession = await fetchSession(session_id);
+  const newRun = getLastRun(newSession!);
 
   return c.json(newRun, 201);
 })
@@ -774,10 +727,10 @@ app.openapi(runsPOSTRoute, async (c) => {
 // Cancel Run Endpoint
 const runCancelRoute = createRoute({
   method: 'post',
-  path: '/api/threads/{thread_id}/cancel_run',
+  path: '/api/sessions/{session_id}/cancel_run',
   request: {
     params: z.object({
-      thread_id: z.string(),
+      session_id: z.string(),
     }),
   },
   responses: {
@@ -788,43 +741,36 @@ const runCancelRoute = createRoute({
 });
 
 app.openapi(runCancelRoute, async (c) => {
-  const { thread_id } = c.req.param();
+  const { session_id } = c.req.param();
 
-  const threadRow = await fetchThread(thread_id);
-  if (!threadRow) {
-    return c.json({ message: 'Thread not found' }, 404);
-  }
-
-  const lastRun = getLastRun(threadRow)
+  const session = await requireSession(session_id);
+  const lastRun = getLastRun(session)
 
   if (lastRun?.state !== 'in_progress') {
     return c.json({ message: 'Run is not in progress' }, 400);
   }
   // Set the run as failed
-  await db.update(run)
+  await db.update(runs)
     .set({
       state: 'failed',
       finished_at: new Date(),
       fail_reason: { message: 'Run was cancelled by user' }
     })
-    .where(eq(run.id, lastRun.id));
+    .where(eq(runs.id, lastRun.id));
 
-  return c.json(await fetchThread(thread_id), 200);
+  return c.json(await fetchSession(session_id), 200);
 });
 
 const runWatchRoute = createRoute({
   method: 'get',
-  path: '/api/threads/{thread_id}/watch_run',
+  path: '/api/sessions/{session_id}/watch_run',
   request: {
     params: z.object({
-      thread_id: z.string()
-    }),
-    // query: z.object({
-    //   last_activity_id: z.string().optional(),
-    // })
+      session_id: z.string()
+    })
   },
   responses: {
-    // 201: response_data(z.array(ActivitySchema)),
+    // 201: response_data(z.array(SessionItemSchema)),
     400: response_error(),
     404: response_error()
   },
@@ -832,37 +778,26 @@ const runWatchRoute = createRoute({
 
 
 
-// Activities Watch (SSE)
-
 // @ts-ignore don't know how to fix this with hono yet
 app.openapi(runWatchRoute, async (c) => {
-  const { thread_id } = c.req.param()
+  const { session_id } = c.req.param()
 
-  const threadRow = await requireThread(thread_id)
+  const session = await requireSession(session_id)
+  const lastRun = getLastRun(session)
 
-  const lastRun = getLastRun(threadRow)
-  // const activities = getAllActivities(threadRow)
-
-
-  // if (lastRun?.state !== 'in_progress') {
-  //   return c.json({ message: "Thread active run must be in 'in_progress' state to watch" }, 400);
-  // }
-
-
-  // 4. Start SSE stream
   return streamSSE(c, async (stream) => {
     let running = true;
     stream.onAbort(() => {
       running = false;
     });
 
-    // Always start with thread.state in_progress
+    // Always start with session.state in_progress
     await stream.writeSSE({
       data: JSON.stringify({ state: lastRun?.state }),
       event: 'state',
     });
 
-    let sentActivityIds: string[] = [];
+    let sentItemIds: string[] = [];
 
     /**
      * 
@@ -872,32 +807,28 @@ app.openapi(runWatchRoute, async (c) => {
      * 
      */
     while (running) {
-      const threadRow = await fetchThread(thread_id);
-      if (!threadRow) {
-        throw new Error('Thread not found');
-      }
-      const lastRun = getLastRun(threadRow)
+      const session = await requireSession(session_id)
+      const lastRun = getLastRun(session)
 
       if (!lastRun) {
         throw new Error('unreachable');
       }
 
-      const activities = getAllActivities(threadRow)
+      const items = getAllSessionItems(session)
 
-      for (const activity of activities) {
-        if (sentActivityIds.includes(activity.id)) {
+      for (const item of items) {
+        if (sentItemIds.includes(item.id)) {
           continue;
         }
-        sentActivityIds.push(activity.id)
+        sentItemIds.push(item.id)
         await stream.writeSSE({
-          data: JSON.stringify(activity),
-          event: 'activity',
+          data: JSON.stringify(item),
+          event: 'item',
         });
       }
 
       // End if run is no longer in_progress
       if (lastRun?.state !== 'in_progress') {
-
         const data: { state: string, fail_reason?: any } = { state: lastRun?.state }
 
         if (lastRun?.state === 'failed') {
@@ -917,16 +848,16 @@ app.openapi(runWatchRoute, async (c) => {
   });
 });
 
-/* --------- ACTIVITIES --------- */
+/* --------- ITEMS --------- */
 
 
-const activitySeenRoute = createRoute({
+const itemSeenRoute = createRoute({
   method: 'post',
-  path: '/api/threads/{thread_id}/activities/{activity_id}/seen',
+  path: '/api/sessions/{session_id}/items/{item_id}/seen',
   request: {
     params: z.object({
-      thread_id: z.string(),
-      activity_id: z.string(),
+      session_id: z.string(),
+      item_id: z.string(),
     }),
   },
   responses: {
@@ -937,18 +868,17 @@ const activitySeenRoute = createRoute({
   },
 })
 
-app.openapi(activitySeenRoute, async (c) => {
-  const { thread_id, activity_id } = c.req.param()
-
-  const session = await requireSession(c.req.raw.headers);
+app.openapi(itemSeenRoute, async (c) => {
+  const { session_id, item_id } = c.req.param()
+  const authSession = await requireAuthSession(c.req.raw.headers);
 
   await db.update(inboxItems).set({
     lastReadEventId: sql`${inboxItems.lastNotifiableEventId}`,
     updatedAt: new Date(),
   }).where(and(
-    eq(inboxItems.userId, session.user.id),
-    eq(inboxItems.threadId, thread_id),
-    eq(inboxItems.activityId, activity_id),
+    eq(inboxItems.userId, authSession.user.id),
+    eq(inboxItems.sessionId, session_id),
+    eq(inboxItems.sessionItemId, item_id),
   ))
 
   return c.json({}, 200);
@@ -959,33 +889,20 @@ app.openapi(activitySeenRoute, async (c) => {
 /* --------- FEED --------- */
 
 
-function validateScore(schema: BaseConfig, thread: Thread, activity: Activity, user: User, scoreName: string, scoreValue: any, options?: { mustNotExist?: boolean }) {
-  // Find the thread config
-  const threadConfig = schema.threads.find((threadConfig) => threadConfig.type === thread.type);
-  if (!threadConfig) {
-    throw new HTTPException(400, { message: `Thread type '${thread.type}' not found in configuration` });
-  }
+function validateScore(config: BaseConfig, session: Session, item: SessionItem, user: User, scoreName: string, scoreValue: any, options?: { mustNotExist?: boolean }) {
+  const sessionConfig = requireSessionConfig(config, session.type);
+  const itemConfig = requireItemConfig(sessionConfig, item.type, item.role ?? undefined)
+  const itemTypeCuteName = `${item.type}' / '${item.role}`
 
-  // Find the activity config for this thread/activity
-  const activityConfig = threadConfig.activities.find(
-    (activityConfig) => activityConfig.type === activity.type && (!activityConfig.role || activityConfig.role === activity.role)
-  );
-
-  const activityTypeCuteName = `${activity.type}' / '${activity.role}`
-
-  if (!activityConfig) {
-    throw new HTTPException(400, { message: `Activity '${activityTypeCuteName}' not found in configuration for thread type '${thread.type}'` });
-  }
-
-  // Find the score config for this activity
-  const scoreConfig = activityConfig.scores?.find((scoreConfig) => scoreConfig.name === scoreName);
+  // Find the score config for this item
+  const scoreConfig = itemConfig.scores?.find((scoreConfig) => scoreConfig.name === scoreName);
   if (!scoreConfig) {
-    throw new HTTPException(400, { message: `Score name '${scoreName}' not found in configuration for activity  '${activityTypeCuteName}' in thread type '${thread.type}'` });
+    throw new HTTPException(400, { message: `Score name '${scoreName}' not found in configuration for item  '${itemTypeCuteName}' in session type '${session.type}'` });
   }
 
   // Check if there is already a score with the same name in any commentMessage's scores
-  if (activity.commentMessages && options?.mustNotExist === true) {
-    for (const message of activity.commentMessages) {
+  if (item.commentMessages && options?.mustNotExist === true) {
+    for (const message of item.commentMessages) {
       if (message.scores) {
         for (const score of message.scores) {
           if (score.name === scoreName && !score.deletedAt && score.createdBy === user.id) {
@@ -1008,11 +925,11 @@ function validateScore(schema: BaseConfig, thread: Thread, activity: Activity, u
 
 const commentsPOSTRoute = createRoute({
   method: 'post',
-  path: '/api/threads/{thread_id}/activities/{activity_id}/comments',
+  path: '/api/sessions/{session_id}/items/{item_id}/comments',
   request: {
     params: z.object({
-      thread_id: z.string(),
-      activity_id: z.string(),
+      session_id: z.string(),
+      item_id: z.string(),
     }),
     body: body(z.object({
       comment: z.string().optional(),
@@ -1031,25 +948,25 @@ const commentsPOSTRoute = createRoute({
 
 app.openapi(commentsPOSTRoute, async (c) => {
   const body = await c.req.json()
-  const { thread_id, activity_id } = c.req.param()
+  const { session_id, item_id } = c.req.param()
 
-  const session = await requireSession(c.req.raw.headers);
-  const thread = await requireThread(thread_id)
-  const activity = await requireActivity(thread, activity_id);
-  const schema = await requireSchema()
+  const authSession = await requireAuthSession(c.req.raw.headers);
+  const session = await requireSession(session_id)
+  const item = await requireSessionItem(session, item_id);
+  const config = await requireConfig()
 
   const inputScores = body.scores ?? {}
 
   for (const [scoreName, scoreValue] of Object.entries(inputScores)) {
-    validateScore(schema, thread, activity, session.user, scoreName, scoreValue, { mustNotExist: true })
+    validateScore(config, session, item, authSession.user, scoreName, scoreValue, { mustNotExist: true })
   }
 
   await db.transaction(async (tx) => {
 
     // Add comment
     const [newMessage] = await tx.insert(commentMessages).values({
-      activityId: activity_id,
-      userId: session.user.id,
+      sessionItemId: item_id,
+      userId: authSession.user.id,
       content: body.comment ?? null,
     }).returning();
 
@@ -1079,18 +996,18 @@ app.openapi(commentsPOSTRoute, async (c) => {
     // add scores
     for (const [scoreName, scoreValue] of Object.entries(inputScores)) {
       await tx.insert(scores).values({
-        activityId: activity_id,
+        sessionItemId: item_id,
         name: scoreName,
         value: scoreValue,
         commentId: newMessage.id,
-        createdBy: session.user.id,
+        createdBy: authSession.user.id,
       })
     }
 
     // add event
     const [event] = await tx.insert(events).values({
       type: 'comment_created',
-      authorId: session.user.id,
+      authorId: authSession.user.id,
       payload: {
         comment_id: newMessage.id, // never gets deleted
         has_comment: body.comment ? true : false,
@@ -1099,8 +1016,7 @@ app.openapi(commentsPOSTRoute, async (c) => {
       }
     }).returning();
 
-    await updateInboxes(tx, event, thread, activity);
-
+    await updateInboxes(tx, event, session, item);
   })
 
   return c.json({}, 201);
@@ -1110,11 +1026,11 @@ app.openapi(commentsPOSTRoute, async (c) => {
 // Comments DELETE (delete comment)
 const commentsDELETERoute = createRoute({
   method: 'delete',
-  path: '/api/threads/{thread_id}/activities/{activity_id}/comments/{comment_id}',
+  path: '/api/sessions/{session_id}/items/{item_id}/comments/{comment_id}',
   request: {
     params: z.object({
-      thread_id: z.string(),
-      activity_id: z.string(),
+      session_id: z.string(),
+      item_id: z.string(),
       comment_id: z.string(),
     }),
   },
@@ -1127,52 +1043,50 @@ const commentsDELETERoute = createRoute({
 })
 
 app.openapi(commentsDELETERoute, async (c) => {
-  const { comment_id, thread_id, activity_id } = c.req.param()
+  const { comment_id, session_id, item_id } = c.req.param()
 
-  const session = await requireSession(c.req.raw.headers);
-  const thread = await requireThread(thread_id)
-  const activity = await requireActivity(thread, activity_id);
-  const commentMessage = await requireCommentMessageFromUser(thread, activity, comment_id, session.user);
+  const authSession = await requireAuthSession(c.req.raw.headers);
+  const session = await requireSession(session_id)
+  const item = await requireSessionItem(session, item_id);
+  const commentMessage = await requireCommentMessageFromUser(item, comment_id, authSession.user);
 
   await db.transaction(async (tx) => {
     await tx.delete(commentMentions).where(eq(commentMentions.commentMessageId, commentMessage.id));
     await tx.delete(scores).where(eq(scores.commentId, commentMessage.id));
     await tx.update(commentMessages).set({
       deletedAt: new Date(),
-      deletedBy: session.user.id
+      deletedBy: authSession.user.id
     }).where(eq(commentMessages.id, commentMessage.id));
 
     // add event
     const [event] = await tx.insert(events).values({
       type: 'comment_deleted',
-      authorId: session.user.id,
+      authorId: authSession.user.id,
       payload: {
         comment_id
       }
     }).returning();
 
-    await updateInboxes(tx, event, thread, activity);
-
+    await updateInboxes(tx, event, session, item);
   });
   return c.json({}, 200);
-
 })
 
 
 // Comments PUT (edit comment)
 const commentsPUTRoute = createRoute({
   method: 'put',
-  path: '/api/threads/{thread_id}/activities/{activity_id}/comments/{comment_id}',
+  path: '/api/sessions/{session_id}/items/{item_id}/comments/{comment_id}',
   request: {
     params: z.object({
-      thread_id: z.string(),
-      activity_id: z.string(),
+      session_id: z.string(),
+      item_id: z.string(),
       comment_id: z.string(),
     }),
     body: body(z.object({
       comment: z.string().optional(),
       scores: z.record(z.string(), z.any()).optional()
-    }))
+    })) 
   },
   responses: {
     200: response_data(z.object({})),
@@ -1183,19 +1097,19 @@ const commentsPUTRoute = createRoute({
 })
 
 app.openapi(commentsPUTRoute, async (c) => {
-  const { thread_id, activity_id, comment_id } = c.req.param()
+  const { session_id, item_id, comment_id } = c.req.param()
   const body = await c.req.json()
 
-  const schema = await requireSchema()
-  const session = await requireSession(c.req.raw.headers);
-  const thread = await requireThread(thread_id)
-  const activity = await requireActivity(thread, activity_id);
-  const commentMessage = await requireCommentMessageFromUser(thread, activity, comment_id, session.user);
+  const config = await requireConfig()
+  const authSession = await requireAuthSession(c.req.raw.headers);
+  const session = await requireSession(session_id)
+  const item = await requireSessionItem(session, item_id)
+  const commentMessage = await requireCommentMessageFromUser(item, comment_id, authSession.user);
 
   const inputScores = body.scores ?? {}
 
   for (const [scoreName, scoreValue] of Object.entries(inputScores)) {
-    validateScore(schema, thread, activity, session.user, scoreName, scoreValue, { mustNotExist: false })
+    validateScore(config, session, item, authSession.user, scoreName, scoreValue, { mustNotExist: false })
   }
 
   await db.transaction(async (tx) => {
@@ -1302,11 +1216,11 @@ app.openapi(commentsPUTRoute, async (c) => {
       } else {
         // Insert new score
         await tx.insert(scores).values({
-          activityId: activity_id,
+          sessionItemId: item_id,
           name: scoreName,
           value: scoreValue,
           commentId: commentMessage.id,
-          createdBy: session.user.id,
+          createdBy: authSession.user.id,
         });
       }
     }
@@ -1314,7 +1228,7 @@ app.openapi(commentsPUTRoute, async (c) => {
     /** ADD EVENT **/
     const [event] = await tx.insert(events).values({
       type: 'comment_edited',
-      authorId: session.user.id,
+      authorId: authSession.user.id,
       payload: {
         comment_id, // never gets deleted
         has_comment: body.comment ? true : false,
@@ -1323,9 +1237,7 @@ app.openapi(commentsPUTRoute, async (c) => {
       }
     }).returning();
 
-    await updateInboxes(tx, event, thread, activity);
-
-
+    await updateInboxes(tx, event, session, item);
   });
 
   return c.json({}, 200);
@@ -1346,7 +1258,7 @@ const membersGETRoute = createRoute({
 })
 
 app.openapi(membersGETRoute, async (c) => {
-  await requireSession(c.req.raw.headers);
+  await requireAuthSession(c.req.raw.headers);
 
   const userRows = await db.select({
     id: users.id,
@@ -1550,19 +1462,19 @@ const emailsGETRoute = createRoute({
 })
 
 app.openapi(emailsGETRoute, async (c) => {
-  const emails = await db
+  const emailRows = await db
     .select({
-      id: email.id,
-      to: email.to,
-      subject: email.subject,
-      from: email.from,
-      created_at: email.created_at,
+      id: emails.id,
+      to: emails.to,
+      subject: emails.subject,
+      from: emails.from,
+      created_at: emails.created_at,
     })
-    .from(email)
-    .orderBy(desc(email.created_at))
+    .from(emails)
+    .orderBy(desc(emails.created_at))
     .limit(100);
 
-  return c.json(emails, 200);
+  return c.json(emailRows, 200);
 })
 
 /* --------- EMAIL DETAIL --------- */
@@ -1577,128 +1489,55 @@ const emailDetailGETRoute = createRoute({
 
 app.openapi(emailDetailGETRoute, async (c) => {
   const { id } = c.req.param()
-  const emailRow = await db.query.email.findFirst({ where: eq(email.id, id) })
+  const emailRow = await db.query.emails.findFirst({ where: eq(emails.id, id) })
   return c.json(emailRow, 200)
 })
 
 /* --------- SCHEMAS ---------   */
 
-const schemasGETRoute = createRoute({
+const configsGETRoute = createRoute({
   method: 'get',
-  path: '/api/dev/schemas/current',
+  path: '/api/dev/configs/current',
   responses: {
-    200: response_data(z.array(SchemaSchema).nullable()),
+    200: response_data(ConfigSchema.nullable()),
   },
 })
 
-app.openapi(schemasGETRoute, async (c) => {
-  await requireSession(c.req.raw.headers)
+app.openapi(configsGETRoute, async (c) => {
+  await requireAuthSession(c.req.raw.headers)
 
-  const schemaRows = await db.select().from(schemas).orderBy(desc(schemas.createdAt)).limit(1)
-  if (schemaRows.length === 0) {
+  const configRows = await db.select().from(configs).orderBy(desc(configs.createdAt)).limit(1)
+  if (configRows.length === 0) {
     return c.json(null, 200)
   }
-  return c.json(schemaRows[0], 200)
+  return c.json(configRows[0], 200)
 })
 
-const schemasPOSTRoute = createRoute({
+const configsPOSTRoute = createRoute({
   method: 'post',
-  path: '/api/dev/schemas',
+  path: '/api/dev/configs',
   request: {
-    body: body(SchemaCreateSchema)
+    body: body(ConfigCreateSchema)
   },
   responses: {
-    200: response_data(z.array(SchemaSchema).nullable()),
+    200: response_data(ConfigSchema),
   },
 })
 
-app.openapi(schemasPOSTRoute, async (c) => {
+app.openapi(configsPOSTRoute, async (c) => {
   await requireAdminSession(c.req.raw.headers)
 
-  const session = await requireSession(c.req.raw.headers)
+  const session = await requireAuthSession(c.req.raw.headers)
   const body = await c.req.json()
 
-  const [newSchema] = await db.insert(schemas).values({
-    schema: body.schema,
+  const [newSchema] = await db.insert(configs).values({
+    config: body.config,
     createdBy: session.user.id,
   }).returning()
 
   return c.json(newSchema, 200)
 })
 
-
-/* --------- INBOX --------- */
-
-
-
-// Inbox GET (get all inbox items for the user)
-const inboxGETRoute = createRoute({
-  method: 'get',
-  path: '/api/inbox',
-  responses: {
-    200: response_data(z.array(InboxItemSchema)),
-    401: response_error(),
-  },
-})
-
-app.openapi(inboxGETRoute, async (c) => {
-  const session = await requireSession(c.req.raw.headers);
-
-  const inboxItemRows = await db.query.inboxItems.findMany({
-    where: eq(inboxItems.userId, session.user.id),
-    with: {
-      thread: true,
-      activity: true,
-      lastNotifiableEvent: true,
-    }
-  })
-
-  inboxItemRows.sort((a, b) => {
-    const aDate = a.lastNotifiableEvent?.createdAt ? new Date(a.lastNotifiableEvent.createdAt).getTime() : 0;
-    const bDate = b.lastNotifiableEvent?.createdAt ? new Date(b.lastNotifiableEvent.createdAt).getTime() : 0;
-    return bDate - aDate;
-  });
-
-  return c.json(inboxItemRows, 200);
-});
-
-
-
-// Mark inbox item as read
-// const inboxMarkAsReadRoute = createRoute({
-//   method: 'post',
-//   path: '/api/inbox/{id}/mark_as_read',
-//   request: {
-//     params: z.object({
-//       id: z.string(),
-//     }),
-//   },
-//   responses: {
-//     200: response_data(z.object({})),
-//     400: response_error(),
-//     401: response_error(),
-//     404: response_error(),
-//   },
-// })
-
-// app.openapi(inboxMarkAsReadRoute, async (c) => {
-//   const { id } = c.req.param()
-
-//   try {
-//     const session = await requireSession(c.req.raw.headers);
-//     const inboxItem = await requireInboxItem(session.user, id)
-
-//     await db.update(inboxItems)
-//       .set({
-//         lastReadEventId: sql`${inboxItem.lastNotifiableEventId}`, // should be set to last notiffiable event id, because IT IS WHAT USER SAW. If we set it to last event id (from the system) we lose option to renotify user about consecutive events that he should be notified about.
-//       })
-//       .where(eq(inboxItems.id, inboxItem.id));
-
-//     return c.json({}, 200);
-//   } catch (error: any) {
-//     return errorToResponse(c, error);
-//   }
-// })
 
 /* --------- IS ACTIVE --------- */
 

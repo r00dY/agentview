@@ -1,11 +1,11 @@
 import { eq } from "drizzle-orm";
 import { db } from "./db"
-import { thread } from "./schemas/schema"
+import { sessions } from "./schemas/schema"
 import type { Transaction } from "./types";
 
-export async function fetchThreads(thread_id?: string, tx?: Transaction) {
-    const threadRows = await (tx || db).query.thread.findMany({
-      where: thread_id ? eq(thread.id, thread_id) : undefined,
+export async function fetchSessions(session_id?: string, tx?: Transaction) {
+    const sessionRows = await (tx || db).query.sessions.findMany({
+      where: session_id ? eq(sessions.id, session_id) : undefined,
       with: {
         client: true,
         // client: {
@@ -17,8 +17,8 @@ export async function fetchThreads(thread_id?: string, tx?: Transaction) {
           orderBy: (run, { asc }) => [asc(run.created_at)],
           with: {
             version: true,
-            activities: {
-              orderBy: (activity, { asc }) => [asc(activity.created_at)],
+            sessionItems: {
+              orderBy: (sessionItem, { asc }) => [asc(sessionItem.created_at)],
               with: {
                 commentMessages: {
                   orderBy: (commentMessages, { asc }) => [asc(commentMessages.createdAt)],
@@ -33,16 +33,11 @@ export async function fetchThreads(thread_id?: string, tx?: Transaction) {
       }
     });
 
-    return threadRows;
-  
-    // return threadRows.map((threadRow) => ({
-    //   ...threadRow,
-    //   runs: threadRow.runs.filter((run, index) => run.state === 'completed' || index === threadRow.runs.length - 1), // last run & completed ones
-    // }))
+    return sessionRows;
   }
   
-  export async function fetchThread(thread_id: string, tx? : Transaction) {
-    const threads = await fetchThreads(thread_id, tx)
+  export async function fetchSession(thread_id: string, tx? : Transaction) {
+    const threads = await fetchSessions(thread_id, tx)
 
     if (threads.length === 0) {
       return undefined;

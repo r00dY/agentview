@@ -6,20 +6,20 @@ export interface BaseScoreConfig {
     options?: any
 }
 
-export interface BaseActivityConfig<ScoreConfigType> {
+export interface BaseSessionItemConfig<ScoreConfigType> {
     type: string;
     role?: string;
     content: z.ZodType;
     scores?: ScoreConfigType[];
 }
 
-export interface BaseThreadConfig<ActivityType> {
+export interface BaseSessionConfig<SessionItemType> {
     type: string;
     url: string;
     metadata?: any;//z.ZodType; // TODO: fix this
-    activities: ActivityType[];
+    items: SessionItemType[];
 }
 
 export type BaseConfig = {
-    threads: BaseThreadConfig<BaseActivityConfig<BaseScoreConfig>>[],
+    sessions: BaseSessionConfig<BaseSessionItemConfig<BaseScoreConfig>>[],
 }
