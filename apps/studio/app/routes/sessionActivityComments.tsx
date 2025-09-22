@@ -1,4 +1,4 @@
-import type { Route } from "./+types/threadActivityComments";
+import type { Route } from "./+types/sessionActivityComments";
 import { apiFetch } from "~/lib/apiFetch";
 import { type ActionResponse } from "~/lib/errors";
 import { commentFormDataToJSON } from "~/lib/commentForm";

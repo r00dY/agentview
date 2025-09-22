@@ -1,5 +1,5 @@
 import { redirect, useLoaderData, Outlet, Link, Form, data, NavLink } from "react-router";
-import type { Route } from "./+types/threads";
+import type { Route } from "./+types/sessions";
 
 import { Button } from "~/components/ui/button";
 import { Circle, CircleCheck, PlusIcon } from "lucide-react";
@@ -41,7 +41,7 @@ export function ThreadCard({ thread, listParams }: { thread: Session, listParams
   const hasUnreads = hasThreadUnreads || hasActivitiesUnread;
 
   return <div key={thread.id}>
-    <NavLink to={`/threads/${thread.id}?list=${listParams.list}&type=${listParams.type}`}>
+    <NavLink to={`/sessions/${thread.id}?list=${listParams.list}&type=${listParams.type}`}>
       {({ isActive }) => (
         <div className={`p-3 border-b hover:bg-gray-50 transition-colors duration-50 ${isActive ? 'bg-gray-100' : ''}`}>
           <div className="flex flex-col gap-1">
@@ -73,7 +73,7 @@ export default function Threads() {
       <Header className="px-3">
         <HeaderTitle title={`${listParams.list === "real" ? "Sessions" : listParams.list === "simulated_private" ? "Private Sessions" : "Shared Sessions"}`} />
         {listParams.list !== "real" && <div>
-          <Button variant="outline" size="sm" asChild><Link to={`/threads/new?list=${listParams.list}&type=${listParams.type}`}><PlusIcon />New Session</Link></Button>
+          <Button variant="outline" size="sm" asChild><Link to={`/sessions/new?list=${listParams.list}&type=${listParams.type}`}><PlusIcon />New Session</Link></Button>
         </div>}
       </Header>
 

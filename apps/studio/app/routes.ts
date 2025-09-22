@@ -15,13 +15,13 @@ export default [
 
         route("clients/:clientId/share", "routes/clientShare.tsx"),
 
-        route("threads", "routes/threads.tsx", [
-            index("routes/threadsIndex.tsx"),
-            route("new", "routes/threadNew.tsx"),
-            route(":id", "routes/thread.tsx", [
-                route("activities/:activityId", "routes/threadActivity.tsx"),
-                route("activities/:activityId/comments", "routes/threadActivityComments.tsx"),
-                route("activities/:activityId/comments/:commentId", "routes/threadActivityComment.tsx")
+        route("sessions", "routes/sessions.tsx", [
+            index("routes/sessionsIndex.tsx"),
+            route("new", "routes/sessionNew.tsx"),
+            route(":id", "routes/session.tsx", [
+                route("activities/:activityId", "routes/sessionActivity.tsx"),
+                route("activities/:activityId/comments", "routes/sessionActivityComments.tsx"),
+                route("activities/:activityId/comments/:commentId", "routes/sessionActivityComment.tsx")
             ]),
         ]),
         route("inbox", "routes/inbox.tsx"),

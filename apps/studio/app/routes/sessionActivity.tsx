@@ -1,8 +1,8 @@
 import { data, useLoaderData, useOutletContext, useParams, useRevalidator } from "react-router";
-import type { Route } from "./+types/threadActivity";
+import type { Route } from "./+types/sessionActivity";
 import { Header, HeaderTitle } from "~/components/header";
-import type { Thread } from "~/lib/shared/apiTypes";
-import { getAllActivities } from "~/lib/shared/threadUtils";
+import type { Session } from "~/lib/shared/apiTypes";
+import { getAllSessionItems } from "~/lib/shared/sessionUtils";
 import { authClient } from "~/lib/auth-client";
 import { CommentThread } from "~/components/comments";
 import { apiFetch } from "~/lib/apiFetch";
@@ -10,19 +10,19 @@ import { useSessionContext } from "~/lib/session";
 import { useEffect } from "react";
 
 export default function ThreadActivityPage() {
-    const { thread } = useOutletContext<{ thread: Thread }>();
+    const { session } = useOutletContext<{ session: Session }>();
     const params = useParams();
     const revalidator = useRevalidator();
 
-    const activities = getAllActivities(thread)
-    const activity = activities.find((a) => a.id === params.activityId)
+    const items = getAllSessionItems(session)
+    const item = items.find((a) => a.id === params.itemId)
 
-    if (!activity) {
-        throw data({ message: "Activity not found" }, { status: 404 })
+    if (!item) {
+        throw data({ message: "Item not found" }, { status: 404 })
     }
 
     useEffect(() => {
-        apiFetch(`/api/sessions/${thread.id}/items/${activity.id}/seen`, {
+        apiFetch(`/api/sessions/${session.id}/items/${item.id}/seen`, {
             method: 'POST',
         }).then((data) => {
             if (data.ok) {
@@ -32,16 +32,16 @@ export default function ThreadActivityPage() {
                 console.error(data.error)
             }
         })
-    }, [activity.id]) // make sure /seen is called when switching activities
+    }, [item.id]) // make sure /seen is called when switching activities
 
     return <div className="flex-1  flex flex-col">
         <Header>
-            <HeaderTitle title={`Activity ${activity.number}`} />
+            <HeaderTitle title={`Item ${item.number}`} />
         </Header>
         <div className="flex-1 overflow-y-auto">
             <CommentThread
-                activity={activity}
-                thread={thread}
+                activity={item}
+                thread={session}
                 collapsed={false}
                 singleLineMessageHeader={true}
             />

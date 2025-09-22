@@ -86,10 +86,9 @@ export default function Layout() {
 
   // Helper function to get unseen count for a specific thread type and list name
   const getUnseenCount = (threadType: string, listName: string) => {
-    const list = lists.find((list) => list.name === listName && list.threadType === threadType)
+    const list = lists.find((list) => list.name === listName && list.agent === threadType)
     return list?.unseenCount ?? 0
   }
-
 
   return (<SessionContext.Provider value={{ user, members, locale }}>
     <SidebarProvider>
@@ -136,7 +135,7 @@ export default function Layout() {
                     <SidebarMenuSub>
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild>
-                          <Link to="/threads">
+                          <Link to="/sessions">
                             <MessageCircle className="mr-2 h-4 w-4" />
                             <span>All</span>
                           </Link>
@@ -154,7 +153,7 @@ export default function Layout() {
                     <SidebarMenuSub>
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild>
-                          <Link to="/threads?list=simulated_private">
+                          <Link to="/sessions?list=simulated_private">
                             <User className="mr-2 h-4 w-4" />
                             <span> Private</span>
                           </Link>
@@ -162,7 +161,7 @@ export default function Layout() {
                       </SidebarMenuSubItem>
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild>
-                          <Link to="/threads?list=simulated_shared">
+                          <Link to="/sessions?list=simulated_shared">
                             <Users className="mr-2 h-4 w-4" />
                             <span>Shared</span>
                           </Link>
@@ -200,7 +199,7 @@ export default function Layout() {
                         <SidebarMenuSub className="mr-0">
                           <SidebarMenuSubItem className={realUnseenCount > 0 ? "flex justify-between items-center" : ""}>
                             <SidebarMenuSubButton asChild>
-                              <Link to={`/threads?type=${thread.type}`}>
+                              <Link to={`/sessions?type=${thread.type}`}>
                                 <MessageCircle className="mr-2 h-4 w-4" />
                                 <span>Production</span>
                               </Link>
@@ -209,7 +208,7 @@ export default function Layout() {
                           </SidebarMenuSubItem>
                           <SidebarMenuSubItem className={simulatedPrivateUnseenCount > 0 ? "flex justify-between items-center" : ""}>
                             <SidebarMenuSubButton asChild>
-                              <Link to={`/threads?type=${thread.type}&list=simulated_private`}>
+                              <Link to={`/sessions?type=${thread.type}&list=simulated_private`}>
                                 <User className="mr-2 h-4 w-4" />
                                 <span>Simulated Private</span>
                               </Link>
@@ -219,7 +218,7 @@ export default function Layout() {
                           </SidebarMenuSubItem>
                           <SidebarMenuSubItem className={simulatedSharedUnseenCount > 0 ? "flex justify-between items-center" : ""}>
                             <SidebarMenuSubButton asChild>
-                              <Link to={`/threads?type=${thread.type}&list=simulated_shared`}>
+                              <Link to={`/sessions?type=${thread.type}&list=simulated_shared`}>
                                 <Users className="mr-2 h-4 w-4" />
                                 <span>Simulated Shared</span>
                               </Link>
@@ -243,7 +242,7 @@ export default function Layout() {
                 <SidebarMenu>
                   <SidebarMenuItem>
                     <SidebarMenuButton asChild>
-                      <Link to="/threads">
+                      <Link to="/sessions">
                         <MessageCircle className="mr-2 h-4 w-4" />
                         <span>Sessions</span>
                       </Link>
@@ -260,13 +259,13 @@ export default function Layout() {
                 <SidebarMenu>
                   <SidebarMenuItem>
                     <SidebarMenuButton asChild>
-                      <Link to="/threads?list=simulated_private">
+                      <Link to="/sessions?list=simulated_private">
                         <User className="mr-2 h-4 w-4" />
                         <span>Private Sessions</span>
                       </Link>
                     </SidebarMenuButton>
                     <SidebarMenuButton asChild>
-                      <Link to="/threads?list=simulated_shared">
+                      <Link to="/sessions?list=simulated_shared">
                         <Users className="mr-2 h-4 w-4" />
                         <span>Shared Sessions</span>
                       </Link>

@@ -165,7 +165,7 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                     </Alert>
                 )}
 
-                <fetcher.Form method="post" action={`/threads/${thread.id}/activities/${activity.id}/comments`} ref={formRef}>
+                <fetcher.Form method="post" action={`/sessions/${thread.id}/items/${activity.id}/comments`} ref={formRef}>
 
                     {unassignedScoreConfigs.length > 0 && <div className="mb-4 space-y-2">
                         {unassignedScoreConfigs.map((scoreConfig) => (
@@ -403,7 +403,7 @@ export function CommentMessageItem({ message, activity, thread,compressionLevel 
                         <DropdownMenuItem onClick={(e) => {
                             e.preventDefault();
                             if (confirm('Are you sure you want to delete this comment?')) {
-                                fetcher.submit(null, { method: 'delete', action: `/threads/${thread.id}/activities/${activity.id}/comments/${message.id}` }); // that could be fetcher.Form!
+                                fetcher.submit(null, { method: 'delete', action: `/sessions/${thread.id}/items/${activity.id}/comments/${message.id}` }); // that could be fetcher.Form!
                             }
                         }}>
                             Delete
@@ -424,7 +424,7 @@ export function CommentMessageItem({ message, activity, thread,compressionLevel 
                         </Alert>
                     )}
 
-                    <fetcher.Form method="put" action={`/threads/${thread.id}/activities/${activity.id}/comments/${message.id}`} ref={formRef} className="space-y-2">
+                    <fetcher.Form method="put" action={`/sessions/${thread.id}/items/${activity.id}/comments/${message.id}`} ref={formRef} className="space-y-2">
                         {messageScoreConfigs.length > 0 && <div className="mb-4 space-y-2">
                             {messageScoreConfigs.map((scoreConfig) => <FormField
                                 key={scoreConfig.name}

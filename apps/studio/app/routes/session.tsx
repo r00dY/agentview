@@ -1,5 +1,5 @@
 import { useLoaderData, useFetcher, Outlet, Link, Form, data, useParams, useSearchParams, useNavigate, useRevalidator } from "react-router";
-import type { Route } from "./+types/thread";
+import type { Route } from "./+types/session";
 import { Button } from "~/components/ui/button";
 import { Header, HeaderTitle } from "~/components/header";
 import { useEffect, useState } from "react";
@@ -93,7 +93,7 @@ function ShareForm({ thread, listParams }: { thread: Session, listParams: Return
     const navigate = useNavigate();
 
     useFetcherSuccess(fetcher, () => {
-        navigate(`/threads/${thread.id}?list=${listParams.list}&type=${listParams.type}`);
+        navigate(`/sessions/${thread.id}?list=${listParams.list}&type=${listParams.type}`);
     });
 
     if (thread.client.is_shared) {
@@ -278,14 +278,14 @@ function ThreadPage() {
                                 content = <activityConfig.display value={activity.content} options={activityConfig.options} />
                             }
 
-                            return <div className={`px-6 py-4  ${params.activityId === activity.id ? "bg-stone-50" : "hover:bg-gray-50"}`} onClick={() => { navigate(`/threads/${thread.id}/activities/${activity.id}?list=${listParams.list}&type=${listParams.type}`) }}>
+                            return <div className={`px-6 py-4  ${params.activityId === activity.id ? "bg-stone-50" : "hover:bg-gray-50"}`} onClick={() => { navigate(`/sessions/${thread.id}/activities/${activity.id}?list=${listParams.list}&type=${listParams.type}`) }}>
                                 {content}
                             </div>
 
 
                             // return <ActivityView
                             //     activity={activity}
-                            //     onSelect={(a) => { navigate(`/threads/${thread.id}/activities/${a?.id}?list=${listParams.list}&type=${listParams.type}`) }}
+                            //     onSelect={(a) => { navigate(`/sessions/${thread.id}/activities/${a?.id}?list=${listParams.list}&type=${listParams.type}`) }}
                             //     selected={params.activityId === activity.id}
                             // />
                         })}
@@ -327,7 +327,7 @@ function ThreadPage() {
                             </div>,
                             // itemComponent: <div 
                             //     className={`relative pl-6 py-2 pr-[444px] group ${params.activityId === activity.id ? "bg-gray-50" : "hover:bg-gray-50"}`} 
-                            //     onClick={() => { navigate(`/threads/${thread.id}/activities/${activity?.id}?list=${listParams.list}&type=${listParams.type}`) }}>
+                            //     onClick={() => { navigate(`/sessions/${thread.id}/items/${activity?.id}?list=${listParams.list}&type=${listParams.type}`) }}>
 
                             //     {content}
                             //     {/* { !hasComments && <div className="absolute top-[8px] right-[408px] opacity-0 group-hover:opacity-100">

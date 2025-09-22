@@ -1,5 +1,5 @@
 import { redirect, Form, useActionData, useFetcher, data, useLoaderData } from "react-router";
-import type { Route } from "./+types/threadNew";
+import type { Route } from "./+types/sessionNew";
 import { Header, HeaderTitle } from "~/components/header";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -54,7 +54,7 @@ export async function clientLoader({ request, params }: Route.ClientLoaderArgs) 
     throw data(threadResponse.error, { status: threadResponse.status });
   }
 
-  return redirect(`/threads/${threadResponse.data.id}?list=${listParams.list}&type=${listParams.type}`);
+  return redirect(`/sessions/${threadResponse.data.id}?list=${listParams.list}&type=${listParams.type}`);
 }
 
 export async function clientAction({ request, params }: Route.ClientActionArgs): Promise<ActionResponse | Response> {
@@ -95,7 +95,7 @@ export async function clientAction({ request, params }: Route.ClientActionArgs):
   }
 
   // Redirect to the new thread
-  return redirect(`/threads/${threadResponse.data.id}?list=${listParams.list}&type=${listParams.type}`);
+  return redirect(`/sessions/${threadResponse.data.id}?list=${listParams.list}&type=${listParams.type}`);
 }
 
 export default function ThreadNew() {
