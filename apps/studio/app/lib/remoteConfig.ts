@@ -5,8 +5,8 @@ import { equalJSON } from "./equalJSON";
 import { config } from "../../agentview.config";
 
 
-export async function getSchema() {
-    const response = await apiFetch(`/api/dev/schemas/current`);
+export async function getRemoteConfig() {
+    const response = await apiFetch(`/api/dev/configs/current`);
 
     if (!response.ok) {
         throw response.error;
@@ -15,11 +15,11 @@ export async function getSchema() {
     return response.data;
 }
 
-export async function updateSchema() {
-    const response = await apiFetch(`/api/dev/schemas`, {
+export async function updateRemoteConfig() {
+    const response = await apiFetch(`/api/dev/configs`, {
         method: "POST",
         body: {
-            schema: serializeBaseConfig(getBaseConfig(config))
+            config: serializeBaseConfig(getBaseConfig(config))
         }
     });
 
@@ -31,18 +31,18 @@ export async function updateSchema() {
 }
 
 export async function createOrUpdateSchema() {
-    const remoteSchema = await getSchema();
+    const remoteConfigRow = await getRemoteConfig();
 
-    const remoteConfig = remoteSchema?.schema ?? null;
+    const remoteConfig = remoteConfigRow?.config ?? null;
     const currentConfig = serializeBaseConfig(getBaseConfig(config));
 
     // console.log('base config', getBaseConfig(config).threads[0].metadata[0])
     // console.log('serialized', currentConfig.threads[0].metadata[0])
 
     if (!equalJSON(remoteConfig, currentConfig)) {
-        console.log('Schema change detected! Updating schema...')
-        return await updateSchema();
+        console.log('Config change detected! Updating config...')
+        return await updateRemoteConfig();
     }
 
-    return remoteSchema;
+    return remoteConfigRow;
 }

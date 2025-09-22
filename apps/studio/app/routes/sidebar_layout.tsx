@@ -35,7 +35,7 @@ import { SessionContext } from "~/lib/session";
 import { apiFetch } from "~/lib/apiFetch";
 import type { Member, SessionList } from "~/lib/shared/apiTypes";
 import { NotificationBadge } from "~/components/NotificationBadge";
-import { createOrUpdateSchema } from "~/lib/schema";
+import { createOrUpdateSchema } from "~/lib/remoteConfig";
 import { config } from "../../agentview.config";
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
@@ -183,13 +183,13 @@ export default function Layout() {
               <SidebarGroupContent>
                 <SidebarMenu>
 
-                { (!config.threads || config.threads.length === 0) && (
+                { (!config.sessions || config.sessions.length === 0) && (
                   <SidebarMenuItem>
                     <SidebarMenuButton className="text-muted-foreground">You don't have any agents yet</SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
 
-                  {config.threads?.map((thread) => {
+                  {config.sessions?.map((thread) => {
                     const realUnseenCount = getUnseenCount(thread.type, "real")
                     const simulatedPrivateUnseenCount = getUnseenCount(thread.type, "simulated_private")
                     const simulatedSharedUnseenCount = getUnseenCount(thread.type, "simulated_shared")

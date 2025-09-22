@@ -1,4 +1,4 @@
-import type { BaseScoreConfig, BaseActivityConfig, BaseThreadConfig, BaseConfig } from "./lib/shared/configTypes";
+import type { BaseScoreConfig, BaseSessionItemConfig, BaseSessionConfig, BaseConfig } from "./lib/shared/configTypes";
 
 export type FormInputProps<T=any> = {
   id: string,
@@ -19,7 +19,7 @@ export type ScoreConfig<T=any> = BaseScoreConfig & {
   display: React.ComponentType<DisplayComponentProps<T>>;
 }
 
-export type ActivityConfig = BaseActivityConfig<ScoreConfig> & {
+export type SessionItemConfig = BaseSessionItemConfig<ScoreConfig> & {
   isInput?: boolean;
   input?: React.ComponentType<FormInputProps>;
   display: React.ComponentType<DisplayComponentProps>;
@@ -27,8 +27,8 @@ export type ActivityConfig = BaseActivityConfig<ScoreConfig> & {
   options?: any;
 };
 
-export type ThreadConfig = BaseThreadConfig<ActivityConfig>;
+export type SessionConfig = BaseSessionConfig<SessionItemConfig>;
   
 export type AgentViewConfig = {
-  threads?: ThreadConfig[],  
+  sessions?: SessionConfig[],  
 }

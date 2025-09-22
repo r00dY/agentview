@@ -16,7 +16,7 @@ import { parseFormData } from "~/lib/parseFormData";
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
   const listParams = getThreadListParams(request);
-  const threadConfig = config.threads?.find((threadConfig) => threadConfig.type === listParams.type);
+  const threadConfig = config.sessions?.find((sessionConfig) => sessionConfig.type === listParams.type);
 
   if (!threadConfig) {
     throw new Error(`Thread config not found for type "${listParams.type}"`);
@@ -42,7 +42,7 @@ export async function clientLoader({ request, params }: Route.ClientLoaderArgs) 
 
   const client_id = clientResponse.data.id;
 
-  const threadResponse = await apiFetch('/api/threads', {
+  const threadResponse = await apiFetch('/api/sessions', {
     method: 'POST',
     body: {
       type: threadConfig.type,
@@ -59,7 +59,7 @@ export async function clientLoader({ request, params }: Route.ClientLoaderArgs) 
 
 export async function clientAction({ request, params }: Route.ClientActionArgs): Promise<ActionResponse | Response> {
   const listParams = getThreadListParams(request);
-  const threadConfig = config.threads?.find((threadConfig) => threadConfig.type === listParams.type);
+  const threadConfig = config.sessions?.find((sessionConfig) => sessionConfig.type === listParams.type);
 
   if (!threadConfig) {
     throw new Error(`Thread config not found for type "${listParams.type}"`);
@@ -81,7 +81,7 @@ export async function clientAction({ request, params }: Route.ClientActionArgs):
   const client_id = clientResponse.data.id;
 
   // Then create the thread with the new client_id and all metadata
-  const threadResponse = await apiFetch('/api/threads', {
+  const threadResponse = await apiFetch('/api/sessions', {
     method: 'POST',
     body: {
       type: threadConfig.type,

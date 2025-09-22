@@ -14,16 +14,10 @@ export const auth = betterAuth({
     trustedOrigins: [getStudioURL()],
     database: drizzleAdapter(db, {
         provider: "pg",
-        // schema: {
-        //     user,
-        //     session,
-        //     account,
-        //     verification
-        // },
         usePlural: true
     }),
     session: {
-        modelName: "user_sessions"
+        modelName: "userSession"
     },
     emailAndPassword: {
         enabled: true

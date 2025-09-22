@@ -24,7 +24,7 @@ export async function clientAction({ request, params }: Route.ClientActionArgs):
         };
     }
 
-    const response = await apiFetch(`/api/threads/${params.id}/activities/${params.activityId}/comments`, {
+    const response = await apiFetch(`/api/sessions/${params.id}/items/${params.activityId}/comments`, {
         method: 'POST',
         body: {
             comment,

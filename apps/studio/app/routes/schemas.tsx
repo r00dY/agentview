@@ -2,32 +2,11 @@ import { data, useFetcher, useLoaderData } from "react-router";
 import type { Route } from "./+types/schemas";
 
 import { Header, HeaderTitle } from "~/components/header";
-import { createOrUpdateSchema } from "~/lib/schema";
+import { createOrUpdateSchema } from "~/lib/remoteConfig";
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   return { schema: await createOrUpdateSchema() };
 }
-
-// export async function clientAction({ request }: Route.ActionArgs) {
-//   const response = await apiFetch(`/api/dev/schemas`, {
-//     method: "POST",
-//     body: {
-//         schema: serializeBaseConfig(getBaseConfig(config))
-//     }
-//   });
-  
-//   if (!response.ok) {
-//     return {
-//         ok: false,
-//         error: response.error
-//     }
-//   }
-
-//   return {
-//     ok: true,
-//     data: response.data
-//   }
-// }
 
 export default function SchemasPage() {
   const { schema } = useLoaderData<typeof clientLoader>();

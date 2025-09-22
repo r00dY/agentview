@@ -6,7 +6,7 @@ import { type ActionResponse } from "~/lib/errors";
 export async function clientAction({ request, params }: Route.ClientActionArgs): Promise<ActionResponse> {
     if (request.method === 'DELETE') {
         
-        const response = await apiFetch(`/api/threads/${params.id}/activities/${params.activityId}/comments/${params.commentId}`, {
+        const response = await apiFetch(`/api/sessions/${params.id}/items/${params.activityId}/comments/${params.commentId}`, {
             method: 'DELETE'
         });
 
@@ -27,7 +27,7 @@ export async function clientAction({ request, params }: Route.ClientActionArgs):
 
         const { comment, scores } = extractionResponse.data;
 
-        const response = await apiFetch(`/api/threads/${params.id}/activities/${params.activityId}/comments/${params.commentId}`, {
+        const response = await apiFetch(`/api/sessions/${params.id}/items/${params.activityId}/comments/${params.commentId}`, {
             method: 'PUT',
             body: {
                 comment,

@@ -6,14 +6,14 @@ import { useEffect, useState } from "react";
 import { parseSSE } from "~/lib/parseSSE";
 import { apiFetch } from "~/lib/apiFetch";
 import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
-import { getLastRun, getAllActivities, getVersions } from "~/lib/shared/threadUtils";
-import { type Thread } from "~/lib/shared/apiTypes";
+import { getLastRun, getAllSessionItems, getVersions } from "~/lib/shared/sessionUtils";
+import { type Session } from "~/lib/shared/apiTypes";
 import { getThreadListParams } from "~/lib/utils";
 import { PropertyList } from "~/components/PropertyList";
 import { MessageCircleIcon, MessageSquareTextIcon, SendHorizonalIcon, Share, SquareIcon, UserIcon, UsersIcon } from "lucide-react";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
 import { useSessionContext } from "~/lib/session";
-import type { ActivityConfig, ThreadConfig } from "~/types";
+import type { SessionItemConfig, SessionConfig } from "~/types";
 import { FormField } from "~/components/form";
 import { parseFormData } from "~/lib/parseFormData";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs";
@@ -22,7 +22,7 @@ import { CommentThreadFloatingBox } from "~/components/comments";
 import { config } from "../../agentview.config";
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
-    const response = await apiFetch<Thread>(`/api/threads/${params.id}`);
+    const response = await apiFetch<Session>(`/api/sessions/${params.id}`);
 
     if (!response.ok) {
         throw data(response.error, { status: response.status })
@@ -36,7 +36,7 @@ export async function clientLoader({ request, params }: Route.ClientLoaderArgs) 
     };
 }
 
-function ThreadDetails({ thread, threadConfig }: { thread: Thread, threadConfig: ThreadConfig }) {
+function ThreadDetails({ thread, threadConfig }: { thread: Session, threadConfig: SessionConfig }) {
     const versions = getVersions(thread);
     const { members } = useSessionContext();
 
@@ -88,7 +88,7 @@ function ThreadDetails({ thread, threadConfig }: { thread: Thread, threadConfig:
     );
 }
 
-function ShareForm({ thread, listParams }: { thread: Thread, listParams: ReturnType<typeof getThreadListParams> }) {
+function ShareForm({ thread, listParams }: { thread: Session, listParams: ReturnType<typeof getThreadListParams> }) {
     const fetcher = useFetcher();
     const navigate = useNavigate();
 
@@ -127,10 +127,10 @@ function ThreadPage() {
 
     const [searchParams, setSearchParams] = useSearchParams();
     // const activities = getAllActivities(thread)
-    const activeActivities = getAllActivities(thread, { activeOnly: true })
+    const activeActivities = getAllSessionItems(thread, { activeOnly: true })
     const lastRun = getLastRun(thread)
 
-    const threadConfig = config.threads?.find((threadConfig) => threadConfig.type === thread.type);
+    const threadConfig = config.sessions?.find((sessionConfig) => sessionConfig.type === thread.type);
     if (!threadConfig) {
         throw new Error(`Thread config not found for type "${thread.type}"`);
     }
@@ -164,7 +164,7 @@ function ThreadPage() {
     }
 
     useEffect(() => {
-        apiFetch(`/api/threads/${thread.id}/seen`, {
+        apiFetch(`/api/sessions/${thread.id}/seen`, {
             method: 'POST',
         }).then((data) => {
             if (data.ok) {
@@ -188,7 +188,7 @@ function ThreadPage() {
 
             (async () => {
                 try {
-                    const response = await fetch(`${getAPIBaseUrl()}/api/threads/${thread.id}/watch_run`, {
+                    const response = await fetch(`${getAPIBaseUrl()}/api/sessions/${thread.id}/watch_run`, {
                         headers: {
                             'Content-Type': 'application/json',
                         }
@@ -205,15 +205,15 @@ function ThreadPage() {
 
                             let newRun: typeof lastRun;
 
-                            if (event.event === 'activity') {
+                            if (event.event === 'item') {
                                 const newActivity = event.data;
-                                const newActivityIndex = lastRun.activities.findIndex((a: any) => a.id === newActivity.id);
+                                const newActivityIndex = lastRun.sessionItems.findIndex((a: any) => a.id === newActivity.id);
 
                                 newRun = {
                                     ...lastRun,
-                                    activities: newActivityIndex === -1 ?
-                                        [...lastRun.activities, newActivity] : [
-                                            ...lastRun.activities.slice(0, newActivityIndex),
+                                    sessionItems: newActivityIndex === -1 ?
+                                        [...lastRun.sessionItems, newActivity] : [
+                                            ...lastRun.sessionItems.slice(0, newActivityIndex),
                                             newActivity
                                         ]
                                 }
@@ -223,6 +223,9 @@ function ThreadPage() {
                                     ...lastRun,
                                     ...event.data
                                 }
+                            }
+                            else {
+                                throw new Error(`Unknown event type: ${event.event}`)
                             }
 
                             return {
@@ -297,7 +300,7 @@ function ThreadPage() {
 
                         let content: React.ReactNode = null;
 
-                        const activityConfig = threadConfig.activities.find((a) => a.type === activity.type && (!a.role || a.role === activity.role));
+                        const activityConfig = threadConfig.items.find((a) => a.type === activity.type && (!a.role || a.role === activity.role));
                         if (!activityConfig) {
                             content = <div className="text-muted-foreground italic">No component (type: "{activity.type}")</div>
                         }
@@ -355,7 +358,7 @@ function ThreadPage() {
 }
 
 
-function InputForm({ thread, threadConfig }: { thread: Thread, threadConfig: ThreadConfig }) {
+function InputForm({ thread, threadConfig }: { thread: Session, threadConfig: SessionConfig }) {
     const [formError, setFormError] = useState<string | null>(null)
 
     const lastRun = getLastRun(thread)
@@ -376,7 +379,7 @@ function InputForm({ thread, threadConfig }: { thread: Thread, threadConfig: Thr
 
         if (data.value) {
             try {
-                const response = await apiFetch(`/api/threads/${thread.id}/runs`, {
+                const response = await apiFetch(`/api/sessions/${thread.id}/runs`, {
                     method: 'POST',
                     body: {
                         input: {
@@ -410,12 +413,12 @@ function InputForm({ thread, threadConfig }: { thread: Thread, threadConfig: Thr
     }
 
     const handleCancel = async () => {
-        await apiFetch(`/api/threads/${thread.id}/cancel_run`, {
+        await apiFetch(`/api/sessions/${thread.id}/cancel_run`, {
             method: 'POST',
         })
     }
 
-    const inputConfigs = threadConfig.activities.filter((activity) => activity.isInput)
+    const inputConfigs = threadConfig.items.filter((item) => item.isInput)
 
     return <div className="p-6 border-t">
 
@@ -494,7 +497,7 @@ function InputForm({ thread, threadConfig }: { thread: Thread, threadConfig: Thr
     </div>
 }
 
-function InputFormFields({ inputConfig }: { inputConfig: ActivityConfig }) {
+function InputFormFields({ inputConfig }: { inputConfig: SessionItemConfig }) {
     return <>
         <input type="hidden" name="type" value={inputConfig.type} />
         <input type="hidden" name="role" value={inputConfig.role} />

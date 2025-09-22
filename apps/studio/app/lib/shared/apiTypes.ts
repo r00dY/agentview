@@ -41,7 +41,7 @@ export type ClientCreate = z.infer<typeof ClientCreateSchema>
 
 export const ScoreSchema = z.object({
     id: z.string(),
-    activityId: z.string(),
+    sessionItemId: z.string(),
 
     name: z.string(),
     value: z.any(),
@@ -70,21 +70,21 @@ export const CommentMessageSchema = z.object({
 export type CommentMessage = z.infer<typeof CommentMessageSchema>
 
 
-export const ActivitySchema = z.object({
+export const SessionItemSchema = z.object({
     id: z.string(),
     number: z.number(),
     created_at: z.date(),
     updated_at: z.date(),
     content: z.any(),
-    thread_id: z.string(),
+    session_id: z.string(),
     type: z.string(),
-    role: z.string().optional(),
+    role: z.string().nullish(),
     commentMessages: z.array(CommentMessageSchema),
 })
 
-export type Activity = z.infer<typeof ActivitySchema>
+export type SessionItem = z.infer<typeof SessionItemSchema>
 
-export const ActivityCreateSchema = ActivitySchema.pick({
+export const SessionItemCreateSchema = SessionItemSchema.pick({
     type: true,
     role: true,
     content: true,
@@ -94,17 +94,17 @@ export const RunSchema = z.object({
     id: z.string(),
     created_at: z.date(),
     finished_at: z.date().nullable(),
-    thread_id: z.string(),
+    session_id: z.string(),
     version_id: z.string().nullable(),
     state: z.string(),
     fail_reason: z.any().nullable(),
-    activities: z.array(ActivitySchema),
+    sessionItems: z.array(SessionItemSchema),
     version: VersionSchema.nullable(),
 })
 
 export type Run = z.infer<typeof RunSchema>
 
-export const ThreadSchema = z.object({
+export const SessionSchema = z.object({
     id: z.string(),
     number: z.number(),
     created_at: z.date(),
@@ -116,32 +116,32 @@ export const ThreadSchema = z.object({
     client: ClientSchema,
 })
 
-export type Thread = z.infer<typeof ThreadSchema>
+export type Session = z.infer<typeof SessionSchema>
 
-export const ThreadCreateSchema = ThreadSchema.pick({
+export const SessionCreateSchema = SessionSchema.pick({
     client_id: true,
     type: true,
     metadata: true,
 })
 
 export const ScoreCreateSchema = ScoreSchema.pick({
-    activityId: true,
+    sessionItemId: true,
     name: true,
     value: true,
     commentId: true,
 })
 
-export const SchemaSchema = z.object({
+export const ConfigSchema = z.object({
     id: z.string(),
-    schema: z.any(),
+    config: z.any(),
     createdAt: z.date(),
     createdBy: z.string(),
 })
 
-export type Schema = z.infer<typeof SchemaSchema>
+export type Config = z.infer<typeof ConfigSchema>
 
-export const SchemaCreateSchema = SchemaSchema.pick({
-    schema: true,
+export const ConfigCreateSchema = ConfigSchema.pick({
+    config: true,
 })
 
 export const InboxItemSchema = z.any() // todo: fix this
@@ -155,22 +155,22 @@ export const MemberSchema = z.object({
     name: z.string().nullable(),
     role: z.string().nullable(),
     created_at: z.date(),
-  })
-  
-  export const MemberUpdateSchema = z.object({
+})
+
+export const MemberUpdateSchema = z.object({
     role: z.enum(['admin', 'user']),
-  })
-  
-  export type Member = z.infer<typeof MemberSchema>
+})
 
-  export type MemberUpdate = z.infer<typeof MemberUpdateSchema>
+export type Member = z.infer<typeof MemberSchema>
+
+export type MemberUpdate = z.infer<typeof MemberUpdateSchema>
 
 
-  export const SessionListSchema = z.object({
+export const SessionListSchema = z.object({
     name: z.string(),
-    threadType: z.string(),
+    agent: z.string(),
     unseenCount: z.number(),
     hasMentions: z.boolean(),
-  })
+})
 
 export type SessionList = z.infer<typeof SessionListSchema>

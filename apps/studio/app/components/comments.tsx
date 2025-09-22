@@ -2,7 +2,7 @@ import { AlertCircleIcon, EllipsisVerticalIcon, Gauge, GaugeIcon, Reply, ReplyIc
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useFetcher, useRevalidator } from "react-router";
 import { config } from "agentview.config";
-import type { Activity, CommentMessage, Thread, User } from "~/lib/shared/apiTypes";
+import type { SessionItem, CommentMessage, Session, User } from "~/lib/shared/apiTypes";
 import { Button } from "~/components/ui/button";
 import {
     DropdownMenu,
@@ -20,8 +20,8 @@ import { useSessionContext } from "~/lib/session";
 import { apiFetch } from "~/lib/apiFetch";
 
 export type CommentThreadProps = {
-    thread: Thread,
-    activity: Activity,
+    thread: Session,
+    activity: SessionItem,
     collapsed?: boolean,
     singleLineMessageHeader?: boolean,
     small?: boolean,
@@ -33,18 +33,18 @@ export type CommentThreadFloatingBoxProps = CommentThreadProps & {
 }
 
 export type CommentThreadFloatingButtonProps = CommentThreadFloatingBoxProps & {
-    thread: Thread,
-    activity: Activity,
+    thread: Session,
+    activity: SessionItem,
     onSelect: (activity: any) => void,
 }
 
-function getAllScoreConfigs(thread: Thread, activity: Activity) {
-    const threadConfig = config.threads?.find((t: any) => t.type === thread.type);
+function getAllScoreConfigs(thread: Session, activity: SessionItem) {
+    const threadConfig = config.sessions?.find((t: any) => t.type === thread.type);
     if (!threadConfig) {
         throw new Error("Thread config not found");
     }
 
-    const activityConfig = threadConfig?.activities.find((a: any) =>
+    const activityConfig = threadConfig?.items.find((a: any) =>
         a.type === activity.type && (!a.role || a.role === activity.role)   
     );
     const allScoreConfigs = activityConfig?.scores || [];
@@ -237,7 +237,7 @@ export function CommentThreadFloatingBox({ thread, activity, selected = false, o
         }
 
         if (selected) {
-            apiFetch(`/api/threads/${thread.id}/activities/${activity.id}/seen`, {
+            apiFetch(`/api/sessions/${thread.id}/items/${activity.id}/seen`, {
                 method: 'POST',
             }).then((data) => {
                 if (data.ok) {

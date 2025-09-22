@@ -1,4 +1,3 @@
-import { config } from "../../agentview.config";
 import type { AgentViewConfig } from "../types";
 import * as z from "zod"
 import type { BaseConfig } from "./shared/configTypes";
@@ -10,15 +9,15 @@ export function serializeBaseConfig(config: BaseConfig): any {
 
 export function getBaseConfig(config: AgentViewConfig): BaseConfig {
   return {
-    threads: (config.threads ?? []).map((thread) => ({
-      type: thread.type,
-      url: thread.url,
-      metadata: thread.metadata,
-      activities: thread.activities.map((activity) => ({
-      type: activity.type,
-        role: activity.role,
-        content: activity.content,
-        scores: activity.scores?.map((score) => ({
+    sessions: (config.sessions ?? []).map((session) => ({
+      type: session.type,
+      url: session.url,
+      metadata: session.metadata,
+      items: session.items.map((item) => ({
+      type: item.type,
+        role: item.role,
+        content: item.content,
+        scores: item.scores?.map((score) => ({
           name: score.name,
           schema: score.schema,
           options: filterOutReactAndFunctions(score.options)

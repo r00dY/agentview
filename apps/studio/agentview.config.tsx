@@ -8,11 +8,11 @@ import { ProductDisplay, ProductSelect } from "product_components";
 
 
 export const config: AgentViewConfig = {
-    threads: [
+    sessions: [
         {
             type: "simple_chat",
             url: "http://127.0.0.1:8000/simple_chat",
-            activities: [
+            items: [
                 {
                     isInput: true,
                     type: "message",
@@ -61,7 +61,7 @@ export const config: AgentViewConfig = {
                     display: ProductDisplay
                 }
             ],
-            activities: [
+            items: [
                 {
                     isInput: true,
                     type: "message",

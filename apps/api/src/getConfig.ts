@@ -6,14 +6,14 @@ import type { BaseConfig } from "./shared/configTypes";
 
 function parseConfig(config: any): BaseConfig {
     return {
-        sessions: config.sessions.map((thread: any) => ({
-            type: thread.type,
-            url: thread.url,
-            metadata: thread.metadata ? convertJsonSchemaToZod(thread.metadata) : undefined,
-            activities: thread.activities?.map((activity: any) => ({
-                ...activity,
-                content: convertJsonSchemaToZod(activity.content),
-                scores: activity.scores?.map((score: any) => ({
+        sessions: config.sessions.map((session: any) => ({
+            type: session.type,
+            url: session.url,
+            metadata: session.metadata ? convertJsonSchemaToZod(session.metadata) : undefined,
+            items: session.items?.map((item: any) => ({
+                ...item,
+                content: convertJsonSchemaToZod(item.content),
+                scores: item.scores?.map((score: any) => ({
                     ...score,
                     schema: convertJsonSchemaToZod(score.schema),
                 }))

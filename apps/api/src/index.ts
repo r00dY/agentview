@@ -122,7 +122,12 @@ function requireSessionConfig(config: BaseConfig, sessionType: string) {
 }
 
 function requireItemConfig(sessionConfig: ReturnType<typeof requireSessionConfig>, type: string, role?: string) {
-  const itemConfig = sessionConfig.items.find(
+  console.log('require item config')
+  console.log(sessionConfig)
+  console.log(type)
+  console.log(role)
+
+  const itemConfig = (sessionConfig.items ?? []).find(
     (itemConfig) => itemConfig.type === type && (!itemConfig.role || itemConfig.role === role)
   );
 

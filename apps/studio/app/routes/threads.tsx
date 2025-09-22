@@ -6,15 +6,15 @@ import { Circle, CircleCheck, PlusIcon } from "lucide-react";
 import { Header, HeaderTitle } from "~/components/header";
 import { getThreadListParams } from "~/lib/utils";
 import { apiFetch } from "~/lib/apiFetch";
-import type { Thread } from "~/lib/shared/apiTypes";
-import { getAllActivities } from "~/lib/shared/threadUtils";
+import type { Session } from "~/lib/shared/apiTypes";
+import { getAllSessionItems } from "~/lib/shared/sessionUtils";
 import { timeAgoShort } from "~/lib/timeAgo";
 import { useSessionContext } from "~/lib/session";
 import { NotificationBadge } from "~/components/NotificationBadge";
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const listParams = getThreadListParams(request);
-  const threadsResponse = await apiFetch<Thread[]>(`/api/threads?list=${listParams.list}&type=${listParams.type}`);
+  const threadsResponse = await apiFetch<Session[]>(`/api/sessions?list=${listParams.list}&type=${listParams.type}`);
 
   if (!threadsResponse.ok) {
     throw data(threadsResponse.error, { status: threadsResponse.status });
@@ -26,13 +26,13 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   }
 }
 
-export function ThreadCard({ thread, listParams }: { thread: Thread, listParams: ReturnType<typeof getThreadListParams> }) {
+export function ThreadCard({ thread, listParams }: { thread: Session, listParams: ReturnType<typeof getThreadListParams> }) {
   const { user } = useSessionContext();
   const date = thread.created_at;
 
   const unseenEvents = (thread as any).unseenEvents;
-  const hasThreadUnreads = unseenEvents.thread.length > 0;
-  const allActivityEvents = (Object.values(unseenEvents.activities) as any[]).flat() as any[];
+  const hasThreadUnreads = unseenEvents.session.length > 0;
+  const allActivityEvents = (Object.values(unseenEvents.items) as any[]).flat() as any[];
 
   const hasActivitiesUnread = allActivityEvents.length > 0;
 

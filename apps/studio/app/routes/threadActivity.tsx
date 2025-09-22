@@ -22,7 +22,7 @@ export default function ThreadActivityPage() {
     }
 
     useEffect(() => {
-        apiFetch(`/api/threads/${thread.id}/activities/${activity.id}/seen`, {
+        apiFetch(`/api/sessions/${thread.id}/items/${activity.id}/seen`, {
             method: 'POST',
         }).then((data) => {
             if (data.ok) {
