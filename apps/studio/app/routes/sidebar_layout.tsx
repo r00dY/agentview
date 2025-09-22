@@ -84,9 +84,9 @@ export default function Layout() {
   const [editProfileOpen, setEditProfileOpen] = React.useState(false)
   const [changePasswordOpen, setChangePasswordOpen] = React.useState(false)
 
-  // Helper function to get unseen count for a specific thread type and list name
-  const getUnseenCount = (threadType: string, listName: string) => {
-    const list = lists.find((list) => list.name === listName && list.agent === threadType)
+  // Helper function to get unseen count for a specific session type and list name
+  const getUnseenCount = (sessionType: string, listName: string) => {
+    const list = lists.find((list) => list.name === listName && list.agent === sessionType)
     return list?.unseenCount ?? 0
   }
 
@@ -188,18 +188,18 @@ export default function Layout() {
                   </SidebarMenuItem>
                 )}
 
-                  {config.sessions?.map((thread) => {
-                    const realUnseenCount = getUnseenCount(thread.type, "real")
-                    const simulatedPrivateUnseenCount = getUnseenCount(thread.type, "simulated_private")
-                    const simulatedSharedUnseenCount = getUnseenCount(thread.type, "simulated_shared")
+                  {config.sessions?.map((session) => {
+                    const realUnseenCount = getUnseenCount(session.type, "real")
+                    const simulatedPrivateUnseenCount = getUnseenCount(session.type, "simulated_private")
+                    const simulatedSharedUnseenCount = getUnseenCount(session.type, "simulated_shared")
                     
                     return (
-                      <SidebarMenuItem key={thread.type}>
-                        <SidebarMenuButton>{thread.type}</SidebarMenuButton>
+                      <SidebarMenuItem key={session.type}>
+                        <SidebarMenuButton>{session.type}</SidebarMenuButton>
                         <SidebarMenuSub className="mr-0">
                           <SidebarMenuSubItem className={realUnseenCount > 0 ? "flex justify-between items-center" : ""}>
                             <SidebarMenuSubButton asChild>
-                              <Link to={`/sessions?type=${thread.type}`}>
+                              <Link to={`/sessions?type=${session.type}`}>
                                 <MessageCircle className="mr-2 h-4 w-4" />
                                 <span>Production</span>
                               </Link>
@@ -208,7 +208,7 @@ export default function Layout() {
                           </SidebarMenuSubItem>
                           <SidebarMenuSubItem className={simulatedPrivateUnseenCount > 0 ? "flex justify-between items-center" : ""}>
                             <SidebarMenuSubButton asChild>
-                              <Link to={`/sessions?type=${thread.type}&list=simulated_private`}>
+                              <Link to={`/sessions?type=${session.type}&list=simulated_private`}>
                                 <User className="mr-2 h-4 w-4" />
                                 <span>Simulated Private</span>
                               </Link>
@@ -218,7 +218,7 @@ export default function Layout() {
                           </SidebarMenuSubItem>
                           <SidebarMenuSubItem className={simulatedSharedUnseenCount > 0 ? "flex justify-between items-center" : ""}>
                             <SidebarMenuSubButton asChild>
-                              <Link to={`/sessions?type=${thread.type}&list=simulated_shared`}>
+                              <Link to={`/sessions?type=${session.type}&list=simulated_shared`}>
                                 <Users className="mr-2 h-4 w-4" />
                                 <span>Simulated Shared</span>
                               </Link>

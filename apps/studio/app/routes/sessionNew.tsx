@@ -6,7 +6,7 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { apiFetch } from "~/lib/apiFetch";
-import { getThreadListParams } from "~/lib/utils";
+import { getListParams } from "~/lib/utils";
 import { type ActionResponse } from "~/lib/errors";
 import { config } from "../../agentview.config";
 import { AlertCircleIcon } from "lucide-react";
@@ -15,16 +15,16 @@ import { FormField } from "~/components/form";
 import { parseFormData } from "~/lib/parseFormData";
 
 export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
-  const listParams = getThreadListParams(request);
-  const threadConfig = config.sessions?.find((sessionConfig) => sessionConfig.type === listParams.type);
+  const listParams = getListParams(request);
+  const sessionConfig = config.sessions?.find((sessionConfig) => sessionConfig.type === listParams.type);
 
-  if (!threadConfig) {
-    throw new Error(`Thread config not found for type "${listParams.type}"`);
+  if (!sessionConfig) {
+    throw new Error(`Session config not found for type "${listParams.type}"`);
   }
 
-  if (threadConfig.metadata && (threadConfig.metadata?.length > 0)) {
+  if (sessionConfig.metadata && (sessionConfig.metadata?.length > 0)) {
     return {
-      threadConfig,
+      sessionConfig,
       listParams
     }
   }
@@ -42,27 +42,27 @@ export async function clientLoader({ request, params }: Route.ClientLoaderArgs) 
 
   const client_id = clientResponse.data.id;
 
-  const threadResponse = await apiFetch('/api/sessions', {
+  const sessionResponse = await apiFetch('/api/sessions', {
     method: 'POST',
     body: {
-      type: threadConfig.type,
+      type: sessionConfig.type,
       client_id: client_id
     }
   });
 
-  if (!threadResponse.ok) {
-    throw data(threadResponse.error, { status: threadResponse.status });
+  if (!sessionResponse.ok) {
+    throw data(sessionResponse.error, { status: sessionResponse.status });
   }
 
-  return redirect(`/sessions/${threadResponse.data.id}?list=${listParams.list}&type=${listParams.type}`);
+  return redirect(`/sessions/${sessionResponse.data.id}?list=${listParams.list}&type=${listParams.type}`);
 }
 
 export async function clientAction({ request, params }: Route.ClientActionArgs): Promise<ActionResponse | Response> {
-  const listParams = getThreadListParams(request);
-  const threadConfig = config.sessions?.find((sessionConfig) => sessionConfig.type === listParams.type);
+  const listParams = getListParams(request);
+  const sessionConfig = config.sessions?.find((sessionConfig) => sessionConfig.type === listParams.type);
 
-  if (!threadConfig) {
-    throw new Error(`Thread config not found for type "${listParams.type}"`);
+  if (!sessionConfig) {
+    throw new Error(`Session config not found for type "${listParams.type}"`);
   }
 
   const formData = await request.formData();
@@ -80,25 +80,23 @@ export async function clientAction({ request, params }: Route.ClientActionArgs):
 
   const client_id = clientResponse.data.id;
 
-  // Then create the thread with the new client_id and all metadata
-  const threadResponse = await apiFetch('/api/sessions', {
+  const sessionResponse = await apiFetch('/api/sessions', {
     method: 'POST',
     body: {
-      type: threadConfig.type,
+      type: sessionConfig.type,
       client_id: client_id,
       metadata: data.metadata
     }
   });
 
-  if (!threadResponse.ok) {
-    return { ok: false, error: threadResponse.error };
+  if (!sessionResponse.ok) {
+    return { ok: false, error: sessionResponse.error };
   }
 
-  // Redirect to the new thread
-  return redirect(`/sessions/${threadResponse.data.id}?list=${listParams.list}&type=${listParams.type}`);
+  return redirect(`/sessions/${sessionResponse.data.id}?list=${listParams.list}&type=${listParams.type}`);
 }
 
-export default function ThreadNew() {
+export default function SessionNewPage() {
   const actionData = useActionData<typeof clientAction>();
 
   return <div className="flex-1">
@@ -115,7 +113,7 @@ export default function ThreadNew() {
 }
 
 function Content() {
-  const { threadConfig } = useLoaderData<typeof clientLoader>();
+  const { sessionConfig } = useLoaderData<typeof clientLoader>();
 
   const fetcher = useFetcher();
   const formRef = useRef<HTMLFormElement>(null);
@@ -131,12 +129,10 @@ function Content() {
 
     <Form method="post" ref={formRef} className="max-w-xl">
 
-      {threadConfig.metadata?.length > 0 && (<div>
-
-        {/* <h3 className="text-sm font-medium mb-4 text-gray-700">Thread properties</h3> */}
+      {sessionConfig.metadata?.length > 0 && (<div>
 
         <div className="space-y-2">
-          {threadConfig.metadata?.map((metafield: any) => (<FormField
+          {sessionConfig.metadata?.map((metafield: any) => (<FormField
             key={metafield.name}
             id={metafield.name}
             label={metafield.title ?? metafield.name}

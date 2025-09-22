@@ -1,4 +1,4 @@
-import type { Route } from "./+types/sessionActivityComments";
+import type { Route } from "./+types/sessionItemComments";
 import { apiFetch } from "~/lib/apiFetch";
 import { type ActionResponse } from "~/lib/errors";
 import { commentFormDataToJSON } from "~/lib/commentForm";
@@ -24,7 +24,7 @@ export async function clientAction({ request, params }: Route.ClientActionArgs):
         };
     }
 
-    const response = await apiFetch(`/api/sessions/${params.id}/items/${params.activityId}/comments`, {
+    const response = await apiFetch(`/api/sessions/${params.id}/items/${params.itemId}/comments`, {
         method: 'POST',
         body: {
             comment,

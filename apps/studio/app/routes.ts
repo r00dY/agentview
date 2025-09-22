@@ -19,12 +19,11 @@ export default [
             index("routes/sessionsIndex.tsx"),
             route("new", "routes/sessionNew.tsx"),
             route(":id", "routes/session.tsx", [
-                route("activities/:activityId", "routes/sessionActivity.tsx"),
-                route("activities/:activityId/comments", "routes/sessionActivityComments.tsx"),
-                route("activities/:activityId/comments/:commentId", "routes/sessionActivityComment.tsx")
+                route("items/:itemId", "routes/sessionItem.tsx"),
+                route("items/:itemId/comments", "routes/sessionItemComments.tsx"),
+                route("items/:itemId/comments/:commentId", "routes/sessionItemComment.tsx")
             ]),
         ]),
-        route("inbox", "routes/inbox.tsx"),
         route("schemas", "routes/schemas.tsx"),
 
         route("logout", "routes/logout.tsx"),

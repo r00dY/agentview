@@ -42,7 +42,7 @@ function newLinesIntoBr(text: string) {
 }
 
 
-export function ActivityUserMessageComponent({ value, options }: DisplayComponentProps<string>) {
+export function ItemUserMessageComponent({ value, options }: DisplayComponentProps<string>) {
     return <div className="relative pl-[10%]">
         <div className="border p-3 rounded-lg bg-white">
             <div
@@ -54,7 +54,7 @@ export function ActivityUserMessageComponent({ value, options }: DisplayComponen
     </div>
 }
 
-export function ActivityAssistantMessageComponent({ value, options }: DisplayComponentProps<string>) {
+export function ItemAssistantMessageComponent({ value, options }: DisplayComponentProps<string>) {
     return <div className="relative pr-[10%]">
         <div className="border p-3 rounded-lg bg-muted">
             <div className="prose prose-ul:list-disc prose-ol:list-decimal prose-a:underline" dangerouslySetInnerHTML={{__html: marked.parse(value, { async: false })}}></div>

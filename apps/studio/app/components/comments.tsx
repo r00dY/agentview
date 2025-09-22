@@ -19,49 +19,49 @@ import { TextEditor, textToElements } from "./wysiwyg/TextEditor";
 import { useSessionContext } from "~/lib/session";
 import { apiFetch } from "~/lib/apiFetch";
 
-export type CommentThreadProps = {
-    thread: Session,
-    activity: SessionItem,
+export type CommentSessionProps = {
+    session: Session,
+    item: SessionItem,
     collapsed?: boolean,
     singleLineMessageHeader?: boolean,
     small?: boolean,
 }
 
-export type CommentThreadFloatingBoxProps = CommentThreadProps & {
+export type CommentSessionFloatingBoxProps = CommentSessionProps & {
     selected: boolean,
-    onSelect: (activity: any) => void,
+    onSelect: (item: any) => void,
 }
 
-export type CommentThreadFloatingButtonProps = CommentThreadFloatingBoxProps & {
-    thread: Session,
-    activity: SessionItem,
-    onSelect: (activity: any) => void,
+export type CommentSessionFloatingButtonProps = CommentSessionFloatingBoxProps & {
+    session: Session,
+    item: SessionItem,
+    onSelect: (item: any) => void,
 }
 
-function getAllScoreConfigs(thread: Session, activity: SessionItem) {
-    const threadConfig = config.sessions?.find((t: any) => t.type === thread.type);
-    if (!threadConfig) {
-        throw new Error("Thread config not found");
+function getAllScoreConfigs(session: Session, item: SessionItem) {
+    const sessionConfig = config.sessions?.find((t: any) => t.type === session.type);
+    if (!sessionConfig) {
+        throw new Error("session config not found");
     }
 
-    const activityConfig = threadConfig?.items.find((a: any) =>
-        a.type === activity.type && (!a.role || a.role === activity.role)   
+    const itemConfig = sessionConfig?.items.find((a: any) =>
+        a.type === item.type && (!a.role || a.role === item.role)   
     );
-    const allScoreConfigs = activityConfig?.scores || [];
+    const allScoreConfigs = itemConfig?.scores || [];
 
     return allScoreConfigs;
 }
 
-export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, activity, collapsed = false, singleLineMessageHeader = false, small=false }, ref) => {
+export const CommentThread = forwardRef<any, CommentSessionProps>(({ session, item, collapsed = false, singleLineMessageHeader = false, small=false }, ref) => {
     const fetcher = useFetcher();
 
-    const visibleMessages = activity.commentMessages.filter((m: any) => !m.deletedAt) ?? []
+    const visibleMessages = item.commentMessages.filter((m: any) => !m.deletedAt) ?? []
     const hasZeroVisisbleComments = visibleMessages.length === 0
 
     const formRef = useRef<HTMLFormElement>(null);
     const { members, user } = useSessionContext();
 
-    const allScoreConfigs = getAllScoreConfigs(thread, activity);
+    const allScoreConfigs = getAllScoreConfigs(session, item);
 
     const scores : Record<string, any> = {};
     for (const messageItem of visibleMessages) {
@@ -129,8 +129,8 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                     key={message.id}
                     message={message}
                     fetcher={fetcher}
-                    activity={activity}
-                    thread={thread}
+                    item={item}
+                    session={session}
                     compressionLevel={compressionLevel}
                     singleLineMessageHeader={singleLineMessageHeader}
                 />
@@ -165,7 +165,7 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
                     </Alert>
                 )}
 
-                <fetcher.Form method="post" action={`/sessions/${thread.id}/items/${activity.id}/comments`} ref={formRef}>
+                <fetcher.Form method="post" action={`/sessions/${session.id}/items/${item.id}/comments`} ref={formRef}>
 
                     {unassignedScoreConfigs.length > 0 && <div className="mb-4 space-y-2">
                         {unassignedScoreConfigs.map((scoreConfig) => (
@@ -227,7 +227,7 @@ export const CommentThread = forwardRef<any, CommentThreadProps>(({ thread, acti
 
 
 
-export function CommentThreadFloatingBox({ thread, activity, selected = false, onSelect }: CommentThreadFloatingBoxProps) {
+export function CommentSessionFloatingBox({ session, item, selected = false, onSelect }: CommentSessionFloatingBoxProps) {
     const commentThreadRef = useRef<any>(null);
     const revalidator = useRevalidator();
 
@@ -237,7 +237,7 @@ export function CommentThreadFloatingBox({ thread, activity, selected = false, o
         }
 
         if (selected) {
-            apiFetch(`/api/sessions/${thread.id}/items/${activity.id}/seen`, {
+            apiFetch(`/api/sessions/${session.id}/items/${item.id}/seen`, {
                 method: 'POST',
             }).then((data) => {
                 if (data.ok) {
@@ -273,12 +273,12 @@ export function CommentThreadFloatingBox({ thread, activity, selected = false, o
     return (
         <div className={`rounded-lg ${selected ? "bg-white border" : "bg-muted"}`} data-comment={true} onClick={(e) => {
             if (!selected) {
-                onSelect(activity)
+                onSelect(item)
             }
         }}>
             <CommentThread
-                thread={thread}
-                activity={activity}
+                session={session}
+                item={item}
                 collapsed={!selected}
                 ref={commentThreadRef}
                 small={true}
@@ -336,7 +336,7 @@ export function CommentMessageHeader({ title, subtitle, actions, singleLineMessa
 type MessageCompressionLevel = "none" | "medium" | "high";
 
 // New subcomponent for comment message item with edit logic
-export function CommentMessageItem({ message, activity, thread,compressionLevel = "none", singleLineMessageHeader = false }: { message: CommentMessage, fetcher: any, activity: SessionItem, thread: Session,  compressionLevel?: MessageCompressionLevel, singleLineMessageHeader?: boolean }) {
+export function CommentMessageItem({ message, item, session,compressionLevel = "none", singleLineMessageHeader = false }: { message: CommentMessage, fetcher: any, item: SessionItem, session: Session,  compressionLevel?: MessageCompressionLevel, singleLineMessageHeader?: boolean }) {
     if (message.deletedAt) {
         throw new Error("Deleted messages don't have rendering code.")
     }
@@ -357,7 +357,7 @@ export function CommentMessageItem({ message, activity, thread,compressionLevel 
     const [isEditing, setIsEditing] = useState(false);
 
 
-    const allScoreConfigs = getAllScoreConfigs(thread, activity);
+    const allScoreConfigs = getAllScoreConfigs(session, item);
 
     const scores : Record<string, any> = {};
     for (const score of message.scores ?? []) {
@@ -367,8 +367,6 @@ export function CommentMessageItem({ message, activity, thread,compressionLevel 
         scores[score.name] = score.value;
     }
 
-
-    // const { scores, allScoreConfigs } = getScoresInfo(thread, activity, user);
 
     const messageScoreConfigs = allScoreConfigs.filter(
         (scoreConfig) =>
@@ -403,7 +401,7 @@ export function CommentMessageItem({ message, activity, thread,compressionLevel 
                         <DropdownMenuItem onClick={(e) => {
                             e.preventDefault();
                             if (confirm('Are you sure you want to delete this comment?')) {
-                                fetcher.submit(null, { method: 'delete', action: `/sessions/${thread.id}/items/${activity.id}/comments/${message.id}` }); // that could be fetcher.Form!
+                                fetcher.submit(null, { method: 'delete', action: `/sessions/${session.id}/items/${item.id}/comments/${message.id}` }); // that could be fetcher.Form!
                             }
                         }}>
                             Delete
@@ -424,7 +422,7 @@ export function CommentMessageItem({ message, activity, thread,compressionLevel 
                         </Alert>
                     )}
 
-                    <fetcher.Form method="put" action={`/sessions/${thread.id}/items/${activity.id}/comments/${message.id}`} ref={formRef} className="space-y-2">
+                    <fetcher.Form method="put" action={`/sessions/${session.id}/items/${item.id}/comments/${message.id}`} ref={formRef} className="space-y-2">
                         {messageScoreConfigs.length > 0 && <div className="mb-4 space-y-2">
                             {messageScoreConfigs.map((scoreConfig) => <FormField
                                 key={scoreConfig.name}

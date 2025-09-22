@@ -2,7 +2,7 @@ import type { AgentViewConfig } from "./app/types";
 import { z } from "zod";
 import { ThumbsDown, ThumbsUp } from "lucide-react";
 import { SelectInput, TextareaInput, TextInput, ToggleBooleanInput } from "./app/components/form";
-import { ActivityAssistantMessageComponent, ActivityUserMessageComponent, DisplayBooleanComponent, DisplayTextComponent } from "./app/components/display";
+import { ItemAssistantMessageComponent, ItemUserMessageComponent, DisplayBooleanComponent, DisplayTextComponent } from "./app/components/display";
 import { marked } from "marked";
 import { ProductDisplay, ProductSelect } from "product_components";
 
@@ -20,13 +20,13 @@ export const config: AgentViewConfig = {
                     title: "Message",
                     content: z.string(),
                     input: TextareaInput,
-                    display: ActivityUserMessageComponent
+                    display: ItemUserMessageComponent
                 },
                 {
                     type: "message",
                     role: "assistant",
                     content: z.string(),
-                    display: ActivityAssistantMessageComponent,
+                    display: ItemAssistantMessageComponent,
                     scores: [
                         {
                             name: "user_reaction",
@@ -69,7 +69,7 @@ export const config: AgentViewConfig = {
                     title: "Message",
                     content: z.string(),
                     input: TextareaInput,
-                    display: ActivityUserMessageComponent
+                    display: ItemUserMessageComponent
                 },
                 {
                     isInput: true,
@@ -148,7 +148,7 @@ export const config: AgentViewConfig = {
                     type: "message",
                     role: "assistant",
                     content: z.string(),
-                    display: ActivityAssistantMessageComponent,
+                    display: ItemAssistantMessageComponent,
                     scores: [
                         {
                             name: "user_reaction",
