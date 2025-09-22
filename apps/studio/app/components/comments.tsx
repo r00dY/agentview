@@ -333,11 +333,10 @@ export function CommentMessageHeader({ title, subtitle, actions, singleLineMessa
     </div>
 }
 
-
 type MessageCompressionLevel = "none" | "medium" | "high";
 
 // New subcomponent for comment message item with edit logic
-export function CommentMessageItem({ message, activity, thread,compressionLevel = "none", singleLineMessageHeader = false }: { message: CommentMessage, fetcher: any, activity: Activity, thread: Thread,  compressionLevel?: MessageCompressionLevel, singleLineMessageHeader?: boolean }) {
+export function CommentMessageItem({ message, activity, thread,compressionLevel = "none", singleLineMessageHeader = false }: { message: CommentMessage, fetcher: any, activity: SessionItem, thread: Session,  compressionLevel?: MessageCompressionLevel, singleLineMessageHeader?: boolean }) {
     if (message.deletedAt) {
         throw new Error("Deleted messages don't have rendering code.")
     }
