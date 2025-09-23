@@ -35,10 +35,6 @@ export const ClientCreateSchema = ClientSchema.pick({
 
 export type ClientCreate = z.infer<typeof ClientCreateSchema>
 
-
-
-
-
 export const ScoreSchema = z.object({
     id: z.string(),
     sessionItemId: z.string(),

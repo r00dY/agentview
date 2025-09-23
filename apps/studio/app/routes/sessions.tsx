@@ -1,13 +1,12 @@
-import { redirect, useLoaderData, Outlet, Link, Form, data, NavLink } from "react-router";
+import { useLoaderData, Outlet, Link, Form, data, NavLink } from "react-router";
 import type { Route } from "./+types/sessions";
 
 import { Button } from "~/components/ui/button";
-import { Circle, CircleCheck, PlusIcon } from "lucide-react";
+import { PlusIcon } from "lucide-react";
 import { Header, HeaderTitle } from "~/components/header";
 import { getListParams } from "~/lib/utils";
 import { apiFetch } from "~/lib/apiFetch";
 import type { Session } from "~/lib/shared/apiTypes";
-import { getAllSessionItems } from "~/lib/shared/sessionUtils";
 import { timeAgoShort } from "~/lib/timeAgo";
 import { useSessionContext } from "~/lib/session";
 import { NotificationBadge } from "~/components/NotificationBadge";
@@ -48,11 +47,6 @@ export default function Session() {
     </div>
 
     <Outlet />
-
-    {/* <div className="flex-1 flex flex-col">  
-      <Outlet />
-    </div> */}
-
   </div>
 }
 
