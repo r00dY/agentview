@@ -3,7 +3,6 @@ import { RouterProvider } from "react-router";
 import { router } from "./routes";
 import "./app.css";
 
-// Create the root element and render the app
 const container = document.getElementById("root");
 if (!container) {
   throw new Error("Root element not found");
@@ -11,8 +10,3 @@ if (!container) {
 
 const root = createRoot(container);
 root.render(<RouterProvider router={router} />)
-// root.render(
-//   <Layout>
-//     <RouterProvider router={router} />
-//   </Layout>
-// );
