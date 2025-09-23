@@ -1,96 +1,18 @@
-import {
-  isRouteErrorResponse,
-  Links,
-  Meta,
-  Outlet,
-  Scripts,
-  ScrollRestoration,
-} from "react-router";
-
-import type { Route } from "./+types/root";
+import { createRoot } from "react-dom/client";
+import { RouterProvider } from "react-router";
+import { router } from "./routes";
 import "./app.css";
 
-export const links: Route.LinksFunction = () => [
-];
-
-export function Layout({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="en">
-      <head>
-        <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <Meta />
-
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,100..900;1,100..900&display=swap"
-        />
-
-        <Links />
-      </head>
-      <body>
-        {children}
-        <ScrollRestoration />
-        <Scripts />
-      </body>
-    </html>
-  );
+// Create the root element and render the app
+const container = document.getElementById("root");
+if (!container) {
+  throw new Error("Root element not found");
 }
 
-export default function App() {
-  return <Outlet />;
-}
-
-export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
-  let message = "Oops!";
-  let details = "An unexpected error occurred.";
-  let stack: string | undefined;
-  let data: any;
-
-  console.log('error', error)
-
-  if (isRouteErrorResponse(error)) {
-    message = error.status === 404 ? "404" : "Error";
-    details =
-      error.status === 404
-        ? "The requested page could not be found."
-        : error.statusText || details;
-
-    data = error.data;
-  } else if (import.meta.env.DEV && error && error instanceof Error) {
-    details = error.message;
-    stack = error.stack;
-  }
-
-  return (
-    <main className="pt-16 p-4 container mx-auto">
-      <h1>{message}</h1>
-      <p>{details}</p>
-      { data && (<div>
-          <br/>
-          <pre>{JSON.stringify(data, null, 2)}</pre>
-        </div>
-      )}
-      {stack && (
-        <pre className="w-full p-4 overflow-x-auto">
-          <code>{stack}</code>
-        </pre>
-      )}
-    </main>
-  );
-}
-
-export function HydrateFallback() {
-  return (
-    <div className="flex items-center justify-center min-h-screen bg-background">
-      <img
-        src="/logo.svg"
-        alt="AgentView Logo"
-        className="w-48 h-48"
-        style={{ objectFit: "contain" }}
-      />
-    </div>
-  );
-}
+const root = createRoot(container);
+root.render(<RouterProvider router={router} />)
+// root.render(
+//   <Layout>
+//     <RouterProvider router={router} />
+//   </Layout>
+// );

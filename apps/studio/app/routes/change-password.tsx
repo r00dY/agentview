@@ -1,10 +1,9 @@
-import type { Route } from "./+types/change-password";
 import { authClient } from "~/lib/auth-client";
 import { type ActionResponse, betterAuthErrorToBaseError } from "~/lib/errors";
 
-export async function clientAction({
+export async function action({
   request,
-}: Route.ActionArgs): Promise<ActionResponse> {
+}: { request: Request }): Promise<ActionResponse> {
 
   const fieldErrors: Record<string, string> = {};
 
@@ -47,4 +46,13 @@ export async function clientAction({
   }
 
   return { ok: true, data };
+}
+
+export default function ChangePassword() {
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-4">Change Password</h1>
+      <p>Change password page content goes here.</p>
+    </div>
+  );
 }

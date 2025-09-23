@@ -1,8 +1,7 @@
-import type { Route } from "./+types/clientShare";
 import { apiFetch } from "~/lib/apiFetch";
 
 
-export async function clientAction({ request, params }: Route.ClientActionArgs) {
+export async function action({ request, params }: { request: Request; params: { clientId: string } }) {
   const formData = await request.formData();
   const is_shared = formData.get("is_shared") === "true" ;
   
@@ -16,4 +15,13 @@ export async function clientAction({ request, params }: Route.ClientActionArgs) 
   }
 
   return { ok: true, data: {} };
+}
+
+export default function ClientShare() {
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-4">Client Share</h1>
+      <p>Client share page content goes here.</p>
+    </div>
+  );
 }

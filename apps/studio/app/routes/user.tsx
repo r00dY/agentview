@@ -1,10 +1,9 @@
-import type { Route } from "./+types/user";
 import { type ActionResponse, betterAuthErrorToBaseError } from "~/lib/errors";
 import { authClient } from "~/lib/auth-client";
 
-export async function clientAction({
+export async function action({
   request,
-}: Route.ActionArgs): Promise<ActionResponse> {
+}: { request: Request }): Promise<ActionResponse> {
 
   const fieldErrors: Record<string, string> = {};
 
@@ -29,4 +28,13 @@ export async function clientAction({
   }
 
   return { ok: true, data };
+}
+
+export default function User() {
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-4">User Profile</h1>
+      <p>User profile page content goes here.</p>
+    </div>
+  );
 }

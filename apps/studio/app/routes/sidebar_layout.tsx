@@ -26,7 +26,7 @@ import {
   SidebarMenuSubItem,
   SidebarMenuSubButton,
 } from "../components/ui/sidebar"
-import type { Route } from "./+types/sidebar_layout";
+// Removed Framework Mode type import
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
 import { EditProfileDialog } from "~/components/EditProfileDialog";
 import { ChangePasswordDialog } from "~/components/ChangePasswordDialog";
@@ -38,7 +38,7 @@ import { NotificationBadge } from "~/components/NotificationBadge";
 import { createOrUpdateSchema } from "~/lib/remoteConfig";
 import { config } from "../../agentview.config";
 
-export async function clientLoader({ request }: Route.ClientLoaderArgs) {
+export async function loader({ request }: { request: Request }) {
   const session = await authClient.getSession()
 
   const url = new URL(request.url);
@@ -79,7 +79,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 }
 
 export default function Layout() {
-  const { user, isDeveloper, members, locale, lists } = useLoaderData<typeof clientLoader>()
+  const { user, isDeveloper, members, locale, lists } = useLoaderData<typeof loader>()
   const logoutFetcher = useFetcher()
   const [editProfileOpen, setEditProfileOpen] = React.useState(false)
   const [changePasswordOpen, setChangePasswordOpen] = React.useState(false)

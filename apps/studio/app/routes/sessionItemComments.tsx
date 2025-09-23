@@ -1,9 +1,8 @@
-import type { Route } from "./+types/sessionItemComments";
 import { apiFetch } from "~/lib/apiFetch";
 import { type ActionResponse } from "~/lib/errors";
 import { commentFormDataToJSON } from "~/lib/commentForm";
 
-export async function clientAction({ request, params }: Route.ClientActionArgs): Promise<ActionResponse> {
+export async function action({ request, params }: { request: Request; params: { id: string; itemId: string } }): Promise<ActionResponse> {
     const formData = await request.formData();
     const extractionResponse = commentFormDataToJSON(formData);
 
@@ -37,4 +36,13 @@ export async function clientAction({ request, params }: Route.ClientActionArgs):
     }
 
     return { ok: true, data: { } }
+}
+
+export default function SessionItemComments() {
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-4">Session Item Comments</h1>
+      <p>Session item comments page content goes here.</p>
+    </div>
+  );
 }

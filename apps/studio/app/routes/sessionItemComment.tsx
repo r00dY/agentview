@@ -1,9 +1,8 @@
-import type { Route } from "./+types/sessionItemComment";
 import { apiFetch } from "~/lib/apiFetch";
 import { commentFormDataToJSON } from "~/lib/commentForm";
 import { type ActionResponse } from "~/lib/errors";
 
-export async function clientAction({ request, params }: Route.ClientActionArgs): Promise<ActionResponse> {
+export async function action({ request, params }: { request: Request; params: { id: string; itemId: string; commentId: string } }): Promise<ActionResponse> {
     if (request.method === 'DELETE') {
         
         const response = await apiFetch(`/api/sessions/${params.id}/items/${params.itemId}/comments/${params.commentId}`, {
@@ -43,4 +42,13 @@ export async function clientAction({ request, params }: Route.ClientActionArgs):
     }
 
     throw new Error('Method not allowed');
+}
+
+export default function SessionItemComment() {
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-4">Session Item Comment</h1>
+      <p>Session item comment page content goes here.</p>
+    </div>
+  );
 }
