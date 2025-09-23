@@ -98,85 +98,9 @@ export default function Layout() {
             <Link to="/">
               <img src="/logo.svg" alt="AgentView Logo" className="max-w-[100px]" />
             </Link>
-
-            {/* <Button variant={"outline"} className="w-full justify-start gap-2 mt-5" asChild>
-
-              <Link to="/users/create">
-                <PlusCircle className="h-4 w-4" />
-                <span>New Session</span>
-              </Link>
-            </Button> */}
           </SidebarHeader>
 
           <SidebarContent>
-            {/* <SidebarGroup>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
-                      <Link to="/inbox">
-                        <Inbox className="mr-2 h-4 w-4" />
-                        <span>Inbox</span>
-                      </Link>
-                    </SidebarMenuButton>
-
-                  </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup> */}
-
-            {/* <SidebarGroup>
-              <SidebarGroupLabel>pdp_chat</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton>Production </SidebarMenuButton>
-
-                    <SidebarMenuSub>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild>
-                          <Link to="/sessions">
-                            <MessageCircle className="mr-2 h-4 w-4" />
-                            <span>All</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                    </SidebarMenuSub>
-
-
-                  </SidebarMenuItem>
-
-
-
-                  <SidebarMenuItem>
-                    <SidebarMenuButton>Simulated</SidebarMenuButton>
-                    <SidebarMenuSub>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild>
-                          <Link to="/sessions?list=simulated_private">
-                            <User className="mr-2 h-4 w-4" />
-                            <span> Private</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild>
-                          <Link to="/sessions?list=simulated_shared">
-                            <Users className="mr-2 h-4 w-4" />
-                            <span>Shared</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                    </SidebarMenuSub>
-
-
-                  </SidebarMenuItem>
-
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup> */}
-
-
             <SidebarGroup>
               <SidebarGroupLabel>Sessions</SidebarGroupLabel>
               <SidebarGroupContent>
@@ -236,44 +160,74 @@ export default function Layout() {
 
 
 
-            {/* <SidebarGroup>
-              <SidebarGroupLabel>Production</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
-                      <Link to="/sessions">
-                        <MessageCircle className="mr-2 h-4 w-4" />
-                        <span>Sessions</span>
-                      </Link>
-                    </SidebarMenuButton>
+            {/* {(!config.sessions || config.sessions.length === 0) ? (
+              <SidebarGroup>
+                <SidebarGroupLabel>Sessions</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton className="text-muted-foreground">
+                        You don't have any agents yet
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            ) : (
+              config.sessions?.map((session) => {
+                const realUnseenCount = getUnseenCount(session.type, "real")
+                const simulatedPrivateUnseenCount = getUnseenCount(session.type, "simulated_private")
+                const simulatedSharedUnseenCount = getUnseenCount(session.type, "simulated_shared")
 
-                  </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
+                return (
+                  <React.Fragment key={session.type}>
+                    <SidebarGroup>
+                      <SidebarGroupLabel>{session.type}</SidebarGroupLabel>
+                      <SidebarGroupContent>
+                        <SidebarMenu>
+                          <SidebarMenuItem>
+                            <SidebarMenuButton>Production</SidebarMenuButton>
+                            <SidebarMenuSub className="mr-0">
+                              <SidebarMenuSubItem className={realUnseenCount > 0 ? "flex justify-between items-center" : ""}>
+                                <SidebarMenuSubButton asChild>
+                                  <Link to={`/sessions?type=${session.type}`}>
+                                    <span>All</span>
+                                  </Link>
+                                </SidebarMenuSubButton>
+                                {realUnseenCount > 0 && <NotificationBadge>{realUnseenCount}</NotificationBadge>}
+                              </SidebarMenuSubItem>
+                            </SidebarMenuSub>
+                          </SidebarMenuItem>
 
-            <SidebarGroup>
-              <SidebarGroupLabel>Dev</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
-                      <Link to="/sessions?list=simulated_private">
-                        <User className="mr-2 h-4 w-4" />
-                        <span>Private Sessions</span>
-                      </Link>
-                    </SidebarMenuButton>
-                    <SidebarMenuButton asChild>
-                      <Link to="/sessions?list=simulated_shared">
-                        <Users className="mr-2 h-4 w-4" />
-                        <span>Shared Sessions</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup> */}
+                          <SidebarMenuItem>
+                            <SidebarMenuButton>Simulations</SidebarMenuButton>
+                            <SidebarMenuSub className="mr-0">
+                              <SidebarMenuSubItem className={simulatedPrivateUnseenCount > 0 ? "flex justify-between items-center" : ""}>
+                                <SidebarMenuSubButton asChild>
+                                  <Link to={`/sessions?type=${session.type}&list=simulated_private`}>
+                                    <span>Private</span>
+                                  </Link>
+                                </SidebarMenuSubButton>
+                                {simulatedPrivateUnseenCount > 0 && <NotificationBadge>{simulatedPrivateUnseenCount}</NotificationBadge>}
+                              </SidebarMenuSubItem>
+                              <SidebarMenuSubItem className={simulatedSharedUnseenCount > 0 ? "flex justify-between items-center" : ""}>
+                                <SidebarMenuSubButton asChild>
+                                  <Link to={`/sessions?type=${session.type}&list=simulated_shared`}>
+                                    <span>Shared</span>
+                                  </Link>
+                                </SidebarMenuSubButton>
+                                {simulatedSharedUnseenCount > 0 && <NotificationBadge>{simulatedSharedUnseenCount}</NotificationBadge>}
+                              </SidebarMenuSubItem>
+                            </SidebarMenuSub>
+                          </SidebarMenuItem>
+                        </SidebarMenu>
+                      </SidebarGroupContent>
+                    </SidebarGroup>
+                  </React.Fragment>
+                )
+              })
+            )} */}
+
 
             {user.role === "admin" && <SidebarGroup>
               <SidebarGroupLabel>Organization</SidebarGroupLabel>
