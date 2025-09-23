@@ -1,5 +1,5 @@
 {
-  "name": "agentview-monorepo",
+  "name": "@agentview/monorepo",
   "private": true,
   "version": "0.0.4-beta.8",
   "scripts": {
