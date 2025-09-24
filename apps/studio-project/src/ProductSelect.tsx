@@ -1,8 +1,8 @@
 import React from "react"
-import { Popover, PopoverContent, PopoverTrigger } from "@agentview/studio/components/ui/popover"
-import { Button } from "@agentview/studio/components/ui/button"
+import { Popover, PopoverContent, PopoverTrigger } from "agentview/components/ui/popover"
+import { Button } from "agentview/components/ui/button"
 import { Check, ChevronsUpDown } from "lucide-react"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@agentview/studio/components/ui/command"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "agentview/components/ui/command"
 import { products } from "./products"
 
 export function ProductSelect({ value, onChange }: { value: string, onChange?: (product: string | undefined) => void }) {

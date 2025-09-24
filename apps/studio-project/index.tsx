@@ -1,5 +1,5 @@
 import "./styles.css";
-import { renderStudio } from "@agentview/studio/index";
+import { renderStudio } from "agentview/index";
 import { config } from "./agentview.config";
 
 renderStudio(

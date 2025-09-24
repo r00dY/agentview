@@ -1,4 +1,4 @@
 @import "tailwindcss";
-@source "node_modules/@agentview/studio";
+@source "node_modules/agentview";
 
-@import "@agentview/studio/styles.css";
+@import "agentview/styles.css";

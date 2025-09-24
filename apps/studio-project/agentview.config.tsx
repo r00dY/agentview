@@ -1,8 +1,8 @@
-import type { AgentViewConfig } from "@agentview/studio/types";
+import type { AgentViewConfig } from "agentview/types";
 import { z } from "zod";
 import { ThumbsDown, ThumbsUp } from "lucide-react";
-import { SelectInput, TextareaInput, ToggleBooleanInput } from "@agentview/studio/components/form";
-import { ItemAssistantMessageComponent, ItemUserMessageComponent, DisplayBooleanComponent } from "@agentview/studio/components/display";
+import { SelectInput, TextareaInput, ToggleBooleanInput } from "agentview/components/form";
+import { ItemAssistantMessageComponent, ItemUserMessageComponent, DisplayBooleanComponent } from "agentview/components/display";
 import { marked } from "marked";
 import { ProductDisplay } from "./src/ProductDisplay";
 import { ProductSelect } from "./src/ProductSelect";

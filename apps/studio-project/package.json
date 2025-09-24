@@ -11,10 +11,12 @@
   "dependencies": {
     "react": "^19.1",
     "react-dom": "^19.1",
-    "@agentview/studio": "workspace:*"
+    "agentview": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.1",
-    "typescript": "^5.8"
+    "typescript": "^5.8",
+    "vite": "^6.3.3",
+    "@tailwindcss/vite": "^4.1.4"
   }
 }

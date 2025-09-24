@@ -1,5 +1,5 @@
 {
-  "name": "@agentview/studio",
+  "name": "agentview",
   "version": "0.0.4-beta.8",
   "type": "module",
   "files": [
