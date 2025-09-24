@@ -22,16 +22,12 @@ import { logoutRoute } from "./routes/logout";
 import ChangePassword from "./routes/change-password";
 import { loginRoute} from "./routes/login";
 import { signupRoute } from "./routes/signup";
-import { RootComponent } from "./RootComponent";
-import { ErrorBoundary } from "./ErrorBoundary";
-import { HydrateFallback } from "./HydrateFallback";
+import { rootRoute } from "./root";
 
 export const router = createBrowserRouter([
   {
     path: "/",
-    Component: RootComponent,
-    ErrorBoundary,
-    HydrateFallback,
+    ...rootRoute,
     children: [
       {
         path: "/",
@@ -135,5 +131,5 @@ export const router = createBrowserRouter([
         ...signupRoute
       },
     ],
-  },
+  }
 ]);
