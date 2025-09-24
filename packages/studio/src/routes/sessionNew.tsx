@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from "~/components/ui/alert";
 import { apiFetch } from "~/lib/apiFetch";
 import { getListParams } from "~/lib/utils";
 import { type ActionResponse } from "~/lib/errors";
-import { config } from "../../agentview.config";
+import { config } from "~/config";
 import { AlertCircleIcon } from "lucide-react";
 import { useRef } from "react";
 import { FormField } from "~/components/form";

@@ -6,7 +6,6 @@ import { ItemAssistantMessageComponent, ItemUserMessageComponent, DisplayBoolean
 import { marked } from "marked";
 import { ProductDisplay, ProductSelect } from "product_components";
 
-
 export const config: AgentViewConfig = {
     sessions: [
         {

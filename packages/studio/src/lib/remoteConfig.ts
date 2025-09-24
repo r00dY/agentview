@@ -2,8 +2,7 @@ import { apiFetch } from "./apiFetch";
 import { serializeBaseConfig } from "./baseConfigHelpers";
 import { getBaseConfig } from "./baseConfigHelpers";
 import { equalJSON } from "./equalJSON";
-import { config } from "../../agentview.config";
-
+import { config } from "~/config";
 
 export async function getRemoteConfig() {
     const response = await apiFetch(`/api/dev/configs/current`);

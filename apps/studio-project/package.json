@@ -1,0 +1,20 @@
+{
+  "name": "@agentview/studio-project",
+  "version": "0.0.4-beta.8",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "start": "vite preview",
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "react": "^19.1",
+    "react-dom": "^19.1",
+    "@agentview/studio": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1",
+    "typescript": "^5.8"
+  }
+}

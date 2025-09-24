@@ -17,7 +17,7 @@ import { sessionRoute } from "./routes/session";
 import { sessionItemRoute } from "./routes/sessionItem";
 import { sessionItemCommentsRoute } from "./routes/sessionItemComments";
 import { sessionItemCommentRoute } from "./routes/sessionItemComment";
-import { schemasRoute } from "./routes/schemas";
+import { configsRoute } from "./routes/configs";
 import { logoutRoute } from "./routes/logout";
 import { changePasswordRoute } from "./routes/change-password";
 import { loginRoute} from "./routes/login";
@@ -108,8 +108,8 @@ export const router = createBrowserRouter([
             ],
           },
           {
-            path: "schemas",
-            ...schemasRoute,
+            path: "configs",
+            ...configsRoute,
           },
           {
             path: "change-password",

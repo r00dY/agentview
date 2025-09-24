@@ -19,7 +19,7 @@ import { parseFormData } from "~/lib/parseFormData";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs";
 import { ItemsWithCommentsLayout } from "~/components/ItemsWithCommentsLayout";
 import { CommentSessionFloatingBox } from "~/components/comments";
-import { config } from "../../agentview.config";
+import { config } from "~/config";
 
 async function loader({ request, params }: LoaderFunctionArgs) {
     const response = await apiFetch<Session>(`/api/sessions/${params.id}`);

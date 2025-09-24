@@ -3,7 +3,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "./app/components/ui/pop
 import { Button } from "./app/components/ui/button"
 import { Check, ChevronsUpDown } from "lucide-react"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "./app/components/ui/command"
-import { cn } from "~/lib/utils"
 
 export function ProductSelect({ value, onChange }: { value: string, onChange?: (product: string | undefined) => void }) {
   const [open, setOpen] = React.useState(false)
@@ -43,7 +42,7 @@ export function ProductSelect({ value, onChange }: { value: string, onChange?: (
                 >
                   <img src={product.image_url} alt={product.name} className="w-8 h-8 mr-2" />
                   {product.name}
-                  <Check className={cn("ml-auto", product.id === selectedProduct?.id ? "opacity-100" : "opacity-0")} />
+                  <Check className={`ml-auto ${product.id === selectedProduct?.id ? "opacity-100" : "opacity-0"}`} />
                 </CommandItem>
               ))}
             </CommandGroup>

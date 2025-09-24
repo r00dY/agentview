@@ -1,7 +1,6 @@
 import { AlertCircleIcon, EllipsisVerticalIcon, Gauge, GaugeIcon, Reply, ReplyIcon } from "lucide-react";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useFetcher, useRevalidator } from "react-router";
-import { config } from "agentview.config";
 import type { SessionItem, CommentMessage, Session, User } from "~/lib/shared/apiTypes";
 import { Button } from "~/components/ui/button";
 import {
@@ -18,6 +17,7 @@ import { Alert, AlertDescription } from "./ui/alert";
 import { TextEditor, textToElements } from "./wysiwyg/TextEditor";
 import { useSessionContext } from "~/lib/session";
 import { apiFetch } from "~/lib/apiFetch";
+import { config } from "~/config";
 
 export type CommentSessionProps = {
     session: Session,

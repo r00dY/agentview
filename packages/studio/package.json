@@ -2,11 +2,15 @@
   "name": "@agentview/studio",
   "version": "0.0.4-beta.8",
   "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "build": "vite build",
-    "dev": "vite",
-    "start": "vite preview",
-    "typecheck": "tsc"
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.1",

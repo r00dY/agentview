@@ -38,7 +38,7 @@ import { apiFetch } from "~/lib/apiFetch";
 import type { Member, SessionList } from "~/lib/shared/apiTypes";
 import { NotificationBadge } from "~/components/NotificationBadge";
 import { createOrUpdateSchema } from "~/lib/remoteConfig";
-import { config } from "../../agentview.config";
+import { config } from "~/config";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const session = await authClient.getSession()
@@ -265,9 +265,9 @@ function Component() {
                   </SidebarMenuItem>
                   <SidebarMenuItem>
                     <SidebarMenuButton asChild>
-                      <Link to="/schemas">
+                      <Link to="/configs">
                         <Database className="mr-2 h-4 w-4" />
-                        <span>Schema</span>
+                        <span>Config</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

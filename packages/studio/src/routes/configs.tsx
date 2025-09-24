@@ -27,7 +27,7 @@ function Component() {
   </div>
 }
 
-export const schemasRoute: RouteObject = {
+export const configsRoute: RouteObject = {
   Component,
   loader,
 } 
