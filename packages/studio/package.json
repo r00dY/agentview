@@ -7,7 +7,7 @@
   ],
   "scripts": {
     "build": "tsc && tsc-alias && cp src/styles.css dist/styles.css",
-    "dev": "tsc --watch",
+    "dev": "vite dev",
     "typecheck": "tsc --noEmit"
   },
   "main": "./dist/index.js",
@@ -18,9 +18,9 @@
       "types": "./dist/index.d.ts"
     },
     "./*": {
+      "types": "./dist/*.d.ts",
       "import": "./dist/*.js",
-      "require": "./dist/*.cjs",
-      "types": "./dist/*.d.ts"
+      "require": "./dist/*.cjs"
     },
     "./styles.css": {
       "default": "./dist/styles.css"
