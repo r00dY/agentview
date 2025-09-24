@@ -1,4 +1,4 @@
-import { defineConfig } from "~/defineConfig";
+import { defineConfig } from "~";
 import { z } from "zod";
 import { ThumbsDown, ThumbsUp } from "lucide-react";
 import { SelectInput, TextareaInput, ToggleBooleanInput } from "~/components/form";
