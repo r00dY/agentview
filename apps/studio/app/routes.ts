@@ -18,9 +18,9 @@ import SessionItem from "./routes/sessionItem";
 import SessionItemComments from "./routes/sessionItemComments";
 import SessionItemComment from "./routes/sessionItemComment";
 import Schemas from "./routes/schemas";
-import { logout } from "./routes/logout";
+import { logoutRoute } from "./routes/logout";
 import ChangePassword from "./routes/change-password";
-import Login from "./routes/login";
+import { loginRoute} from "./routes/login";
 import Signup from "./routes/signup";
 import { RootComponent } from "./RootComponent";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -124,12 +124,11 @@ export const router = createBrowserRouter([
       },
       {
         path: "logout",
-        loader: logout.loader,
-        // Component: logout.Component,
+        ...logoutRoute
       },
       {
         path: "login",
-        Component: Login,
+        ...loginRoute
       },
       {
         path: "signup",
