@@ -1,5 +1,5 @@
 import { data, useLoaderData, useOutletContext, useParams, useRevalidator } from "react-router";
-import type { Route } from "./+types/sessionItem";
+import type { RouteObject } from "react-router";
 import { Header, HeaderTitle } from "~/components/header";
 import type { Session } from "~/lib/shared/apiTypes";
 import { getAllSessionItems } from "~/lib/shared/sessionUtils";
@@ -7,7 +7,7 @@ import { CommentThread } from "~/components/comments";
 import { apiFetch } from "~/lib/apiFetch";
 import { useEffect } from "react";
 
-export default function SessionItemPage() {
+function Component() {
     const { session } = useOutletContext<{ session: Session }>();
     const params = useParams();
     const revalidator = useRevalidator();
@@ -46,4 +46,8 @@ export default function SessionItemPage() {
 
         </div>
     </div>
+}
+
+export const sessionItemRoute: RouteObject = {
+  Component,
 }

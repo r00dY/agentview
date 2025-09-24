@@ -1,25 +1,25 @@
-import { createBrowserRouter } from "react-router";
-import SidebarLayout, { loader as sidebarLayoutLoader } from "./routes/sidebar_layout";
-import Home from "./routes/home";
-import User from "./routes/user";
-import Members from "./routes/members";
-import MembersInvite from "./routes/membersInvite";
-import MembersInviteCancel from "./routes/membersInviteCancel";
-import MembersEdit from "./routes/membersEdit";
-import MembersDelete from "./routes/membersDelete";
-import Emails from "./routes/emails";
-import EmailDetail from "./routes/emailDetail";
-import ClientShare from "./routes/clientShare";
-import Sessions from "./routes/sessions";
-import SessionsIndex from "./routes/sessionsIndex";
-import SessionNew from "./routes/sessionNew";
-import Session from "./routes/session";
-import SessionItem from "./routes/sessionItem";
-import SessionItemComments from "./routes/sessionItemComments";
-import SessionItemComment from "./routes/sessionItemComment";
-import Schemas from "./routes/schemas";
+import { createBrowserRouter, type IndexRouteObject, type NonIndexRouteObject } from "react-router";
+import { sidebarLayoutRoute} from "./routes/sidebar_layout";
+import { homeRoute } from "./routes/home";
+import { userRoute } from "./routes/user";
+import { membersRoute } from "./routes/members";
+import { membersInviteRoute } from "./routes/membersInvite";
+import { membersInviteCancelRoute } from "./routes/membersInviteCancel";
+import { membersEditRoute } from "./routes/membersEdit";
+import { membersDeleteRoute } from "./routes/membersDelete";
+import { emailsRoute } from "./routes/emails";
+import { emailDetailRoute } from "./routes/emailDetail";
+import { clientShareRoute } from "./routes/clientShare";
+import { sessionsRoute } from "./routes/sessions";
+import { sessionsIndexRoute } from "./routes/sessionsIndex";
+import { sessionNewRoute } from "./routes/sessionNew";
+import { sessionRoute } from "./routes/session";
+import { sessionItemRoute } from "./routes/sessionItem";
+import { sessionItemCommentsRoute } from "./routes/sessionItemComments";
+import { sessionItemCommentRoute } from "./routes/sessionItemComment";
+import { schemasRoute } from "./routes/schemas";
 import { logoutRoute } from "./routes/logout";
-import ChangePassword from "./routes/change-password";
+import { changePasswordRoute } from "./routes/change-password";
 import { loginRoute} from "./routes/login";
 import { signupRoute } from "./routes/signup";
 import { rootRoute } from "./root";
@@ -31,78 +31,77 @@ export const router = createBrowserRouter([
     children: [
       {
         path: "/",
-        Component: SidebarLayout,
-        loader: sidebarLayoutLoader,
+        ...sidebarLayoutRoute,
         children: [
           {
+            ...homeRoute,
             index: true,
-            Component: Home,
           },
           {
             path: "user",
-            Component: User,
+            ...userRoute,
           },
           {
             path: "members",
-            Component: Members,
+            ...membersRoute,
             children: [
               {
                 path: "invitations/new",
-                Component: MembersInvite,
+                ...membersInviteRoute,
               },
               {
                 path: "invitations/:invitationId/cancel",
-                Component: MembersInviteCancel,
+                ...membersInviteCancelRoute,
               },
               {
                 path: ":userId/edit",
-                Component: MembersEdit,
+                ...membersEditRoute,
               },
               {
                 path: ":userId/delete",
-                Component: MembersDelete,
+                ...membersDeleteRoute,
               },
             ],
           },
           {
             path: "emails",
-            Component: Emails,
+            ...emailsRoute,
           },
           {
             path: "emails/:id",
-            Component: EmailDetail,
+            ...emailDetailRoute,
           },
           {
             path: "clients/:clientId/share",
-            Component: ClientShare,
+            ...clientShareRoute,
           },
           {
             path: "sessions",
-            Component: Sessions,
+            ...sessionsRoute,
             children: [
               {
+                ...sessionsIndexRoute,
                 index: true,
-                Component: SessionsIndex,
               },
               {
                 path: "new",
-                Component: SessionNew,
+                ...sessionNewRoute,
               },
               {
                 path: ":id",
-                Component: Session,
+                ...sessionRoute,
                 children: [
                   {
                     path: "items/:itemId",
-                    Component: SessionItem,
+                    ...sessionItemRoute,
                   },
                   {
                     path: "items/:itemId/comments",
-                    Component: SessionItemComments,
+                    ...sessionItemCommentsRoute,
                   },
                   {
                     path: "items/:itemId/comments/:commentId",
-                    Component: SessionItemComment,
+                    ...sessionItemCommentRoute,
                   },
                 ],
               },
@@ -110,11 +109,11 @@ export const router = createBrowserRouter([
           },
           {
             path: "schemas",
-            Component: Schemas,
+            ...schemasRoute,
           },
           {
             path: "change-password",
-            Component: ChangePassword,
+            ...changePasswordRoute,
           },
         ],
       },
@@ -131,5 +130,5 @@ export const router = createBrowserRouter([
         ...signupRoute
       },
     ],
-  }
+  } as NonIndexRouteObject
 ]);

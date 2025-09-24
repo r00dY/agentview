@@ -1,5 +1,5 @@
 import { useLoaderData, Link, data } from "react-router";
-import type { Route } from "./+types/emails";
+import type { RouteObject } from "react-router";
 import {
   Table,
   TableHeader,
@@ -11,7 +11,7 @@ import {
 import { Header, HeaderTitle } from "~/components/header";
 import { apiFetch } from "~/lib/apiFetch";
 
-export async function clientLoader({ request }: Route.ClientLoaderArgs) {
+async function loader() {
   const response = await apiFetch(`/api/dev/emails`);
   
   if (!response.ok) {
@@ -22,8 +22,8 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   return { emails: response.data };
 }
 
-export default function Emails() {
-  const { emails } = useLoaderData<typeof clientLoader>();
+function Component() {
+  const { emails } = useLoaderData<typeof loader>();
 
   return <div>
 
@@ -76,4 +76,9 @@ export default function Emails() {
         </div>
       </div>
     </div>
-} 
+}
+
+export const emailsRoute: RouteObject = {
+  Component,
+  loader,
+}

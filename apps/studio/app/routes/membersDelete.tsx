@@ -1,14 +1,13 @@
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
-import type { Route } from "./+types/membersDelete";
+import type { ActionFunctionArgs, LoaderFunctionArgs, RouteObject } from "react-router";
 import { data, redirect, useFetcher, useLoaderData, useNavigate } from "react-router";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { AlertCircleIcon } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
 import { apiFetch } from "~/lib/apiFetch";
 import type { ActionResponse } from "~/lib/errors";
 
-export async function clientLoader({ params }: Route.ClientLoaderArgs) {
+async function loader({ params }: LoaderFunctionArgs) {
   const response = await apiFetch(`/api/members`);
 
   if (!response.ok) {
@@ -24,7 +23,7 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   return { user }
 }
 
-export async function clientAction({ request }: Route.ClientActionArgs): Promise<Response | ActionResponse> {
+async function action({ request }: ActionFunctionArgs): Promise<Response | ActionResponse> {
   const formData = await request.formData();
   const userId = formData.get("userId") as string;
 
@@ -42,10 +41,10 @@ export async function clientAction({ request }: Route.ClientActionArgs): Promise
   return redirect("/members");
 }
 
-export default function MembersDelete() {
+function Component() {
   const fetcher = useFetcher();
   const navigate = useNavigate();
-  const { user } = useLoaderData<typeof clientLoader>();
+  const { user } = useLoaderData<typeof loader>();
   
   return (
     <div>
@@ -92,4 +91,10 @@ export default function MembersDelete() {
       </Dialog>
     </div>
   );
+}
+
+export const membersDeleteRoute: RouteObject = {
+  Component,
+  loader,
+  action,
 }

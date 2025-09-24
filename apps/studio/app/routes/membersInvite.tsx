@@ -1,5 +1,5 @@
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
-import type { Route } from "./+types/home";
+import type { ActionFunctionArgs, RouteObject } from "react-router";
 import { redirect, useFetcher, useNavigate } from "react-router";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { AlertCircleIcon } from "lucide-react";
@@ -10,7 +10,7 @@ import { Button } from "~/components/ui/button";
 import { apiFetch } from "~/lib/apiFetch";
 import type { ActionResponse } from "~/lib/errors";
 
-export async function clientAction({ request }: Route.ClientActionArgs) {
+async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const email = formData.get("email") as string;
   const role = formData.get("role") as string;
@@ -31,7 +31,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
 }
 
 
-export default function InvitationNew() {
+function Component() {
   const fetcher = useFetcher<ActionResponse>();
   const navigate = useNavigate();
 
@@ -92,4 +92,9 @@ export default function InvitationNew() {
       </DialogContent>
     </Dialog>
   </div>
+}
+
+export const membersInviteRoute: RouteObject = {
+  Component,
+  action,
 }

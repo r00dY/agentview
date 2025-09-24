@@ -1,9 +1,10 @@
 import { authClient } from "~/lib/auth-client";
 import { type ActionResponse, betterAuthErrorToBaseError } from "~/lib/errors";
+import type { ActionFunctionArgs, RouteObject } from "react-router";
 
-export async function action({
+async function action({
   request,
-}: { request: Request }): Promise<ActionResponse> {
+}: ActionFunctionArgs): Promise<ActionResponse> {
 
   const fieldErrors: Record<string, string> = {};
 
@@ -48,11 +49,16 @@ export async function action({
   return { ok: true, data };
 }
 
-export default function ChangePassword() {
+function Component() {
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-4">Change Password</h1>
       <p>Change password page content goes here.</p>
     </div>
   );
+}
+
+export const changePasswordRoute: RouteObject = {
+  Component,
+  action,
 }

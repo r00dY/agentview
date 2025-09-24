@@ -1,5 +1,5 @@
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
-import type { Route } from "./+types/membersEdit";
+import type { ActionFunctionArgs, LoaderFunctionArgs, RouteObject } from "react-router";
 import { redirect, useFetcher, useLoaderData, useNavigate } from "react-router";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { AlertCircleIcon } from "lucide-react";
@@ -10,7 +10,7 @@ import { apiFetch } from "~/lib/apiFetch";
 import type { ActionResponse } from "~/lib/errors";
 
 
-export async function clientLoader({ params }: Route.ClientLoaderArgs) {
+async function loader({ params }: LoaderFunctionArgs) {
   const response = await apiFetch(`/api/members`);
 
   if (!response.ok) {
@@ -26,7 +26,7 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   return { user }
 }
 
-export async function clientAction({ request }: Route.ClientActionArgs): Promise<ActionResponse | Response> {
+async function action({ request }: ActionFunctionArgs): Promise<ActionResponse | Response> {
   const formData = await request.formData();
   const userId = formData.get("userId") as string;
   const role = formData.get("role") as "admin" | "user";
@@ -46,10 +46,10 @@ export async function clientAction({ request }: Route.ClientActionArgs): Promise
   return redirect("/members");
 }
 
-export default function MembersEdit() {
+function Component() {
   const fetcher = useFetcher<ActionResponse>();
   const navigate = useNavigate();
-  const { user } = useLoaderData<typeof clientLoader>();
+  const { user } = useLoaderData<typeof loader>();
   
   return <div className="bg-red-500">
     <Dialog open={true} onOpenChange={() => { navigate(-1) }}>
@@ -104,4 +104,10 @@ export default function MembersEdit() {
       </DialogContent>
     </Dialog>
   </div>
+}
+
+export const membersEditRoute: RouteObject = {
+  Component,
+  loader,
+  action,
 }

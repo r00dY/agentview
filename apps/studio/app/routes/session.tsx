@@ -1,5 +1,5 @@
 import { useLoaderData, useFetcher, Outlet, Link, Form, data, useParams, useSearchParams, useNavigate, useRevalidator } from "react-router";
-import type { Route } from "./+types/session";
+import type { LoaderFunctionArgs, RouteObject } from "react-router";
 import { Button } from "~/components/ui/button";
 import { Header, HeaderTitle } from "~/components/header";
 import { useEffect, useState } from "react";
@@ -21,7 +21,7 @@ import { ItemsWithCommentsLayout } from "~/components/ItemsWithCommentsLayout";
 import { CommentSessionFloatingBox } from "~/components/comments";
 import { config } from "../../agentview.config";
 
-export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
+async function loader({ request, params }: LoaderFunctionArgs) {
     const response = await apiFetch<Session>(`/api/sessions/${params.id}`);
 
     if (!response.ok) {
@@ -38,9 +38,7 @@ export async function clientLoader({ request, params }: Route.ClientLoaderArgs) 
 
 
 function SessionPage() {
-    const loaderData = useLoaderData<typeof clientLoader>();
-    const params = useParams();
-    const navigate = useNavigate();
+    const loaderData = useLoaderData<typeof loader>();
     const revalidator = useRevalidator();
     const { user } = useSessionContext();
 
@@ -349,8 +347,8 @@ function ShareForm({ session, listParams }: { session: Session, listParams: Retu
     </fetcher.Form>
 }
 
-export default function SessionPageWrapper() {
-    const loaderData = useLoaderData<typeof clientLoader>();
+function Component() {
+    const loaderData = useLoaderData<typeof loader>();
     return <SessionPage key={loaderData.session.id} />
 }
 
@@ -502,4 +500,9 @@ function InputFormFields({ inputConfig }: { inputConfig: SessionItemConfig }) {
             />
         )}
     </>
+}
+
+export const sessionRoute: RouteObject = {
+  Component,
+  loader,
 }

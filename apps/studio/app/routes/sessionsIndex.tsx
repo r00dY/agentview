@@ -1,5 +1,9 @@
-import type { Route } from "./+types/sessionsIndex";
+import type { RouteObject } from "react-router";
 
-export default function SessionsIndex() {
+function Component() {
   return null;
+}
+
+export const sessionsIndexRoute: RouteObject = {
+  Component,
 }

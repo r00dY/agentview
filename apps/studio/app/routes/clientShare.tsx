@@ -1,7 +1,7 @@
 import { apiFetch } from "~/lib/apiFetch";
+import type { ActionFunctionArgs, RouteObject } from "react-router";
 
-
-export async function action({ request, params }: { request: Request; params: { clientId: string } }) {
+async function action({ request, params }: ActionFunctionArgs) {
   const formData = await request.formData();
   const is_shared = formData.get("is_shared") === "true" ;
   
@@ -17,11 +17,16 @@ export async function action({ request, params }: { request: Request; params: { 
   return { ok: true, data: {} };
 }
 
-export default function ClientShare() {
+function Component() {
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-4">Client Share</h1>
       <p>Client share page content goes here.</p>
     </div>
   );
+}
+
+export const clientShareRoute: RouteObject = {
+  Component,
+  action,
 }

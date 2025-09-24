@@ -1,7 +1,8 @@
 import { type ActionResponse, betterAuthErrorToBaseError } from "~/lib/errors";
 import { authClient } from "~/lib/auth-client";
+import type { RouteObject } from "react-router";
 
-export async function action({
+async function action({
   request,
 }: { request: Request }): Promise<ActionResponse> {
 
@@ -30,11 +31,16 @@ export async function action({
   return { ok: true, data };
 }
 
-export default function User() {
+function Component() {
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-4">User Profile</h1>
       <p>User profile page content goes here.</p>
     </div>
   );
+}
+
+export const userRoute: RouteObject = {
+  Component,
+  action,
 }

@@ -1,5 +1,5 @@
-import { redirect, useLoaderData, useFetcher, Outlet, Link, data } from "react-router";
-import type { Route } from "./+types/members";
+import { useLoaderData, useFetcher, Outlet, Link, data } from "react-router";
+import type { RouteObject } from "react-router";
 import {
   Table,
   TableHeader,
@@ -16,7 +16,7 @@ import { authClient } from "~/lib/auth-client";
 import { apiFetch } from "~/lib/apiFetch";
 
 
-export async function clientLoader({ request }: Route.ClientLoaderArgs) {
+async function loader() {
   const usersResponse = await authClient.admin.listUsers({
     query: {
       limit: 100,
@@ -43,8 +43,8 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 }
 
 
-export default function MembersPage() {
-  const { users, invitations } = useLoaderData<typeof clientLoader>();
+function Component() {
+  const { users, invitations } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
 
   return <div>
@@ -55,7 +55,6 @@ export default function MembersPage() {
 
     <div className="p-6 max-w-6xl">
       
-      {/* Members Table */}
       <div className="mb-8">
         <div className="flex justify-end mb-3">
 
@@ -147,8 +146,12 @@ export default function MembersPage() {
       </div>
       </div>
 
-      
       <Outlet />
     </div>
   </div>
+}
+
+export const membersRoute: RouteObject = {
+  Component,
+  loader,
 }

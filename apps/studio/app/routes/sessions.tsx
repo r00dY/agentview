@@ -1,5 +1,5 @@
 import { useLoaderData, Outlet, Link, Form, data, NavLink } from "react-router";
-import type { Route } from "./+types/sessions";
+import type { LoaderFunctionArgs, RouteObject } from "react-router";
 
 import { Button } from "~/components/ui/button";
 import { PlusIcon } from "lucide-react";
@@ -11,7 +11,7 @@ import { timeAgoShort } from "~/lib/timeAgo";
 import { useSessionContext } from "~/lib/session";
 import { NotificationBadge } from "~/components/NotificationBadge";
 
-export async function clientLoader({ request }: Route.ClientLoaderArgs) {
+async function loader({ request }: LoaderFunctionArgs) {
   const listParams = getListParams(request);
   const sessionsResponse = await apiFetch<Session[]>(`/api/sessions?list=${listParams.list}&type=${listParams.type}`);
 
@@ -25,8 +25,8 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   }
 }
 
-export default function Session() {
-  const { sessions, listParams } = useLoaderData<typeof clientLoader>();
+function Component() {
+  const { sessions, listParams } = useLoaderData<typeof loader>();
 
   return <div className="flex flex-row items-stretch h-full">
 
@@ -86,4 +86,9 @@ export function SessionCard({ session, listParams }: { session: Session, listPar
       )}
     </NavLink>
   </div>
+}
+
+export const sessionsRoute: RouteObject = {
+  Component,
+  loader,
 }

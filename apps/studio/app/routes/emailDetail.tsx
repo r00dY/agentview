@@ -1,10 +1,10 @@
 import { useLoaderData, data } from "react-router";
-import type { Route } from "./+types/emailDetail";
+import type { LoaderFunctionArgs, RouteObject } from "react-router";
 import { Card, CardContent } from "~/components/ui/card";
 import { Header, HeaderTitle } from "~/components/header";
 import { apiFetch } from "~/lib/apiFetch";
 
-export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
+async function loader({ params }: LoaderFunctionArgs) {
   const response = await apiFetch(`/api/dev/emails/${params.id}`);
 
   if (!response.ok) {
@@ -14,8 +14,8 @@ export async function clientLoader({ request, params }: Route.ClientLoaderArgs) 
   return { email: response.data };
 }
 
-export default function EmailDetail() {
-  const { email } = useLoaderData<typeof clientLoader>();
+function Component() {
+  const { email } = useLoaderData<typeof loader>();
 
   return <div>
 
@@ -96,4 +96,9 @@ export default function EmailDetail() {
       </Card>
     </div>
   </div>
+}
+
+export const emailDetailRoute: RouteObject = {
+  Component,
+  loader,
 } 

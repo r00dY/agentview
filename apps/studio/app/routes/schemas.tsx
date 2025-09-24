@@ -1,16 +1,15 @@
-import { data, useFetcher, useLoaderData } from "react-router";
-import type { Route } from "./+types/schemas";
+import { useFetcher, useLoaderData } from "react-router";
+import type { RouteObject } from "react-router";
 
 import { Header, HeaderTitle } from "~/components/header";
 import { createOrUpdateSchema } from "~/lib/remoteConfig";
 
-export async function clientLoader({ request }: Route.ClientLoaderArgs) {
+async function loader() {
   return { schema: await createOrUpdateSchema() };
 }
 
-export default function SchemasPage() {
-  const { schema } = useLoaderData<typeof clientLoader>();
-  const fetcher = useFetcher();
+function Component() {
+  const { schema } = useLoaderData<typeof loader>();
 
   return <div>
     <Header>
@@ -18,11 +17,6 @@ export default function SchemasPage() {
     </Header>
 
     <div className="p-6 max-w-6xl">
-        {/* <fetcher.Form method="post" className="mb-4">
-          <Button type="submit" disabled={fetcher.state === "submitting"}>
-            { fetcher.state === "submitting" ? "Syncing..." : "Sync Schema" }
-          </Button>
-        </fetcher.Form> */}
         { !schema && <div>No schema found</div> }
         { schema && (
           <pre className="bg-gray-100 p-4 rounded overflow-x-auto text-sm">
@@ -31,4 +25,9 @@ export default function SchemasPage() {
         ) }
     </div>
   </div>
+}
+
+export const schemasRoute: RouteObject = {
+  Component,
+  loader,
 } 

@@ -1,5 +1,5 @@
 import { redirect, Form, useActionData, useFetcher, data, useLoaderData } from "react-router";
-import type { Route } from "./+types/sessionNew";
+import type { ActionFunctionArgs, LoaderFunctionArgs, RouteObject } from "react-router";
 import { Header, HeaderTitle } from "~/components/header";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -14,7 +14,7 @@ import { useRef } from "react";
 import { FormField } from "~/components/form";
 import { parseFormData } from "~/lib/parseFormData";
 
-export async function clientLoader({ request, params }: Route.ClientLoaderArgs) {
+async function loader({ request, params }: LoaderFunctionArgs) {
   const listParams = getListParams(request);
   const sessionConfig = config.sessions?.find((sessionConfig) => sessionConfig.type === listParams.type);
 
@@ -57,7 +57,7 @@ export async function clientLoader({ request, params }: Route.ClientLoaderArgs) 
   return redirect(`/sessions/${sessionResponse.data.id}?list=${listParams.list}&type=${listParams.type}`);
 }
 
-export async function clientAction({ request, params }: Route.ClientActionArgs): Promise<ActionResponse | Response> {
+async function action({ request, params }: ActionFunctionArgs): Promise<ActionResponse | Response> {
   const listParams = getListParams(request);
   const sessionConfig = config.sessions?.find((sessionConfig) => sessionConfig.type === listParams.type);
 
@@ -96,8 +96,8 @@ export async function clientAction({ request, params }: Route.ClientActionArgs):
   return redirect(`/sessions/${sessionResponse.data.id}?list=${listParams.list}&type=${listParams.type}`);
 }
 
-export default function SessionNewPage() {
-  const actionData = useActionData<typeof clientAction>();
+function Component() {
+  const actionData = useActionData<typeof action>();
 
   return <div className="flex-1">
     <Header>
@@ -113,7 +113,7 @@ export default function SessionNewPage() {
 }
 
 function Content() {
-  const { sessionConfig } = useLoaderData<typeof clientLoader>();
+  const { sessionConfig } = useLoaderData<typeof loader>();
 
   const fetcher = useFetcher();
   const formRef = useRef<HTMLFormElement>(null);
@@ -169,4 +169,10 @@ function Content() {
       </div>
     </Form>
   </div>
+}
+
+export const sessionNewRoute: RouteObject = {
+  Component,
+  loader,
+  action,
 }

@@ -6,6 +6,8 @@ import {
   redirect,
   useFetcher,
   useLoaderData,
+  type LoaderFunctionArgs,
+  type RouteObject,
 } from "react-router";
 
 import { LogOut, ChevronUp, User, Edit, Lock, Users, Mail, MessageCircle, Database, Inbox } from "lucide-react"
@@ -38,7 +40,7 @@ import { NotificationBadge } from "~/components/NotificationBadge";
 import { createOrUpdateSchema } from "~/lib/remoteConfig";
 import { config } from "../../agentview.config";
 
-export async function loader({ request }: { request: Request }) {
+export async function loader({ request }: LoaderFunctionArgs) {
   const session = await authClient.getSession()
 
   const url = new URL(request.url);
@@ -78,7 +80,7 @@ export async function loader({ request }: { request: Request }) {
   };
 }
 
-export default function Layout() {
+function Component() {
   const { user, isDeveloper, members, locale, lists } = useLoaderData<typeof loader>()
   const logoutFetcher = useFetcher()
   const [editProfileOpen, setEditProfileOpen] = React.useState(false)
@@ -297,18 +299,14 @@ export default function Layout() {
                       <Lock className="mr-2 h-4 w-4" />
                       Change Password
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => {
-                      logoutFetcher.submit(null, {
-                        method: 'post',
-                        action: '/logout'
-                      })
-                    }}>
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Log out
+                    <DropdownMenuItem asChild>
+                      <Link to="/logout">
+                        <LogOut className="mr-2 h-4 w-4" />
+                        Log out
+                      </Link>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-
 
                 <EditProfileDialog
                   open={editProfileOpen}
@@ -335,4 +333,9 @@ export default function Layout() {
     </SidebarProvider>
   </SessionContext.Provider>
   );
+}
+
+export const sidebarLayoutRoute: RouteObject = {
+  Component,
+  loader,
 }

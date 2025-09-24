@@ -1,8 +1,9 @@
 import { apiFetch } from "~/lib/apiFetch";
 import { commentFormDataToJSON } from "~/lib/commentForm";
 import { type ActionResponse } from "~/lib/errors";
+import type { ActionFunctionArgs, RouteObject } from "react-router";
 
-export async function action({ request, params }: { request: Request; params: { id: string; itemId: string; commentId: string } }): Promise<ActionResponse> {
+async function action({ request, params }: ActionFunctionArgs): Promise<ActionResponse> {
     if (request.method === 'DELETE') {
         
         const response = await apiFetch(`/api/sessions/${params.id}/items/${params.itemId}/comments/${params.commentId}`, {
@@ -44,11 +45,6 @@ export async function action({ request, params }: { request: Request; params: { 
     throw new Error('Method not allowed');
 }
 
-export default function SessionItemComment() {
-  return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Session Item Comment</h1>
-      <p>Session item comment page content goes here.</p>
-    </div>
-  );
+export const sessionItemCommentRoute: RouteObject = {
+  action,
 }
