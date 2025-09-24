@@ -1,12 +1,19 @@
-import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router";
-import { router } from "./routes";
-import "./app.css";
+import type { AgentViewConfig } from "./types";
+import { createRoot } from "react-dom/client";
 
-const container = document.getElementById("root");
-if (!container) {
-  throw new Error("Root element not found");
+export async function renderStudio(config: AgentViewConfig) {
+  const container = document.getElementById("agentview");
+  if (!container) {
+    throw new Error("Root element not found");
+  }
+  const root = createRoot(container);
+
+  (window as any).agentview = {
+    config
+  }
+
+  import("./routes").then(({ router }) => {
+    root.render(<RouterProvider router={router} />)
+  })
 }
-
-const root = createRoot(container);
-root.render(<RouterProvider router={router} />)

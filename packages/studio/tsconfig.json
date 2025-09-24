@@ -17,11 +17,14 @@
     "paths": {
       "~/*": ["./src/*"]
     },
+    "outDir": "./dist",
     "esModuleInterop": true,
     "verbatimModuleSyntax": true,
-    "noEmit": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "strict": true
+    "strict": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
   }
 }

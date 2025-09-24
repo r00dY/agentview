@@ -11,10 +11,9 @@
         ],
         "jsx": "react-jsx",
         "outDir": "./dist",
-
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true
+        "declaration": true,
+        "declarationMap": true,
+        "sourceMap": true
     },
     "include": [
         "./src/**/*"

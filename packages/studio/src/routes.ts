@@ -1,4 +1,4 @@
-import { createBrowserRouter, type IndexRouteObject, type NonIndexRouteObject } from "react-router";
+import { createBrowserRouter, type NonIndexRouteObject } from "react-router";
 import { sidebarLayoutRoute} from "./routes/sidebar_layout";
 import { homeRoute } from "./routes/home";
 import { userRoute } from "./routes/user";
