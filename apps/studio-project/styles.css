@@ -1,0 +1,4 @@
+@import "tailwindcss";
+@source "node_modules/@agentview/studio";
+
+@import "@agentview/studio/styles.css";

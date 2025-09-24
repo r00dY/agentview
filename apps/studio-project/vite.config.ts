@@ -2,7 +2,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  plugins: [tailwindcss()], // to remove tscondfigPaths
+  plugins: [tailwindcss()],
   server: {
     port: 1989,
   },
