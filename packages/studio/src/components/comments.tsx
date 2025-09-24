@@ -14,7 +14,7 @@ import { timeAgoShort } from "~/lib/timeAgo";
 import { FormField } from "./form";
 import { PropertyList } from "./PropertyList";
 import { Alert, AlertDescription } from "./ui/alert";
-import { TextEditor, textToElements } from "./wysiwyg/TextEditor";
+import { TextEditor, textToElements } from "./TextEditor";
 import { useSessionContext } from "~/lib/session";
 import { apiFetch } from "~/lib/apiFetch";
 import { config } from "~/config";
