@@ -6,7 +6,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc && tsc-alias",
+    "build": "tsc && tsc-alias && cp src/styles.css dist/styles.css",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit"
   },
@@ -17,6 +17,9 @@
       "import": "./dist/*.js",
       "require": "./dist/*.cjs",
       "types": "./dist/*.d.ts"
+    },
+    "./styles.css": {
+      "default": "./dist/styles.css"
     }
   },
   "dependencies": {

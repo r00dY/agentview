@@ -19,6 +19,8 @@ const alertVariants = cva(
   }
 )
 
+type Dupa = VariantProps<typeof alertVariants>
+
 function Alert({
   className,
   variant,

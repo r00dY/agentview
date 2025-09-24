@@ -4,9 +4,9 @@ import { ThumbsDown, ThumbsUp } from "lucide-react";
 import { SelectInput, TextareaInput, ToggleBooleanInput } from "@agentview/studio/components/form";
 import { ItemAssistantMessageComponent, ItemUserMessageComponent, DisplayBooleanComponent } from "@agentview/studio/components/display";
 import { marked } from "marked";
-import { ProductDisplay } from "src/ProductDisplay";
-import { ProductSelect } from "src/ProductSelect";
-import { ScoreBadge } from "src/ScoreBadge";
+import { ProductDisplay } from "./src/ProductDisplay";
+import { ProductSelect } from "./src/ProductSelect";
+import { ScoreBadge } from "./src/ScoreBadge";
 
 export const config: AgentViewConfig = {
     sessions: [
