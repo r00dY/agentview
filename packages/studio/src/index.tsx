@@ -15,3 +15,7 @@ export async function renderStudio(rootElement: HTMLElement | null, config: Agen
     root.render(<RouterProvider router={router} />)
   })
 }
+
+export function defineConfig(config: AgentViewConfig) {
+  return config;
+}

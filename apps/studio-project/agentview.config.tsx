@@ -1,4 +1,4 @@
-import type { AgentViewConfig } from "agentview/types";
+import { defineConfig } from "agentview";
 import { z } from "zod";
 import { ThumbsDown, ThumbsUp } from "lucide-react";
 import { SelectInput, TextareaInput, ToggleBooleanInput } from "agentview/components/form";
@@ -8,7 +8,7 @@ import { ProductDisplay } from "./src/ProductDisplay";
 import { ProductSelect } from "./src/ProductSelect";
 import { ScoreBadge } from "./src/ScoreBadge";
 
-export const config: AgentViewConfig = {
+export default defineConfig({
     sessions: [
         {
             type: "simple_chat",
@@ -173,4 +173,4 @@ export const config: AgentViewConfig = {
             ]
         }
     ]
-}
+})

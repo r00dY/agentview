@@ -1,8 +1,8 @@
 import "./styles.css";
 import { renderStudio } from "agentview";
-import { config } from "./agentview.config";
+import agentviewConfig from "./agentview.config";
 
 renderStudio(
     document.getElementById("agentview"), 
-    config
+    agentviewConfig
 );
