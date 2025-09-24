@@ -21,7 +21,7 @@ import Schemas from "./routes/schemas";
 import { logoutRoute } from "./routes/logout";
 import ChangePassword from "./routes/change-password";
 import { loginRoute} from "./routes/login";
-import Signup from "./routes/signup";
+import { signupRoute } from "./routes/signup";
 import { RootComponent } from "./RootComponent";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { HydrateFallback } from "./HydrateFallback";
@@ -132,7 +132,7 @@ export const router = createBrowserRouter([
       },
       {
         path: "signup",
-        Component: Signup,
+        ...signupRoute
       },
     ],
   },

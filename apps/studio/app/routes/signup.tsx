@@ -1,8 +1,7 @@
-import { redirect, Form, useActionData, useLoaderData, data } from "react-router";
+import { redirect, Form, useActionData, useLoaderData, data, type LoaderFunctionArgs, type ActionFunctionArgs, type RouteObject } from "react-router";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
-import type { Route } from "./+types/signup";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { AlertCircleIcon } from "lucide-react";
@@ -10,8 +9,7 @@ import { betterAuthErrorToBaseError, type ActionResponse } from "~/lib/errors";
 import { authClient } from "~/lib/auth-client";
 import { apiFetch } from "~/lib/apiFetch";
 
-
-export async function clientLoader({ request }: Route.ClientLoaderArgs): Promise<ActionResponse<{ invitation: any, isNewInstallation: boolean }> | Response> {
+async function loader({ request }: LoaderFunctionArgs): Promise<ActionResponse<{ invitation: any, isNewInstallation: boolean }> | Response> {
   const session = await authClient.getSession();
   
   if (session.data) {
@@ -22,7 +20,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs): Promise
   const statusResponse = await apiFetch<{ is_active: boolean }>('/api/status');
   if (!statusResponse.ok) {
     throw data(statusResponse.error, {
-      status: statusResponse.status, // TODO: standardised error handling from clientLoaders!!! 
+      status: statusResponse.status,
     });
   }
 
@@ -67,10 +65,10 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs): Promise
 }
 
 
-export async function clientAction({
+export async function action({
   request,
   params
-}: Route.ClientActionArgs) {
+}: ActionFunctionArgs) {
   const url = new URL(request.url);
   const invitationId = url.searchParams.get('invitationId');
   const formData = await request.formData();
@@ -105,9 +103,9 @@ export async function clientAction({
   return redirect('/');
 }
 
-export default function SignupPage() {
-  const actionData = useActionData<typeof clientAction>();
-  const loaderData = useLoaderData<typeof clientLoader>();
+function Component() {
+  const actionData = useActionData<typeof action>();
+  const loaderData = useLoaderData<typeof loader>();
 
   return (
     <div className="container mx-auto p-4 max-w-md mt-16">
@@ -247,4 +245,10 @@ export default function SignupPage() {
       </Card>
     </div>
   );
+}
+
+export const signupRoute : RouteObject = {
+  Component,
+  loader,
+  action,
 }

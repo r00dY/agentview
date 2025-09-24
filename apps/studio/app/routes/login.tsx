@@ -84,7 +84,7 @@ function Component() {
               </Label>
               <Input
                 id="email"
-                // type="email"
+                type="email"
                 name="email"
                 placeholder="Enter your email"
                 required
