@@ -30,4 +30,4 @@ function Component() {
 export const configsRoute: RouteObject = {
   Component,
   loader,
-} 
+}
