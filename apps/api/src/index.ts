@@ -33,24 +33,22 @@ import packageJson from '../package.json'
 
 
 export const app = new OpenAPIHono({
+  // custom error handler for zod validation errors
   defaultHook: (result, c) => {
     if (!result.success) {
-
       return c.json({
         message: 'Validation error',
         issues: result.error.issues
       }, 422)
-
     }
   }
 })
 
 /** --------- ERROR HANDLING --------- */
 
-function handleError(c: any, error: any) {
-  console.error(error);
+app.onError((error, c) => {
   if (error instanceof BetterAuthAPIError) {
-    return c.json(error.body, error.statusCode);
+    return c.json(error.body, error.statusCode as any); // "as any" because error.statusCode is "number" and hono expects some numeric literal union 
   }
   else if (error instanceof DrizzleQueryError) {
     return c.json({ ...error, message: "DB error. Is db running?" }, 400);
@@ -64,11 +62,6 @@ function handleError(c: any, error: any) {
   else {
     return c.json({ message: "Unexpected error" }, 400);
   }
-}
-
-
-app.onError((err, c) => {
-  return handleError(c, err);
 });
 
 /** --------- CORS --------- */
@@ -87,22 +80,15 @@ app.on(["POST", "GET"], "/api/auth/*", (c) => {
 /** --------- UTILS --------- */
 
 
-async function requireAuthSession(headers: Headers) {
+async function requireAuthSession(headers: Headers, options?: { admin?: boolean }) {
   const userSession = await auth.api.getSession({ headers })
   if (!userSession) {
     throw new HTTPException(401, { message: "Unauthorized" });
   }
-  return userSession
-}
-
-async function requireAdminSession(headers: Headers) {
-  const session = await requireAuthSession(headers)
-
-  if (session.user.role !== "admin") {
+  if (options?.admin && userSession.user.role !== "admin") {
     throw new HTTPException(401, { message: "Unauthorized" });
   }
-
-  return session;
+  return userSession
 }
 
 async function requireConfig() {
@@ -1299,7 +1285,7 @@ app.openapi(memberPOSTRoute, async (c) => {
   const { memberId } = c.req.param()
   const body = await c.req.json()
 
-  await requireAdminSession(c.req.raw.headers);
+  await requireAuthSession(c.req.raw.headers, { admin: true });
 
   await auth.api.setRole({
     headers: c.req.raw.headers,
@@ -1329,7 +1315,7 @@ const memberDELETERoute = createRoute({
 app.openapi(memberDELETERoute, async (c) => {
   const { memberId } = c.req.param()
 
-  await requireAdminSession(c.req.raw.headers);
+  await requireAuthSession(c.req.raw.headers, { admin: true });
 
   await auth.api.removeUser({
     headers: c.req.raw.headers,
@@ -1373,7 +1359,7 @@ const invitationsPOSTRoute = createRoute({
 app.openapi(invitationsPOSTRoute, async (c) => {
   const body = await c.req.json()
 
-  const session = await requireAdminSession(c.req.raw.headers);
+  const session = await requireAuthSession(c.req.raw.headers, { admin: true });
 
   await createInvitation(body.email, body.role, session.user.id);
 
@@ -1399,7 +1385,7 @@ const invitationsGETRoute = createRoute({
 })
 
 app.openapi(invitationsGETRoute, async (c) => {
-  await requireAdminSession(c.req.raw.headers);
+  await requireAuthSession(c.req.raw.headers, { admin: true });
 
   const pendingInvitations = await getPendingInvitations();
   return c.json(pendingInvitations, 200);
@@ -1424,7 +1410,7 @@ const invitationDELETERoute = createRoute({
 app.openapi(invitationDELETERoute, async (c) => {
   const { id } = c.req.param()
 
-  await requireAdminSession(c.req.raw.headers);
+  await requireAuthSession(c.req.raw.headers, { admin: true });
   await cancelInvitation(id);
   return c.json({}, 200);
 })
@@ -1530,9 +1516,7 @@ const configsPOSTRoute = createRoute({
 })
 
 app.openapi(configsPOSTRoute, async (c) => {
-  await requireAdminSession(c.req.raw.headers)
-
-  const session = await requireAuthSession(c.req.raw.headers)
+  const session = await requireAuthSession(c.req.raw.headers, { admin: true })
   const body = await c.req.json()
 
   const [newSchema] = await db.insert(configs).values({
