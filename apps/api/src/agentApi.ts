@@ -37,8 +37,38 @@ export async function* callAgentAPI(request: { session: any }, url: string): Asy
     })
   }
 
+  const responseData : any = {
+    request: {
+      url,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: request
+    },
+    response: {
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries()),
+    }
+  };
+
+  yield {
+    name: "response_data",
+    data: responseData
+  }
+
   if (!response.ok) {
-    const error = getErrorObject(tryParseJSON(await response.text()))
+    const content = tryParseJSON(await response.text());
+    console.log('content', content)
+    responseData.response.body = content;
+
+    yield {
+      name: "response_data",
+      data: responseData
+    }
+
+    const error = getErrorObject(content)
     throw new AgentAPIError({
       ...error,
       message: `HTTP error response (${response.status}): ${error.message}`,
@@ -121,7 +151,6 @@ export async function* callAgentAPI(request: { session: any }, url: string): Asy
       message: `Expected Content-Type "application/json" or "text/event-stream", got "${contentType}"`
     })
   }
-
 }
 
 

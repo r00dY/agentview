@@ -3,11 +3,11 @@ import type { ActionFunctionArgs, RouteObject } from "react-router";
 
 async function action({ request, params }: ActionFunctionArgs) {
   const formData = await request.formData();
-  const is_shared = formData.get("is_shared") === "true" ;
+  const isShared = formData.get("isShared") === "true" ;
   
   const response = await apiFetch(`/api/clients/${params.clientId}`, {
     method: "PUT",
-    body: { is_shared },
+    body: { isShared },
   });
 
   if (!response.ok) {

@@ -679,21 +679,26 @@ app.openapi(runsPOSTRoute, async (c) => {
       
       let versionId: string | null = null;
 
-      let firstItem = true;
-      for await (const event of runOutput) {
+      let hadManifest = false
 
+      for await (const event of runOutput) {
         if (!(await isStillRunning())) {
           return
         }
 
-        // The first yield MUST be a manifest
-        if (firstItem && event.name !== 'manifest') {
+        if (!hadManifest && event.name !== 'response_data' && event.name !== 'manifest') {
           throw new AgentAPIError({
             message: "No 'manifest' was sent by the agent."
           });
         }
 
-        if (event.name === 'manifest') {
+        if (event.name === 'response_data') {
+          await db.update(runs)
+            .set({ responseData: event.data })
+            .where(eq(runs.id, userItem.runId));
+          continue;
+        }
+        else if (event.name === 'manifest') {
           // Create or find existing version
           const [version] = await db.insert(versions).values({
             version: event.data.version,
@@ -715,7 +720,7 @@ app.openapi(runsPOSTRoute, async (c) => {
               .where(eq(runs.id, userItem.runId));
           }
 
-          firstItem = false;
+          hadManifest = true;
           continue; // Skip this item as it's not an item
         }
         else if (event.name === 'item') {

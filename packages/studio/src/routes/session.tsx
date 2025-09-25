@@ -19,6 +19,7 @@ import { parseFormData } from "~/lib/parseFormData";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs";
 import { ItemsWithCommentsLayout } from "~/components/ItemsWithCommentsLayout";
 import { CommentSessionFloatingBox } from "~/components/comments";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody } from "~/components/ui/dialog";
 import { config } from "~/config";
 import { requireAgentConfig } from "~/lib/config";
 
@@ -340,7 +341,7 @@ function ShareForm({ session, listParams }: { session: Session, listParams: Retu
     }
 
     return <fetcher.Form method="put" action={`/clients/${session.client.id}/share`}>
-        <input type="hidden" name="is_shared" value="true" />
+        <input type="hidden" name="isShared" value="true" />
         <Button variant="outline" size="sm" type="submit"><Share /> {fetcher.state === "submitting" ? "Making public..." : "Make public"}</Button>
     </fetcher.Form>
 }
@@ -471,7 +472,14 @@ function InputForm({ session, agentConfig }: { session: Session, agentConfig: Ag
                 <div className="gap-2 text-sm text-muted-foreground">
                     {!formError && <div>
                         {sessionStatus === "in_progress" && <div>Running...</div>}
-                        {sessionStatus === "failed" && <div className="text-red-500">Failed: {lastRun?.failReason?.message ?? "Unknown reason"}</div>}
+                        {sessionStatus === "failed" && (
+                            <div className="text-red-500 flex items-center gap-2">
+                                Failed: {lastRun?.failReason?.message ?? "Unknown reason"}
+                                {lastRun?.responseData && <Button variant="outline" size="sm" onClick={() => {
+                                    console.log(lastRun.responseData)
+                                }}>Log details</Button>}
+                            </div>
+                        )}
                     </div>}
                     {formError && <div className="text-red-500">{formError}</div>}
                 </div>

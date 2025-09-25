@@ -88,6 +88,7 @@ export const runs = pgTable("runs", {
   versionId: uuid("version_id").references(() => versions.id), // version is nullable because when run is created, version is not yet created yet (no `run` was made)
   state: varchar("state", { length: 255 }).notNull(),
   failReason: jsonb("fail_reason"),
+  responseData: jsonb("response_data"),
 });
 
 // Comment messages within sessions
