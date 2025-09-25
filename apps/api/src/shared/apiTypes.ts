@@ -134,6 +134,9 @@ export const SessionCreateSchema = SessionSchema.pick({
     clientId: true,
     agent: true,
     metadata: true,
+}).extend({
+    clientId: SessionSchema.shape.clientId.optional(),
+    isShared: z.boolean().optional(),
 })
 
 export const ScoreCreateSchema = ScoreSchema.pick({

@@ -57,21 +57,10 @@ async function action({ request, params }: ActionFunctionArgs): Promise<ActionRe
   const formData = await request.formData();
   const data = parseFormData(formData);
 
-  // Create a client first
-  const clientResponse = await apiFetch('/api/clients', {
-    method: 'POST',
-    body: {}
-  });
-
-  if (!clientResponse.ok) {
-    return { ok: false, error: clientResponse.error };
-  }
-
   const sessionResponse = await apiFetch('/api/sessions', {
     method: 'POST',
     body: {
       agent: agentConfig.name,
-      clientId: clientResponse.data.id,
       metadata: data.metadata
     }
   });

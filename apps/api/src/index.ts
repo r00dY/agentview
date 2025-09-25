@@ -182,10 +182,10 @@ const apiClientsPOSTRoute = createRoute({
 
 app.openapi(apiClientsPOSTRoute, async (c) => {
   const body = await c.req.json()
-  const session = await requireAuthSession(c.req.raw.headers)
+  const authSession = await requireAuthSession(c.req.raw.headers)
 
   const [newClient] = await db.insert(clients).values({
-    simulatedBy: session.user.id,
+    simulatedBy: authSession.user.id,
     isShared: body.isShared,
   }).returning();
 
@@ -407,9 +407,20 @@ app.openapi(sessionsPOSTRoute, async (c) => {
   const body = await c.req.json()
 
   const config = await requireConfig()
-  const client = await requireClient(body.clientId)
   const agentConfig = await requireAgentConfig(config, body.agent)
   const authSession = await requireAuthSession(c.req.raw.headers)
+
+  const client = async () => {
+    if (body.clientId) {
+      return await requireClient(body.clientId)
+    }
+    else {
+      return (await db.insert(clients).values({
+        simulatedBy: authSession.user.id,
+        isShared: body.isShared ?? false,
+      }).returning())[0];
+    }
+  }
 
   // Validate metadata against the schema
   try {
