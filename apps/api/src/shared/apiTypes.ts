@@ -25,7 +25,6 @@ export const InvitationCreateSchema = z.object({
     role: z.enum(['admin', 'user']),
 })
 
-
 export const VersionSchema = z.object({
     id: z.string(),
     version: z.string(),
