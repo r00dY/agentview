@@ -5,6 +5,7 @@ import { HTTPException } from 'hono/http-exception'
 import { cors } from 'hono/cors'
 import { streamSSE } from 'hono/streaming'
 import { APIError as BetterAuthAPIError} from "better-auth/api";
+import type { User as BetterAuthUser } from "better-auth";
 
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { swaggerUI } from '@hono/swagger-ui'
@@ -22,7 +23,7 @@ import { getStudioURL } from './getStudioURL'
 
 // shared imports
 import { getAllSessionItems, getLastRun } from './shared/sessionUtils'
-import { ClientSchema, SessionSchema, SessionCreateSchema, SessionItemCreateSchema, RunSchema, SessionItemSchema, type Session, type SessionItem, ConfigSchema, ConfigCreateSchema, InboxItemSchema, ClientCreateSchema, UserSchema, UserUpdateSchema, type InboxItem, allowedSessionLists, InvitationSchema, InvitationCreateSchema } from './shared/apiTypes'
+import { ClientSchema, SessionSchema, SessionCreateSchema, SessionItemCreateSchema, RunSchema, SessionItemSchema, type Session, type SessionItem, ConfigSchema, ConfigCreateSchema, ClientCreateSchema, UserSchema, UserUpdateSchema, allowedSessionLists, InvitationSchema, InvitationCreateSchema } from './shared/apiTypes'
 import { getConfig } from './getConfig'
 import type { BaseConfig, BaseAgentConfig } from './shared/configTypes'
 import { users } from './schemas/auth-schema'
@@ -151,7 +152,7 @@ async function requireClient(clientId: string) {
   return clientRow
 }
 
-async function requireCommentMessageFromUser(item: SessionItem, commentId: string, user: User) {
+async function requireCommentMessageFromUser(item: SessionItem, commentId: string, user: BetterAuthUser) {
   const comment = item.commentMessages?.find((m) => m.id === commentId && m.deletedAt === null)
   if (!comment) {
     throw new HTTPException(404, { message: "Comment not found" });
@@ -251,7 +252,7 @@ app.openapi(apiClientsPUTRoute, async (c) => {
 })
 
 
-function getSessionListFilter(args: { agent: string, list: string, user?: User }) {
+function getSessionListFilter(args: { agent: string, list: string, user?: BetterAuthUser }) {
   const { agent, list, user } = args;
 
   const filters : any[] = [
@@ -326,7 +327,7 @@ app.openapi(sessionsGETRoute, async (c) => {
     const sessionInboxItem = session.inboxItems.find((inboxItem) => inboxItem.sessionItemId === null);
     const itemInboxItems = session.inboxItems.filter((inboxItem) => inboxItem.sessionItemId !== null);
 
-    function getUnseenEvents(inboxItem: InboxItem | null | undefined) {
+    function getUnseenEvents(inboxItem: any) {
       if (isInboxItemUnread(inboxItem)) {
         return inboxItem?.render?.events ?? [];
       }
@@ -892,7 +893,7 @@ app.openapi(itemSeenRoute, async (c) => {
 /* --------- FEED --------- */
 
 
-function validateScore(config: BaseConfig, session: Session, item: SessionItem, user: User, scoreName: string, scoreValue: any, options?: { mustNotExist?: boolean }) {
+function validateScore(config: BaseConfig, session: Session, item: SessionItem, user: BetterAuthUser, scoreName: string, scoreValue: any, options?: { mustNotExist?: boolean }) {
   const agentConfig = requireAgentConfig(config, session.agent);
   const itemConfig = requireItemConfig(agentConfig, item.type, item.role ?? undefined)
   const itemTypeCuteName = `${item.type}' / '${item.role}`
@@ -1262,15 +1263,15 @@ const usersGETRoute = createRoute({
 app.openapi(usersGETRoute, async (c) => {
   await requireAuthSession(c.req.raw.headers);
 
-  const userRows = await db.select({
-    id: users.id,
-    email: users.email,
-    name: users.name,
-    role: users.role,
-    createdAt: users.createdAt
-  }).from(users);
+  const userRows = await db.select().from(users);
 
-  return c.json(userRows, 200);
+  return c.json(userRows.map((user) => ({
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role ?? "user",
+    createdAt: user.createdAt,
+  })), 200);
 })
 
 // User POST (update role)

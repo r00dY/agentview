@@ -156,11 +156,6 @@ export const ConfigCreateSchema = ConfigSchema.pick({
     config: true,
 })
 
-export const InboxItemSchema = z.any() // todo: fix this
-
-export type InboxItem = z.infer<typeof InboxItemSchema>
-
-
 export const UserSchema = z.object({
     id: z.string(),
     email: z.string(),
