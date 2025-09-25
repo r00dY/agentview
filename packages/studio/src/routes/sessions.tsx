@@ -8,7 +8,7 @@ import { getListParams } from "~/lib/utils";
 import { apiFetch } from "~/lib/apiFetch";
 import type { Session } from "~/lib/shared/apiTypes";
 import { timeAgoShort } from "~/lib/timeAgo";
-import { useSessionContext } from "~/lib/session";
+import { useSessionContext } from "~/lib/SessionContext";
 import { NotificationBadge } from "~/components/NotificationBadge";
 
 async function loader({ request }: LoaderFunctionArgs) {

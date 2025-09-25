@@ -1,12 +1,7 @@
 import React from "react";
 import type { User } from "./shared/apiTypes";
-import type { Session } from "better-auth";
-import { authClient } from "./auth-client";
-
-type a = ReturnType<typeof authClient.getSession>
 
 export type SessionContextValue = {
-//   session: Awaited<ReturnType<typeof authClient.getSession>>['data']
   user: User;
   members: User[];
   locale: string;

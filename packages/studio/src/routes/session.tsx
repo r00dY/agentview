@@ -12,7 +12,7 @@ import { getListParams } from "~/lib/utils";
 import { PropertyList } from "~/components/PropertyList";
 import { MessageCircleIcon, MessageSquareTextIcon, SendHorizonalIcon, Share, SquareIcon, UserIcon, UsersIcon } from "lucide-react";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
-import { useSessionContext } from "~/lib/session";
+import { useSessionContext } from "~/lib/SessionContext";
 import type { SessionItemConfig, AgentConfig } from "~/types";
 import { FormField } from "~/components/form";
 import { parseFormData } from "~/lib/parseFormData";
@@ -114,7 +114,7 @@ function SessionPage() {
                     setStreaming(true)
 
                     for await (const event of parseSSE(response)) {
-                        
+
                         setSession((currentSession) => {
                             const lastRun = getLastRun(currentSession);
                             if (!lastRun) { throw new Error("Unreachable: Last run not found") };

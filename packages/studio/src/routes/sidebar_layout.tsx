@@ -35,7 +35,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { EditProfileDialog } from "~/components/EditProfileDialog";
 import { ChangePasswordDialog } from "~/components/ChangePasswordDialog";
 import { authClient } from "~/lib/auth-client";
-import { SessionContext } from "~/lib/session";
+import { SessionContext } from "~/lib/SessionContext";
 import { apiFetch } from "~/lib/apiFetch";
 import { NotificationBadge } from "~/components/NotificationBadge";
 import { createOrUpdateSchema } from "~/lib/remoteConfig";
