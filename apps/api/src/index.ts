@@ -22,7 +22,7 @@ import { getStudioURL } from './getStudioURL'
 
 // shared imports
 import { getAllSessionItems, getLastRun } from './shared/sessionUtils'
-import { ClientSchema, SessionSchema, SessionCreateSchema, SessionItemCreateSchema, RunSchema, SessionItemSchema, type User, type Session, type SessionItem, ConfigSchema, ConfigCreateSchema, InboxItemSchema, ClientCreateSchema, MemberSchema, MemberUpdateSchema, type InboxItem, allowedSessionLists } from './shared/apiTypes'
+import { ClientSchema, SessionSchema, SessionCreateSchema, SessionItemCreateSchema, RunSchema, SessionItemSchema, type User, type Session, type SessionItem, ConfigSchema, ConfigCreateSchema, InboxItemSchema, ClientCreateSchema, MemberSchema, MemberUpdateSchema, type InboxItem, allowedSessionLists, InvitationSchema, InvitationCreateSchema } from './shared/apiTypes'
 import { getConfig } from './getConfig'
 import type { BaseConfig, BaseAgentConfig } from './shared/configTypes'
 import { users } from './schemas/auth-schema'
@@ -118,29 +118,29 @@ function requireItemConfig(agentConfig: ReturnType<typeof requireAgentConfig>, t
   return itemConfig
 }
 
-async function requireSession(session_id: string) {
-  const session = await fetchSession(session_id)
+async function requireSession(sessionId: string) {
+  const session = await fetchSession(sessionId)
   if (!session) {
     throw new HTTPException(404, { message: "Session not found" });
   }
   return session
 }
 
-async function requireSessionItem(session: Session, item_id: string) {
-  const item = getAllSessionItems(session).find((a) => a.id === item_id)
+async function requireSessionItem(session: Session, itemId: string) {
+  const item = getAllSessionItems(session).find((a) => a.id === itemId)
   if (!item) {
     throw new HTTPException(404, { message: "Session item not found" });
   }
   return item
 }
 
-async function requireClient(client_id: string) {
-  if (!isUUID(client_id)) {
-    throw new HTTPException(400, { message: `Invalid client id: ${client_id}` });
+async function requireClient(clientId: string) {
+  if (!isUUID(clientId)) {
+    throw new HTTPException(400, { message: `Invalid client id: ${clientId}` });
   }
 
   const clientRow = await db.query.clients.findFirst({
-    where: eq(clients.id, client_id),
+    where: eq(clients.id, clientId),
   });
 
   if (!clientRow) {
@@ -149,8 +149,8 @@ async function requireClient(client_id: string) {
   return clientRow
 }
 
-async function requireCommentMessageFromUser(item: SessionItem, comment_id: string, user: User) {
-  const comment = item.commentMessages?.find((m) => m.id === comment_id && m.deletedAt === null)
+async function requireCommentMessageFromUser(item: SessionItem, commentId: string, user: User) {
+  const comment = item.commentMessages?.find((m) => m.id === commentId && m.deletedAt === null)
   if (!comment) {
     throw new HTTPException(404, { message: "Comment not found" });
   }
@@ -182,8 +182,8 @@ app.openapi(apiClientsPOSTRoute, async (c) => {
   const session = await requireAuthSession(c.req.raw.headers)
 
   const [newClient] = await db.insert(clients).values({
-    simulated_by: session.user.id,
-    is_shared: body.is_shared,
+    simulatedBy: session.user.id,
+    isShared: body.isShared,
   }).returning();
 
   return c.json(newClient, 201);
@@ -221,7 +221,7 @@ app.openapi(clientGETRoute, async (c) => {
 
 const apiClientsPUTRoute = createRoute({
   method: 'put',
-  path: '/api/clients/{client_id}',
+  path: '/api/clients/{clientId}',
   request: {
     body: body(ClientCreateSchema)
   },
@@ -232,16 +232,16 @@ const apiClientsPUTRoute = createRoute({
 
 app.openapi(apiClientsPUTRoute, async (c) => {
   const body = await c.req.json()
-  const { client_id } = c.req.param()
+  const { clientId } = c.req.param()
 
   const session = await requireAuthSession(c.req.raw.headers)
-  const clientRow = await requireClient(client_id)
+  const clientRow = await requireClient(clientId)
 
-  if (clientRow.simulated_by !== session.user.id) {
+  if (clientRow.simulatedBy !== session.user.id) {
     throw new HTTPException(401, { message: "Unauthorized" });
   }
 
-  const [updatedClient] = await db.update(clients).set(body).where(eq(clients.id, client_id)).returning();
+  const [updatedClient] = await db.update(clients).set(body).where(eq(clients.id, clientId)).returning();
 
   return c.json(updatedClient, 200);
 })
@@ -251,13 +251,13 @@ app.openapi(apiClientsPUTRoute, async (c) => {
 
 // const LISTS : Record<string, { filter: any }>= {
 //   real: {
-//     filter: () => isNull(clients.simulated_by)
+//     filter: () => isNull(clients.simulatedBy)
 //   },
 //   simulated_private: {
-//     filter: (user: User) => and(eq(clients.simulated_by, user.id), eq(clients.is_shared, false))
+//     filter: (user: User) => and(eq(clients.simulatedBy, user.id), eq(clients.isShared, false))
 //   },
 //   simulated_shared: {
-//     filter: () => and(isNotNull(clients.simulated_by), eq(clients.is_shared, true))
+//     filter: () => and(isNotNull(clients.simulatedBy), eq(clients.isShared, true))
 //   }
 // }
 
@@ -285,7 +285,7 @@ app.openapi(apiClientsPUTRoute, async (c) => {
 //         })
 //         .from(inboxItems)
 //         .leftJoin(sessions, eq(inboxItems.sessionId, sessions.id))
-//         .leftJoin(clients, eq(sessions.client_id, clients.id))
+//         .leftJoin(clients, eq(sessions.clientId, clients.id))
 //         .where(
 //           and(
 //             eq(inboxItems.userId, session.user.id), 
@@ -313,13 +313,13 @@ app.openapi(apiClientsPUTRoute, async (c) => {
 
 // const LISTS : Record<string, { filter: any }>= {
 //   real: {
-//     filter: () => isNull(clients.simulated_by)
+//     filter: () => isNull(clients.simulatedBy)
 //   },
 //   simulated_private: {
-//     filter: (user: User) => and(eq(clients.simulated_by, user.id), eq(clients.is_shared, false))
+//     filter: (user: User) => and(eq(clients.simulatedBy, user.id), eq(clients.isShared, false))
 //   },
 //   simulated_shared: {
-//     filter: () => and(isNotNull(clients.simulated_by), eq(clients.is_shared, true))
+//     filter: () => and(isNotNull(clients.simulatedBy), eq(clients.isShared, true))
 //   }
 // }
 
@@ -331,16 +331,16 @@ function getSessionListFilter(args: { agent: string, list: string, user?: User }
   ]
 
   if (list === "real") {
-    filters.push(isNull(clients.simulated_by));
+    filters.push(isNull(clients.simulatedBy));
   }
   else if (list === "simulated_shared") {
-    filters.push(and(isNotNull(clients.simulated_by), eq(clients.is_shared, true)));
+    filters.push(and(isNotNull(clients.simulatedBy), eq(clients.isShared, true)));
   }
   else if (list === "simulated_private") {
     if (!user) {
       throw new Error("User not given for simulated_private list")
     }
-    filters.push(and(eq(clients.simulated_by, user.id), eq(clients.is_shared, false)));
+    filters.push(and(eq(clients.simulatedBy, user.id), eq(clients.isShared, false)));
   }
 
   return and(...filters);
@@ -373,12 +373,12 @@ app.openapi(sessionsGETRoute, async (c) => {
       agent: sessions.agent,
       client: {
         id: clients.id,
-        simulated_by: clients.simulated_by,
-        is_shared: clients.is_shared,
+        simulatedBy: clients.simulatedBy,
+        isShared: clients.isShared,
       }
     })
     .from(sessions)
-    .leftJoin(clients, eq(sessions.client_id, clients.id))
+    .leftJoin(clients, eq(sessions.clientId, clients.id))
     .where(getSessionListFilter({ agent, list, user: authSession.user }));
 
   const sessionIds = result.map((row) => row.id);
@@ -391,7 +391,7 @@ app.openapi(sessionsGETRoute, async (c) => {
         where: eq(inboxItems.userId, authSession.user.id),
       },
     },
-    orderBy: (session: any, { desc }: any) => [desc(session.updated_at)],
+    orderBy: (session, { desc }: any) => [desc(session.updatedAt)],
   })
 
   const sessionRowsFilteredWithInboxItems = sessionRows.map((session) => {
@@ -447,7 +447,7 @@ app.openapi(sessionsGETStatsRoute, async (c) => {
     })
     .from(inboxItems)
     .leftJoin(sessions, eq(inboxItems.sessionId, sessions.id))
-    .leftJoin(clients, eq(sessions.client_id, clients.id))
+    .leftJoin(clients, eq(sessions.clientId, clients.id))
     .where(
       and(
         eq(inboxItems.userId, user.id), 
@@ -478,7 +478,7 @@ app.openapi(sessionsPOSTRoute, async (c) => {
   const body = await c.req.json()
 
   const config = await requireConfig()
-  const client = await requireClient(body.client_id)
+  const client = await requireClient(body.clientId)
   const agentConfig = await requireAgentConfig(config, body.agent)
   const authSession = await requireAuthSession(c.req.raw.headers)
 
@@ -516,10 +516,10 @@ app.openapi(sessionsPOSTRoute, async (c) => {
 
 const sessionGETRoute = createRoute({
   method: 'get',
-  path: '/api/sessions/{session_id}',
+  path: '/api/sessions/{sessionId}',
   request: {
     params: z.object({
-      session_id: z.string(),
+      sessionId: z.string(),
     }),
   },
   responses: {
@@ -531,9 +531,9 @@ const sessionGETRoute = createRoute({
 
 
 app.openapi(sessionGETRoute, async (c) => {
-  const { session_id } = c.req.param()
+  const { sessionId } = c.req.param()
 
-  const session = await fetchSession(session_id);
+  const session = await fetchSession(sessionId);
 
   if (!session) {
     return c.json({ message: "Session not found" }, 404);
@@ -545,10 +545,10 @@ app.openapi(sessionGETRoute, async (c) => {
 
 const sessionSeenRoute = createRoute({
   method: 'post',
-  path: '/api/sessions/{session_id}/seen',
+  path: '/api/sessions/{sessionId}/seen',
   request: {
     params: z.object({
-      session_id: z.string(),
+      sessionId: z.string(),
     }),
   },
   responses: {
@@ -560,7 +560,7 @@ const sessionSeenRoute = createRoute({
 })
 
 app.openapi(sessionSeenRoute, async (c) => {
-  const { session_id } = c.req.param()
+  const { sessionId } = c.req.param()
 
   const authSession = await requireAuthSession(c.req.raw.headers);
 
@@ -569,7 +569,7 @@ app.openapi(sessionSeenRoute, async (c) => {
     updatedAt: new Date(),
   }).where(and(
     eq(inboxItems.userId, authSession.user.id),
-    eq(inboxItems.sessionId, session_id),
+    eq(inboxItems.sessionId, sessionId),
     isNull(inboxItems.sessionItemId),
   ))
 
@@ -583,10 +583,10 @@ app.openapi(sessionSeenRoute, async (c) => {
 // Create run
 const runsPOSTRoute = createRoute({
   method: 'post',
-  path: '/api/sessions/{session_id}/runs',
+  path: '/api/sessions/{sessionId}/runs',
   request: {
     params: z.object({
-      session_id: z.string(),
+      sessionId: z.string(),
     }),
     body: body(z.object({
       input: SessionItemCreateSchema
@@ -600,10 +600,10 @@ const runsPOSTRoute = createRoute({
 })
 
 app.openapi(runsPOSTRoute, async (c) => {
-  const { session_id } = c.req.param()
+  const { sessionId } = c.req.param()
   const { input: { type, role, content } } = await c.req.json()
 
-  const session = await requireSession(session_id)
+  const session = await requireSession(sessionId)
   const config = await requireConfig()
   const agentConfig = requireAgentConfig(config, session.agent)
   const itemConfig = requireItemConfig(agentConfig, type, role)
@@ -625,16 +625,16 @@ app.openapi(runsPOSTRoute, async (c) => {
   const userItem = await db.transaction(async (tx) => {
 
     const [newRun] = await tx.insert(runs).values({
-      session_id,
+      sessionId: sessionId,
       state: 'in_progress',
     }).returning();
 
     const [userItem] = await tx.insert(sessionItems).values({
-      session_id,
+      sessionId: sessionId,
       type,
       role,
       content,
-      run_id: newRun.id,
+      runId: newRun.id,
     }).returning();
 
     return userItem;
@@ -656,17 +656,17 @@ app.openapi(runsPOSTRoute, async (c) => {
     const input = {
       session: {
         id: session.id,
-        created_at: session.created_at,
-        updated_at: session.updated_at,
+        createdAt: session.createdAt,
+        updatedAt: session.updatedAt,
         metadata: session.metadata,
-        client_id: session.client_id,
+        clientId: session.clientId,
         agent: session.agent,
         items: [...getAllSessionItems(session), userItem]
       }
     }
 
     async function isStillRunning() {
-      const currentRun = await db.query.runs.findFirst({ where: eq(runs.id, userItem.run_id) });
+      const currentRun = await db.query.runs.findFirst({ where: eq(runs.id, userItem.runId) });
       if (currentRun && currentRun.state === 'in_progress') {
         return true
       }
@@ -709,10 +709,10 @@ app.openapi(runsPOSTRoute, async (c) => {
           versionId = version.id;
 
           // Update the run with version_id
-          if (userItem.run_id) {
+          if (userItem.runId) {
             await db.update(runs)
-              .set({ version_id: versionId })
-              .where(eq(runs.id, userItem.run_id));
+              .set({ versionId })
+              .where(eq(runs.id, userItem.runId));
           }
 
           firstItem = false;
@@ -734,11 +734,11 @@ app.openapi(runsPOSTRoute, async (c) => {
           }
 
           await db.insert(sessionItems).values({
-            session_id,
+            sessionId: sessionId,
             type: parsedItem.data.type,
             role: parsedItem.data.role,
             content: parsedItem.data.content,
-            run_id: userItem.run_id,
+            runId: userItem.runId,
           })
         }
         else {
@@ -755,9 +755,9 @@ app.openapi(runsPOSTRoute, async (c) => {
       await db.update(runs)
         .set({
           state: 'completed',
-          finished_at: new Date(),
+          finishedAt: new Date(),
         })
-        .where(eq(runs.id, userItem.run_id));
+        .where(eq(runs.id, userItem.runId));
     }
     catch (error: unknown) {
       if (!(await isStillRunning())) {
@@ -779,15 +779,15 @@ app.openapi(runsPOSTRoute, async (c) => {
       await db.update(runs)
         .set({
           state: 'failed',
-          finished_at: new Date(),
-          fail_reason: failReason
+          finishedAt: new Date(),
+          failReason
         })
-        .where(eq(runs.id, userItem.run_id));
+        .where(eq(runs.id, userItem.runId));
     }
 
   })();
 
-  const newSession = await fetchSession(session_id);
+  const newSession = await fetchSession(sessionId);
   const newRun = getLastRun(newSession!);
 
   return c.json(newRun, 201);
@@ -797,10 +797,10 @@ app.openapi(runsPOSTRoute, async (c) => {
 // Cancel Run Endpoint
 const runCancelRoute = createRoute({
   method: 'post',
-  path: '/api/sessions/{session_id}/cancel_run',
+  path: '/api/sessions/{sessionId}/cancel_run',
   request: {
     params: z.object({
-      session_id: z.string(),
+      sessionId: z.string(),
     }),
   },
   responses: {
@@ -811,9 +811,9 @@ const runCancelRoute = createRoute({
 });
 
 app.openapi(runCancelRoute, async (c) => {
-  const { session_id } = c.req.param();
+  const { sessionId } = c.req.param();
 
-  const session = await requireSession(session_id);
+  const session = await requireSession(sessionId);
   const lastRun = getLastRun(session)
 
   if (lastRun?.state !== 'in_progress') {
@@ -823,20 +823,20 @@ app.openapi(runCancelRoute, async (c) => {
   await db.update(runs)
     .set({
       state: 'failed',
-      finished_at: new Date(),
-      fail_reason: { message: 'Run was cancelled by user' }
+      finishedAt: new Date(),
+      failReason: { message: 'Run was cancelled by user' }
     })
     .where(eq(runs.id, lastRun.id));
 
-  return c.json(await fetchSession(session_id), 200);
+  return c.json(await fetchSession(sessionId), 200);
 });
 
 const runWatchRoute = createRoute({
   method: 'get',
-  path: '/api/sessions/{session_id}/watch_run',
+  path: '/api/sessions/{sessionId}/watch_run',
   request: {
     params: z.object({
-      session_id: z.string()
+      sessionId: z.string()
     })
   },
   responses: {
@@ -850,9 +850,9 @@ const runWatchRoute = createRoute({
 
 // @ts-ignore don't know how to fix this with hono yet
 app.openapi(runWatchRoute, async (c) => {
-  const { session_id } = c.req.param()
+  const { sessionId } = c.req.param()
 
-  const session = await requireSession(session_id)
+  const session = await requireSession(sessionId)
   const lastRun = getLastRun(session)
 
   return streamSSE(c, async (stream) => {
@@ -877,7 +877,7 @@ app.openapi(runWatchRoute, async (c) => {
      * 
      */
     while (running) {
-      const session = await requireSession(session_id)
+      const session = await requireSession(sessionId)
       const lastRun = getLastRun(session)
 
       if (!lastRun) {
@@ -899,10 +899,10 @@ app.openapi(runWatchRoute, async (c) => {
 
       // End if run is no longer in_progress
       if (lastRun?.state !== 'in_progress') {
-        const data: { state: string, fail_reason?: any } = { state: lastRun?.state }
+        const data: { state: string, failReason?: any } = { state: lastRun?.state }
 
         if (lastRun?.state === 'failed') {
-          data.fail_reason = lastRun.fail_reason
+          data.failReason = lastRun.failReason
         }
 
         await stream.writeSSE({
@@ -923,11 +923,11 @@ app.openapi(runWatchRoute, async (c) => {
 
 const itemSeenRoute = createRoute({
   method: 'post',
-  path: '/api/sessions/{session_id}/items/{item_id}/seen',
+  path: '/api/sessions/{sessionId}/items/{itemId}/seen',
   request: {
     params: z.object({
-      session_id: z.string(),
-      item_id: z.string(),
+      sessionId: z.string(),
+      itemId: z.string(),
     }),
   },
   responses: {
@@ -939,7 +939,7 @@ const itemSeenRoute = createRoute({
 })
 
 app.openapi(itemSeenRoute, async (c) => {
-  const { session_id, item_id } = c.req.param()
+  const { sessionId, itemId } = c.req.param()
   const authSession = await requireAuthSession(c.req.raw.headers);
 
   await db.update(inboxItems).set({
@@ -947,8 +947,8 @@ app.openapi(itemSeenRoute, async (c) => {
     updatedAt: new Date(),
   }).where(and(
     eq(inboxItems.userId, authSession.user.id),
-    eq(inboxItems.sessionId, session_id),
-    eq(inboxItems.sessionItemId, item_id),
+    eq(inboxItems.sessionId, sessionId),
+    eq(inboxItems.sessionItemId, itemId),
   ))
 
   return c.json({}, 200);
@@ -995,11 +995,11 @@ function validateScore(config: BaseConfig, session: Session, item: SessionItem, 
 
 const commentsPOSTRoute = createRoute({
   method: 'post',
-  path: '/api/sessions/{session_id}/items/{item_id}/comments',
+  path: '/api/sessions/{sessionId}/items/{itemId}/comments',
   request: {
     params: z.object({
-      session_id: z.string(),
-      item_id: z.string(),
+      sessionId: z.string(),
+      itemId: z.string(),
     }),
     body: body(z.object({
       comment: z.string().optional(),
@@ -1015,14 +1015,13 @@ const commentsPOSTRoute = createRoute({
 })
 
 
-
 app.openapi(commentsPOSTRoute, async (c) => {
   const body = await c.req.json()
-  const { session_id, item_id } = c.req.param()
+  const { sessionId, itemId } = c.req.param()
 
   const authSession = await requireAuthSession(c.req.raw.headers);
-  const session = await requireSession(session_id)
-  const item = await requireSessionItem(session, item_id);
+  const session = await requireSession(sessionId)
+  const item = await requireSessionItem(session, itemId);
   const config = await requireConfig()
 
   const inputScores = body.scores ?? {}
@@ -1035,7 +1034,7 @@ app.openapi(commentsPOSTRoute, async (c) => {
 
     // Add comment
     const [newMessage] = await tx.insert(commentMessages).values({
-      sessionItemId: item_id,
+      sessionItemId: itemId,
       userId: authSession.user.id,
       content: body.comment ?? null,
     }).returning();
@@ -1066,7 +1065,7 @@ app.openapi(commentsPOSTRoute, async (c) => {
     // add scores
     for (const [scoreName, scoreValue] of Object.entries(inputScores)) {
       await tx.insert(scores).values({
-        sessionItemId: item_id,
+        sessionItemId: itemId,
         name: scoreName,
         value: scoreValue,
         commentId: newMessage.id,
@@ -1096,12 +1095,12 @@ app.openapi(commentsPOSTRoute, async (c) => {
 // Comments DELETE (delete comment)
 const commentsDELETERoute = createRoute({
   method: 'delete',
-  path: '/api/sessions/{session_id}/items/{item_id}/comments/{comment_id}',
+  path: '/api/sessions/{sessionId}/items/{itemId}/comments/{commentId}',
   request: {
     params: z.object({
-      session_id: z.string(),
-      item_id: z.string(),
-      comment_id: z.string(),
+      sessionId: z.string(),
+      itemId: z.string(),
+      commentId: z.string(),
     }),
   },
   responses: {
@@ -1113,12 +1112,12 @@ const commentsDELETERoute = createRoute({
 })
 
 app.openapi(commentsDELETERoute, async (c) => {
-  const { comment_id, session_id, item_id } = c.req.param()
+  const { commentId, sessionId, itemId } = c.req.param()
 
   const authSession = await requireAuthSession(c.req.raw.headers);
-  const session = await requireSession(session_id)
-  const item = await requireSessionItem(session, item_id);
-  const commentMessage = await requireCommentMessageFromUser(item, comment_id, authSession.user);
+  const session = await requireSession(sessionId)
+  const item = await requireSessionItem(session, itemId);
+  const commentMessage = await requireCommentMessageFromUser(item, commentId, authSession.user);
 
   await db.transaction(async (tx) => {
     await tx.delete(commentMentions).where(eq(commentMentions.commentMessageId, commentMessage.id));
@@ -1133,7 +1132,7 @@ app.openapi(commentsDELETERoute, async (c) => {
       type: 'comment_deleted',
       authorId: authSession.user.id,
       payload: {
-        comment_id
+        comment_id: commentId
       }
     }).returning();
 
@@ -1146,12 +1145,12 @@ app.openapi(commentsDELETERoute, async (c) => {
 // Comments PUT (edit comment)
 const commentsPUTRoute = createRoute({
   method: 'put',
-  path: '/api/sessions/{session_id}/items/{item_id}/comments/{comment_id}',
+  path: '/api/sessions/{sessionId}/items/{itemId}/comments/{commentId}',
   request: {
     params: z.object({
-      session_id: z.string(),
-      item_id: z.string(),
-      comment_id: z.string(),
+      sessionId: z.string(),
+      itemId: z.string(),
+      commentId: z.string(),
     }),
     body: body(z.object({
       comment: z.string().optional(),
@@ -1167,14 +1166,14 @@ const commentsPUTRoute = createRoute({
 })
 
 app.openapi(commentsPUTRoute, async (c) => {
-  const { session_id, item_id, comment_id } = c.req.param()
+  const { sessionId, itemId, commentId } = c.req.param()
   const body = await c.req.json()
 
   const config = await requireConfig()
   const authSession = await requireAuthSession(c.req.raw.headers);
-  const session = await requireSession(session_id)
-  const item = await requireSessionItem(session, item_id)
-  const commentMessage = await requireCommentMessageFromUser(item, comment_id, authSession.user);
+  const session = await requireSession(sessionId)
+  const item = await requireSessionItem(session, itemId)
+  const commentMessage = await requireCommentMessageFromUser(item, commentId, authSession.user);
 
   const inputScores = body.scores ?? {}
 
@@ -1286,7 +1285,7 @@ app.openapi(commentsPUTRoute, async (c) => {
       } else {
         // Insert new score
         await tx.insert(scores).values({
-          sessionItemId: item_id,
+          sessionItemId: itemId,
           name: scoreName,
           value: scoreValue,
           commentId: commentMessage.id,
@@ -1300,7 +1299,7 @@ app.openapi(commentsPUTRoute, async (c) => {
       type: 'comment_edited',
       authorId: authSession.user.id,
       payload: {
-        comment_id, // never gets deleted
+        comment_id: commentId, // never gets deleted
         has_comment: body.comment ? true : false,
         user_mentions: newUserMentions,
         scores: inputScores,
@@ -1335,7 +1334,7 @@ app.openapi(membersGETRoute, async (c) => {
     email: users.email,
     name: users.name,
     role: users.role,
-    created_at: users.createdAt
+    createdAt: users.createdAt
   }).from(users);
 
   return c.json(userRows, 200);
@@ -1405,21 +1404,6 @@ app.openapi(memberDELETERoute, async (c) => {
 })
 
 /* --------- INVITATIONS --------- */
-
-const InvitationSchema = z.object({
-  id: z.string(),
-  email: z.string(),
-  role: z.string(),
-  expires_at: z.date(),
-  created_at: z.date(),
-  status: z.string(),
-  invited_by: z.string().nullable(),
-})
-
-const InvitationCreateSchema = z.object({
-  email: z.string().email(),
-  role: z.enum(['admin', 'user']),
-})
 
 // Invitations POST (create invitation)
 const invitationsPOSTRoute = createRoute({
@@ -1538,10 +1522,10 @@ app.openapi(emailsGETRoute, async (c) => {
       to: emails.to,
       subject: emails.subject,
       from: emails.from,
-      created_at: emails.created_at,
+      createdAt: emails.createdAt,
     })
     .from(emails)
-    .orderBy(desc(emails.created_at))
+    .orderBy(desc(emails.createdAt))
     .limit(100);
 
   return c.json(emailRows, 200);

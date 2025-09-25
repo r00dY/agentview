@@ -53,7 +53,7 @@ function Component() {
 
 export function SessionCard({ session, listParams }: { session: Session, listParams: ReturnType<typeof getListParams> }) {
   const { user } = useSessionContext();
-  const date = session.created_at;
+  const date = session.createdAt;
 
   const unseenEvents = (session as any).unseenEvents;
   const hasSessionUnreads = unseenEvents.session.length > 0;

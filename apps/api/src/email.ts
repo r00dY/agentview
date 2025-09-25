@@ -9,7 +9,7 @@ export async function addEmail(emailPayload: EmailPayload, userId: string) {
 
   await db.insert(emails).values({
     id: crypto.randomUUID(),
-    user_id: userId,
+    userId,
     to,
     subject: emailPayload.subject,
     body: emailPayload.html,
@@ -17,8 +17,8 @@ export async function addEmail(emailPayload: EmailPayload, userId: string) {
     from: emailPayload.from || 'noreply@example.com',
     cc,
     bcc,
-    reply_to: emailPayload.replyTo,
-    created_at: new Date(),
-    updated_at: new Date(),
+    replyTo: emailPayload.replyTo,
+    createdAt: new Date(),
+    updatedAt: new Date(),
   });
 }

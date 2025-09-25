@@ -21,7 +21,7 @@ export async function getValidInvitation(invitationId: string) {
       throw new Error("Invitation not found.");
     }
   
-    if (invitationRow.expires_at && new Date(invitationRow.expires_at) < new Date()) {
+    if (invitationRow.expiresAt && new Date(invitationRow.expiresAt) < new Date()) {
       throw new Error("Invitation has expired.");
     } 
   
@@ -79,10 +79,10 @@ export async function createInvitation(email: string, role: string, invitedById:
     id: newId,
     email,
     role,
-    invited_by: invitedById,
+    invitedBy: invitedById,
     status: "pending",
-    created_at: new Date(),
-    expires_at: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30), // 30 days
+    createdAt: new Date(),
+    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30), // 30 days
   }).returning();
 
   await addEmail({

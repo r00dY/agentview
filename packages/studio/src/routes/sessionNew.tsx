@@ -35,13 +35,11 @@ async function loader({ request }: LoaderFunctionArgs) {
     throw data(clientResponse.error, { status: clientResponse.status });
   }
 
-  const client_id = clientResponse.data.id;
-
   const sessionResponse = await apiFetch('/api/sessions', {
     method: 'POST',
     body: {
       agent: agentConfig.name,
-      client_id: client_id
+      clientId: clientResponse.data.id
     }
   });
 
@@ -69,13 +67,11 @@ async function action({ request, params }: ActionFunctionArgs): Promise<ActionRe
     return { ok: false, error: clientResponse.error };
   }
 
-  const client_id = clientResponse.data.id;
-
   const sessionResponse = await apiFetch('/api/sessions', {
     method: 'POST',
     body: {
       agent: agentConfig.name,
-      client_id: client_id,
+      clientId: clientResponse.data.id,
       metadata: data.metadata
     }
   });

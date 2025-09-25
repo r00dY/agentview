@@ -14,11 +14,11 @@ export async function fetchSessions(session_id?: string, tx?: Transaction) {
         //   }
         // },
         runs: {
-          orderBy: (run, { asc }) => [asc(run.created_at)],
+          orderBy: (run, { asc }) => [asc(run.createdAt)],
           with: {
             version: true,
             sessionItems: {
-              orderBy: (sessionItem, { asc }) => [asc(sessionItem.created_at)],
+              orderBy: (sessionItem, { asc }) => [asc(sessionItem.createdAt)],
               with: {
                 commentMessages: {
                   orderBy: (commentMessages, { asc }) => [asc(commentMessages.createdAt)],

@@ -44,7 +44,7 @@ function Component() {
             <div>
               <label className="text-sm font-medium text-muted-foreground">Date</label>
               <p className="text-sm">
-                {new Date(email.created_at).toLocaleDateString('en-US', {
+                {new Date(email.createdAt).toLocaleDateString('en-US', {
                   year: 'numeric',
                   month: 'long',
                   day: 'numeric',

@@ -264,7 +264,7 @@ function SessionPage() {
 
             </div>
 
-            {session.client.simulated_by === user.id && <InputForm session={session} agentConfig={agentConfig} />}
+            {session.client.simulatedBy === user.id && <InputForm session={session} agentConfig={agentConfig} />}
 
         </div>
 
@@ -278,7 +278,7 @@ function SessionDetails({ session, agentConfig }: { session: Session, agentConfi
     const versions = getVersions(session);
     const { members } = useSessionContext();
 
-    const simulatedBy = members.find((member) => member.id === session.client.simulated_by);
+    const simulatedBy = members.find((member) => member.id === session.client.simulatedBy);
 
     return (
         <div className="w-full">
@@ -290,7 +290,7 @@ function SessionDetails({ session, agentConfig }: { session: Session, agentConfi
                 <PropertyList.Item>
                     <PropertyList.Title>Created</PropertyList.Title>
                     <PropertyList.TextValue>
-                        {new Date(session.created_at).toLocaleDateString('en-US', {
+                        {new Date(session.createdAt).toLocaleDateString('en-US', {
                             year: 'numeric',
                             month: 'long',
                             day: 'numeric',
@@ -334,7 +334,7 @@ function ShareForm({ session, listParams }: { session: Session, listParams: Retu
         navigate(`/sessions/${session.id}?list=${listParams.list}&agent=${listParams.agent}`);
     });
 
-    if (session.client.is_shared) {
+    if (session.client.isShared) {
         return <div className="flex flex-row gap-1 items-center text-xs text-white bg-cyan-700 px-2 py-1 rounded-md font-medium"><UsersIcon className="size-3" />Shared</div>
         // return <Badge>Public</Badge>
     }
@@ -471,7 +471,7 @@ function InputForm({ session, agentConfig }: { session: Session, agentConfig: Ag
                 <div className="gap-2 text-sm text-muted-foreground">
                     {!formError && <div>
                         {sessionStatus === "in_progress" && <div>Running...</div>}
-                        {sessionStatus === "failed" && <div className="text-red-500">Failed: {lastRun?.fail_reason?.message ?? "Unknown reason"}</div>}
+                        {sessionStatus === "failed" && <div className="text-red-500">Failed: {lastRun?.failReason?.message ?? "Unknown reason"}</div>}
                     </div>}
                     {formError && <div className="text-red-500">{formError}</div>}
                 </div>

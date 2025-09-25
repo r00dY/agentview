@@ -61,7 +61,7 @@ function Component() {
                     </Link>
                   </TableCell>
                   <TableCell>
-                    {new Date(email.created_at).toLocaleDateString('en-US', {
+                    {new Date(email.createdAt).toLocaleDateString('en-US', {
                       year: 'numeric',
                       month: 'short',
                       day: 'numeric',

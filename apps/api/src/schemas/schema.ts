@@ -3,90 +3,91 @@ import { users, accounts, verifications, userSessions } from "./auth-schema";
 import { relations, sql } from "drizzle-orm";
 
 export const invitations = pgTable("invitations", {
-  id: text('id').primaryKey(),
-  email: varchar({ length: 255 }).notNull(),
-  role: varchar({ length: 255 }).notNull(),
-  expires_at: timestamp("expires_at", { withTimezone: true }).notNull(),
-  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  id: text("id").primaryKey(),
+  email: varchar("email", { length: 255 }).notNull(),
+  role: varchar("role", { length: 255 }).notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   status: varchar({ length: 255 }).notNull(),
-  invited_by: text('invited_by').references(() => users.id, { onDelete: 'cascade' })
+  invitedBy: text('invited_by').references(() => users.id, { onDelete: 'cascade' })
 });
 
 // Channels table for managing different communication channels
-export const channels = pgTable("channels", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  type: varchar({ length: 255 }).notNull(), // 'slack', 'email', 'whatsapp', 'web_chat', etc.
-  name: varchar({ length: 255 }).notNull(),
-  config: jsonb("config"),
-  enabled: boolean("enabled").notNull().default(true),
-  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+// export const channels = pgTable("channels", {
+//   id: uuid("id").primaryKey().defaultRandom(),
+//   type: varchar({ length: 255 }).notNull(), // 'slack', 'email', 'whatsapp', 'web_chat', etc.
+//   name: varchar({ length: 255 }).notNull(),
+//   config: jsonb("config"),
+//   enabled: boolean("enabled").notNull().default(true),
+//   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+//   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+// });
 
 export const emails = pgTable("emails", {
-  id: text('id').primaryKey(),
-  user_id: text('user_id').references(() => users.id),
-  to: varchar({ length: 255 }).notNull(),
-  subject: varchar({ length: 255 }),
-  body: text('body'),
-  text: text('text'),
-  from: varchar({ length: 255 }).notNull(),
-  cc: varchar({ length: 255 }),
-  bcc: varchar({ length: 255 }),
-  reply_to: varchar({ length: 255 }),
-  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  id: text("id").primaryKey(),
+  userId: text("user_id").references(() => users.id),
+  to: varchar("to", { length: 255 }).notNull(),
+  subject: varchar("subject", { length: 255 }),
+  body: text("body"),
+  text: text("text"),
+  from: varchar("from", { length: 255 }).notNull(),
+  cc: varchar("cc", { length: 255 }),
+  bcc: varchar("bcc", { length: 255 }),
+  replyTo: varchar("reply_to", { length: 255 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const clients = pgTable("clients", {
   id: uuid("id").primaryKey().defaultRandom(),
-  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  simulated_by: text('simulated_by').references(() => users.id, { onDelete: 'set null' }),
-  is_shared: boolean("is_shared").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  simulatedBy: text('simulated_by').references(() => users.id, { onDelete: 'set null' }),
+  isShared: boolean("is_shared").notNull().default(false),
 });
 
 export const sessions = pgTable("sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
   number: serial("string").notNull(),
-  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   metadata: jsonb("data"),
-  client_id: uuid("client_id").notNull().references(() => clients.id, { onDelete: 'cascade' }),
-  agent: varchar({ length: 255 }).notNull(),
+  clientId: uuid("client_id").notNull().references(() => clients.id, { onDelete: 'cascade' }),
+  agent: varchar("agent", { length: 255 }).notNull(),
 });
 
 export const sessionItems = pgTable("session_items", {
   id: uuid("id").primaryKey().defaultRandom(),
   number: serial("string").notNull(),
-  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   content: jsonb("content"),
-  session_id: uuid("session_id").notNull().references(() => sessions.id, { onDelete: 'cascade' }),
-  run_id: uuid("run_id").notNull().references(() => runs.id, { onDelete: 'set null' }),
-  type: varchar({ length: 255 }).notNull(),
-  role: varchar({ length: 255 }),
+  sessionId: uuid("session_id").notNull().references(() => sessions.id, { onDelete: 'cascade' }),
+  runId: uuid("run_id").notNull().references(() => runs.id, { onDelete: 'set null' }),
+  type: varchar("type", { length: 255 }).notNull(),
+  role: varchar("role", { length: 255 }),
+})
 
-  channel_id: uuid("channel_id").references(() => channels.id, { onDelete: 'set null' }),
-  channel_session_item_id: varchar({ length: 255 }),
-}, (table) => [uniqueIndex('channel_session_item_unique').on(table.channel_id, table.channel_session_item_id)]);
+//   channel_id: uuid("channel_id").references(() => channels.id, { onDelete: 'set null' }),
+//   channel_session_item_id: varchar({ length: 255 }),
+// }, (table) => [uniqueIndex('channel_session_item_unique').on(table.channel_id, table.channel_session_item_id)]);
 
 export const versions = pgTable("versions", {
   id: uuid("id").primaryKey().defaultRandom(),
-  version: varchar({ length: 255 }).notNull(),
-  env: varchar({ length: 255 }).notNull().default("dev"),
+  version: varchar("version", { length: 255 }).notNull(),
+  env: varchar("env", { length: 255 }).notNull(),
   metadata: jsonb("metadata"),
-  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [uniqueIndex('version_env_unique').on(table.version, table.env)]);
 
 export const runs = pgTable("runs", {
   id: uuid("id").primaryKey().defaultRandom(),
-  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  finished_at: timestamp("finished_at", { withTimezone: true }),
-  session_id: uuid("session_id").notNull().references(() => sessions.id, { onDelete: 'cascade' }),
-  version_id: uuid("version_id").references(() => versions.id), // version is nullable because when run is created, version is not yet created yet (no `run` was made)
-  state: varchar({ length: 255 }).notNull(),
-  fail_reason: jsonb("fail_reason"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+  sessionId: uuid("session_id").notNull().references(() => sessions.id, { onDelete: 'cascade' }),
+  versionId: uuid("version_id").references(() => versions.id), // version is nullable because when run is created, version is not yet created yet (no `run` was made)
+  state: varchar("state", { length: 255 }).notNull(),
+  failReason: jsonb("fail_reason"),
 });
 
 // Comment messages within sessions
@@ -123,7 +124,7 @@ export const scores = pgTable('scores', {
   id: uuid('id').primaryKey().defaultRandom(),
   sessionItemId: uuid('session_item_id').notNull().references(() => sessionItems.id, { onDelete: 'cascade' }),
 
-  name: varchar('type', { length: 255 }).notNull(),
+  name: varchar('name', { length: 255 }).notNull(),
   value: jsonb('value').notNull(),
   commentId: uuid('comment_id').notNull().references(() => commentMessages.id, { onDelete: 'cascade' }),
 
@@ -183,7 +184,7 @@ export const sessionRelations = relations(sessions, ({ many, one }) => ({
   sessionItems: many(sessionItems),
   runs: many(runs),
   client: one(clients, {
-    fields: [sessions.client_id],
+    fields: [sessions.clientId],
     references: [clients.id],
   }),
   inboxItems: many(inboxItems),
@@ -192,14 +193,14 @@ export const sessionRelations = relations(sessions, ({ many, one }) => ({
 export const clientRelations = relations(clients, ({ many, one }) => ({
   sessions: many(sessions),
   simulatedBy: one(users, {
-    fields: [clients.simulated_by],
+    fields: [clients.simulatedBy],
     references: [users.id],
   }),
 }));
 
-export const channelsRelations = relations(channels, ({ many }) => ({
-  sessionItems: many(sessionItems),
-}));
+// export const channelsRelations = relations(channels, ({ many }) => ({
+//   sessionItems: many(sessionItems),
+// }));
 
 export const versionsRelations = relations(versions, ({ many }) => ({
   runs: many(runs),
@@ -207,11 +208,11 @@ export const versionsRelations = relations(versions, ({ many }) => ({
 
 export const runRelations = relations(runs, ({ one, many }) => ({
   session: one(sessions, {
-    fields: [runs.session_id],
+    fields: [runs.sessionId],
     references: [sessions.id],
   }),
   version: one(versions, {
-    fields: [runs.version_id],
+    fields: [runs.versionId],
     references: [versions.id],
   }),
   sessionItems: many(sessionItems)
@@ -219,17 +220,17 @@ export const runRelations = relations(runs, ({ one, many }) => ({
 
 export const sessionItemsRelations = relations(sessionItems, ({ one, many }) => ({
   session: one(sessions, {
-    fields: [sessionItems.session_id],
+    fields: [sessionItems.sessionId],
     references: [sessions.id],
   }),
   run: one(runs, {
-    fields: [sessionItems.run_id],
+    fields: [sessionItems.runId],
     references: [runs.id],
   }),
-  channel: one(channels, {
-    fields: [sessionItems.channel_id],
-    references: [channels.id],
-  }),
+  // channel: one(channels, {
+  //   fields: [sessionItems.channelId],
+  //   references: [channels.id],
+  // }),
   commentMessages: many(commentMessages),
   scores: many(scores),
 }));
@@ -349,7 +350,6 @@ export const schema = {
 
   sessionRelations,
   clientRelations,
-  channelsRelations,
   versionsRelations,
   runRelations,
   sessionItemsRelations,

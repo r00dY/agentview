@@ -10,27 +10,43 @@ export const UserSchema = z.object({
 
 export type User = z.infer<typeof UserSchema>
 
+export const InvitationSchema = z.object({
+    id: z.string(),
+    email: z.string(),
+    role: z.string(),
+    expiresAt: z.date(),
+    createdAt: z.date(),
+    status: z.string(),
+    invitedBy: z.string().nullable(),
+})
+
+export const InvitationCreateSchema = z.object({
+    email: z.string().email(),
+    role: z.enum(['admin', 'user']),
+})
+
+
 export const VersionSchema = z.object({
     id: z.string(),
     version: z.string(),
     env: z.string(),
     metadata: z.any(),
-    created_at: z.date(),
+    createdAt: z.date(),
 })
 
 export const ClientSchema = z.object({
     id: z.string(),
-    created_at: z.date(),
-    updated_at: z.date(),
-    simulated_by: z.string().nullable(),
-    is_shared: z.boolean(),
+    createdAt: z.date(),
+    updatedAt: z.date(),
+    simulatedBy: z.string().nullable(),
+    isShared: z.boolean(),
 })
 
 export type Client = z.infer<typeof ClientSchema>
 
 export const ClientCreateSchema = ClientSchema.pick({
-    simulated_by: true,
-    is_shared: true,
+    simulatedBy: true,
+    isShared: true,
 }).partial()
 
 export type ClientCreate = z.infer<typeof ClientCreateSchema>
@@ -69,10 +85,10 @@ export type CommentMessage = z.infer<typeof CommentMessageSchema>
 export const SessionItemSchema = z.object({
     id: z.string(),
     number: z.number(),
-    created_at: z.date(),
-    updated_at: z.date(),
+    createdAt: z.date(),
+    updatedAt: z.date(),
     content: z.any(),
-    session_id: z.string(),
+    sessionId: z.string(),
     type: z.string(),
     role: z.string().nullish(),
     commentMessages: z.array(CommentMessageSchema),
@@ -88,12 +104,12 @@ export const SessionItemCreateSchema = SessionItemSchema.pick({
 
 export const RunSchema = z.object({
     id: z.string(),
-    created_at: z.date(),
-    finished_at: z.date().nullable(),
-    session_id: z.string(),
-    version_id: z.string().nullable(),
+    createdAt: z.date(),
+    finishedAt: z.date().nullable(),
+    sessionId: z.string(),
+    versionId: z.string().nullable(),
     state: z.string(),
-    fail_reason: z.any().nullable(),
+    failReason: z.any().nullable(),
     sessionItems: z.array(SessionItemSchema),
     version: VersionSchema.nullable(),
 })
@@ -103,10 +119,10 @@ export type Run = z.infer<typeof RunSchema>
 export const SessionSchema = z.object({
     id: z.string(),
     number: z.number(),
-    created_at: z.date(),
-    updated_at: z.date(),
+    createdAt: z.date(),
+    updatedAt: z.date(),
     metadata: z.any(),
-    client_id: z.string(),
+    clientId: z.string(),
     agent: z.string(),
     runs: z.array(RunSchema),
     client: ClientSchema,
@@ -115,7 +131,7 @@ export const SessionSchema = z.object({
 export type Session = z.infer<typeof SessionSchema>
 
 export const SessionCreateSchema = SessionSchema.pick({
-    client_id: true,
+    clientId: true,
     agent: true,
     metadata: true,
 })
@@ -141,7 +157,7 @@ export const ConfigCreateSchema = ConfigSchema.pick({
 })
 
 export const InboxItemSchema = z.any() // todo: fix this
-  
+
 export type InboxItem = z.infer<typeof InboxItemSchema>
 
 
@@ -150,7 +166,7 @@ export const MemberSchema = z.object({
     email: z.string(),
     name: z.string().nullable(),
     role: z.string().nullable(),
-    created_at: z.date(),
+    createdAt: z.date(),
 })
 
 export const MemberUpdateSchema = z.object({

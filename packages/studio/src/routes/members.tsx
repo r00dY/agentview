@@ -90,7 +90,7 @@ function Component() {
                 <TableCell>{invitation.role}</TableCell>
                 <TableCell>
                 {(() => {
-                      const isExpired = invitation.status === 'pending' && invitation.expires_at && new Date(invitation.expires_at) < new Date();
+                      const isExpired = invitation.status === 'pending' && invitation.expiresAt && new Date(invitation.expiresAt) < new Date();
 
                       if (isExpired) {
                         return <Badge variant="destructive">Invite expired</Badge>
