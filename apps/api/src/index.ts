@@ -181,8 +181,9 @@ const apiClientsPOSTRoute = createRoute({
 })
 
 app.openapi(apiClientsPOSTRoute, async (c) => {
-  const body = await c.req.json()
   const authSession = await requireAuthSession(c.req.raw.headers)
+
+  const body = await c.req.json()
 
   const [newClient] = await db.insert(clients).values({
     simulatedBy: authSession.user.id,
@@ -208,9 +209,9 @@ const clientGETRoute = createRoute({
 })
 
 app.openapi(clientGETRoute, async (c) => {
-  const { id } = c.req.param()
-
   await requireAuthSession(c.req.raw.headers)
+
+  const { id } = c.req.param()
 
   const clientRow = await db.query.clients.findFirst({
     where: eq(clients.id, id),
@@ -236,13 +237,14 @@ const apiClientsPUTRoute = createRoute({
 })
 
 app.openapi(apiClientsPUTRoute, async (c) => {
+  const authSession = await requireAuthSession(c.req.raw.headers)
+
   const body = await c.req.json()
   const { clientId } = c.req.param()
 
-  const session = await requireAuthSession(c.req.raw.headers)
   const clientRow = await requireClient(clientId)
 
-  if (clientRow.simulatedBy !== session.user.id) {
+  if (clientRow.simulatedBy !== authSession.user.id) {
     throw new HTTPException(401, { message: "Unauthorized" });
   }
 
@@ -472,7 +474,9 @@ const sessionGETRoute = createRoute({
 
 
 
-app.openapi(sessionGETRoute, async (c) => {
+app.openapi(sessionGETRoute, async (c) => {  
+  await requireAuthSession(c.req.raw.headers)
+
   const { sessionId } = c.req.param()
 
   const session = await fetchSession(sessionId);
@@ -502,9 +506,10 @@ const sessionSeenRoute = createRoute({
 })
 
 app.openapi(sessionSeenRoute, async (c) => {
+  const authSession = await requireAuthSession(c.req.raw.headers);
+
   const { sessionId } = c.req.param()
 
-  const authSession = await requireAuthSession(c.req.raw.headers);
 
   await db.update(inboxItems).set({
     lastReadEventId: sql`${inboxItems.lastNotifiableEventId}`,
@@ -542,6 +547,8 @@ const runsPOSTRoute = createRoute({
 })
 
 app.openapi(runsPOSTRoute, async (c) => {
+  await requireAuthSession(c.req.raw.headers);
+
   const { sessionId } = c.req.param()
   const { input: { type, role, content } } = await c.req.json()
 
@@ -758,6 +765,8 @@ const runCancelRoute = createRoute({
 });
 
 app.openapi(runCancelRoute, async (c) => {
+  await requireAuthSession(c.req.raw.headers);
+
   const { sessionId } = c.req.param();
 
   const session = await requireSession(sessionId);
@@ -797,6 +806,8 @@ const runWatchRoute = createRoute({
 
 // @ts-ignore don't know how to fix this with hono yet
 app.openapi(runWatchRoute, async (c) => {
+  await requireAuthSession(c.req.raw.headers);
+
   const { sessionId } = c.req.param()
 
   const session = await requireSession(sessionId)
@@ -886,8 +897,9 @@ const itemSeenRoute = createRoute({
 })
 
 app.openapi(itemSeenRoute, async (c) => {
-  const { sessionId, itemId } = c.req.param()
   const authSession = await requireAuthSession(c.req.raw.headers);
+
+  const { sessionId, itemId } = c.req.param()
 
   await db.update(inboxItems).set({
     lastReadEventId: sql`${inboxItems.lastNotifiableEventId}`,
@@ -963,10 +975,11 @@ const commentsPOSTRoute = createRoute({
 
 
 app.openapi(commentsPOSTRoute, async (c) => {
+  const authSession = await requireAuthSession(c.req.raw.headers);
+
   const body = await c.req.json()
   const { sessionId, itemId } = c.req.param()
 
-  const authSession = await requireAuthSession(c.req.raw.headers);
   const session = await requireSession(sessionId)
   const item = await requireSessionItem(session, itemId);
   const config = await requireConfig()
@@ -1059,9 +1072,9 @@ const commentsDELETERoute = createRoute({
 })
 
 app.openapi(commentsDELETERoute, async (c) => {
-  const { commentId, sessionId, itemId } = c.req.param()
-
   const authSession = await requireAuthSession(c.req.raw.headers);
+
+  const { commentId, sessionId, itemId } = c.req.param()
   const session = await requireSession(sessionId)
   const item = await requireSessionItem(session, itemId);
   const commentMessage = await requireCommentMessageFromUser(item, commentId, authSession.user);
@@ -1113,11 +1126,12 @@ const commentsPUTRoute = createRoute({
 })
 
 app.openapi(commentsPUTRoute, async (c) => {
+  const authSession = await requireAuthSession(c.req.raw.headers);
+
   const { sessionId, itemId, commentId } = c.req.param()
   const body = await c.req.json()
 
   const config = await requireConfig()
-  const authSession = await requireAuthSession(c.req.raw.headers);
   const session = await requireSession(sessionId)
   const item = await requireSessionItem(session, itemId)
   const commentMessage = await requireCommentMessageFromUser(item, commentId, authSession.user);
@@ -1306,10 +1320,10 @@ const userPOSTRoute = createRoute({
 })
 
 app.openapi(userPOSTRoute, async (c) => {
+  await requireAuthSession(c.req.raw.headers, { admin: true });
+
   const { userId } = c.req.param()
   const body = await c.req.json()
-
-  await requireAuthSession(c.req.raw.headers, { admin: true });
 
   await auth.api.setRole({
     headers: c.req.raw.headers,
@@ -1337,9 +1351,9 @@ const userDELETERoute = createRoute({
 })
 
 app.openapi(userDELETERoute, async (c) => {
-  const { userId } = c.req.param()
-
   await requireAuthSession(c.req.raw.headers, { admin: true });
+
+  const { userId } = c.req.param()
 
   await auth.api.removeUser({
     headers: c.req.raw.headers,
@@ -1366,9 +1380,9 @@ const invitationsPOSTRoute = createRoute({
 
 
 app.openapi(invitationsPOSTRoute, async (c) => {
-  const body = await c.req.json()
-
   const session = await requireAuthSession(c.req.raw.headers, { admin: true });
+
+  const body = await c.req.json()
 
   await createInvitation(body.email, body.role, session.user.id);
 
@@ -1417,9 +1431,10 @@ const invitationDELETERoute = createRoute({
 })
 
 app.openapi(invitationDELETERoute, async (c) => {
+  await requireAuthSession(c.req.raw.headers, { admin: true });
+
   const { id } = c.req.param()
 
-  await requireAuthSession(c.req.raw.headers, { admin: true });
   await cancelInvitation(id);
   return c.json({}, 200);
 })
@@ -1447,9 +1462,6 @@ app.openapi(invitationValidateRoute, async (c) => {
 })
 
 
-
-
-
 /* --------- EMAILS --------- */
 
 // Emails GET
@@ -1462,6 +1474,8 @@ const emailsGETRoute = createRoute({
 })
 
 app.openapi(emailsGETRoute, async (c) => {
+  await requireAuthSession(c.req.raw.headers, { admin: true });
+  
   const emailRows = await db
     .select({
       id: emails.id,
@@ -1488,6 +1502,8 @@ const emailDetailGETRoute = createRoute({
 })
 
 app.openapi(emailDetailGETRoute, async (c) => {
+  await requireAuthSession(c.req.raw.headers, { admin: true });
+
   const { id } = c.req.param()
   const emailRow = await db.query.emails.findFirst({ where: eq(emails.id, id) })
   return c.json(emailRow, 200)
