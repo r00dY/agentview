@@ -87,8 +87,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
   }
 
+  if (!session.data.user.role) {
+    throw data("User not found", { status: 404 });
+  }
+
+  const user : User = {
+    id: session.data.user.id,
+    email: session.data.user.email,
+    name: session.data.user.name,
+    role: session.data.user.role,
+    createdAt: session.data.user.createdAt.toISOString(),
+  }
+  
   return {
-    user: session.data.user,
+    user,
     members: membersResponse.data,
     locale,
     isDeveloper: true,

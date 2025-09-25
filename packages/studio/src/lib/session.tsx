@@ -7,7 +7,7 @@ type a = ReturnType<typeof authClient.getSession>
 
 export type SessionContextValue = {
 //   session: Awaited<ReturnType<typeof authClient.getSession>>['data']
-    user: User;
+  user: User;
   members: User[];
   locale: string;
 };

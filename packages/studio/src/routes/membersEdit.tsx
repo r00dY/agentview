@@ -11,10 +11,10 @@ import type { ActionResponse } from "~/lib/errors";
 
 
 async function loader({ params }: LoaderFunctionArgs) {
-  const response = await apiFetch(`/api/members`);
+  const response = await apiFetch(`/api/users`);
 
   if (!response.ok) {
-    throw new Error('Failed to fetch members');
+    throw new Error('Failed to fetch users');
   }
 
   const user = response.data.find((user: any) => user.id === params.userId);
@@ -31,7 +31,7 @@ async function action({ request }: ActionFunctionArgs): Promise<ActionResponse |
   const userId = formData.get("userId") as string;
   const role = formData.get("role") as "admin" | "user";
 
-  const response = await apiFetch(`/api/members/${userId}`, {
+  const response = await apiFetch(`/api/users/${userId}`, {
     method: 'POST',
     body: { role },
   });
