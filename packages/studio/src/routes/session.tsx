@@ -107,7 +107,8 @@ function SessionPage() {
                     const response = await fetch(`${getAPIBaseUrl()}/api/sessions/${session.id}/watch_run`, {
                         headers: {
                             'Content-Type': 'application/json',
-                        }
+                        },
+                        credentials: 'include', // ensure cookies are sent
                     });
 
                     setStreaming(true)

@@ -803,7 +803,6 @@ const runWatchRoute = createRoute({
 })
 
 
-
 // @ts-ignore don't know how to fix this with hono yet
 app.openapi(runWatchRoute, async (c) => {
   await requireAuthSession(c.req.raw.headers);
