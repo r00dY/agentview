@@ -3,7 +3,7 @@ import { users, accounts, verifications, userSessions } from "./auth-schema";
 import { relations, sql } from "drizzle-orm";
 
 export const invitations = pgTable("invitations", {
-  id: text("id").primaryKey(),
+  id: uuid("id").primaryKey().defaultRandom(),
   email: varchar("email", { length: 255 }).notNull(),
   role: varchar("role", { length: 255 }).notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true, mode: "string" }).notNull(),
@@ -24,7 +24,7 @@ export const invitations = pgTable("invitations", {
 // });
 
 export const emails = pgTable("emails", {
-  id: text("id").primaryKey(),
+  id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id").references(() => users.id),
   to: varchar("to", { length: 255 }).notNull(),
   subject: varchar("subject", { length: 255 }),

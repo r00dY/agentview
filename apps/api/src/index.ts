@@ -11,7 +11,7 @@ import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { swaggerUI } from '@hono/swagger-ui'
 import { db } from './db'
 import { clients, sessions, sessionItems, runs, emails, commentMessages, commentMessageEdits, commentMentions, versions, scores, configs, events, inboxItems } from './schemas/schema'
-import { eq, desc, and, inArray, ne, gt, isNull, isNotNull, or, gte, sql, countDistinct, DrizzleQueryError } from 'drizzle-orm'
+import { eq, desc, and, inArray, ne, gt, isNull, isNotNull, or, gte, sql, countDistinct, DrizzleQueryError, type InferSelectModel, type InferModel } from 'drizzle-orm'
 import { response_data, response_error, body } from './hono_utils'
 import { isUUID } from './isUUID'
 import { extractMentions } from './utils'
@@ -329,9 +329,10 @@ app.openapi(sessionsGETRoute, async (c) => {
     const sessionInboxItem = session.inboxItems.find((inboxItem) => inboxItem.sessionItemId === null);
     const itemInboxItems = session.inboxItems.filter((inboxItem) => inboxItem.sessionItemId !== null);
 
-    function getUnseenEvents(inboxItem: any) {
+    function getUnseenEvents(inboxItem: InferSelectModel<typeof inboxItems> | null | undefined) {
       if (isInboxItemUnread(inboxItem)) {
-        return inboxItem?.render?.events ?? [];
+        const render: any = inboxItem?.render;
+        return render?.events ?? [];
       }
       return [];
     }

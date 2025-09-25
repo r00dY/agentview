@@ -76,13 +76,12 @@ export async function createInvitation(email: string, role: string, invitedById:
   const newId = crypto.randomUUID();
 
   await db.insert(invitations).values({
-    id: newId,
     email,
     role,
     invitedBy: invitedById,
     status: "pending",
-    createdAt: new Date(),
-    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30), // 30 days
+    createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString(), // 30 days
   }).returning();
 
   await addEmail({

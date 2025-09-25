@@ -8,7 +8,6 @@ export async function addEmail(emailPayload: EmailPayload, userId: string) {
   const bcc = emailPayload.bcc ? (Array.isArray(emailPayload.bcc) ? emailPayload.bcc.join(', ') : emailPayload.bcc) : undefined;
 
   await db.insert(emails).values({
-    id: crypto.randomUUID(),
     userId,
     to,
     subject: emailPayload.subject,
@@ -18,7 +17,7 @@ export async function addEmail(emailPayload: EmailPayload, userId: string) {
     cc,
     bcc,
     replyTo: emailPayload.replyTo,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   });
 }

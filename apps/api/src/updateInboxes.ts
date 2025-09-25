@@ -79,7 +79,7 @@ export async function updateInboxes(
                 newInboxItemValues.push({
                     userId: user.id,
                     sessionItemId: item.id,
-                    sessionId: item.session_id,
+                    sessionId: item.sessionId,
                     lastNotifiableEventId: newEvent.id,
                     render: {
                         events: [newEvent]
@@ -161,7 +161,7 @@ export async function updateInboxes(
         await tx.insert(inboxItems).values(newInboxItemValues).onConflictDoUpdate({
             target: [inboxItems.userId, inboxItems.sessionId, inboxItems.sessionItemId],
             set: {
-                updatedAt: new Date(),
+                updatedAt: new Date().toISOString(),
                 lastNotifiableEventId: sql.raw(`excluded.${inboxItems.lastNotifiableEventId.name}`),
                 render: sql.raw(`excluded.${inboxItems.render.name}`),
             }
