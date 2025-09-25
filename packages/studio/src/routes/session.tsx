@@ -13,13 +13,14 @@ import { PropertyList } from "~/components/PropertyList";
 import { MessageCircleIcon, MessageSquareTextIcon, SendHorizonalIcon, Share, SquareIcon, UserIcon, UsersIcon } from "lucide-react";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
 import { useSessionContext } from "~/lib/session";
-import type { SessionItemConfig, SessionConfig } from "~/types";
+import type { SessionItemConfig, AgentConfig } from "~/types";
 import { FormField } from "~/components/form";
 import { parseFormData } from "~/lib/parseFormData";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs";
 import { ItemsWithCommentsLayout } from "~/components/ItemsWithCommentsLayout";
 import { CommentSessionFloatingBox } from "~/components/comments";
 import { config } from "~/config";
+import { requireAgentConfig } from "~/lib/config";
 
 async function loader({ request, params }: LoaderFunctionArgs) {
     const response = await apiFetch<Session>(`/api/sessions/${params.id}`);
@@ -51,10 +52,7 @@ function SessionPage() {
     const activeItems = getAllSessionItems(session, { activeOnly: true })
     const lastRun = getLastRun(session)
 
-    const sessionConfig = config.sessions?.find((sessionConfig) => sessionConfig.type === session.type);
-    if (!sessionConfig) {
-        throw new Error(`Session config not found for type "${session.type}"`);
-    }
+    const agentConfig = requireAgentConfig(config, session.agent);
 
     const selectedItemId = activeItems.find((a: any) => a.id === searchParams.get('itemId'))?.id ?? undefined;
 
@@ -178,7 +176,7 @@ function SessionPage() {
             <div className="flex-1 overflow-y-auto">
 
                 <div className="p-6 border-b">
-                    <SessionDetails session={session} sessionConfig={sessionConfig} />
+                    <SessionDetails session={session} agentConfig={agentConfig} />
                 </div>
 
                 <div className="">
@@ -187,7 +185,7 @@ function SessionPage() {
 
                             let content: React.ReactNode = null;
 
-                            const itemConfig = sessionConfig.items.find((a) => a.type === item.type && (!a.role || a.role === item.role));
+                            const itemConfig = agentConfig.items.find((a) => a.type === item.type && (!a.role || a.role === item.role));
                             if (!itemConfig) {
                                 content = <div className="text-muted-foreground italic">No component (type: "{item.type}")</div>
                             }
@@ -217,7 +215,7 @@ function SessionPage() {
 
                         let content: React.ReactNode = null;
 
-                        const itemConfig = sessionConfig.items.find((a) => a.type === item.type && (!a.role || a.role === item.role));
+                        const itemConfig = agentConfig.items.find((a) => a.type === item.type && (!a.role || a.role === item.role));
                         if (!itemConfig) {
                             content = <div className="text-muted-foreground italic">No component (type: "{item.type}")</div>
                         }
@@ -266,7 +264,7 @@ function SessionPage() {
 
             </div>
 
-            {session.client.simulated_by === user.id && <InputForm session={session} sessionConfig={sessionConfig} />}
+            {session.client.simulated_by === user.id && <InputForm session={session} agentConfig={agentConfig} />}
 
         </div>
 
@@ -276,7 +274,7 @@ function SessionPage() {
 
 
 
-function SessionDetails({ session, sessionConfig }: { session: Session, sessionConfig: SessionConfig }) {
+function SessionDetails({ session, agentConfig }: { session: Session, agentConfig: AgentConfig }) {
     const versions = getVersions(session);
     const { members } = useSessionContext();
 
@@ -287,7 +285,7 @@ function SessionDetails({ session, sessionConfig }: { session: Session, sessionC
             <PropertyList.Root>
                 <PropertyList.Item>
                     <PropertyList.Title>Agent</PropertyList.Title>
-                    <PropertyList.TextValue>{session.type}</PropertyList.TextValue>
+                    <PropertyList.TextValue>{session.agent}</PropertyList.TextValue>
                 </PropertyList.Item>
                 <PropertyList.Item>
                     <PropertyList.Title>Created</PropertyList.Title>
@@ -317,7 +315,7 @@ function SessionDetails({ session, sessionConfig }: { session: Session, sessionC
                 </PropertyList.Item>
 
 
-                {(sessionConfig.metadata ?? []).map((metafield: any) => (
+                {(agentConfig.metadata ?? []).map((metafield: any) => (
                     <PropertyList.Item className="items-start">
                         <PropertyList.Title>{metafield.title ?? metafield.name}</PropertyList.Title>
                         <PropertyList.TextValue><metafield.display value={session.metadata?.[metafield.name]} options={metafield.options} /></PropertyList.TextValue>
@@ -352,7 +350,7 @@ function Component() {
     return <SessionPage key={loaderData.session.id} />
 }
 
-function InputForm({ session, sessionConfig }: { session: Session, sessionConfig: SessionConfig }) {
+function InputForm({ session, agentConfig }: { session: Session, agentConfig: AgentConfig }) {
     const [formError, setFormError] = useState<string | null>(null)
 
     const lastRun = getLastRun(session)
@@ -404,7 +402,7 @@ function InputForm({ session, sessionConfig }: { session: Session, sessionConfig
         })
     }
 
-    const inputConfigs = sessionConfig.items.filter((item) => item.isInput)
+    const inputConfigs = agentConfig.items.filter((item) => item.isInput)
 
     return <div className="p-6 border-t">
 

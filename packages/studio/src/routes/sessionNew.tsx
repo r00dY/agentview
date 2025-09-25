@@ -2,8 +2,6 @@ import { redirect, Form, useActionData, useFetcher, data, useLoaderData } from "
 import type { ActionFunctionArgs, LoaderFunctionArgs, RouteObject } from "react-router";
 import { Header, HeaderTitle } from "~/components/header";
 import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { apiFetch } from "~/lib/apiFetch";
 import { getListParams } from "~/lib/utils";
@@ -13,18 +11,15 @@ import { AlertCircleIcon } from "lucide-react";
 import { useRef } from "react";
 import { FormField } from "~/components/form";
 import { parseFormData } from "~/lib/parseFormData";
+import { requireAgentConfig } from "~/lib/config";
 
-async function loader({ request, params }: LoaderFunctionArgs) {
+async function loader({ request }: LoaderFunctionArgs) {
   const listParams = getListParams(request);
-  const sessionConfig = config.sessions?.find((sessionConfig) => sessionConfig.type === listParams.agent);
-
-  if (!sessionConfig) {
-    throw new Error(`Session config not found for type "${listParams.agent}"`);
-  }
-
-  if (sessionConfig.metadata && (sessionConfig.metadata?.length > 0)) {
+  const agentConfig = requireAgentConfig(config, listParams.agent);
+ 
+  if (agentConfig.metadata && (agentConfig.metadata?.length > 0)) {
     return {
-      sessionConfig,
+      agentConfig,
       listParams
     }
   }
@@ -45,7 +40,7 @@ async function loader({ request, params }: LoaderFunctionArgs) {
   const sessionResponse = await apiFetch('/api/sessions', {
     method: 'POST',
     body: {
-      type: sessionConfig.type,
+      agent: agentConfig.name,
       client_id: client_id
     }
   });
@@ -59,12 +54,8 @@ async function loader({ request, params }: LoaderFunctionArgs) {
 
 async function action({ request, params }: ActionFunctionArgs): Promise<ActionResponse | Response> {
   const listParams = getListParams(request);
-  const sessionConfig = config.sessions?.find((sessionConfig) => sessionConfig.type === listParams.agent);
-
-  if (!sessionConfig) {
-    throw new Error(`Session config not found for agent "${listParams.agent}"`);
-  }
-
+  const agentConfig = requireAgentConfig(config, listParams.agent);
+  
   const formData = await request.formData();
   const data = parseFormData(formData);
 
@@ -83,7 +74,7 @@ async function action({ request, params }: ActionFunctionArgs): Promise<ActionRe
   const sessionResponse = await apiFetch('/api/sessions', {
     method: 'POST',
     body: {
-      type: sessionConfig.type,
+      agent: agentConfig.name,
       client_id: client_id,
       metadata: data.metadata
     }
@@ -113,7 +104,7 @@ function Component() {
 }
 
 function Content() {
-  const { sessionConfig } = useLoaderData<typeof loader>();
+  const { agentConfig } = useLoaderData<typeof loader>();
 
   const fetcher = useFetcher();
   const formRef = useRef<HTMLFormElement>(null);
@@ -129,10 +120,10 @@ function Content() {
 
     <Form method="post" ref={formRef} className="max-w-xl">
 
-      {sessionConfig.metadata?.length > 0 && (<div>
+      {agentConfig.metadata?.length > 0 && (<div>
 
         <div className="space-y-2">
-          {sessionConfig.metadata?.map((metafield: any) => (<FormField
+          {agentConfig.metadata?.map((metafield: any) => (<FormField
             key={metafield.name}
             id={metafield.name}
             label={metafield.title ?? metafield.name}

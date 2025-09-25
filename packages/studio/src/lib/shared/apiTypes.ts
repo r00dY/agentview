@@ -107,7 +107,7 @@ export const SessionSchema = z.object({
     updated_at: z.date(),
     metadata: z.any(),
     client_id: z.string(),
-    type: z.string(),
+    agent: z.string(),
     runs: z.array(RunSchema),
     client: ClientSchema,
 })
@@ -116,7 +116,7 @@ export type Session = z.infer<typeof SessionSchema>
 
 export const SessionCreateSchema = SessionSchema.pick({
     client_id: true,
-    type: true,
+    agent: true,
     metadata: true,
 })
 

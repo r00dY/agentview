@@ -18,6 +18,7 @@ import { TextEditor, textToElements } from "./TextEditor";
 import { useSessionContext } from "~/lib/session";
 import { apiFetch } from "~/lib/apiFetch";
 import { config } from "~/config";
+import { requireAgentConfig, requireItemConfig } from "~/lib/config";
 
 export type CommentSessionProps = {
     session: Session,
@@ -39,17 +40,9 @@ export type CommentSessionFloatingButtonProps = CommentSessionFloatingBoxProps &
 }
 
 function getAllScoreConfigs(session: Session, item: SessionItem) {
-    const sessionConfig = config.sessions?.find((t: any) => t.type === session.type);
-    if (!sessionConfig) {
-        throw new Error("session config not found");
-    }
-
-    const itemConfig = sessionConfig?.items.find((a: any) =>
-        a.type === item.type && (!a.role || a.role === item.role)   
-    );
-    const allScoreConfigs = itemConfig?.scores || [];
-
-    return allScoreConfigs;
+    const agentConfig = requireAgentConfig(config, session.agent);
+    const itemConfig = requireItemConfig(agentConfig, item.type, item.role);
+    return itemConfig?.scores || [];
 }
 
 export const CommentThread = forwardRef<any, CommentSessionProps>(({ session, item, collapsed = false, singleLineMessageHeader = false, small=false }, ref) => {

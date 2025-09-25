@@ -53,7 +53,7 @@ export const sessions = pgTable("sessions", {
   updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   metadata: jsonb("data"),
   client_id: uuid("client_id").notNull().references(() => clients.id, { onDelete: 'cascade' }),
-  type: varchar({ length: 255 }).notNull(),
+  agent: varchar({ length: 255 }).notNull(),
 });
 
 export const sessionItems = pgTable("session_items", {

@@ -13,13 +13,13 @@ export interface BaseSessionItemConfig<ScoreConfigType> {
     scores?: ScoreConfigType[];
 }
 
-export interface BaseSessionConfig<SessionItemType> {
-    type: string;
+export interface BaseAgentConfig<SessionItemType> {
+    name: string;
     url: string;
     metadata?: any;//z.ZodType; // TODO: fix this
     items: SessionItemType[];
 }
 
 export type BaseConfig = {
-    sessions: BaseSessionConfig<BaseSessionItemConfig<BaseScoreConfig>>[],
+    agents?: BaseAgentConfig<BaseSessionItemConfig<BaseScoreConfig>>[],
 }

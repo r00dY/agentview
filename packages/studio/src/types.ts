@@ -1,4 +1,4 @@
-import type { BaseScoreConfig, BaseSessionItemConfig, BaseSessionConfig, BaseConfig } from "./lib/shared/configTypes";
+import type { BaseScoreConfig, BaseSessionItemConfig, BaseAgentConfig, BaseConfig } from "./lib/shared/configTypes";
 
 export type FormInputProps<T=any> = {
   id: string,
@@ -27,8 +27,8 @@ export type SessionItemConfig = BaseSessionItemConfig<ScoreConfig> & {
   options?: any;
 };
 
-export type SessionConfig = BaseSessionConfig<SessionItemConfig>;
+export type AgentConfig = BaseAgentConfig<SessionItemConfig>;
   
 export type AgentViewConfig = {
-  sessions?: SessionConfig[],  
+  agents?: AgentConfig[],  
 }

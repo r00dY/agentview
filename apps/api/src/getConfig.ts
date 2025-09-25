@@ -6,11 +6,11 @@ import type { BaseConfig } from "./shared/configTypes";
 
 function parseConfig(config: any): BaseConfig {
     return {
-        sessions: config.sessions.map((session: any) => ({
-            type: session.type,
-            url: session.url,
-            metadata: session.metadata ? convertJsonSchemaToZod(session.metadata) : undefined,
-            items: session.items?.map((item: any) => ({
+        agents: config.agents.map((agent: any) => ({
+            name: agent.name,
+            url: agent.url,
+            metadata: agent.metadata ? convertJsonSchemaToZod(agent.metadata) : undefined,
+            items: agent.items?.map((item: any) => ({
                 ...item,
                 content: convertJsonSchemaToZod(item.content),
                 scores: item.scores?.map((score: any) => ({

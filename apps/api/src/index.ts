@@ -24,7 +24,7 @@ import { getStudioURL } from './getStudioURL'
 import { getAllSessionItems, getLastRun } from './shared/sessionUtils'
 import { ClientSchema, SessionSchema, SessionCreateSchema, SessionItemCreateSchema, RunSchema, SessionItemSchema, type User, type Session, type SessionItem, ConfigSchema, ConfigCreateSchema, InboxItemSchema, ClientCreateSchema, MemberSchema, MemberUpdateSchema, type InboxItem, allowedSessionLists } from './shared/apiTypes'
 import { getConfig } from './getConfig'
-import type { BaseConfig, BaseSessionConfig } from './shared/configTypes'
+import type { BaseConfig, BaseAgentConfig } from './shared/configTypes'
 import { users } from './schemas/auth-schema'
 import { getUsersCount } from './users'
 import { updateInboxes } from './updateInboxes'
@@ -99,23 +99,20 @@ async function requireConfig() {
   return config
 }
 
-function requireSessionConfig(config: BaseConfig, sessionType: string) {
-  const sessionConfig = config.sessions.find((sessionConfig) => sessionConfig.type === sessionType);
-  if (!sessionConfig) {
-    throw new HTTPException(404, { message: `Session type '${sessionType}' not found in schema.` });
+function requireAgentConfig(config: BaseConfig, name: string) {
+  const agentConfig = config.agents?.find((agent) => agent.name === name)
+  if (!agentConfig) {
+    throw new HTTPException(404, { message: `Agent '${name}' not found in schema.` });
   }
-  return sessionConfig
+  return agentConfig
 }
 
-function requireItemConfig(sessionConfig: ReturnType<typeof requireSessionConfig>, type: string, role?: string) {
-  const itemConfig = (sessionConfig.items ?? []).find(
-    (itemConfig) => itemConfig.type === type && (!itemConfig.role || itemConfig.role === role)
-  );
-
+function requireItemConfig(agentConfig: ReturnType<typeof requireAgentConfig>, type: string, role?: string | null) {
+  const itemConfig = agentConfig.items?.find((item) => item.type === type && (!item.role || item.role === role))
   const itemTypeCuteName = `${type}' / '${role}`
 
   if (!itemConfig) {
-    throw new HTTPException(400, { message: `Item '${itemTypeCuteName}' not found in configuration for session type '${sessionConfig.type}'` });
+    throw new HTTPException(400, { message: `Item '${itemTypeCuteName}' not found in configuration for agent '${agentConfig.name}'` });
   }
 
   return itemConfig
@@ -279,7 +276,7 @@ app.openapi(apiClientsPUTRoute, async (c) => {
 //   const lists : SessionList[] = []
 
 //   // For each session type in the schema
-//   for (const sessionConfig of config.sessions) {
+//   for (const agentConfig of config.sessions) {
 //     // For each list type (real, simulated_private, simulated_shared)
 //     for (const [listName, list] of Object.entries(LISTS)) {
 //       const result = await db
@@ -294,13 +291,13 @@ app.openapi(apiClientsPUTRoute, async (c) => {
 //             eq(inboxItems.userId, session.user.id), 
 //             sql`${inboxItems.lastNotifiableEventId} > COALESCE(${inboxItems.lastReadEventId}, 0)`, 
 //             list.filter(session.user),
-//             eq(sessions.type, sessionConfig.type)
+//             eq(sessions.type, agentConfig.type)
 //           )
 //         )
 
 //       lists.push({
 //         name: listName,
-//         agent: sessionConfig.type,
+//         agent: agentConfig.type,
 //         unseenCount: result[0].unreadSessions ?? 0,
 //         hasMentions: false,
 //       })
@@ -330,7 +327,7 @@ function getSessionListFilter(args: { agent: string, list: string, user?: User }
   const { agent, list, user } = args;
 
   const filters : any[] = [
-    eq(sessions.type, agent)
+    eq(sessions.agent, agent)
   ]
 
   if (list === "real") {
@@ -373,7 +370,7 @@ app.openapi(sessionsGETRoute, async (c) => {
   const result = await db
     .select({
       id: sessions.id,
-      type: sessions.type,
+      agent: sessions.agent,
       client: {
         id: clients.id,
         simulated_by: clients.simulated_by,
@@ -387,7 +384,7 @@ app.openapi(sessionsGETRoute, async (c) => {
   const sessionIds = result.map((row) => row.id);
 
   const sessionRows = await db.query.sessions.findMany({
-    where: and(inArray(sessions.id, sessionIds), eq(sessions.type, agent)),
+    where: and(inArray(sessions.id, sessionIds), eq(sessions.agent, agent)),
     with: {
       client: true,
       inboxItems: {
@@ -482,12 +479,12 @@ app.openapi(sessionsPOSTRoute, async (c) => {
 
   const config = await requireConfig()
   const client = await requireClient(body.client_id)
-  const sessionConfig = await requireSessionConfig(config, body.type)
+  const agentConfig = await requireAgentConfig(config, body.agent)
   const authSession = await requireAuthSession(c.req.raw.headers)
 
   // Validate metadata against the schema
   try {
-    sessionConfig.metadata?.parse(body.metadata);
+    agentConfig.metadata?.parse(body.metadata);
   } catch (error: any) {
     return c.json({ message: error.message }, 400);
   }
@@ -608,8 +605,8 @@ app.openapi(runsPOSTRoute, async (c) => {
 
   const session = await requireSession(session_id)
   const config = await requireConfig()
-  const sessionConfig = requireSessionConfig(config, session.type)
-  const itemConfig = requireItemConfig(sessionConfig, type, role)
+  const agentConfig = requireAgentConfig(config, session.agent)
+  const itemConfig = requireItemConfig(agentConfig, type, role)
 
   // Validate content against the schema
   try {
@@ -663,7 +660,7 @@ app.openapi(runsPOSTRoute, async (c) => {
         updated_at: session.updated_at,
         metadata: session.metadata,
         client_id: session.client_id,
-        type: session.type,
+        agent: session.agent,
         items: [...getAllSessionItems(session), userItem]
       }
     }
@@ -678,7 +675,7 @@ app.openapi(runsPOSTRoute, async (c) => {
 
     try {
       // Try streaming first, fallback to non-streaming
-      const runOutput = callAgentAPI(input, sessionConfig.url)
+      const runOutput = callAgentAPI(input, agentConfig.url)
       
       let versionId: string | null = null;
 
@@ -963,14 +960,14 @@ app.openapi(itemSeenRoute, async (c) => {
 
 
 function validateScore(config: BaseConfig, session: Session, item: SessionItem, user: User, scoreName: string, scoreValue: any, options?: { mustNotExist?: boolean }) {
-  const sessionConfig = requireSessionConfig(config, session.type);
-  const itemConfig = requireItemConfig(sessionConfig, item.type, item.role ?? undefined)
+  const agentConfig = requireAgentConfig(config, session.agent);
+  const itemConfig = requireItemConfig(agentConfig, item.type, item.role ?? undefined)
   const itemTypeCuteName = `${item.type}' / '${item.role}`
 
   // Find the score config for this item
   const scoreConfig = itemConfig.scores?.find((scoreConfig) => scoreConfig.name === scoreName);
   if (!scoreConfig) {
-    throw new HTTPException(400, { message: `Score name '${scoreName}' not found in configuration for item  '${itemTypeCuteName}' in session type '${session.type}'` });
+    throw new HTTPException(400, { message: `Score name '${scoreName}' not found in configuration for item  '${itemTypeCuteName}' in agent '${session.agent}'` });
   }
 
   // Check if there is already a score with the same name in any commentMessage's scores

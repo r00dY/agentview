@@ -9,11 +9,11 @@ export function serializeBaseConfig(config: BaseConfig): any {
 
 export function getBaseConfig(config: AgentViewConfig): BaseConfig {
   return {
-    sessions: (config.sessions ?? []).map((session) => ({
-      type: session.type,
-      url: session.url,
-      metadata: session.metadata,
-      items: session.items.map((item) => ({
+    agents: (config.agents ?? []).map((agent) => ({
+      name: agent.name,
+      url: agent.url,
+      metadata: agent.metadata,
+      items: agent.items.map((item) => ({
       type: item.type,
         role: item.role,
         content: item.content,

@@ -9,9 +9,9 @@ import { ProductSelect } from "./ProductSelect";
 import { ScoreBadge } from "./ScoreBadge";
 
 export default defineConfig({
-    sessions: [
+    agents: [
         {
-            type: "simple_chat",
+            name: "simple_chat",
             url: "http://127.0.0.1:8000/simple_chat",
             items: [
                 {
@@ -51,7 +51,7 @@ export default defineConfig({
             ]
         },
         {
-            type: "pdp_chat",
+            name: "pdp_chat",
             url: "http://127.0.0.1:8000/product_chat",
             metadata: [
                 {

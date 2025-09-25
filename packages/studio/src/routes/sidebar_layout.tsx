@@ -37,11 +37,10 @@ import { ChangePasswordDialog } from "~/components/ChangePasswordDialog";
 import { authClient } from "~/lib/auth-client";
 import { SessionContext } from "~/lib/session";
 import { apiFetch } from "~/lib/apiFetch";
-import type { Member } from "~/lib/shared/apiTypes";
-import { allowedSessionLists } from "~/lib/shared/apiTypes";
 import { NotificationBadge } from "~/components/NotificationBadge";
 import { createOrUpdateSchema } from "~/lib/remoteConfig";
 import { config } from "~/config";
+import { type Member, allowedSessionLists } from "~/lib/shared/apiTypes";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const session = await authClient.getSession()
@@ -69,22 +68,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const locale = request.headers.get('accept-language')?.split(',')[0] || 'en-US';
 
   // Fetch session stats for each session type and list combination
-  const sessionStats: { [sessionType: string]: { [list: string]: { unseenCount: number, hasMentions: boolean } } } = {};
+  const listStats: { [sessionType: string]: { [list: string]: { unseenCount: number, hasMentions: boolean } } } = {};
 
-  if (config.sessions) {
-    for (const sessionConfig of config.sessions) {
-      const sessionType = sessionConfig.type;
-      sessionStats[sessionType] = {};
+  if (config.agents) {
+    for (const agentConfig of config.agents) {
+      listStats[agentConfig.name] = {};
 
       for (const list of allowedSessionLists) {
-        const statsUrl = `/api/sessions/stats?agent=${encodeURIComponent(sessionType)}&list=${encodeURIComponent(list)}`;
+        const statsUrl = `/api/sessions/stats?agent=${agentConfig.name}&list=${list}`;
         const statsResponse = await apiFetch<{ unseenCount: number, hasMentions: boolean }>(statsUrl);
 
         if (!statsResponse.ok) {
           throw data(statsResponse.error, { status: statsResponse.status });
         }
 
-        sessionStats[sessionType][list] = statsResponse.data;
+        listStats[agentConfig.name][list] = statsResponse.data;
       }
     }
   }
@@ -94,18 +92,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
     members: membersResponse.data,
     locale,
     isDeveloper: true,
-    sessionStats
+    listStats
   };
 }
 
 function Component() {
-  const { user, isDeveloper, members, locale, sessionStats } = useLoaderData<typeof loader>()
+  const { user, isDeveloper, members, locale, listStats } = useLoaderData<typeof loader>()
   const [editProfileOpen, setEditProfileOpen] = React.useState(false)
   const [changePasswordOpen, setChangePasswordOpen] = React.useState(false)
 
   // Helper function to get unseen count for a specific session type and list name
   const getUnseenCount = (sessionType: string, listName: string) => {
-    return sessionStats[sessionType]?.[listName]?.unseenCount ?? 0
+    return listStats[sessionType]?.[listName]?.unseenCount ?? 0
   }
 
   return (<SessionContext.Provider value={{ user, members, locale }}>
@@ -124,24 +122,24 @@ function Component() {
               <SidebarGroupContent>
                 <SidebarMenu>
 
-                { (!config.sessions || config.sessions.length === 0) && (
+                { (!config.agents || config.agents.length === 0) && (
                   <SidebarMenuItem>
                     <SidebarMenuButton className="text-muted-foreground">You don't have any agents yet</SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
 
-                  {config.sessions?.map((session) => {
-                    const realUnseenCount = getUnseenCount(session.type, "real")
-                    const simulatedPrivateUnseenCount = getUnseenCount(session.type, "simulated_private")
-                    const simulatedSharedUnseenCount = getUnseenCount(session.type, "simulated_shared")
+                  {config.agents?.map((agent) => {
+                    const realUnseenCount = getUnseenCount(agent.name, "real")
+                    const simulatedPrivateUnseenCount = getUnseenCount(agent.name, "simulated_private")
+                    const simulatedSharedUnseenCount = getUnseenCount(agent.name, "simulated_shared")
                     
                     return (
-                      <SidebarMenuItem key={session.type}>
-                        <SidebarMenuButton>{session.type}</SidebarMenuButton>
+                      <SidebarMenuItem key={agent.name}>
+                        <SidebarMenuButton>{agent.name}</SidebarMenuButton>
                         <SidebarMenuSub className="mr-0">
                           <SidebarMenuSubItem className={realUnseenCount > 0 ? "flex justify-between items-center" : ""}>
                             <SidebarMenuSubButton asChild>
-                              <Link to={`/sessions?agent=${session.type}`}>
+                              <Link to={`/sessions?agent=${agent.name}`}>
                                 <MessageCircle className="mr-2 h-4 w-4" />
                                 <span>Production</span>
                               </Link>
@@ -150,7 +148,7 @@ function Component() {
                           </SidebarMenuSubItem>
                           <SidebarMenuSubItem className={simulatedPrivateUnseenCount > 0 ? "flex justify-between items-center" : ""}>
                             <SidebarMenuSubButton asChild>
-                              <Link to={`/sessions?agent=${session.type}&list=simulated_private`}>
+                              <Link to={`/sessions?agent=${agent.name}&list=simulated_private`}>
                                 <User className="mr-2 h-4 w-4" />
                                 <span>Simulated Private</span>
                               </Link>
@@ -160,7 +158,7 @@ function Component() {
                           </SidebarMenuSubItem>
                           <SidebarMenuSubItem className={simulatedSharedUnseenCount > 0 ? "flex justify-between items-center" : ""}>
                             <SidebarMenuSubButton asChild>
-                              <Link to={`/sessions?agent=${session.type}&list=simulated_shared`}>
+                              <Link to={`/sessions?agent=${agent.name}&list=simulated_shared`}>
                                 <Users className="mr-2 h-4 w-4" />
                                 <span>Simulated Shared</span>
                               </Link>
@@ -176,75 +174,6 @@ function Component() {
               </SidebarGroupContent>
             </SidebarGroup>
 
-
-
-            {/* {(!config.sessions || config.sessions.length === 0) ? (
-              <SidebarGroup>
-                <SidebarGroupLabel>Sessions</SidebarGroupLabel>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    <SidebarMenuItem>
-                      <SidebarMenuButton className="text-muted-foreground">
-                        You don't have any agents yet
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            ) : (
-              config.sessions?.map((session) => {
-                const realUnseenCount = getUnseenCount(session.type, "real")
-                const simulatedPrivateUnseenCount = getUnseenCount(session.type, "simulated_private")
-                const simulatedSharedUnseenCount = getUnseenCount(session.type, "simulated_shared")
-
-                return (
-                  <React.Fragment key={session.type}>
-                    <SidebarGroup>
-                      <SidebarGroupLabel>{session.type}</SidebarGroupLabel>
-                      <SidebarGroupContent>
-                        <SidebarMenu>
-                          <SidebarMenuItem>
-                            <SidebarMenuButton>Production</SidebarMenuButton>
-                            <SidebarMenuSub className="mr-0">
-                              <SidebarMenuSubItem className={realUnseenCount > 0 ? "flex justify-between items-center" : ""}>
-                                <SidebarMenuSubButton asChild>
-                                  <Link to={`/sessions?type=${session.type}`}>
-                                    <span>All</span>
-                                  </Link>
-                                </SidebarMenuSubButton>
-                                {realUnseenCount > 0 && <NotificationBadge>{realUnseenCount}</NotificationBadge>}
-                              </SidebarMenuSubItem>
-                            </SidebarMenuSub>
-                          </SidebarMenuItem>
-
-                          <SidebarMenuItem>
-                            <SidebarMenuButton>Simulations</SidebarMenuButton>
-                            <SidebarMenuSub className="mr-0">
-                              <SidebarMenuSubItem className={simulatedPrivateUnseenCount > 0 ? "flex justify-between items-center" : ""}>
-                                <SidebarMenuSubButton asChild>
-                                  <Link to={`/sessions?type=${session.type}&list=simulated_private`}>
-                                    <span>Private</span>
-                                  </Link>
-                                </SidebarMenuSubButton>
-                                {simulatedPrivateUnseenCount > 0 && <NotificationBadge>{simulatedPrivateUnseenCount}</NotificationBadge>}
-                              </SidebarMenuSubItem>
-                              <SidebarMenuSubItem className={simulatedSharedUnseenCount > 0 ? "flex justify-between items-center" : ""}>
-                                <SidebarMenuSubButton asChild>
-                                  <Link to={`/sessions?type=${session.type}&list=simulated_shared`}>
-                                    <span>Shared</span>
-                                  </Link>
-                                </SidebarMenuSubButton>
-                                {simulatedSharedUnseenCount > 0 && <NotificationBadge>{simulatedSharedUnseenCount}</NotificationBadge>}
-                              </SidebarMenuSubItem>
-                            </SidebarMenuSub>
-                          </SidebarMenuItem>
-                        </SidebarMenu>
-                      </SidebarGroupContent>
-                    </SidebarGroup>
-                  </React.Fragment>
-                )
-              })
-            )} */}
 
 
             {user.role === "admin" && <SidebarGroup>
