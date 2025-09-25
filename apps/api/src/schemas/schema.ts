@@ -6,8 +6,8 @@ export const invitations = pgTable("invitations", {
   id: text("id").primaryKey(),
   email: varchar("email", { length: 255 }).notNull(),
   role: varchar("role", { length: 255 }).notNull(),
-  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true, mode: "string" }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   status: varchar({ length: 255 }).notNull(),
   invitedBy: text('invited_by').references(() => users.id, { onDelete: 'cascade' })
 });
@@ -19,8 +19,8 @@ export const invitations = pgTable("invitations", {
 //   name: varchar({ length: 255 }).notNull(),
 //   config: jsonb("config"),
 //   enabled: boolean("enabled").notNull().default(true),
-//   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-//   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+//   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+//   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 // });
 
 export const emails = pgTable("emails", {
@@ -34,14 +34,14 @@ export const emails = pgTable("emails", {
   cc: varchar("cc", { length: 255 }),
   bcc: varchar("bcc", { length: 255 }),
   replyTo: varchar("reply_to", { length: 255 }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 });
 
 export const clients = pgTable("clients", {
   id: uuid("id").primaryKey().defaultRandom(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   simulatedBy: text('simulated_by').references(() => users.id, { onDelete: 'set null' }),
   isShared: boolean("is_shared").notNull().default(false),
 });
@@ -49,8 +49,8 @@ export const clients = pgTable("clients", {
 export const sessions = pgTable("sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
   number: serial("string").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   metadata: jsonb("data"),
   clientId: uuid("client_id").notNull().references(() => clients.id, { onDelete: 'cascade' }),
   agent: varchar("agent", { length: 255 }).notNull(),
@@ -59,8 +59,8 @@ export const sessions = pgTable("sessions", {
 export const sessionItems = pgTable("session_items", {
   id: uuid("id").primaryKey().defaultRandom(),
   number: serial("string").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   content: jsonb("content"),
   sessionId: uuid("session_id").notNull().references(() => sessions.id, { onDelete: 'cascade' }),
   runId: uuid("run_id").notNull().references(() => runs.id, { onDelete: 'set null' }),
@@ -77,13 +77,13 @@ export const versions = pgTable("versions", {
   version: varchar("version", { length: 255 }).notNull(),
   env: varchar("env", { length: 255 }).notNull(),
   metadata: jsonb("metadata"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [uniqueIndex('version_env_unique').on(table.version, table.env)]);
 
 export const runs = pgTable("runs", {
   id: uuid("id").primaryKey().defaultRandom(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  finishedAt: timestamp("finished_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  finishedAt: timestamp("finished_at", { withTimezone: true, mode: "string" }),
   sessionId: uuid("session_id").notNull().references(() => sessions.id, { onDelete: 'cascade' }),
   versionId: uuid("version_id").references(() => versions.id), // version is nullable because when run is created, version is not yet created yet (no `run` was made)
   state: varchar("state", { length: 255 }).notNull(),
@@ -97,11 +97,11 @@ export const commentMessages = pgTable('comment_messages', {
   sessionItemId: uuid('session_item_id').notNull().references(() => sessionItems.id, { onDelete: 'cascade' }),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   content: text('content'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 
   // Soft delete fields
-  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  deletedAt: timestamp('deleted_at', { withTimezone: true, mode: "string" }),
   deletedBy: text('deleted_by').references(() => users.id, { onDelete: 'set null' }),
 });
 
@@ -110,7 +110,7 @@ export const commentMentions = pgTable('comment_mentions', {
   id: uuid('id').primaryKey().defaultRandom(),
   commentMessageId: uuid('comment_message_id').notNull().references(() => commentMessages.id, { onDelete: 'cascade' }),
   mentionedUserId: text('mentioned_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+  createdAt: timestamp('created_at', { withTimezone: true, mode: "string" }).notNull().defaultNow()
 });
 
 // Edit history for comment messages
@@ -118,7 +118,7 @@ export const commentMessageEdits = pgTable('comment_message_edits', {
   id: uuid('id').primaryKey().defaultRandom(),
   commentMessageId: uuid('comment_message_id').notNull().references(() => commentMessages.id, { onDelete: 'cascade' }),
   previousContent: text('previous_content'),
-  editedAt: timestamp('edited_at', { withTimezone: true }).notNull().defaultNow(),
+  editedAt: timestamp('edited_at', { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 });
 
 export const scores = pgTable('scores', {
@@ -129,12 +129,12 @@ export const scores = pgTable('scores', {
   value: jsonb('value').notNull(),
   commentId: uuid('comment_id').notNull().references(() => commentMessages.id, { onDelete: 'cascade' }),
 
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   createdBy: text('created_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
   
   // Soft delete fields
-  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  deletedAt: timestamp('deleted_at', { withTimezone: true, mode: "string" }),
   deletedBy: text('deleted_by').references(() => users.id, { onDelete: 'set null' }),
 }, (table) => [
   unique().on(table.sessionItemId, table.name, table.createdBy)
@@ -144,7 +144,7 @@ export const scores = pgTable('scores', {
 
 export const events = pgTable('events', {
   id: bigserial({ mode: 'number' }).primaryKey(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   authorId: text('author_id').references(() => users.id),
   type: varchar('type', { length: 256 }).notNull(),  // "comment_created", "comment_edited", "comment_deleted", etc...
   payload: jsonb('payload').notNull(),
@@ -156,8 +156,8 @@ export const events = pgTable('events', {
 
 export const inboxItems = pgTable('inbox_items', {
   id: uuid('id').primaryKey().defaultRandom(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 
   userId: text('user_id').notNull().references(() => users.id),
   sessionItemId: uuid('session_item_id').references(() => sessionItems.id),
@@ -176,7 +176,7 @@ export const inboxItems = pgTable('inbox_items', {
 export const configs = pgTable('configs', {
   id: uuid('id').primaryKey().defaultRandom(),
   config: jsonb('value').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   createdBy: text('created_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
 });
 

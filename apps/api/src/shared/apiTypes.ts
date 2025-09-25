@@ -18,25 +18,22 @@ export const ClientCreateSchema = ClientSchema.pick({
 export type ClientCreate = z.infer<typeof ClientCreateSchema>
 
 
+// export const UserSchema = z.object({
+//     id: z.string(),
+//     createdAt: z.iso.date(),
+//     updatedAt: z.iso.date(),
+//     name: z.string(),
+//     email: z.string(),
+// })
 
-
-
-export const UserSchema = z.object({
-    id: z.string(),
-    createdAt: z.date(),
-    updatedAt: z.date(),
-    name: z.string(),
-    email: z.string(),
-})
-
-export type User = z.infer<typeof UserSchema>
+// export type User = z.infer<typeof UserSchema>
 
 export const InvitationSchema = z.object({
     id: z.string(),
     email: z.string(),
     role: z.string(),
-    expiresAt: z.date(),
-    createdAt: z.date(),
+    expiresAt: z.iso.date(),
+    createdAt: z.iso.date(),
     status: z.string(),
     invitedBy: z.string().nullable(),
 })
@@ -51,7 +48,7 @@ export const VersionSchema = z.object({
     version: z.string(),
     env: z.string(),
     metadata: z.any(),
-    createdAt: z.date(),
+    createdAt: z.iso.date(),
 })
 
 export const ScoreSchema = z.object({
@@ -63,9 +60,9 @@ export const ScoreSchema = z.object({
     commentId: z.string().nullable(),
 
     createdBy: z.string(),
-    createdAt: z.date(),
-    updatedAt: z.date(),
-    deletedAt: z.date().nullable(),
+    createdAt: z.iso.date(),
+    updatedAt: z.iso.date(),
+    deletedAt: z.iso.date().nullable(),
     deletedBy: z.string().nullable(),
 })
 
@@ -75,25 +72,24 @@ export const CommentMessageSchema = z.object({
     id: z.string(),
     userId: z.string(),
     content: z.string().nullable(),
-    createdAt: z.date(),
-    updatedAt: z.date().nullable(),
-    deletedAt: z.date().nullable(),
+    createdAt: z.iso.date(),
+    updatedAt: z.iso.date().nullable(),
+    deletedAt: z.iso.date().nullable(),
     deletedBy: z.string().nullable(),
     scores: z.array(ScoreSchema).nullable(),
 })
 
 export type CommentMessage = z.infer<typeof CommentMessageSchema>
 
-
 export const SessionItemSchema = z.object({
     id: z.string(),
     number: z.number(),
-    createdAt: z.date(),
-    updatedAt: z.date(),
+    createdAt: z.iso.date(),
+    updatedAt: z.iso.date(),
     content: z.any(),
     sessionId: z.string(),
     type: z.string(),
-    role: z.string().nullish(),
+    role: z.string().nullable(),
     commentMessages: z.array(CommentMessageSchema),
 })
 
@@ -107,8 +103,8 @@ export const SessionItemCreateSchema = SessionItemSchema.pick({
 
 export const RunSchema = z.object({
     id: z.string(),
-    createdAt: z.date(),
-    finishedAt: z.date().nullable(),
+    createdAt: z.iso.date(),
+    finishedAt: z.iso.date().nullable(),
     sessionId: z.string(),
     versionId: z.string().nullable(),
     state: z.string(),
@@ -123,8 +119,8 @@ export type Run = z.infer<typeof RunSchema>
 export const SessionSchema = z.object({
     id: z.string(),
     number: z.number(),
-    createdAt: z.date(),
-    updatedAt: z.date(),
+    createdAt: z.iso.date(),
+    updatedAt: z.iso.date(),
     metadata: z.any(),
     clientId: z.string(),
     agent: z.string(),
@@ -150,7 +146,7 @@ export const ScoreCreateSchema = ScoreSchema.pick({
 export const ConfigSchema = z.object({
     id: z.string(),
     config: z.any(),
-    createdAt: z.date(),
+    createdAt: z.iso.date(),
     createdBy: z.string(),
 })
 
@@ -165,20 +161,20 @@ export const InboxItemSchema = z.any() // todo: fix this
 export type InboxItem = z.infer<typeof InboxItemSchema>
 
 
-export const MemberSchema = z.object({
+export const UserSchema = z.object({
     id: z.string(),
     email: z.string(),
-    name: z.string().nullable(),
-    role: z.string().nullable(),
-    createdAt: z.date(),
+    name: z.string(),
+    role: z.string(),
+    createdAt: z.iso.date(),
 })
 
-export const MemberUpdateSchema = z.object({
+export const UserUpdateSchema = z.object({
     role: z.enum(['admin', 'user']),
 })
 
-export type Member = z.infer<typeof MemberSchema>
+export type User = z.infer<typeof UserSchema>
 
-export type MemberUpdate = z.infer<typeof MemberUpdateSchema>
+export type UserUpdate = z.infer<typeof UserUpdateSchema>
 
 export const allowedSessionLists = ["real", "simulated_private", "simulated_shared"]

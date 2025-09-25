@@ -10,7 +10,7 @@ import {
   type RouteObject,
 } from "react-router";
 
-import { LogOut, ChevronUp, User, Edit, Lock, Users, Mail, MessageCircle, Database, Inbox } from "lucide-react"
+import { LogOut, ChevronUp, UserIcon, Edit, Lock, Users, Mail, MessageCircle, Database, Inbox } from "lucide-react"
 import {
   SidebarProvider,
   Sidebar,
@@ -40,7 +40,7 @@ import { apiFetch } from "~/lib/apiFetch";
 import { NotificationBadge } from "~/components/NotificationBadge";
 import { createOrUpdateSchema } from "~/lib/remoteConfig";
 import { config } from "~/config";
-import { type Member, allowedSessionLists } from "~/lib/shared/apiTypes";
+import { type User, allowedSessionLists } from "~/lib/shared/apiTypes";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const session = await authClient.getSession()
@@ -59,7 +59,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   
   await createOrUpdateSchema(); // update schema on every page load
 
-  const membersResponse = await apiFetch<Member[]>('/api/members');
+  const membersResponse = await apiFetch<User[]>('/api/users');
 
   if (!membersResponse.ok) {
     throw data(membersResponse.error, { status: membersResponse.status });
@@ -149,7 +149,7 @@ function Component() {
                           <SidebarMenuSubItem className={simulatedPrivateUnseenCount > 0 ? "flex justify-between items-center" : ""}>
                             <SidebarMenuSubButton asChild>
                               <Link to={`/sessions?agent=${agent.name}&list=simulated_private`}>
-                                <User className="mr-2 h-4 w-4" />
+                                <UserIcon className="mr-2 h-4 w-4" />
                                 <span>Simulated Private</span>
                               </Link>
                             </SidebarMenuSubButton>
@@ -227,7 +227,7 @@ function Component() {
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <SidebarMenuButton>
-                      <User />
+                      <UserIcon />
                       <div className="flex flex-col items-start text-left">
                         <span className="text-sm font-medium truncate">{user.name}</span>
                         <span className="text-xs text-muted-foreground truncate">{user.email}</span>

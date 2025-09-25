@@ -4,7 +4,7 @@ import { HTTPException } from 'hono/http-exception'
 
 import { cors } from 'hono/cors'
 import { streamSSE } from 'hono/streaming'
-import { APIError as BetterAuthAPIError } from "better-auth/api";
+import { APIError as BetterAuthAPIError} from "better-auth/api";
 
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { swaggerUI } from '@hono/swagger-ui'
@@ -22,7 +22,7 @@ import { getStudioURL } from './getStudioURL'
 
 // shared imports
 import { getAllSessionItems, getLastRun } from './shared/sessionUtils'
-import { ClientSchema, SessionSchema, SessionCreateSchema, SessionItemCreateSchema, RunSchema, SessionItemSchema, type User, type Session, type SessionItem, ConfigSchema, ConfigCreateSchema, InboxItemSchema, ClientCreateSchema, MemberSchema, MemberUpdateSchema, type InboxItem, allowedSessionLists, InvitationSchema, InvitationCreateSchema } from './shared/apiTypes'
+import { ClientSchema, SessionSchema, SessionCreateSchema, SessionItemCreateSchema, RunSchema, SessionItemSchema, type Session, type SessionItem, ConfigSchema, ConfigCreateSchema, InboxItemSchema, ClientCreateSchema, UserSchema, UserUpdateSchema, type InboxItem, allowedSessionLists, InvitationSchema, InvitationCreateSchema } from './shared/apiTypes'
 import { getConfig } from './getConfig'
 import type { BaseConfig, BaseAgentConfig } from './shared/configTypes'
 import { users } from './schemas/auth-schema'
@@ -494,7 +494,7 @@ app.openapi(sessionSeenRoute, async (c) => {
 
   await db.update(inboxItems).set({
     lastReadEventId: sql`${inboxItems.lastNotifiableEventId}`,
-    updatedAt: new Date(),
+    updatedAt: new Date().toISOString(),
   }).where(and(
     eq(inboxItems.userId, authSession.user.id),
     eq(inboxItems.sessionId, sessionId),
@@ -688,7 +688,7 @@ app.openapi(runsPOSTRoute, async (c) => {
       await db.update(runs)
         .set({
           state: 'completed',
-          finishedAt: new Date(),
+          finishedAt: new Date().toISOString(),
         })
         .where(eq(runs.id, userItem.runId));
     }
@@ -712,7 +712,7 @@ app.openapi(runsPOSTRoute, async (c) => {
       await db.update(runs)
         .set({
           state: 'failed',
-          finishedAt: new Date(),
+          finishedAt: new Date().toISOString(),
           failReason
         })
         .where(eq(runs.id, userItem.runId));
@@ -756,7 +756,7 @@ app.openapi(runCancelRoute, async (c) => {
   await db.update(runs)
     .set({
       state: 'failed',
-      finishedAt: new Date(),
+      finishedAt: new Date().toISOString(),
       failReason: { message: 'Run was cancelled by user' }
     })
     .where(eq(runs.id, lastRun.id));
@@ -877,7 +877,7 @@ app.openapi(itemSeenRoute, async (c) => {
 
   await db.update(inboxItems).set({
     lastReadEventId: sql`${inboxItems.lastNotifiableEventId}`,
-    updatedAt: new Date(),
+    updatedAt: new Date().toISOString(),
   }).where(and(
     eq(inboxItems.userId, authSession.user.id),
     eq(inboxItems.sessionId, sessionId),
@@ -1056,7 +1056,7 @@ app.openapi(commentsDELETERoute, async (c) => {
     await tx.delete(commentMentions).where(eq(commentMentions.commentMessageId, commentMessage.id));
     await tx.delete(scores).where(eq(scores.commentId, commentMessage.id));
     await tx.update(commentMessages).set({
-      deletedAt: new Date(),
+      deletedAt: new Date().toISOString(),
       deletedBy: authSession.user.id
     }).where(eq(commentMessages.id, commentMessage.id));
 
@@ -1139,7 +1139,7 @@ app.openapi(commentsPUTRoute, async (c) => {
 
     // Update the comment message
     await tx.update(commentMessages)
-      .set({ content: body.comment ?? null, updatedAt: new Date() })
+      .set({ content: body.comment ?? null, updatedAt: new Date().toISOString() })
       .where(eq(commentMessages.id, commentMessage.id));
 
     // Handle mentions for edits
@@ -1212,7 +1212,7 @@ app.openapi(commentsPUTRoute, async (c) => {
         await tx.update(scores)
           .set({
             value: scoreValue,
-            updatedAt: new Date()
+            updatedAt: new Date().toISOString()
           })
           .where(eq(scores.id, existingScore.id));
       } else {
@@ -1246,20 +1246,20 @@ app.openapi(commentsPUTRoute, async (c) => {
 })
 
 
-/* --------- MEMBERS --------- */
+/* --------- USERS --------- */
 
 
-// Members GET (list all users)
-const membersGETRoute = createRoute({
+// Users GET (list all users)
+const usersGETRoute = createRoute({
   method: 'get',
-  path: '/api/members',
+  path: '/api/users',
   responses: {
-    200: response_data(z.array(MemberSchema)),
+    200: response_data(z.array(UserSchema)),
     401: response_error(),
   },
 })
 
-app.openapi(membersGETRoute, async (c) => {
+app.openapi(usersGETRoute, async (c) => {
   await requireAuthSession(c.req.raw.headers);
 
   const userRows = await db.select({
@@ -1271,18 +1271,17 @@ app.openapi(membersGETRoute, async (c) => {
   }).from(users);
 
   return c.json(userRows, 200);
-
 })
 
-// Member POST (update role)
-const memberPOSTRoute = createRoute({
+// User POST (update role)
+const userPOSTRoute = createRoute({
   method: 'post',
-  path: '/api/members/{memberId}',
+  path: '/api/users/{userId}',
   request: {
     params: z.object({
-      memberId: z.string(),
+      userId: z.string(),
     }),
-    body: body(MemberUpdateSchema)
+    body: body(UserUpdateSchema)
   },
   responses: {
     200: response_data(z.object({})),
@@ -1292,27 +1291,27 @@ const memberPOSTRoute = createRoute({
   },
 })
 
-app.openapi(memberPOSTRoute, async (c) => {
-  const { memberId } = c.req.param()
+app.openapi(userPOSTRoute, async (c) => {
+  const { userId } = c.req.param()
   const body = await c.req.json()
 
   await requireAuthSession(c.req.raw.headers, { admin: true });
 
   await auth.api.setRole({
     headers: c.req.raw.headers,
-    body: { userId: memberId, role: body.role },
+    body: { userId, role: body.role },
   });
 
   return c.json({}, 200);
 })
 
-// Member DELETE (delete user)
-const memberDELETERoute = createRoute({
+// User DELETE (delete user)
+const userDELETERoute = createRoute({
   method: 'delete',
-  path: '/api/members/{memberId}',
+  path: '/api/users/{userId}',
   request: {
     params: z.object({
-      memberId: z.string(),
+      userId: z.string(),
     }),
   },
   responses: {
@@ -1323,14 +1322,14 @@ const memberDELETERoute = createRoute({
   },
 })
 
-app.openapi(memberDELETERoute, async (c) => {
-  const { memberId } = c.req.param()
+app.openapi(userDELETERoute, async (c) => {
+  const { userId } = c.req.param()
 
   await requireAuthSession(c.req.raw.headers, { admin: true });
 
   await auth.api.removeUser({
     headers: c.req.raw.headers,
-    body: { userId: memberId },
+    body: { userId },
   });
 
   return c.json({}, 200);
