@@ -1,6 +1,25 @@
 import z from 'zod'
 
 
+export const ClientSchema = z.object({
+    id: z.string(),
+    createdAt: z.iso.date(),
+    updatedAt: z.iso.date(),
+    simulatedBy: z.string().nullable(),
+    isShared: z.boolean(),
+})
+
+export type Client = z.infer<typeof ClientSchema>
+
+export const ClientCreateSchema = ClientSchema.pick({
+    isShared: true,
+}).partial()
+
+export type ClientCreate = z.infer<typeof ClientCreateSchema>
+
+
+
+
 
 export const UserSchema = z.object({
     id: z.string(),
@@ -34,23 +53,6 @@ export const VersionSchema = z.object({
     metadata: z.any(),
     createdAt: z.date(),
 })
-
-export const ClientSchema = z.object({
-    id: z.string(),
-    createdAt: z.date(),
-    updatedAt: z.date(),
-    simulatedBy: z.string().nullable(),
-    isShared: z.boolean(),
-})
-
-export type Client = z.infer<typeof ClientSchema>
-
-export const ClientCreateSchema = ClientSchema.pick({
-    simulatedBy: true,
-    isShared: true,
-}).partial()
-
-export type ClientCreate = z.infer<typeof ClientCreateSchema>
 
 export const ScoreSchema = z.object({
     id: z.string(),

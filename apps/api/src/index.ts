@@ -55,7 +55,9 @@ app.onError((error, c) => {
     return c.json({ ...error, message: "DB error. Is db running?" }, 400);
   }
   else if (error instanceof HTTPException) {
-    return c.json(error, 500);
+    return c.json({
+      message: error.message,
+    }, error.status);
   }
   else if (error instanceof Error) {
     return c.json({ message: error.message }, 400);
@@ -206,6 +208,8 @@ const clientGETRoute = createRoute({
 
 app.openapi(clientGETRoute, async (c) => {
   const { id } = c.req.param()
+
+  await requireAuthSession(c.req.raw.headers)
 
   const clientRow = await db.query.clients.findFirst({
     where: eq(clients.id, id),
