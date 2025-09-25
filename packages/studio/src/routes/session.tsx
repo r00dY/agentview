@@ -114,8 +114,7 @@ function SessionPage() {
                     setStreaming(true)
 
                     for await (const event of parseSSE(response)) {
-
-
+                        
                         setSession((currentSession) => {
                             const lastRun = getLastRun(currentSession);
                             if (!lastRun) { throw new Error("Unreachable: Last run not found") };
