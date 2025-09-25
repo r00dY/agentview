@@ -79,7 +79,6 @@ app.on(["POST", "GET"], "/api/auth/*", (c) => {
 
 /** --------- UTILS --------- */
 
-
 async function requireAuthSession(headers: Headers, options?: { admin?: boolean }) {
   const userSession = await auth.api.getSession({ headers })
   if (!userSession) {
@@ -165,19 +164,6 @@ async function requireCommentMessageFromUser(item: SessionItem, comment_id: stri
   return comment
 }
 
-/* --------- LISTS --------- */
-
-const LISTS : Record<string, { filter: any }>= {
-  real: {
-    filter: () => isNull(clients.simulated_by)
-  },
-  simulated_private: {
-    filter: (user: User) => and(eq(clients.simulated_by, user.id), eq(clients.is_shared, false))
-  },
-  simulated_shared: {
-    filter: () => and(isNotNull(clients.simulated_by), eq(clients.is_shared, true))
-  }
-}
 
 /* --------- CLIENTS --------- */
 
@@ -263,6 +249,20 @@ app.openapi(apiClientsPUTRoute, async (c) => {
 })
 
 
+/* --------- LISTS --------- */
+
+const LISTS : Record<string, { filter: any }>= {
+  real: {
+    filter: () => isNull(clients.simulated_by)
+  },
+  simulated_private: {
+    filter: (user: User) => and(eq(clients.simulated_by, user.id), eq(clients.is_shared, false))
+  },
+  simulated_shared: {
+    filter: () => and(isNotNull(clients.simulated_by), eq(clients.is_shared, true))
+  }
+}
+
 const listsGETRoute = createRoute({
   method: 'get',
   path: '/api/lists',
@@ -308,6 +308,8 @@ app.openapi(listsGETRoute, async (c) => {
 
   return c.json(lists, 200);
 })
+
+
 
 /* --------- SESSIONS --------- */
 
