@@ -16,10 +16,10 @@ import { parseFormData } from "~/lib/parseFormData";
 
 async function loader({ request, params }: LoaderFunctionArgs) {
   const listParams = getListParams(request);
-  const sessionConfig = config.sessions?.find((sessionConfig) => sessionConfig.type === listParams.type);
+  const sessionConfig = config.sessions?.find((sessionConfig) => sessionConfig.type === listParams.agent);
 
   if (!sessionConfig) {
-    throw new Error(`Session config not found for type "${listParams.type}"`);
+    throw new Error(`Session config not found for type "${listParams.agent}"`);
   }
 
   if (sessionConfig.metadata && (sessionConfig.metadata?.length > 0)) {
@@ -54,15 +54,15 @@ async function loader({ request, params }: LoaderFunctionArgs) {
     throw data(sessionResponse.error, { status: sessionResponse.status });
   }
 
-  return redirect(`/sessions/${sessionResponse.data.id}?list=${listParams.list}&type=${listParams.type}`);
+  return redirect(`/sessions/${sessionResponse.data.id}?list=${listParams.list}&agent=${listParams.agent}`);
 }
 
 async function action({ request, params }: ActionFunctionArgs): Promise<ActionResponse | Response> {
   const listParams = getListParams(request);
-  const sessionConfig = config.sessions?.find((sessionConfig) => sessionConfig.type === listParams.type);
+  const sessionConfig = config.sessions?.find((sessionConfig) => sessionConfig.type === listParams.agent);
 
   if (!sessionConfig) {
-    throw new Error(`Session config not found for type "${listParams.type}"`);
+    throw new Error(`Session config not found for agent "${listParams.agent}"`);
   }
 
   const formData = await request.formData();
@@ -93,7 +93,7 @@ async function action({ request, params }: ActionFunctionArgs): Promise<ActionRe
     return { ok: false, error: sessionResponse.error };
   }
 
-  return redirect(`/sessions/${sessionResponse.data.id}?list=${listParams.list}&type=${listParams.type}`);
+  return redirect(`/sessions/${sessionResponse.data.id}?list=${listParams.list}&agent=${listParams.agent}`);
 }
 
 function Component() {

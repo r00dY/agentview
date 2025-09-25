@@ -13,7 +13,7 @@ import { NotificationBadge } from "~/components/NotificationBadge";
 
 async function loader({ request }: LoaderFunctionArgs) {
   const listParams = getListParams(request);
-  const sessionsResponse = await apiFetch<Session[]>(`/api/sessions?list=${listParams.list}&type=${listParams.type}`);
+  const sessionsResponse = await apiFetch<Session[]>(`/api/sessions?agent=${listParams.agent}&list=${listParams.list}`);
 
   if (!sessionsResponse.ok) {
     throw data(sessionsResponse.error, { status: sessionsResponse.status });
@@ -35,7 +35,7 @@ function Component() {
       <Header className="px-3">
         <HeaderTitle title={`${listParams.list === "real" ? "Sessions" : listParams.list === "simulated_private" ? "Private Sessions" : "Shared Sessions"}`} />
         {listParams.list !== "real" && <div>
-          <Button variant="outline" size="sm" asChild><Link to={`/sessions/new?list=${listParams.list}&type=${listParams.type}`}><PlusIcon />New Session</Link></Button>
+          <Button variant="outline" size="sm" asChild><Link to={`/sessions/new?agent=${listParams.agent}&list=${listParams.list}`}><PlusIcon />New Session</Link></Button>
         </div>}
       </Header>
 
@@ -66,7 +66,7 @@ export function SessionCard({ session, listParams }: { session: Session, listPar
   const hasUnreads = hasSessionUnreads || hasActivitiesUnread;
 
   return <div key={session.id}>
-    <NavLink to={`/sessions/${session.id}?list=${listParams.list}&type=${listParams.type}`}>
+    <NavLink to={`/sessions/${session.id}?list=${listParams.list}&agent=${listParams.agent}`}>
       {({ isActive }) => (
         <div className={`p-3 border-b hover:bg-gray-50 transition-colors duration-50 ${isActive ? 'bg-gray-100' : ''}`}>
           <div className="flex flex-col gap-1">

@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { allowedSessionLists } from "./shared/apiTypes";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -69,17 +70,16 @@ export function extractMentions(content: string): Record<string, string[]> {
 export function getListParams(request: Request) {
   const url = new URL(request.url);
   const list = url.searchParams.get('list') ?? "real";
-  const allowedLists = ["simulated_shared", "simulated_private", "real"];
 
-  if (!allowedLists.includes(list)) {
-    throw new Error(`Invalid list: ${list}. Allowed types are: ${allowedLists.join(", ")}`);
+  if (!allowedSessionLists.includes(list)) {
+    throw new Error(`Invalid list: ${list}. Allowed lists are: ${allowedSessionLists.join(", ")}`);
   }
 
-  const type = url.searchParams.get('type');
+  const agent = url.searchParams.get('agent');
 
-  if (!type) {
-    throw new Error(`Session type is required`);
+  if (!agent) {
+    throw new Error(`Session agent is required`);
   }
 
-  return { list, type }
+  return { list, agent }
 }

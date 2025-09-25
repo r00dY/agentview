@@ -35,7 +35,8 @@ import { ChangePasswordDialog } from "~/components/ChangePasswordDialog";
 import { authClient } from "~/lib/auth-client";
 import { SessionContext } from "~/lib/session";
 import { apiFetch } from "~/lib/apiFetch";
-import type { Member, SessionList } from "~/lib/shared/apiTypes";
+import type { Member } from "~/lib/shared/apiTypes";
+import { allowedSessionLists } from "~/lib/shared/apiTypes";
 import { NotificationBadge } from "~/components/NotificationBadge";
 import { createOrUpdateSchema } from "~/lib/remoteConfig";
 import { config } from "~/config";
@@ -65,10 +66,25 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const locale = request.headers.get('accept-language')?.split(',')[0] || 'en-US';
 
-  const listsResponse = await apiFetch<SessionList[]>('/api/lists');
+  // Fetch session stats for each session type and list combination
+  const sessionStats: { [sessionType: string]: { [list: string]: { unseenCount: number, hasMentions: boolean } } } = {};
 
-  if (!listsResponse.ok) {
-    throw data(listsResponse.error, { status: listsResponse.status });
+  if (config.sessions) {
+    for (const sessionConfig of config.sessions) {
+      const sessionType = sessionConfig.type;
+      sessionStats[sessionType] = {};
+
+      for (const list of allowedSessionLists) {
+        const statsUrl = `/api/sessions/stats?agent=${encodeURIComponent(sessionType)}&list=${encodeURIComponent(list)}`;
+        const statsResponse = await apiFetch<{ unseenCount: number, hasMentions: boolean }>(statsUrl);
+
+        if (!statsResponse.ok) {
+          throw data(statsResponse.error, { status: statsResponse.status });
+        }
+
+        sessionStats[sessionType][list] = statsResponse.data;
+      }
+    }
   }
 
   return {
@@ -76,20 +92,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
     members: membersResponse.data,
     locale,
     isDeveloper: true,
-    lists: listsResponse.data
+    sessionStats
   };
 }
 
 function Component() {
-  const { user, isDeveloper, members, locale, lists } = useLoaderData<typeof loader>()
-  const logoutFetcher = useFetcher()
+  const { user, isDeveloper, members, locale, sessionStats } = useLoaderData<typeof loader>()
   const [editProfileOpen, setEditProfileOpen] = React.useState(false)
   const [changePasswordOpen, setChangePasswordOpen] = React.useState(false)
 
   // Helper function to get unseen count for a specific session type and list name
   const getUnseenCount = (sessionType: string, listName: string) => {
-    const list = lists.find((list) => list.name === listName && list.agent === sessionType)
-    return list?.unseenCount ?? 0
+    return sessionStats[sessionType]?.[listName]?.unseenCount ?? 0
   }
 
   return (<SessionContext.Provider value={{ user, members, locale }}>
@@ -125,7 +139,7 @@ function Component() {
                         <SidebarMenuSub className="mr-0">
                           <SidebarMenuSubItem className={realUnseenCount > 0 ? "flex justify-between items-center" : ""}>
                             <SidebarMenuSubButton asChild>
-                              <Link to={`/sessions?type=${session.type}`}>
+                              <Link to={`/sessions?agent=${session.type}`}>
                                 <MessageCircle className="mr-2 h-4 w-4" />
                                 <span>Production</span>
                               </Link>
@@ -134,7 +148,7 @@ function Component() {
                           </SidebarMenuSubItem>
                           <SidebarMenuSubItem className={simulatedPrivateUnseenCount > 0 ? "flex justify-between items-center" : ""}>
                             <SidebarMenuSubButton asChild>
-                              <Link to={`/sessions?type=${session.type}&list=simulated_private`}>
+                              <Link to={`/sessions?agent=${session.type}&list=simulated_private`}>
                                 <User className="mr-2 h-4 w-4" />
                                 <span>Simulated Private</span>
                               </Link>
@@ -144,7 +158,7 @@ function Component() {
                           </SidebarMenuSubItem>
                           <SidebarMenuSubItem className={simulatedSharedUnseenCount > 0 ? "flex justify-between items-center" : ""}>
                             <SidebarMenuSubButton asChild>
-                              <Link to={`/sessions?type=${session.type}&list=simulated_shared`}>
+                              <Link to={`/sessions?agent=${session.type}&list=simulated_shared`}>
                                 <Users className="mr-2 h-4 w-4" />
                                 <span>Simulated Shared</span>
                               </Link>

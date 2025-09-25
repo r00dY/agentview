@@ -22,7 +22,7 @@ import { getStudioURL } from './getStudioURL'
 
 // shared imports
 import { getAllSessionItems, getLastRun } from './shared/sessionUtils'
-import { ClientSchema, SessionSchema, SessionCreateSchema, SessionItemCreateSchema, RunSchema, SessionItemSchema, type User, type Session, type SessionItem, ConfigSchema, ConfigCreateSchema, InboxItemSchema, ClientCreateSchema, MemberSchema, MemberUpdateSchema, type InboxItem, SessionListSchema, type SessionList } from './shared/apiTypes'
+import { ClientSchema, SessionSchema, SessionCreateSchema, SessionItemCreateSchema, RunSchema, SessionItemSchema, type User, type Session, type SessionItem, ConfigSchema, ConfigCreateSchema, InboxItemSchema, ClientCreateSchema, MemberSchema, MemberUpdateSchema, type InboxItem, allowedSessionLists } from './shared/apiTypes'
 import { getConfig } from './getConfig'
 import type { BaseConfig, BaseSessionConfig } from './shared/configTypes'
 import { users } from './schemas/auth-schema'
@@ -47,6 +47,7 @@ export const app = new OpenAPIHono({
 /** --------- ERROR HANDLING --------- */
 
 app.onError((error, c) => {
+  console.error(error)
   if (error instanceof BetterAuthAPIError) {
     return c.json(error.body, error.statusCode as any); // "as any" because error.statusCode is "number" and hono expects some numeric literal union 
   }
@@ -251,75 +252,111 @@ app.openapi(apiClientsPUTRoute, async (c) => {
 
 /* --------- LISTS --------- */
 
-const LISTS : Record<string, { filter: any }>= {
-  real: {
-    filter: () => isNull(clients.simulated_by)
-  },
-  simulated_private: {
-    filter: (user: User) => and(eq(clients.simulated_by, user.id), eq(clients.is_shared, false))
-  },
-  simulated_shared: {
-    filter: () => and(isNotNull(clients.simulated_by), eq(clients.is_shared, true))
-  }
-}
+// const LISTS : Record<string, { filter: any }>= {
+//   real: {
+//     filter: () => isNull(clients.simulated_by)
+//   },
+//   simulated_private: {
+//     filter: (user: User) => and(eq(clients.simulated_by, user.id), eq(clients.is_shared, false))
+//   },
+//   simulated_shared: {
+//     filter: () => and(isNotNull(clients.simulated_by), eq(clients.is_shared, true))
+//   }
+// }
 
-const listsGETRoute = createRoute({
-  method: 'get',
-  path: '/api/lists',
-  responses: {
-    200: response_data(z.array(SessionListSchema)),
-  },
-})
+// const listsGETRoute = createRoute({
+//   method: 'get',
+//   path: '/api/lists',
+//   responses: {
+//     200: response_data(z.array(SessionListSchema)),
+//   },
+// })
 
-app.openapi(listsGETRoute, async (c) => {
-  const session = await requireAuthSession(c.req.raw.headers)
-  const config = await requireConfig()
+// app.openapi(listsGETRoute, async (c) => {
+//   const session = await requireAuthSession(c.req.raw.headers)
+//   const config = await requireConfig()
 
-  const lists : SessionList[] = []
+//   const lists : SessionList[] = []
 
-  // For each session type in the schema
-  for (const sessionConfig of config.sessions) {
-    // For each list type (real, simulated_private, simulated_shared)
-    for (const [listName, list] of Object.entries(LISTS)) {
-      const result = await db
-        .select({
-          unreadSessions: countDistinct(inboxItems.sessionId),
-        })
-        .from(inboxItems)
-        .leftJoin(sessions, eq(inboxItems.sessionId, sessions.id))
-        .leftJoin(clients, eq(sessions.client_id, clients.id))
-        .where(
-          and(
-            eq(inboxItems.userId, session.user.id), 
-            sql`${inboxItems.lastNotifiableEventId} > COALESCE(${inboxItems.lastReadEventId}, 0)`, 
-            list.filter(session.user),
-            eq(sessions.type, sessionConfig.type)
-          )
-        )
+//   // For each session type in the schema
+//   for (const sessionConfig of config.sessions) {
+//     // For each list type (real, simulated_private, simulated_shared)
+//     for (const [listName, list] of Object.entries(LISTS)) {
+//       const result = await db
+//         .select({
+//           unreadSessions: countDistinct(inboxItems.sessionId),
+//         })
+//         .from(inboxItems)
+//         .leftJoin(sessions, eq(inboxItems.sessionId, sessions.id))
+//         .leftJoin(clients, eq(sessions.client_id, clients.id))
+//         .where(
+//           and(
+//             eq(inboxItems.userId, session.user.id), 
+//             sql`${inboxItems.lastNotifiableEventId} > COALESCE(${inboxItems.lastReadEventId}, 0)`, 
+//             list.filter(session.user),
+//             eq(sessions.type, sessionConfig.type)
+//           )
+//         )
 
-      lists.push({
-        name: listName,
-        agent: sessionConfig.type,
-        unseenCount: result[0].unreadSessions ?? 0,
-        hasMentions: false,
-      })
-    }
-  }
+//       lists.push({
+//         name: listName,
+//         agent: sessionConfig.type,
+//         unseenCount: result[0].unreadSessions ?? 0,
+//         hasMentions: false,
+//       })
+//     }
+//   }
 
-  return c.json(lists, 200);
-})
+//   return c.json(lists, 200);
+// })
 
 
 
 /* --------- SESSIONS --------- */
+
+// const LISTS : Record<string, { filter: any }>= {
+//   real: {
+//     filter: () => isNull(clients.simulated_by)
+//   },
+//   simulated_private: {
+//     filter: (user: User) => and(eq(clients.simulated_by, user.id), eq(clients.is_shared, false))
+//   },
+//   simulated_shared: {
+//     filter: () => and(isNotNull(clients.simulated_by), eq(clients.is_shared, true))
+//   }
+// }
+
+function getSessionListFilter(args: { agent: string, list: string, user?: User }) {
+  const { agent, list, user } = args;
+
+  const filters : any[] = [
+    eq(sessions.type, agent)
+  ]
+
+  if (list === "real") {
+    filters.push(isNull(clients.simulated_by));
+  }
+  else if (list === "simulated_shared") {
+    filters.push(and(isNotNull(clients.simulated_by), eq(clients.is_shared, true)));
+  }
+  else if (list === "simulated_private") {
+    if (!user) {
+      throw new Error("User not given for simulated_private list")
+    }
+    filters.push(and(eq(clients.simulated_by, user.id), eq(clients.is_shared, false)));
+  }
+
+  return and(...filters);
+}
+
 
 const sessionsGETRoute = createRoute({
   method: 'get',
   path: '/api/sessions',
   request: {
     query: z.object({
-      list: z.enum(Object.keys(LISTS)).optional(),
-      type: z.string(),
+      agent: z.string(),
+      list: z.enum(allowedSessionLists)
     }),
   },
   responses: {
@@ -331,17 +368,26 @@ const sessionsGETRoute = createRoute({
 app.openapi(sessionsGETRoute, async (c) => {
   const authSession = await requireAuthSession(c.req.raw.headers)
 
-  const listName = c.req.query().list ?? "real";
-  const type = c.req.query().type;
+  const { agent, list } = c.req.query();
 
-  const listFilter = LISTS[listName].filter(authSession.user);
+  const result = await db
+    .select({
+      id: sessions.id,
+      type: sessions.type,
+      client: {
+        id: clients.id,
+        simulated_by: clients.simulated_by,
+        is_shared: clients.is_shared,
+      }
+    })
+    .from(sessions)
+    .leftJoin(clients, eq(sessions.client_id, clients.id))
+    .where(getSessionListFilter({ agent, list, user: authSession.user }));
 
-  const result = await db.select().from(sessions).leftJoin(clients, eq(sessions.client_id, clients.id)).where(listFilter);
-
-  const sessionIds = result.map((row) => row.sessions.id);
+  const sessionIds = result.map((row) => row.id);
 
   const sessionRows = await db.query.sessions.findMany({
-    where: and(inArray(sessions.id, sessionIds), eq(sessions.type, type)),
+    where: and(inArray(sessions.id, sessionIds), eq(sessions.type, agent)),
     with: {
       client: true,
       inboxItems: {
@@ -378,6 +424,45 @@ app.openapi(sessionsGETRoute, async (c) => {
   })
 
   return c.json(sessionRowsFilteredWithInboxItems, 200);
+})
+
+const sessionsGETStatsRoute = createRoute({
+  method: 'get',
+  path: '/api/sessions/stats',
+  request: {
+    query: z.object({
+      agent: z.string(),
+      list: z.enum(allowedSessionLists)
+    }),
+  },
+  responses: {
+    200: response_data(z.object({ unseenCount: z.number(), hasMentions: z.boolean() })),
+  },
+})
+
+app.openapi(sessionsGETStatsRoute, async (c) => {
+  const { user } = await requireAuthSession(c.req.raw.headers)
+  const { agent, list } = c.req.query();
+
+  const result = await db
+    .select({
+      unreadSessions: countDistinct(inboxItems.sessionId),
+    })
+    .from(inboxItems)
+    .leftJoin(sessions, eq(inboxItems.sessionId, sessions.id))
+    .leftJoin(clients, eq(sessions.client_id, clients.id))
+    .where(
+      and(
+        eq(inboxItems.userId, user.id), 
+        sql`${inboxItems.lastNotifiableEventId} > COALESCE(${inboxItems.lastReadEventId}, 0)`, 
+        getSessionListFilter({ agent, list, user })
+      )
+    )
+
+  return c.json({
+    unseenCount: result[0].unreadSessions ?? 0,
+    hasMentions: false,
+  }, 200);
 })
 
 const sessionsPOSTRoute = createRoute({

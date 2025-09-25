@@ -161,12 +161,4 @@ export type Member = z.infer<typeof MemberSchema>
 
 export type MemberUpdate = z.infer<typeof MemberUpdateSchema>
 
-
-export const SessionListSchema = z.object({
-    name: z.string(),
-    agent: z.string(),
-    unseenCount: z.number(),
-    hasMentions: z.boolean(),
-})
-
-export type SessionList = z.infer<typeof SessionListSchema>
+export const allowedSessionLists = ["real", "simulated_private", "simulated_shared"] as const

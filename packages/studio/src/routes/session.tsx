@@ -195,14 +195,14 @@ function SessionPage() {
                                 content = <itemConfig.display value={item.content} options={itemConfig.options} />
                             }
 
-                            return <div className={`px-6 py-4  ${params.itemId === item.id ? "bg-stone-50" : "hover:bg-gray-50"}`} onClick={() => { navigate(`/sessions/${session.id}/items/${item.id}?list=${listParams.list}&type=${listParams.type}`) }}>
+                            return <div className={`px-6 py-4  ${params.itemId === item.id ? "bg-stone-50" : "hover:bg-gray-50"}`} onClick={() => { navigate(`/sessions/${session.id}/items/${item.id}?list=${listParams.list}&agent=${listParams.agent}`) }}>
                                 {content}
                             </div>
 
 
                             // return <itemView
                             //     item={item}
-                            //     onSelect={(a) => { navigate(`/sessions/${session.id}/items/${a?.id}?list=${listParams.list}&type=${listParams.type}`) }}
+                            //     onSelect={(a) => { navigate(`/sessions/${session.id}/items/${a?.id}?list=${listParams.list}&agent=${listParams.agent}`) }}
                             //     selected={params.itemId === item.id}
                             // />
                         })}
@@ -244,7 +244,7 @@ function SessionPage() {
                             </div>,
                             // itemComponent: <div 
                             //     className={`relative pl-6 py-2 pr-[444px] group ${params.itemId === item.id ? "bg-gray-50" : "hover:bg-gray-50"}`} 
-                            //     onClick={() => { navigate(`/sessions/${session.id}/items/${item?.id}?list=${listParams.list}&type=${listParams.type}`) }}>
+                            //     onClick={() => { navigate(`/sessions/${session.id}/items/${item?.id}?list=${listParams.list}&agent=${listParams.agent}`) }}>
 
                             //     {content}
                             //     {/* { !hasComments && <div className="absolute top-[8px] right-[408px] opacity-0 group-hover:opacity-100">
@@ -333,7 +333,7 @@ function ShareForm({ session, listParams }: { session: Session, listParams: Retu
     const navigate = useNavigate();
 
     useFetcherSuccess(fetcher, () => {
-        navigate(`/sessions/${session.id}?list=${listParams.list}&type=${listParams.type}`);
+        navigate(`/sessions/${session.id}?list=${listParams.list}&agent=${listParams.agent}`);
     });
 
     if (session.client.is_shared) {
