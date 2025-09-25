@@ -25,21 +25,10 @@ async function loader({ request }: LoaderFunctionArgs) {
   }
 
   /** NO METADATA CASE **/
-
-  const clientResponse = await apiFetch('/api/clients', {
-    method: 'POST',
-    body: {}
-  });
-
-  if (!clientResponse.ok) {
-    throw data(clientResponse.error, { status: clientResponse.status });
-  }
-
   const sessionResponse = await apiFetch('/api/sessions', {
     method: 'POST',
     body: {
-      agent: agentConfig.name,
-      clientId: clientResponse.data.id
+      agent: agentConfig.name
     }
   });
 
