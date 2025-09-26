@@ -56,6 +56,17 @@ export const sessions = pgTable("sessions", {
   agent: varchar("agent", { length: 255 }).notNull(),
 });
 
+export const runs = pgTable("runs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  finishedAt: timestamp("finished_at", { withTimezone: true, mode: "string" }),
+  sessionId: uuid("session_id").notNull().references(() => sessions.id, { onDelete: 'cascade' }),
+  versionId: uuid("version_id").references(() => versions.id), // version is nullable because when run is created, version is not yet created yet (no `run` was made)
+  state: varchar("state", { length: 255 }).notNull(),
+  failReason: jsonb("fail_reason"),
+  responseData: jsonb("response_data"),
+});
+
 export const sessionItems = pgTable("session_items", {
   id: uuid("id").primaryKey().defaultRandom(),
   number: serial("string").notNull(),
@@ -79,17 +90,6 @@ export const versions = pgTable("versions", {
   metadata: jsonb("metadata"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [uniqueIndex('version_env_unique').on(table.version, table.env)]);
-
-export const runs = pgTable("runs", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
-  finishedAt: timestamp("finished_at", { withTimezone: true, mode: "string" }),
-  sessionId: uuid("session_id").notNull().references(() => sessions.id, { onDelete: 'cascade' }),
-  versionId: uuid("version_id").references(() => versions.id), // version is nullable because when run is created, version is not yet created yet (no `run` was made)
-  state: varchar("state", { length: 255 }).notNull(),
-  failReason: jsonb("fail_reason"),
-  responseData: jsonb("response_data"),
-});
 
 // Comment messages within sessions
 export const commentMessages = pgTable('comment_messages', {

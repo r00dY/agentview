@@ -424,7 +424,7 @@ export function CommentMessageItem({ message, item, session,compressionLevel = "
                                 error={fetcher.data?.error?.fieldErrors?.["scores." + scoreConfig.name]}
                                 name={"scores." + scoreConfig.name}
                                 defaultValue={scores[scoreConfig.name] ?? undefined}
-                                InputComponent={scoreConfig.input}
+                                InputComponent={scoreConfig.inputComponent}
                                 options={scoreConfig.options}
                             />)}
                         </div>}
@@ -465,7 +465,7 @@ export function CommentMessageItem({ message, item, session,compressionLevel = "
                             {messageScoreConfigs.map((scoreConfig) => (
                                 <PropertyList.Item key={scoreConfig.name}>
                                     <PropertyList.Title>{scoreConfig.title ?? scoreConfig.name}</PropertyList.Title>
-                                    <PropertyList.TextValue><scoreConfig.display value={scores[scoreConfig.name]} options={scoreConfig.options} /></PropertyList.TextValue>
+                                    <PropertyList.TextValue><scoreConfig.displayComponent value={scores[scoreConfig.name]} options={scoreConfig.options} /></PropertyList.TextValue>
                                 </PropertyList.Item>
                             ))}
                         </PropertyList.Root>

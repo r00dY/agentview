@@ -72,6 +72,31 @@ export default defineConfig({
                     displayComponent: ItemUserMessageComponent
                 },
                 {
+                    type: "message",
+                    role: "assistant",
+                    content: z.string(),
+                    displayComponent: ItemAssistantMessageComponent,
+                    scores: [
+                        {
+                            name: "user_reaction",
+                            title: "Reaction",
+                            schema: z.boolean(),
+                            inputComponent: ToggleBooleanInput,
+                            displayComponent: DisplayBooleanComponent,
+                            options: {
+                                true: {
+                                    icon: ThumbsUp,
+                                    label: "Like"
+                                },
+                                false: {
+                                    icon: ThumbsDown,
+                                    label: "Don't like"
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
                     input: true,
                     type: "change_page",
                     title: "Change page",
@@ -144,31 +169,6 @@ export default defineConfig({
                         }
                     ]
                 },
-                {
-                    type: "message",
-                    role: "assistant",
-                    content: z.string(),
-                    displayComponent: ItemAssistantMessageComponent,
-                    scores: [
-                        {
-                            name: "user_reaction",
-                            title: "Reaction",
-                            schema: z.boolean(),
-                            inputComponent: ToggleBooleanInput,
-                            displayComponent: DisplayBooleanComponent,
-                            options: {
-                                true: {
-                                    icon: ThumbsUp,
-                                    label: "Like"
-                                },
-                                false: {
-                                    icon: ThumbsDown,
-                                    label: "Don't like"
-                                }
-                            }
-                        }
-                    ]
-                }
             ]
         }
     ]
