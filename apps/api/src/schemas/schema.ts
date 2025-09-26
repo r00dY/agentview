@@ -65,6 +65,7 @@ export const runs = pgTable("runs", {
   state: varchar("state", { length: 255 }).notNull(),
   failReason: jsonb("fail_reason"),
   responseData: jsonb("response_data"),
+  metadata: jsonb("metadata")
 });
 
 export const sessionItems = pgTable("session_items", {
@@ -77,6 +78,7 @@ export const sessionItems = pgTable("session_items", {
   runId: uuid("run_id").notNull().references(() => runs.id, { onDelete: 'set null' }),
   type: varchar("type", { length: 255 }).notNull(),
   role: varchar("role", { length: 255 }),
+  metadata: jsonb("metadata")
 })
 
 //   channel_id: uuid("channel_id").references(() => channels.id, { onDelete: 'set null' }),

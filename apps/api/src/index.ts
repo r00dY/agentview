@@ -611,8 +611,9 @@ app.openapi(runsPOSTRoute, async (c) => {
         metadata: session.metadata,
         clientId: session.clientId,
         agent: session.agent,
-        items: [...getAllSessionItems(session), userItem]
-      }
+        items: getAllSessionItems(session)
+      },
+      input: userItem
     }
 
     async function isStillRunning() {
@@ -673,6 +674,12 @@ app.openapi(runsPOSTRoute, async (c) => {
           hadManifest = true;
           continue; // Skip this item as it's not an item
         }
+        else if (event.name === 'metadata') {
+          await db.update(runs)
+            .set({ metadata: event.data })
+            .where(eq(runs.id, userItem.runId));
+          continue;
+        }
         else if (event.name === 'item') {
 
           const parsedItem = z.object({
@@ -693,13 +700,14 @@ app.openapi(runsPOSTRoute, async (c) => {
             type: parsedItem.data.type,
             role: parsedItem.data.role,
             content: parsedItem.data.content,
+            metadata: event.data.metadata,
             runId: userItem.runId,
           })
         }
         else {
-          throw {
-            message: `Unknown event type: ${event.name}`
-          }
+          throw new AgentAPIError({
+            message: `Unknown event type: "${event.name}"`
+          });
         }
       }
 
