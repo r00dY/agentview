@@ -18,7 +18,6 @@ export default defineConfig({
                     input: true,
                     type: "message",
                     role: "user",
-                    title: "Message",
                     content: z.string(),
                     inputComponent: TextareaInput,
                     displayComponent: ItemUserMessageComponent,

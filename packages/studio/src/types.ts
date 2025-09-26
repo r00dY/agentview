@@ -29,7 +29,6 @@ export type InputSessionItemConfig = BaseSessionItemConfig<ScoreConfig> & {
 
 export type StepSessionItemConfig = BaseSessionItemConfig<ScoreConfig> & {
   input?: false;
-  title?: string;
   options?: any;
   displayComponent: React.ComponentType<DisplayComponentProps>;
 };
