@@ -221,7 +221,7 @@ function SessionPage() {
                             content = <div className="text-muted-foreground italic">No component (type: "{item.type}")</div>
                         }
                         else {
-                            content = <itemConfig.display value={item.content} options={itemConfig.options} />
+                            content = <itemConfig.displayComponent value={item.content} options={itemConfig.options} />
                         }
 
                         return {
@@ -403,7 +403,7 @@ function InputForm({ session, agentConfig }: { session: Session, agentConfig: Ag
         })
     }
 
-    const inputConfigs = agentConfig.items.filter((item) => item.isInput)
+    const inputConfigs = agentConfig.items.filter((item) => item.input)
 
     return <div className="p-6 border-t">
 
@@ -501,7 +501,7 @@ function InputFormFields({ inputConfig }: { inputConfig: SessionItemConfig }) {
                 name={"value"}
                 defaultValue={undefined}
                 // defaultValue={scores[metafield.name] ?? undefined}
-                InputComponent={inputConfig.input}
+                InputComponent={inputConfig.inputComponent}
                 options={inputConfig.options}
             />
         )}

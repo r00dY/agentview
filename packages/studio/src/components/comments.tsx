@@ -169,7 +169,7 @@ export const CommentThread = forwardRef<any, CommentSessionProps>(({ session, it
                                 error={fetcher.data?.error?.fieldErrors?.["scores." + scoreConfig.name]}
                                 name={"scores." + scoreConfig.name}
                                 defaultValue={scores[scoreConfig.name] ?? undefined}
-                                InputComponent={scoreConfig.input}
+                                InputComponent={scoreConfig.inputComponent}
                                 options={scoreConfig.options}
                             />
                         ))}

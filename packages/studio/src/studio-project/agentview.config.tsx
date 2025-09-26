@@ -15,26 +15,26 @@ export default defineConfig({
             url: "http://127.0.0.1:8000/simple_chat",
             items: [
                 {
-                    isInput: true,
+                    input: true,
                     type: "message",
                     role: "user",
                     title: "Message",
                     content: z.string(),
-                    input: TextareaInput,
-                    display: ItemUserMessageComponent
+                    inputComponent: TextareaInput,
+                    displayComponent: ItemUserMessageComponent,
                 },
                 {
                     type: "message",
                     role: "assistant",
                     content: z.string(),
-                    display: ItemAssistantMessageComponent,
+                    displayComponent: ItemAssistantMessageComponent,
                     scores: [
                         {
                             name: "user_reaction",
                             title: "Can it go to client?",
                             schema: z.boolean(),
-                            input: ToggleBooleanInput,
-                            display: DisplayBooleanComponent,
+                            inputComponent: ToggleBooleanInput,
+                            displayComponent: DisplayBooleanComponent,
                             options: {
                                 true: {
                                     icon: ThumbsUp,
@@ -64,25 +64,25 @@ export default defineConfig({
             ],
             items: [
                 {
-                    isInput: true,
+                    input: true,
                     type: "message",
                     role: "user",
                     title: "Message",
                     content: z.string(),
-                    input: TextareaInput,
-                    display: ItemUserMessageComponent
+                    inputComponent: TextareaInput,
+                    displayComponent: ItemUserMessageComponent
                 },
                 {
-                    isInput: true,
+                    input: true,
                     type: "change_page",
                     title: "Change page",
                     content: z.object({
                         product_id: z.string(),
                     }),
-                    input: ({ value, onChange }) => {
+                    inputComponent: ({ value, onChange }) => {
                         return <ProductSelect value={value?.product_id} onChange={(product_id) => { onChange({ product_id }) }} />
                     },
-                    display: ({ value }) => <div className="flex flex-row items-center justify-end gap-2"><div className="text-muted-foreground">Changed page to</div><ProductDisplay value={value?.product_id} /></div>
+                    displayComponent: ({ value }) => <div className="flex flex-row items-center justify-end gap-2"><div className="text-muted-foreground">Changed page to</div><ProductDisplay value={value?.product_id} /></div>
                 },
                 {
                     type: "change_page_output",
@@ -90,7 +90,7 @@ export default defineConfig({
                         score: z.enum(["best_fit", "great_option", "optional", "not_recommended"]),
                         comment: z.string()
                     }).nullable(),
-                    display: ({ value }) => {
+                    displayComponent: ({ value }) => {
                         return (
                             <div className="relative pr-[10%]">
                                 <div className="border p-3 rounded-lg bg-muted">
@@ -115,8 +115,8 @@ export default defineConfig({
                             name: "user_reaction",
                             title: "Reaction",
                             schema: z.boolean(),
-                            input: ToggleBooleanInput,
-                            display: DisplayBooleanComponent,
+                            inputComponent: ToggleBooleanInput,
+                            displayComponent: DisplayBooleanComponent,
                             options: {
                                 true: {
                                     icon: ThumbsUp,
@@ -132,8 +132,8 @@ export default defineConfig({
                             name: "recommended_score",
                             title: "Your score",
                             schema: z.string(),
-                            input: SelectInput,
-                            display: ({ value }) => <ScoreBadge score={value} />,
+                            inputComponent: SelectInput,
+                            displayComponent: ({ value }) => <ScoreBadge score={value} />,
                             options: {
                                 items: [
                                     { value: "best_fit", label: "Best Fit" },
@@ -149,14 +149,14 @@ export default defineConfig({
                     type: "message",
                     role: "assistant",
                     content: z.string(),
-                    display: ItemAssistantMessageComponent,
+                    displayComponent: ItemAssistantMessageComponent,
                     scores: [
                         {
                             name: "user_reaction",
                             title: "Reaction",
                             schema: z.boolean(),
-                            input: ToggleBooleanInput,
-                            display: DisplayBooleanComponent,
+                            inputComponent: ToggleBooleanInput,
+                            displayComponent: DisplayBooleanComponent,
                             options: {
                                 true: {
                                     icon: ThumbsUp,

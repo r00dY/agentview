@@ -15,17 +15,27 @@ export type DisplayComponentProps<T=any> = {
 
 export type ScoreConfig<T=any> = BaseScoreConfig & {
   title?: string;
-  input: React.ComponentType<FormInputProps<T>>;
-  display: React.ComponentType<DisplayComponentProps<T>>;
+  inputComponent: React.ComponentType<FormInputProps>;
+  displayComponent: React.ComponentType<DisplayComponentProps>;
 }
 
-export type SessionItemConfig = BaseSessionItemConfig<ScoreConfig> & {
-  isInput?: boolean;
-  input?: React.ComponentType<FormInputProps>;
-  display: React.ComponentType<DisplayComponentProps>;
+export type InputSessionItemConfig = BaseSessionItemConfig<ScoreConfig> & {
+  input: true;
   title?: string;
   options?: any;
+  inputComponent: React.ComponentType<FormInputProps>;
+  displayComponent: React.ComponentType<DisplayComponentProps>;
 };
+
+export type StepSessionItemConfig = BaseSessionItemConfig<ScoreConfig> & {
+  input?: false;
+  title?: string;
+  options?: any;
+  displayComponent: React.ComponentType<DisplayComponentProps>;
+};
+
+export type SessionItemConfig = InputSessionItemConfig | StepSessionItemConfig;
+
 
 export type AgentConfig = BaseAgentConfig<SessionItemConfig>;
   
