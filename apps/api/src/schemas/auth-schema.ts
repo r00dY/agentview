@@ -25,7 +25,7 @@ export const users = pgTable("users", {
   banExpires: timestamp("ban_expires"),
 });
 
-export const userSessions = pgTable("user_sessions", {
+export const authSessions = pgTable("auth_sessions", {
   id: text("id").primaryKey(),
   expiresAt: timestamp("expires_at").notNull(),
   token: text("token").notNull().unique(),

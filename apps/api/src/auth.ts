@@ -17,7 +17,7 @@ export const auth = betterAuth({
         usePlural: true
     }),
     session: {
-        modelName: "userSession"
+        modelName: "authSession"
     },
     emailAndPassword: {
         enabled: true

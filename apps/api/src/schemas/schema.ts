@@ -1,5 +1,5 @@
 import { pgTable, text, timestamp, uuid, varchar, jsonb, boolean, uniqueIndex, integer, bigserial, bigint, serial, unique } from "drizzle-orm/pg-core";
-import { users, accounts, verifications, userSessions } from "./auth-schema";
+import { users, accounts, verifications, authSessions } from "./auth-schema";
 import { relations, sql } from "drizzle-orm";
 
 export const invitations = pgTable("invitations", {
@@ -44,6 +44,21 @@ export const clients = pgTable("clients", {
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   simulatedBy: text('simulated_by').references(() => users.id, { onDelete: 'set null' }),
   isShared: boolean("is_shared").notNull().default(false),
+  
+  external_id: varchar("external_id", { length: 255 }),
+}, (table) => [uniqueIndex('client_external_id_unique').on(table.external_id)]);
+
+export const clientSessions = pgTable("client_sessions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  expiresAt: timestamp("expires_at").notNull(),
+  token: text("token").notNull().unique(),
+  createdAt: timestamp("created_at").notNull(),
+  updatedAt: timestamp("updated_at").notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  clientId: uuid("client_id")
+    .notNull()
+    .references(() => clients.id, { onDelete: "cascade" })
 });
 
 export const sessions = pgTable("sessions", {
@@ -329,7 +344,7 @@ export const usersRelations = relations(users, ({ many }) => ({
 
 export const schema = {
   users,
-  userSessions,
+  authSessions,
   accounts,
   verifications,
   invitations,
