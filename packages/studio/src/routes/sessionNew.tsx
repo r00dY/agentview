@@ -25,10 +25,23 @@ async function loader({ request }: LoaderFunctionArgs) {
   }
 
   /** NO METADATA CASE **/
+
+  const clientResponse = await apiFetch('/api/clients', {
+    method: 'POST',
+    body: {
+      isShared: false
+    }
+  });
+
+  if (!clientResponse.ok) {
+    throw data(clientResponse.error, { status: clientResponse.status });
+  }
+
   const sessionResponse = await apiFetch('/api/sessions', {
     method: 'POST',
     body: {
-      agent: agentConfig.name
+      agent: agentConfig.name,
+      clientId: clientResponse.data.id
     }
   });
 
@@ -44,13 +57,25 @@ async function action({ request, params }: ActionFunctionArgs): Promise<ActionRe
   const agentConfig = requireAgentConfig(config, listParams.agent);
   
   const formData = await request.formData();
-  const data = parseFormData(formData);
+  const parsedData = parseFormData(formData);
+
+  const clientResponse = await apiFetch('/api/clients', {
+    method: 'POST',
+    body: {
+      isShared: false
+    }
+  });
+
+  if (!clientResponse.ok) {
+    throw data(clientResponse.error, { status: clientResponse.status });
+  }
 
   const sessionResponse = await apiFetch('/api/sessions', {
     method: 'POST',
     body: {
       agent: agentConfig.name,
-      metadata: data.metadata
+      clientId: clientResponse.data.id,
+      metadata: parsedData.metadata
     }
   });
 

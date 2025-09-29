@@ -48,12 +48,12 @@ export const clients = pgTable("clients", {
   external_id: varchar("external_id", { length: 255 }),
 }, (table) => [uniqueIndex('client_external_id_unique').on(table.external_id)]);
 
-export const clientSessions = pgTable("client_sessions", {
+export const clientAuthSessions = pgTable("client_auth_sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
-  expiresAt: timestamp("expires_at").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true, mode: "string" }).notNull(),
   token: text("token").notNull().unique(),
-  createdAt: timestamp("created_at").notNull(),
-  updatedAt: timestamp("updated_at").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull(),
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
   clientId: uuid("client_id")
@@ -216,6 +216,13 @@ export const clientRelations = relations(clients, ({ many, one }) => ({
   }),
 }));
 
+export const clientAuthSessionsRelations = relations(clientAuthSessions, ({ one }) => ({
+  client: one(clients, {
+    fields: [clientAuthSessions.clientId],
+    references: [clients.id],
+  }),
+}));
+
 // export const channelsRelations = relations(channels, ({ many }) => ({
 //   sessionItems: many(sessionItems),
 // }));
@@ -352,6 +359,7 @@ export const schema = {
   emails,
 
   clients,
+  clientAuthSessions,
   sessions,
   sessionItems,
   versions,
@@ -365,7 +373,7 @@ export const schema = {
   inboxItems,
   configs,
 
-
+  clientAuthSessionsRelations,
   sessionRelations,
   clientRelations,
   versionsRelations,

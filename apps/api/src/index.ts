@@ -4,7 +4,7 @@ import { HTTPException } from 'hono/http-exception'
 
 import { cors } from 'hono/cors'
 import { streamSSE } from 'hono/streaming'
-import { APIError as BetterAuthAPIError} from "better-auth/api";
+import { APIError as BetterAuthAPIError } from "better-auth/api";
 import type { User as BetterAuthUser } from "better-auth";
 
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
@@ -30,6 +30,7 @@ import { users } from './schemas/auth-schema'
 import { getUsersCount } from './users'
 import { updateInboxes } from './updateInboxes'
 import { isInboxItemUnread } from './inboxItems'
+import { createClient, createClientAuthSession, getClientAuthSession } from './clientsAuth'
 import packageJson from '../package.json'
 
 
@@ -94,6 +95,19 @@ async function requireAuthSession(headers: Headers, options?: { admin?: boolean 
   return userSession
 }
 
+async function requireAuthSessionForUserOrClient(headers: Headers) {
+  const clientAuthSession = await getClientAuthSession({ headers })
+  const userAuthSession = await auth.api.getSession({ headers })
+
+  if (clientAuthSession) {
+    return { type: ('client' as const), session: clientAuthSession }
+  }
+  if (userAuthSession) {
+    return { type: ('user' as const), session: userAuthSession }
+  }
+  throw new HTTPException(401, { message: "Unauthorized" });
+}
+
 async function requireConfig() {
   const config = await getConfig()
   if (!config) {
@@ -121,11 +135,23 @@ function requireItemConfig(agentConfig: ReturnType<typeof requireAgentConfig>, t
   return itemConfig
 }
 
-async function requireSession(sessionId: string) {
+async function requireSession(sessionId: string, auth: Awaited<ReturnType<typeof requireAuthSessionForUserOrClient>>) {
   const session = await fetchSession(sessionId)
   if (!session) {
     throw new HTTPException(404, { message: "Session not found" });
   }
+
+  if (auth.type === 'client') {
+    if (session.clientId !== auth.session.clientId) {
+      throw new HTTPException(404, { message: "Session not found" });
+    }
+  }
+  else {
+    if (!session.client.isShared && session.client.simulatedBy !== auth.session.user.id) {  
+      throw new HTTPException(404, { message: "Session not found" });
+    }
+  }
+
   return session
 }
 
@@ -167,6 +193,46 @@ async function requireCommentMessageFromUser(item: SessionItem, commentId: strin
 
 
 /* --------- CLIENTS --------- */
+
+// Client authentication endpoint
+const clientAuthRoute = createRoute({
+  method: 'post',
+  path: '/api/clients/auth',
+  responses: {
+    200: response_data(z.object({
+      token: z.string(),
+      clientId: z.string(),
+      expiresAt: z.iso.date(),
+    })),
+    401: response_error(),
+    404: response_error(),
+  },
+})
+
+app.openapi(clientAuthRoute, async (c) => {
+  const clientSession = await getClientAuthSession({ headers: c.req.raw.headers })
+
+  if (clientSession) {
+    return c.json({
+      clientId: clientSession.clientId,
+      token: clientSession.token,
+      expiresAt: clientSession.expiresAt,
+    }, 200)
+  }
+
+  const client = await createClient()
+  const newClientSession = await createClientAuthSession(client.id, {
+    ipAddress: c.req.header('x-forwarded-for') || c.req.header('x-real-ip'),
+    userAgent: c.req.header('user-agent'),
+  })
+
+  return c.json({
+    clientId: client.id,
+    token: newClientSession.token,
+    expiresAt: newClientSession.expiresAt,
+  }, 200)
+})
+
 
 // API Clients POST
 const apiClientsPOSTRoute = createRoute({
@@ -257,7 +323,7 @@ app.openapi(apiClientsPUTRoute, async (c) => {
 function getSessionListFilter(args: { agent: string, list: string, user?: BetterAuthUser }) {
   const { agent, list, user } = args;
 
-  const filters : any[] = [
+  const filters: any[] = [
     eq(sessions.agent, agent)
   ]
 
@@ -293,6 +359,7 @@ const sessionsGETRoute = createRoute({
   },
 })
 
+// TODO: fix me (client auth!!!)
 app.openapi(sessionsGETRoute, async (c) => {
   const authSession = await requireAuthSession(c.req.raw.headers)
 
@@ -382,8 +449,8 @@ app.openapi(sessionsGETStatsRoute, async (c) => {
     .leftJoin(clients, eq(sessions.clientId, clients.id))
     .where(
       and(
-        eq(inboxItems.userId, user.id), 
-        sql`${inboxItems.lastNotifiableEventId} > COALESCE(${inboxItems.lastReadEventId}, 0)`, 
+        eq(inboxItems.userId, user.id),
+        sql`${inboxItems.lastNotifiableEventId} > COALESCE(${inboxItems.lastReadEventId}, 0)`,
         getSessionListFilter({ agent, list, user })
       )
     )
@@ -411,17 +478,14 @@ app.openapi(sessionsPOSTRoute, async (c) => {
 
   const config = await requireConfig()
   const agentConfig = await requireAgentConfig(config, body.agent)
-  const authSession = await requireAuthSession(c.req.raw.headers)
+  const auth = await requireAuthSessionForUserOrClient(c.req.raw.headers)
 
   const client = await (async () => {
-    if (body.clientId) {
-      return await requireClient(body.clientId)
+    if (auth.type === 'client') {
+      return auth.session.client
     }
     else {
-      return (await db.insert(clients).values({
-        simulatedBy: authSession.user.id,
-        isShared,
-      }).returning())[0];
+      return await requireClient(body.clientId)
     }
   })()
 
@@ -433,25 +497,29 @@ app.openapi(sessionsPOSTRoute, async (c) => {
   }
 
   const newSession = await db.transaction(async (tx) => {
-    const [newSessionRow] = await tx.insert(sessions).values({...body, clientId: client.id}).returning();
+    const [newSessionRow] = await tx.insert(sessions).values({ ...body, clientId: client.id }).returning();
 
-    // add event
-    const [event] = await tx.insert(events).values({
-      type: 'session_created',
-      authorId: authSession.user.id,
-      payload: {
-        session_id: newSessionRow.id,
+    // add event (only for users, not clients)
+    if (auth.type === 'user') {
+      const [event] = await tx.insert(events).values({
+        type: 'session_created',
+        authorId: auth.session.user.id,
+        payload: {
+          session_id: newSessionRow.id,
+        }
+      }).returning();
+
+      const newSession = await fetchSession(newSessionRow.id, tx);
+      if (!newSession) {
+        throw new Error("[Internal Error] Session not found");
       }
-    }).returning();
 
-    const newSession = await fetchSession(newSessionRow.id, tx);
-    if (!newSession) {
-      throw new Error("[Internal Error] Session not found");
+      await updateInboxes(tx, event, newSession, null);
+      return newSession;
+    } else {
+      // For clients, just return the session without events/inboxes
+      return await fetchSession(newSessionRow.id, tx);
     }
-
-    await updateInboxes(tx, event, newSession, null);
-
-    return newSession;
   });
 
   return c.json(newSession, 201);
@@ -471,19 +539,20 @@ const sessionGETRoute = createRoute({
   },
 })
 
+function requireAccessToSession(session: Session, auth: Awaited<ReturnType<typeof requireAuthSessionForUserOrClient>>) {
+  if (auth.type === 'client') {
+    return session.clientId === auth.session.clientId
+  }
+  else {
+    return session.client.isShared || session.client.simulatedBy === auth.session.user.id
+  }
+}
 
-
-app.openapi(sessionGETRoute, async (c) => {  
-  await requireAuthSession(c.req.raw.headers)
-
+app.openapi(sessionGETRoute, async (c) => {
+  const auth = await requireAuthSessionForUserOrClient(c.req.raw.headers)
   const { sessionId } = c.req.param()
 
-  const session = await fetchSession(sessionId);
-
-  if (!session) {
-    return c.json({ message: "Session not found" }, 404);
-  }
-
+  const session = await requireSession(sessionId, auth);
   return c.json(session, 200);
 })
 
@@ -546,12 +615,12 @@ const runsPOSTRoute = createRoute({
 })
 
 app.openapi(runsPOSTRoute, async (c) => {
-  await requireAuthSession(c.req.raw.headers);
+  const auth = await requireAuthSessionForUserOrClient(c.req.raw.headers);
 
   const { sessionId } = c.req.param()
   const { input: { type, role, content } } = await c.req.json()
 
-  const session = await requireSession(sessionId)
+  const session = await requireSession(sessionId, auth)
   const config = await requireConfig()
   const agentConfig = requireAgentConfig(config, session.agent)
   const itemConfig = requireItemConfig(agentConfig, type, role)
@@ -629,7 +698,7 @@ app.openapi(runsPOSTRoute, async (c) => {
     try {
       // Try streaming first, fallback to non-streaming
       const runOutput = callAgentAPI(input, agentConfig.url)
-      
+
       let versionId: string | null = null;
 
       let hadManifest = false
@@ -784,11 +853,12 @@ const runCancelRoute = createRoute({
 });
 
 app.openapi(runCancelRoute, async (c) => {
-  await requireAuthSession(c.req.raw.headers);
+  const auth = await requireAuthSessionForUserOrClient(c.req.raw.headers);
 
   const { sessionId } = c.req.param();
 
-  const session = await requireSession(sessionId);
+  const session = await requireSession(sessionId, auth);
+
   const lastRun = getLastRun(session)
 
   if (lastRun?.state !== 'in_progress') {
@@ -824,11 +894,12 @@ const runWatchRoute = createRoute({
 
 // @ts-ignore don't know how to fix this with hono yet
 app.openapi(runWatchRoute, async (c) => {
-  await requireAuthSession(c.req.raw.headers);
+  const auth = await requireAuthSessionForUserOrClient(c.req.raw.headers);
 
   const { sessionId } = c.req.param()
 
-  const session = await requireSession(sessionId)
+  const session = await requireSession(sessionId, auth)
+
   const lastRun = getLastRun(session)
 
   return streamSSE(c, async (stream) => {
@@ -853,7 +924,7 @@ app.openapi(runWatchRoute, async (c) => {
      * 
      */
     while (running) {
-      const session = await requireSession(sessionId)
+      const session = await requireSession(sessionId, auth)
       const lastRun = getLastRun(session)
 
       if (!lastRun) {
@@ -998,7 +1069,7 @@ app.openapi(commentsPOSTRoute, async (c) => {
   const body = await c.req.json()
   const { sessionId, itemId } = c.req.param()
 
-  const session = await requireSession(sessionId)
+  const session = await requireSession(sessionId, { type: 'user', session: authSession })
   const item = await requireSessionItem(session, itemId);
   const config = await requireConfig()
 
@@ -1093,7 +1164,7 @@ app.openapi(commentsDELETERoute, async (c) => {
   const authSession = await requireAuthSession(c.req.raw.headers);
 
   const { commentId, sessionId, itemId } = c.req.param()
-  const session = await requireSession(sessionId)
+  const session = await requireSession(sessionId, { type: 'user', session: authSession })
   const item = await requireSessionItem(session, itemId);
   const commentMessage = await requireCommentMessageFromUser(item, commentId, authSession.user);
 
@@ -1133,7 +1204,7 @@ const commentsPUTRoute = createRoute({
     body: body(z.object({
       comment: z.string().optional(),
       scores: z.record(z.string(), z.any()).optional()
-    })) 
+    }))
   },
   responses: {
     200: response_data(z.object({})),
@@ -1150,7 +1221,7 @@ app.openapi(commentsPUTRoute, async (c) => {
   const body = await c.req.json()
 
   const config = await requireConfig()
-  const session = await requireSession(sessionId)
+  const session = await requireSession(sessionId, { type: 'user', session: authSession })
   const item = await requireSessionItem(session, itemId)
   const commentMessage = await requireCommentMessageFromUser(item, commentId, authSession.user);
 
@@ -1493,7 +1564,7 @@ const emailsGETRoute = createRoute({
 
 app.openapi(emailsGETRoute, async (c) => {
   await requireAuthSession(c.req.raw.headers, { admin: true });
-  
+
   const emailRows = await db
     .select({
       id: emails.id,
