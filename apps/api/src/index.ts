@@ -237,16 +237,14 @@ app.openapi(clientAuthRoute, async (c) => {
 
       const existingClient = await findClientByExternalId(jwtPayload.external_id)
 
-      if (!existingClient) {
-        throw new HTTPException(401, { message: "Can't link this ID token to any client." });
+      if (existingClient) {
+        return existingClient
+      } else {
+        return await createClient(jwtPayload.external_id)
       }
-
-      return existingClient
-
-      
-    } else {
-      return await createClient()
     }
+
+    return await createClient()
   })()
 
   const newClientSession = await createClientAuthSession(client.id, {

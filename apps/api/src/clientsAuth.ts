@@ -1,4 +1,3 @@
-import { HTTPException } from 'hono/http-exception'
 import { db } from './db'
 import { clients, clientAuthSessions } from './schemas/schema'
 import { eq, and, gt } from 'drizzle-orm'
@@ -6,12 +5,11 @@ import { randomBytes } from 'crypto'
 import jwt from 'jsonwebtoken'
 
 
-export async function createClient() {
-  // Create new client
+export async function createClient(externalId?: string) {
   const [newClient] = await db.insert(clients).values({
-    external_id: null, // Always null for now
-    isShared: false, // Clients are never shared
-    simulatedBy: null, // Clients are not simulated
+    external_id: externalId ?? null,
+    isShared: false,
+    simulatedBy: null,
   }).returning()
 
   return newClient
@@ -74,10 +72,8 @@ export function extractClientToken(headers: Headers): string | null {
 
 export function verifyJWT(token: string): { external_id: string } | null {
   try {
-    // For now, we'll use a simple verification without secret validation
-    // In production, you should validate the JWT signature with the appropriate secret
-    const decoded = jwt.decode(token) as any
-    
+    const decoded = jwt.verify(token, process.env.AGENTVIEW_SECRET_KEY!) as any
+
     if (!decoded || !decoded.external_id) {
       return null
     }
