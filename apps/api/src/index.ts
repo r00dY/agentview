@@ -390,7 +390,8 @@ async function getSessions(agent: string, list: string, clientId: string) {
     .select()
     .from(sessions)
     .leftJoin(clients, eq(sessions.clientId, clients.id))
-    .where(getSessionListFilter({ agent, list, clientId }));
+    .where(getSessionListFilter({ agent, list, clientId }))
+    .orderBy(desc(sessions.updatedAt));
 
   return result.map((row) => ({
     ...row.sessions,
