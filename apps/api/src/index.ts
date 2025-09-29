@@ -432,8 +432,6 @@ app.openapi(sessionsPOSTRoute, async (c) => {
     return c.json({ message: error.message }, 400);
   }
 
-
-  
   const newSession = await db.transaction(async (tx) => {
     const [newSessionRow] = await tx.insert(sessions).values({...body, clientId: client.id}).returning();
 
