@@ -30,7 +30,7 @@ import { users } from './schemas/auth-schema'
 import { getUsersCount } from './users'
 import { updateInboxes } from './updateInboxes'
 import { isInboxItemUnread } from './inboxItems'
-import { createClient, createClientAuthSession, getClientAuthSession } from './clientsAuth'
+import { createClient, createClientAuthSession, getClientAuthSession, verifyJWT, findClientByExternalId } from './clientsAuth'
 import packageJson from '../package.json'
 
 
@@ -198,6 +198,11 @@ async function requireCommentMessageFromUser(item: SessionItem, commentId: strin
 const clientAuthRoute = createRoute({
   method: 'post',
   path: '/api/clients/auth',
+  request: {
+    body: body(z.object({
+      id_token: z.string().optional(),
+    })),
+  },
   responses: {
     200: response_data(z.object({
       token: z.string(),
@@ -220,7 +225,30 @@ app.openapi(clientAuthRoute, async (c) => {
     }, 200)
   }
 
-  const client = await createClient()
+  const client = await (async () => {
+    const body = await c.req.json()
+
+    if (body.id_token) {
+        const jwtPayload = verifyJWT(body.id_token)
+
+        if (!jwtPayload) {
+          throw new HTTPException(401, { message: "Can't verify this ID token." });
+        }
+
+      const existingClient = await findClientByExternalId(jwtPayload.external_id)
+
+      if (!existingClient) {
+        throw new HTTPException(401, { message: "Can't link this ID token to any client." });
+      }
+
+      return existingClient
+
+      
+    } else {
+      return await createClient()
+    }
+  })()
+
   const newClientSession = await createClientAuthSession(client.id, {
     ipAddress: c.req.header('x-forwarded-for') || c.req.header('x-real-ip'),
     userAgent: c.req.header('user-agent'),

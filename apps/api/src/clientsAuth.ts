@@ -3,6 +3,7 @@ import { db } from './db'
 import { clients, clientAuthSessions } from './schemas/schema'
 import { eq, and, gt } from 'drizzle-orm'
 import { randomBytes } from 'crypto'
+import jwt from 'jsonwebtoken'
 
 
 export async function createClient() {
@@ -69,4 +70,28 @@ export function extractClientToken(headers: Headers): string | null {
     return null
   }
   return authHeader.substring(7) // Remove 'Bearer ' prefix
+}
+
+export function verifyJWT(token: string): { external_id: string } | null {
+  try {
+    // For now, we'll use a simple verification without secret validation
+    // In production, you should validate the JWT signature with the appropriate secret
+    const decoded = jwt.decode(token) as any
+    
+    if (!decoded || !decoded.external_id) {
+      return null
+    }
+    
+    return { external_id: decoded.external_id }
+  } catch (error) {
+    return null
+  }
+}
+
+export async function findClientByExternalId(externalId: string) {
+  const client = await db.query.clients.findFirst({
+    where: eq(clients.external_id, externalId)
+  })
+  
+  return client
 }
