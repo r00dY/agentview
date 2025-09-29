@@ -116,26 +116,29 @@ export const RunSchema = z.object({
 
 export type Run = z.infer<typeof RunSchema>
 
-export const SessionSchema = z.object({
+export const SessionBaseSchema = z.object({
     id: z.string(),
     number: z.number(),
     createdAt: z.iso.date(),
     updatedAt: z.iso.date(),
     metadata: z.any(),
-    clientId: z.string(),
     agent: z.string(),
-    runs: z.array(RunSchema),
     client: ClientSchema,
+})
+
+export type SessionBase = z.infer<typeof SessionBaseSchema>
+
+export const SessionSchema = SessionBaseSchema.extend({
+    runs: z.array(RunSchema),
 })
 
 export type Session = z.infer<typeof SessionSchema>
 
-export const SessionCreateSchema = SessionSchema.pick({
-    clientId: true,
+export const SessionCreateSchema = SessionBaseSchema.pick({
     agent: true,
     metadata: true,
 }).extend({
-    clientId: SessionSchema.shape.clientId.optional(),
+    clientId: z.string().optional(),
     isShared: z.boolean().optional(),
 })
 

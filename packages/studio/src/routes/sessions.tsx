@@ -19,14 +19,21 @@ async function loader({ request }: LoaderFunctionArgs) {
     throw data(sessionsResponse.error, { status: sessionsResponse.status });
   }
 
+  const statsResponse = await apiFetch<any>(`/api/sessions/stats?agent=${listParams.agent}&list=${listParams.list}&granular=true`);
+
+  if (!statsResponse.ok) {
+    throw data(statsResponse.error, { status: statsResponse.status });
+  }
+
   return {
     sessions: sessionsResponse.data,
+    allStats: statsResponse.data,
     listParams
   }
 }
 
 function Component() {
-  const { sessions, listParams } = useLoaderData<typeof loader>();
+  const { sessions, listParams, allStats } = useLoaderData<typeof loader>();
 
   return <div className="flex flex-row items-stretch h-full">
 
@@ -40,7 +47,7 @@ function Component() {
       </Header>
 
       <div className="flex-1 overflow-y-auto">
-        {sessions.length > 0 && sessions.map((session) => <SessionCard session={session} listParams={listParams} />)}
+        {sessions.length > 0 && sessions.map((session) => <SessionCard session={session} listParams={listParams} sessionStats={allStats.sessions[session.id]} />)}
         {sessions.length === 0 && <div className="px-3 py-4 text-muted-foreground">No sessions available.</div>}
       </div>
 
@@ -51,19 +58,24 @@ function Component() {
 }
 
 
-export function SessionCard({ session, listParams }: { session: Session, listParams: ReturnType<typeof getListParams> }) {
+export function SessionCard({ session, listParams, sessionStats }: { session: Session, listParams: ReturnType<typeof getListParams>, sessionStats: any }) {
   const { user } = useSessionContext();
   const date = session.createdAt;
 
-  const unseenEvents = (session as any).unseenEvents;
-  const hasSessionUnreads = unseenEvents.session.length > 0;
-  const allItemEvents = (Object.values(unseenEvents.items) as any[]).flat() as any[];
+  const unseenEvents = sessionStats.unseenEvents;
+  const hasSessionUnreads = unseenEvents.length > 0;
+  
+  const allItemEvents: any[] = [];
 
-  const hasActivitiesUnread = allItemEvents.length > 0;
+  for(const itemStats of Object.values(sessionStats.items) as any[]) {
+    allItemEvents.push(...itemStats.unseenEvents);
+  }
 
-  const activitiesEventsCount = allItemEvents.length;
-  const activitiesMentionsCount = allItemEvents.filter((event: any) => Array.isArray(event?.payload?.user_mentions) && (event.payload.user_mentions as any[]).includes(user.id)).length;
-  const hasUnreads = hasSessionUnreads || hasActivitiesUnread;
+  const hasUnreadItems = allItemEvents.length > 0;
+
+  const itemsEventsCount = allItemEvents.length;
+  const itemsMentionsCount = allItemEvents.filter((event: any) => Array.isArray(event?.payload?.user_mentions) && (event.payload.user_mentions as any[]).includes(user.id)).length;
+  const hasUnreads = hasSessionUnreads || hasUnreadItems;
 
   return <div key={session.id}>
     <NavLink to={`/sessions/${session.id}?list=${listParams.list}&agent=${listParams.agent}`}>
@@ -76,8 +88,8 @@ export function SessionCard({ session, listParams }: { session: Session, listPar
 
               <div className="flex flex-row gap-1 items-center">
                 <div className="text-xs text-gray-500">{timeAgoShort(date)}</div>
-                {activitiesEventsCount > 0 && <NotificationBadge>{activitiesEventsCount}</NotificationBadge> }
-                { activitiesMentionsCount > 0 && <NotificationBadge>@</NotificationBadge> }
+                {itemsEventsCount > 0 && <NotificationBadge>{itemsEventsCount}</NotificationBadge> }
+                { itemsMentionsCount > 0 && <NotificationBadge>@</NotificationBadge> }
               </div>
 
             </div>
