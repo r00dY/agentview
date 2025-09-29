@@ -395,7 +395,9 @@ async function getSessions(params: z.infer<typeof SessionsGetQueryParamsSchema>,
     .from(sessions)
     .leftJoin(clients, eq(sessions.clientId, clients.id))
     .where(getSessionListFilter(params, clientId))
-    .orderBy(desc(sessions.updatedAt));
+    .orderBy(desc(sessions.updatedAt))
+    .limit(params.limit ?? 10)
+    .offset(params.page ?? 0);
 
   return result.map((row) => ({
     ...row.sessions,
@@ -410,68 +412,6 @@ app.openapi(sessionsGETRoute, async (c) => {
 
   return c.json(await getSessions(params, clientId), 200);
 })
-
-// app.openapi(sessionsGETRoute, async (c) => {
-//   const authSession = await requireAuthSession(c.req.raw.headers)
-
-//   const { agent, list } = c.req.query();
-
-//   const result = await db
-//     .select({
-//       id: sessions.id,
-//       agent: sessions.agent,
-//       client: {
-//         id: clients.id,
-//         simulatedBy: clients.simulatedBy,
-//         isShared: clients.isShared,
-//       }
-//     })
-//     .from(sessions)
-//     .leftJoin(clients, eq(sessions.clientId, clients.id))
-//     .where(getSessionListFilter({ agent, list, user: authSession.user }));
-
-//   const sessionIds = result.map((row) => row.id);
-
-//   const sessionRows = await db.query.sessions.findMany({
-//     where: and(inArray(sessions.id, sessionIds), eq(sessions.agent, agent)),
-//     with: {
-//       client: true,
-//       inboxItems: {
-//         where: eq(inboxItems.userId, authSession.user.id),
-//       },
-//     },
-//     orderBy: (session, { desc }: any) => [desc(session.updatedAt)],
-//   })
-
-//   const sessionRowsFilteredWithInboxItems = sessionRows.map((session) => {
-//     const sessionInboxItem = session.inboxItems.find((inboxItem) => inboxItem.sessionItemId === null);
-//     const itemInboxItems = session.inboxItems.filter((inboxItem) => inboxItem.sessionItemId !== null);
-
-//     function getUnseenEvents(inboxItem: InferSelectModel<typeof inboxItems> | null | undefined) {
-//       if (isInboxItemUnread(inboxItem)) {
-//         const render: any = inboxItem?.render;
-//         return render?.events ?? [];
-//       }
-//       return [];
-//     }
-
-//     const unseenEvents: { session: any[], items: { [key: string]: any[] } } = {
-//       session: getUnseenEvents(sessionInboxItem),
-//       items: {}
-//     }
-
-//     itemInboxItems.forEach((inboxItem) => {
-//       unseenEvents.items[inboxItem.sessionItemId!] = getUnseenEvents(inboxItem);
-//     });
-
-//     return {
-//       ...session,
-//       unseenEvents
-//     }
-//   })
-
-//   return c.json(sessionRowsFilteredWithInboxItems, 200);
-// })
 
 
 type StatsResponse = {
