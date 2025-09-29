@@ -578,7 +578,6 @@ app.openapi(sessionSeenRoute, async (c) => {
 
   const { sessionId } = c.req.param()
 
-
   await db.update(inboxItems).set({
     lastReadEventId: sql`${inboxItems.lastNotifiableEventId}`,
     updatedAt: new Date().toISOString(),
