@@ -91,7 +91,16 @@ export async function* callAgentAPI(request: { session: any }, url: string): Asy
 
     /** NON-STREAMING RESPONSE **/
   if (contentType.startsWith('application/json')) {
-    const data = await response.json()
+    let data: any;
+    
+    try {
+      data = await response.json()
+    } catch(e) {
+      throw new AgentAPIError({
+        message: 'Error parsing JSON response',
+        eventData: data
+      })
+    }
 
     // emit manifest
     if (data.manifest) {

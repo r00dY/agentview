@@ -17,7 +17,7 @@ import { isUUID } from './isUUID'
 import { extractMentions } from './utils'
 import { auth } from './auth'
 import { createInvitation, cancelInvitation, getPendingInvitations, getValidInvitation } from './invitations'
-import { fetchSession } from './sessions'
+import { fetchSession, fetchSessionState } from './sessions'
 import { callAgentAPI, AgentAPIError } from './agentApi'
 import { getStudioURL } from './getStudioURL'
 
@@ -571,6 +571,8 @@ app.openapi(runsPOSTRoute, async (c) => {
     return c.json({ message: `Cannot add user item when session is in 'in_progress' state.` }, 400);
   }
 
+  const state = await fetchSessionState(sessionId);
+
   // Create user item and run
   const userItem = await db.transaction(async (tx) => {
 
@@ -590,7 +592,8 @@ app.openapi(runsPOSTRoute, async (c) => {
     return userItem;
   });
 
-  /*** 
+
+  /***
    * 
    * SIMULATION OF THE BACKGROUND JOB RUNNING
    * 
@@ -611,7 +614,8 @@ app.openapi(runsPOSTRoute, async (c) => {
         metadata: session.metadata,
         clientId: session.clientId,
         agent: session.agent,
-        items: getAllSessionItems(session)
+        items: getAllSessionItems(session),
+        state
       },
       input: userItem
     }
@@ -679,6 +683,14 @@ app.openapi(runsPOSTRoute, async (c) => {
             .set({ metadata: event.data })
             .where(eq(runs.id, userItem.runId));
           continue;
+        }
+        else if (event.name === 'state') {
+          await db.insert(sessionItems).values({
+            sessionId: sessionId,
+            type: "__state__",
+            content: event.data,
+            runId: userItem.runId,
+          })
         }
         else if (event.name === 'item') {
 

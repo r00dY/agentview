@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { and, eq, not } from "drizzle-orm";
 import { db } from "./db"
-import { sessions } from "./schemas/schema"
+import { sessionItems, sessions } from "./schemas/schema"
 import type { Transaction } from "./types";
 
 export async function fetchSessions(session_id?: string, tx?: Transaction) {
@@ -19,6 +19,7 @@ export async function fetchSessions(session_id?: string, tx?: Transaction) {
             version: true,
             sessionItems: {
               orderBy: (sessionItem, { asc }) => [asc(sessionItem.createdAt)],
+              where: (sessionItem, { ne }) => ne(sessionItem.type, "__state__"),
               with: {
                 commentMessages: {
                   orderBy: (commentMessages, { asc }) => [asc(commentMessages.createdAt)],
@@ -44,4 +45,19 @@ export async function fetchSessions(session_id?: string, tx?: Transaction) {
     }
 
     return sessions[0]
+  }
+
+
+  export async function fetchSessionState(session_id: string, tx?: Transaction) {
+    // Fetch the latest __state__ session item by createdAt descending
+    const stateItem = await (tx || db).query.sessionItems.findFirst({
+      where: and(eq(sessionItems.sessionId, session_id), eq(sessionItems.type, "__state__")),
+      orderBy: (sessionItem, { desc }) => [desc(sessionItem.createdAt)],
+    });
+
+    if (!stateItem) {
+      return null
+    }
+
+    return stateItem.content as any
   }
