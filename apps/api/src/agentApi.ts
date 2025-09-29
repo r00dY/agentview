@@ -29,136 +29,147 @@ export async function* callAgentAPI(request: { session: any }, url: string): Asy
       },
       body: JSON.stringify(request),
     })
-  }
-  catch(error: unknown) {
-    throw new AgentAPIError({
-      message: "Agent API network error",
-      details: (error as Error).message
-    })
-  }
 
-  const responseData : any = {
-    request: {
-      url,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    const responseData : any = {
+      request: {
+        url,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: request
       },
-      body: request
-    },
-    response: {
-      status: response.status,
-      statusText: response.statusText,
-      headers: Object.fromEntries(response.headers.entries()),
-    }
-  };
-
-  yield {
-    name: "response_data",
-    data: responseData
-  }
-
-  if (!response.ok) {
-    const content = tryParseJSON(await response.text());
-    console.log('content', content)
-    responseData.response.body = content;
+      response: {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+      }
+    };
 
     yield {
       name: "response_data",
       data: responseData
     }
 
-    const error = getErrorObject(content)
-    throw new AgentAPIError({
-      ...error,
-      message: `HTTP error response (${response.status}): ${error.message}`,
-    })  
-  }
+    if (!response.ok) {
+      const content = tryParseJSON(await response.text());
+      console.log('content', content)
+      responseData.response.body = content;
 
-  const contentType = response.headers.get('Content-Type');
+      yield {
+        name: "response_data",
+        data: responseData
+      }
 
-  if (!contentType) {
-    throw new AgentAPIError({
-      message: 'No Content-Type header'
-    })
-  }
-
-  if (!response.body) {
-    throw new AgentAPIError({
-      message: 'No response body'
-    })
-  }
-
-    /** NON-STREAMING RESPONSE **/
-  if (contentType.startsWith('application/json')) {
-    let data: any;
-    
-    try {
-      data = await response.json()
-    } catch(e) {
+      const error = getErrorObject(content)
       throw new AgentAPIError({
-        message: 'Error parsing JSON response',
-        eventData: data
+        ...error,
+        message: `HTTP error response (${response.status}): ${error.message}`,
+      })  
+    }
+
+    const contentType = response.headers.get('Content-Type');
+
+    if (!contentType) {
+      throw new AgentAPIError({
+        message: 'No Content-Type header'
       })
     }
 
-    // emit manifest
-    if (data.manifest) {
-      yield {
-        name: "manifest",
-        data: data.manifest
-      }
+    if (!response.body) {
+      throw new AgentAPIError({
+        message: 'No response body'
+      })
     }
 
-    if (data.items) {
-      for (const item of data.items) {
-        yield {
-          name: "item",
-          data: item
-        }
-      }
-    }
-  }
-
-  /** STREAMING RESPONSE **/
-  else if (contentType.startsWith('text/event-stream')) {
-    for await (const { event, data } of parseSSE(response.body)) {
-      let parsedData: any;
-
-      if (event === "ping") {
-        continue
-      }
+      /** NON-STREAMING RESPONSE **/
+    if (contentType.startsWith('application/json')) {
+      let data: any;
 
       try {
-        parsedData = JSON.parse(data)
+        data = await response.json()
       } catch(e) {
         throw new AgentAPIError({
-          message: 'Error parsing SSE event (event data must be an object)',
+          message: 'Error parsing JSON response',
           eventData: data
         })
       }
 
-      if (event === "error") {
-        const error = getErrorObject(parsedData)
-
-        throw new AgentAPIError({
-          ...error,
-          message: `${error.message ?? "Unknown error event"}`
-        })
-      }
-      else {
+      // emit manifest
+      if (data.manifest) {
         yield {
-          name: event,
-          data: parsedData
+          name: "manifest",
+          data: data.manifest
+        }
+      }
+
+      if (data.items) {
+        for (const item of data.items) {
+          yield {
+            name: "item",
+            data: item
+          }
         }
       }
     }
 
+    /** STREAMING RESPONSE **/
+    else if (contentType.startsWith('text/event-stream')) {
+      for await (const { event, data } of parseSSE(response.body)) {
+        let parsedData: any;
+
+        if (event === "ping") {
+          continue
+        }
+
+        try {
+          parsedData = JSON.parse(data)
+        } catch(e) {
+          throw new AgentAPIError({
+            message: 'Error parsing SSE event (event data must be an object)',
+            eventData: data
+          })
+        }
+
+        if (event === "error") {
+          const error = getErrorObject(parsedData)
+
+          throw new AgentAPIError({
+            ...error,
+            message: `${error.message ?? "Unknown error event"}`
+          })
+        }
+        else {
+          yield {
+            name: event,
+            data: parsedData
+          }
+        }
+      }
+
+    }
+    else {
+      throw new AgentAPIError({
+        message: `Expected Content-Type "application/json" or "text/event-stream", got "${contentType}"`
+      })
+    }
+
   }
-  else {
-    throw new AgentAPIError({
-      message: `Expected Content-Type "application/json" or "text/event-stream", got "${contentType}"`
-    })
+  catch(error: unknown) {
+    if (error instanceof AgentAPIError) { // our internal errors should be rethrown
+      throw error
+    }
+    // the only errors that are left are network errors
+    else if (error instanceof Error) {
+      throw new AgentAPIError({
+        message: "Agent API connection error: " + error.message,
+        cause: error.cause
+      })
+    }
+    // we rethrow unknown errors
+    else {
+      throw error;
+    }
   }
 }
 

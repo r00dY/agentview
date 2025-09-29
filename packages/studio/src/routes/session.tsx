@@ -474,7 +474,7 @@ function InputForm({ session, agentConfig }: { session: Session, agentConfig: Ag
                         {sessionStatus === "in_progress" && <div>Running...</div>}
                         {sessionStatus === "failed" && (
                             <div className="text-red-500 flex items-center gap-2">
-                                Failed: {lastRun?.failReason?.message ?? "Unknown reason"}
+                                {lastRun?.failReason?.message ?? "Unknown reason"}
                                 {lastRun?.responseData && <Button variant="outline" size="sm" onClick={() => {
                                     console.log(lastRun.responseData)
                                 }}>Log details</Button>}
