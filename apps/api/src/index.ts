@@ -147,7 +147,7 @@ async function requireSession(sessionId: string, auth: Awaited<ReturnType<typeof
     }
   }
   else {
-    if (!session.client.isShared && session.client.simulatedBy !== auth.session.user.id) {  
+    if (session.client.simulatedBy && !session.client.isShared && session.client.simulatedBy !== auth.session.user.id) {  
       throw new HTTPException(404, { message: "Session not found" });
     }
   }
