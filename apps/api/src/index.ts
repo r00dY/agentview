@@ -316,7 +316,6 @@ app.openapi(clientGETRoute, async (c) => {
   return c.json(clientRow, 200);
 })
 
-
 const apiClientsPUTRoute = createRoute({
   method: 'put',
   path: '/api/clients/{clientId}',
@@ -458,7 +457,7 @@ const sessionsGETStatsRoute = createRoute({
     }),
   },
   responses: {
-    200: response_data(z.object({ unseenCount: z.number(), hasMentions: z.boolean() })),
+    200: response_data(z.object({ unseenCount: z.number() })),
   },
 })
 
@@ -482,8 +481,7 @@ app.openapi(sessionsGETStatsRoute, async (c) => {
     )
 
   return c.json({
-    unseenCount: result[0].unreadSessions ?? 0,
-    hasMentions: false,
+    unseenCount: result[0].unreadSessions ?? 0
   }, 200);
 })
 
