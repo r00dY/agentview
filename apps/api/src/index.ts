@@ -345,8 +345,15 @@ app.openapi(apiClientsPUTRoute, async (c) => {
 })
 
 
-function getSessionListFilter(args: { agent?: string, list?: string, clientId?: string }) {
-  const { agent, list = "real", clientId } = args;
+const SessionsGetQueryParamsSchema = z.object({
+  agent: z.string().optional(),
+  list: z.enum(allowedSessionLists).optional(),
+  page: z.number().optional(),
+  limit: z.number().optional(),
+})
+
+function getSessionListFilter(params: z.infer<typeof SessionsGetQueryParamsSchema>, clientId?: string) {
+  const { agent, list = "real" } = params;
 
   const filters: any[] = []
 
@@ -374,10 +381,7 @@ const sessionsGETRoute = createRoute({
   method: 'get',
   path: '/api/sessions',
   request: {
-    query: z.object({
-      agent: z.string().optional(),
-      list: z.enum(allowedSessionLists).optional()
-    }),
+    query: SessionsGetQueryParamsSchema,
   },
   responses: {
     200: response_data(z.array(SessionBaseSchema)),
@@ -385,12 +389,12 @@ const sessionsGETRoute = createRoute({
   },
 })
 
-async function getSessions(agent: string, list: string, clientId: string) {
+async function getSessions(params: z.infer<typeof SessionsGetQueryParamsSchema>, clientId: string) {
   const result = await db
     .select()
     .from(sessions)
     .leftJoin(clients, eq(sessions.clientId, clients.id))
-    .where(getSessionListFilter({ agent, list, clientId }))
+    .where(getSessionListFilter(params, clientId))
     .orderBy(desc(sessions.updatedAt));
 
   return result.map((row) => ({
@@ -401,11 +405,10 @@ async function getSessions(agent: string, list: string, clientId: string) {
 
 app.openapi(sessionsGETRoute, async (c) => {
   const auth = await requireAuthSessionForUserOrClient(c.req.raw.headers)
-  const { agent, list } = c.req.query();
-
+  const params = c.req.query();
   const clientId = auth.type === 'client' ? auth.session.client.id : auth.session.user.id;
 
-  return c.json(await getSessions(agent, list, clientId), 200);
+  return c.json(await getSessions(params, clientId), 200);
 })
 
 // app.openapi(sessionsGETRoute, async (c) => {
@@ -471,21 +474,6 @@ app.openapi(sessionsGETRoute, async (c) => {
 // })
 
 
-const sessionsGETStatsRoute = createRoute({
-  method: 'get',
-  path: '/api/sessions/stats',
-  request: {
-    query: z.object({
-      agent: z.string(),
-      list: z.enum(allowedSessionLists).optional(),
-      granular: z.stringbool().optional()
-    }),
-  },
-  responses: {
-    200: response_data(z.object({ unseenCount: z.number() })),
-  },
-})
-
 type StatsResponse = {
   unseenCount: number,
   sessions?: {
@@ -496,9 +484,22 @@ type StatsResponse = {
   }
 }
 
+const sessionsGETStatsRoute = createRoute({
+  method: 'get',
+  path: '/api/sessions/stats',
+  request: {
+    query: SessionsGetQueryParamsSchema.extend({
+      granular: z.stringbool().optional()
+    }),
+  },
+  responses: {
+    200: response_data(z.object({ unseenCount: z.number() })),
+  },
+})
+
 app.openapi(sessionsGETStatsRoute, async (c) => {
   const authSession = await requireAuthSession(c.req.raw.headers)
-  const { agent, list, granular = false } = c.req.query();
+  const { granular = false, ...params } = c.req.query();
 
   const result = await db
     .select({
@@ -511,7 +512,7 @@ app.openapi(sessionsGETStatsRoute, async (c) => {
       and(
         eq(inboxItems.userId, authSession.user.id),
         sql`${inboxItems.lastNotifiableEventId} > COALESCE(${inboxItems.lastReadEventId}, 0)`,
-        getSessionListFilter({ agent, list, clientId: authSession.user.id })
+        getSessionListFilter(params, authSession.user.id)
       )
     )
 
@@ -520,7 +521,7 @@ app.openapi(sessionsGETStatsRoute, async (c) => {
   }
 
   if (granular) {
-    const rows = await getSessions(agent, list, authSession.user.id);
+    const rows = await getSessions(params, authSession.user.id);
     const sessionIds = rows.map((row) => row.id);
 
     response.sessions = {}
