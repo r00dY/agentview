@@ -10,7 +10,7 @@ import { getLastRun, getAllSessionItems, getVersions } from "~/lib/shared/sessio
 import { type Session } from "~/lib/shared/apiTypes";
 import { getListParams, toQueryParams } from "~/lib/utils";
 import { PropertyList } from "~/components/PropertyList";
-import { AlertCircleIcon, MessageCircleIcon, MessageSquareTextIcon, SendHorizonalIcon, Share, SquareIcon, UserIcon, UsersIcon } from "lucide-react";
+import { AlertCircleIcon, MessageCircleIcon, MessageCirclePlus, MessageSquareTextIcon, SendHorizonalIcon, Share, SquareIcon, UserIcon, UsersIcon } from "lucide-react";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
 import { useSessionContext } from "~/lib/SessionContext";
 import type { SessionItemConfig, AgentConfig } from "~/types";
@@ -163,7 +163,7 @@ function SessionPage() {
 
     return <>
         {/* <div className="basis-[720px] flex-shrink-0 flex-grow-0 border-r  flex flex-col"> */}
-        <div className="basis-[1080px] flex-shrink-0 flex-grow-0 border-r  flex flex-col">
+        <div className="flex-shrink-0 flex-grow-1 border-r  flex flex-col">
 
             <Header>
                 <HeaderTitle title={`Session ${session.number}`} />
@@ -220,19 +220,34 @@ function SessionPage() {
                             content = <itemConfig.displayComponent value={item.content} options={itemConfig.options} />
                         }
 
+                        console.log(item.content)
+
                         return {
                             id: item.id,
                             itemComponent: <div
-                                className={`relative pl-6 py-2 pr-[420px] group ${selectedItemId === item.id ? "bg-gray-50" : "hover:bg-gray-50"}`}
-                                onClick={() => {
-                                    if (selectedItemId === item.id) {
-                                        setselectedItemId(undefined)
-                                    } else {
-                                        setselectedItemId(item?.id)
-                                    }
-                                }}
+                                // className={`relative group ${selectedItemId === item.id ? "bg-gray-50" : "hover:bg-gray-50"}`}
+                                className={`relative group`}
+                                // onClick={() => {
+                                //     if (selectedItemId === item.id) {
+                                //         setselectedItemId(undefined)
+                                //     } else {
+                                //         setselectedItemId(item?.id)
+                                //     }
+                                // }}
                             >
+                                <div className="absolute pl-2 left-[800px] pt-2 text-muted-foreground text-xs font-medium group-hover:visible invisible animate-none">
+                                    <Button variant="outline" size="icon_xs" onClick={() => { setselectedItemId(item.id) }}><MessageCirclePlus className="size-3" /></Button>
+                                    {/* <MessageCirclePlus className="size-3" /> */}
+                                </div>
+                                {/* <div className="absolute left-0 pl-6 pt-2 ">
+                                    { item.role === "user" && <div className="text-muted-foreground text-xs ">
+                                        #1
+                                    </div> }
+
+                                </div> */}
+                                <div className="relative max-w-[800px] py-2 pl-6">
                                 {content}
+                                </div>
                                 {/* { !hasComments && <div className="absolute top-[8px] right-[408px] opacity-0 group-hover:opacity-100">
                                     <Button variant="outline" size="icon_xs" onClick={() => { setselectedItemId(item.id) }}><MessageSquareTextIcon /></Button>
                                 </div>} */}
