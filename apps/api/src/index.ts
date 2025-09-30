@@ -348,7 +348,7 @@ app.openapi(apiClientsPUTRoute, async (c) => {
 const SessionsGetQueryParamsSchema = z.object({
   agent: z.string().optional(),
   list: z.enum(allowedSessionLists).optional(),
-  cursor: z.string().optional(),
+  page: z.string().optional(),
   limit: z.string().optional(),
 })
 
@@ -390,8 +390,12 @@ const sessionsGETRoute = createRoute({
 })
 
 async function getSessions(params: z.infer<typeof SessionsGetQueryParamsSchema>, clientId: string) {
-  const DEFAULT_LIMIT = 10
+  const DEFAULT_LIMIT = 50
+  const DEFAULT_PAGE = 1
+  
   const limit = Math.max(parseInt(params.limit ?? DEFAULT_LIMIT.toString()) || DEFAULT_LIMIT, 1);
+  const page = Math.max(parseInt(params.page ?? DEFAULT_PAGE.toString()) || DEFAULT_PAGE, 1);
+  const offset = (page - 1) * limit;
   
   // Get total count for pagination metadata
   const totalCountResult = await db
@@ -402,50 +406,36 @@ async function getSessions(params: z.infer<typeof SessionsGetQueryParamsSchema>,
   
   const totalCount = totalCountResult[0]?.count ?? 0;
   
-  // Build cursor-based query
-  let whereConditions = [getSessionListFilter(params, clientId)];
-  
-  // Apply cursor filter if provided
-  if (params.cursor) {
-    const cursorDate = new Date(params.cursor);
-    whereConditions.push(sql`sessions.updated_at < ${cursorDate}`);
-  }
-  
-  const query = db
+  // Get sessions with pagination
+  const result = await db
     .select()
     .from(sessions)
     .leftJoin(clients, eq(sessions.clientId, clients.id))
-    .where(and(...whereConditions))
+    .where(getSessionListFilter(params, clientId))
     .orderBy(desc(sessions.updatedAt))
-    .limit(limit + 1); // Get one extra to determine if there's a next page
+    .limit(limit)
+    .offset(offset);
   
-  const result = await query;
-  
-  // Check if there's a next page
-  const hasNextPage = result.length > limit;
-  const sessionsData = hasNextPage ? result.slice(0, limit) : result;
-  
-  // Calculate pagination metadata
-  const hasPreviousPage = !!params.cursor;
-  const nextCursor = hasNextPage ? sessionsData[sessionsData.length - 1]?.sessions.updatedAt : null;
-  const previousCursor = hasPreviousPage ? sessionsData[0]?.sessions.updatedAt : null;
-  
-  const currentPageStart = hasPreviousPage ? 1 : 1; // This would need to be calculated based on actual position
-  const currentPageEnd = sessionsData.length;
-  
-  const sessionsResult = sessionsData.map((row) => ({
+  const sessionsResult = result.map((row) => ({
     ...row.sessions,
     client: row.clients!,
   }));
   
+  // Calculate pagination metadata
+  const totalPages = Math.ceil(totalCount / limit);
+  const hasNextPage = page < totalPages;
+  const hasPreviousPage = page > 1;
+  const currentPageStart = offset + 1;
+  const currentPageEnd = Math.min(offset + limit, totalCount);
+  
   return {
     sessions: sessionsResult,
     pagination: {
+      totalCount,
+      page,
+      limit,
       hasNextPage,
       hasPreviousPage,
-      nextCursor,
-      previousCursor,
-      totalCount,
       currentPageStart,
       currentPageEnd,
     }

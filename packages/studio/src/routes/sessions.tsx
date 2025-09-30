@@ -2,15 +2,14 @@ import { useLoaderData, Outlet, Link, Form, data, NavLink } from "react-router";
 import type { LoaderFunctionArgs, RouteObject } from "react-router";
 
 import { Button } from "~/components/ui/button";
-import { PlusIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from "lucide-react";
 import { Header, HeaderTitle } from "~/components/header";
 import { getListParams, toQueryParams } from "~/lib/utils";
 import { apiFetch } from "~/lib/apiFetch";
-import type { SessionBase, SessionsPaginatedResponse } from "~/lib/shared/apiTypes";
+import type { Pagination, SessionBase, SessionsPaginatedResponse } from "~/lib/shared/apiTypes";
 import { timeAgoShort } from "~/lib/timeAgo";
 import { useSessionContext } from "~/lib/SessionContext";
 import { NotificationBadge } from "~/components/NotificationBadge";
-import { PaginationControls } from "~/components/PaginationControls";
 
 async function loader({ request }: LoaderFunctionArgs) {
   const listParams = getListParams(request);
@@ -47,7 +46,7 @@ function Component() {
         </div>}
       </Header>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto pb-12">
         {sessions.length > 0 && sessions.map(session => <SessionCard session={session} listParams={listParams} sessionStats={allStats.sessions[session.id]} />)}
         {sessions.length === 0 && <div className="px-3 py-4 text-muted-foreground">No sessions available.</div>}
         <PaginationControls pagination={pagination} listParams={listParams} />
@@ -58,6 +57,39 @@ function Component() {
     <Outlet />
   </div>
 }
+
+function PaginationControls({ pagination, listParams }: { pagination: Pagination, listParams: ReturnType<typeof getListParams> }) {
+  const { hasNextPage, hasPreviousPage, totalCount, currentPageStart, currentPageEnd, page } = pagination;
+  
+  return (<div className="flex flex-row justify-center">
+    <div className="px-3 py-2 text-xs text-muted-foreground flex items-center gap-1">
+      <div className="flex items-center gap-2">
+        {hasPreviousPage && (
+          <Button variant="ghost" size="xs" asChild>
+            <Link to={`/sessions?${toQueryParams({...listParams, page: page - 1})}`}>
+              <ChevronLeftIcon/>
+            </Link>
+          </Button>
+        )}
+      </div>
+      
+      <div className="text-center">
+        {currentPageStart}-{currentPageEnd} of {totalCount}
+      </div>
+      
+      <div className="flex items-center gap-2">
+        {hasNextPage && (
+          <Button variant="ghost" size="xs" asChild>
+            <Link to={`/sessions?${toQueryParams({...listParams, page: page + 1})}`}>
+              <ChevronRightIcon/>
+            </Link>
+          </Button>
+        )}
+      </div>
+    </div>
+    </div>);
+}
+
 
 
 export function SessionCard({ session, listParams, sessionStats }: { session: SessionBase, listParams: ReturnType<typeof getListParams>, sessionStats: any }) {

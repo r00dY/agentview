@@ -181,13 +181,13 @@ export type UserUpdate = z.infer<typeof UserUpdateSchema>
 export const allowedSessionLists = ["real", "simulated_private", "simulated_shared"]
 
 export const PaginationSchema = z.object({
+  page: z.number(),
+  limit: z.number(),
+  totalCount: z.number(),
   hasNextPage: z.boolean(),
   hasPreviousPage: z.boolean(),
-  nextCursor: z.string().nullable(),
-  previousCursor: z.string().nullable(),
-  totalCount: z.number(),
   currentPageStart: z.number(),
-  currentPageEnd: z.number(),
+  currentPageEnd: z.number()
 })
 
 export type Pagination = z.infer<typeof PaginationSchema>
