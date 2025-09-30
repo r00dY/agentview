@@ -348,8 +348,8 @@ app.openapi(apiClientsPUTRoute, async (c) => {
 const SessionsGetQueryParamsSchema = z.object({
   agent: z.string().optional(),
   list: z.enum(allowedSessionLists).optional(),
-  page: z.number().optional(),
-  limit: z.number().optional(),
+  page: z.string().optional(),
+  limit: z.string().optional(),
 })
 
 function getSessionListFilter(params: z.infer<typeof SessionsGetQueryParamsSchema>, clientId?: string) {
@@ -390,14 +390,21 @@ const sessionsGETRoute = createRoute({
 })
 
 async function getSessions(params: z.infer<typeof SessionsGetQueryParamsSchema>, clientId: string) {
+  const DEFAULT_LIMIT = 50
+  const DEFAULT_PAGE = 1
+
+  const limit = Math.max(parseInt(params.limit ?? DEFAULT_LIMIT.toString()) || DEFAULT_LIMIT, 1);
+  const page = Math.max(parseInt(params.page ?? DEFAULT_PAGE.toString()) || DEFAULT_PAGE, 1);
+  const offset = (page - 1) * limit;
+
   const result = await db
     .select()
     .from(sessions)
     .leftJoin(clients, eq(sessions.clientId, clients.id))
     .where(getSessionListFilter(params, clientId))
     .orderBy(desc(sessions.updatedAt))
-    .limit(params.limit ?? 10)
-    .offset(params.page ?? 0);
+    .limit(limit)
+    .offset(offset);
 
   return result.map((row) => ({
     ...row.sessions,

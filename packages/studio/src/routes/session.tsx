@@ -8,7 +8,7 @@ import { apiFetch } from "~/lib/apiFetch";
 import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
 import { getLastRun, getAllSessionItems, getVersions } from "~/lib/shared/sessionUtils";
 import { type Session } from "~/lib/shared/apiTypes";
-import { getListParams } from "~/lib/utils";
+import { getListParams, toQueryParams } from "~/lib/utils";
 import { PropertyList } from "~/components/PropertyList";
 import { MessageCircleIcon, MessageSquareTextIcon, SendHorizonalIcon, Share, SquareIcon, UserIcon, UsersIcon } from "lucide-react";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
@@ -30,10 +30,7 @@ async function loader({ request, params }: LoaderFunctionArgs) {
         throw data(response.error, { status: response.status })
     }
 
-    const listParams = getListParams(request)
-
     return {
-        listParams,
         session: response.data
     };
 }
@@ -46,8 +43,6 @@ function SessionPage() {
 
     const [session, setSession] = useState(loaderData.session)
     const [isStreaming, setStreaming] = useState(false)
-
-    const listParams = loaderData.listParams
 
     const [searchParams, setSearchParams] = useSearchParams();
     const activeItems = getAllSessionItems(session, { activeOnly: true })
@@ -172,7 +167,7 @@ function SessionPage() {
             <Header>
                 <HeaderTitle title={`Session ${session.number}`} />
 
-                <ShareForm session={session} listParams={listParams} />
+                <ShareForm session={session} />
             </Header>
             <div className="flex-1 overflow-y-auto">
 
@@ -194,14 +189,14 @@ function SessionPage() {
                                 content = <itemConfig.display value={item.content} options={itemConfig.options} />
                             }
 
-                            return <div className={`px-6 py-4  ${params.itemId === item.id ? "bg-stone-50" : "hover:bg-gray-50"}`} onClick={() => { navigate(`/sessions/${session.id}/items/${item.id}?list=${listParams.list}&agent=${listParams.agent}`) }}>
+                            return <div className={`px-6 py-4  ${params.itemId === item.id ? "bg-stone-50" : "hover:bg-gray-50"}`} onClick={() => { navigate(`/sessions/${session.id}/items/${item.id}?${toQueryParams(listParams)}`) }}>
                                 {content}
                             </div>
 
 
                             // return <itemView
                             //     item={item}
-                            //     onSelect={(a) => { navigate(`/sessions/${session.id}/items/${a?.id}?list=${listParams.list}&agent=${listParams.agent}`) }}
+                            //     onSelect={(a) => { navigate(`/sessions/${session.id}/items/${a?.id}?${toQueryParams(listParams)}`) }}
                             //     selected={params.itemId === item.id}
                             // />
                         })}
@@ -243,7 +238,7 @@ function SessionPage() {
                             </div>,
                             // itemComponent: <div 
                             //     className={`relative pl-6 py-2 pr-[444px] group ${params.itemId === item.id ? "bg-gray-50" : "hover:bg-gray-50"}`} 
-                            //     onClick={() => { navigate(`/sessions/${session.id}/items/${item?.id}?list=${listParams.list}&agent=${listParams.agent}`) }}>
+                            //     onClick={() => { navigate(`/sessions/${session.id}/items/${item?.id}?${toQueryParams(listParams)}`) }}>
 
                             //     {content}
                             //     {/* { !hasComments && <div className="absolute top-[8px] right-[408px] opacity-0 group-hover:opacity-100">
@@ -327,14 +322,8 @@ function SessionDetails({ session, agentConfig }: { session: Session, agentConfi
     );
 }
 
-function ShareForm({ session, listParams }: { session: Session, listParams: ReturnType<typeof getListParams> }) {
+function ShareForm({ session }: { session: Session}) {
     const fetcher = useFetcher();
-    const navigate = useNavigate();
-
-    useFetcherSuccess(fetcher, () => {
-        navigate(`/sessions/${session.id}?list=${listParams.list}&agent=${listParams.agent}`);
-    });
-
     if (session.client.isShared) {
         return <div className="flex flex-row gap-1 items-center text-xs text-white bg-cyan-700 px-2 py-1 rounded-md font-medium"><UsersIcon className="size-3" />Shared</div>
         // return <Badge>Public</Badge>

@@ -4,7 +4,7 @@ import type { LoaderFunctionArgs, RouteObject } from "react-router";
 import { Button } from "~/components/ui/button";
 import { PlusIcon } from "lucide-react";
 import { Header, HeaderTitle } from "~/components/header";
-import { getListParams } from "~/lib/utils";
+import { getListParams, toQueryParams } from "~/lib/utils";
 import { apiFetch } from "~/lib/apiFetch";
 import type { Session } from "~/lib/shared/apiTypes";
 import { timeAgoShort } from "~/lib/timeAgo";
@@ -13,14 +13,13 @@ import { NotificationBadge } from "~/components/NotificationBadge";
 
 async function loader({ request }: LoaderFunctionArgs) {
   const listParams = getListParams(request);
-  const sessionsResponse = await apiFetch<Session[]>(`/api/sessions?agent=${listParams.agent}&list=${listParams.list}`);
-
+  
+  const sessionsResponse = await apiFetch<Session[]>(`/api/sessions?${toQueryParams(listParams)}`);
   if (!sessionsResponse.ok) {
     throw data(sessionsResponse.error, { status: sessionsResponse.status });
   }
 
-  const statsResponse = await apiFetch<any>(`/api/sessions/stats?agent=${listParams.agent}&list=${listParams.list}&granular=true`);
-
+  const statsResponse = await apiFetch<any>(`/api/sessions/stats?${toQueryParams(listParams)}&granular=true`);
   if (!statsResponse.ok) {
     throw data(statsResponse.error, { status: statsResponse.status });
   }
@@ -42,7 +41,7 @@ function Component() {
       <Header className="px-3">
         <HeaderTitle title={`${listParams.list === "real" ? "Sessions" : listParams.list === "simulated_private" ? "Private Sessions" : "Shared Sessions"}`} />
         {listParams.list !== "real" && <div>
-          <Button variant="outline" size="sm" asChild><Link to={`/sessions/new?agent=${listParams.agent}&list=${listParams.list}`}><PlusIcon />New Session</Link></Button>
+          <Button variant="outline" size="sm" asChild><Link to={`/sessions/new?${toQueryParams(listParams)}`}><PlusIcon />New Session</Link></Button>
         </div>}
       </Header>
 
@@ -78,7 +77,7 @@ export function SessionCard({ session, listParams, sessionStats }: { session: Se
   const hasUnreads = hasSessionUnreads || hasUnreadItems;
 
   return <div key={session.id}>
-    <NavLink to={`/sessions/${session.id}?list=${listParams.list}&agent=${listParams.agent}`}>
+    <NavLink to={`/sessions/${session.id}?${toQueryParams(listParams)}`}>
       {({ isActive }) => (
         <div className={`p-3 border-b hover:bg-gray-50 transition-colors duration-50 ${isActive ? 'bg-gray-100' : ''}`}>
           <div className="flex flex-col gap-1">

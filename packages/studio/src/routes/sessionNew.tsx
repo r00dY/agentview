@@ -4,7 +4,7 @@ import { Header, HeaderTitle } from "~/components/header";
 import { Button } from "~/components/ui/button";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { apiFetch } from "~/lib/apiFetch";
-import { getListParams } from "~/lib/utils";
+import { getListParams, toQueryParams } from "~/lib/utils";
 import { type ActionResponse } from "~/lib/errors";
 import { config } from "~/config";
 import { AlertCircleIcon } from "lucide-react";
@@ -49,7 +49,7 @@ async function loader({ request }: LoaderFunctionArgs) {
     throw data(sessionResponse.error, { status: sessionResponse.status });
   }
 
-  return redirect(`/sessions/${sessionResponse.data.id}?list=${listParams.list}&agent=${listParams.agent}`);
+  return redirect(`/sessions/${sessionResponse.data.id}?${toQueryParams(listParams)}`);
 }
 
 async function action({ request, params }: ActionFunctionArgs): Promise<ActionResponse | Response> {
@@ -83,7 +83,7 @@ async function action({ request, params }: ActionFunctionArgs): Promise<ActionRe
     return { ok: false, error: sessionResponse.error };
   }
 
-  return redirect(`/sessions/${sessionResponse.data.id}?list=${listParams.list}&agent=${listParams.agent}`);
+  return redirect(`/sessions/${sessionResponse.data.id}?${toQueryParams(listParams)}`);
 }
 
 function Component() {
