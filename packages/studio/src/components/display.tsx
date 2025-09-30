@@ -54,10 +54,14 @@ export function ItemUserMessageComponent({ value, options }: DisplayComponentPro
     </div>
 }
 
+// export function ItemAssistantMessageComponent({ value, options }: DisplayComponentProps<string>) {
+//     return <div className="relative pr-[10%]">
+//         <div className="border p-3 rounded-lg bg-muted">
+//             <div className="prose prose-ul:list-disc prose-ol:list-decimal prose-a:underline" dangerouslySetInnerHTML={{__html: marked.parse(value, { async: false })}}></div>
+//         </div>
+//     </div>
+// }
+
 export function ItemAssistantMessageComponent({ value, options }: DisplayComponentProps<string>) {
-    return <div className="relative pr-[10%]">
-        <div className="border p-3 rounded-lg bg-muted">
-            <div className="prose prose-ul:list-disc prose-ol:list-decimal prose-a:underline" dangerouslySetInnerHTML={{__html: marked.parse(value, { async: false })}}></div>
-        </div>
-    </div>
+    return <div className="pt-2 pb-3 prose prose-ul:list-disc prose-ol:list-decimal prose-a:underline" dangerouslySetInnerHTML={{__html: marked.parse(value, { async: false })}}></div>
 }

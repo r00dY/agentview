@@ -10,7 +10,7 @@ import { getLastRun, getAllSessionItems, getVersions } from "~/lib/shared/sessio
 import { type Session } from "~/lib/shared/apiTypes";
 import { getListParams, toQueryParams } from "~/lib/utils";
 import { PropertyList } from "~/components/PropertyList";
-import { MessageCircleIcon, MessageSquareTextIcon, SendHorizonalIcon, Share, SquareIcon, UserIcon, UsersIcon } from "lucide-react";
+import { AlertCircleIcon, MessageCircleIcon, MessageSquareTextIcon, SendHorizonalIcon, Share, SquareIcon, UserIcon, UsersIcon } from "lucide-react";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
 import { useSessionContext } from "~/lib/SessionContext";
 import type { SessionItemConfig, AgentConfig } from "~/types";
@@ -22,6 +22,8 @@ import { CommentSessionFloatingBox } from "~/components/comments";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody } from "~/components/ui/dialog";
 import { config } from "~/config";
 import { requireAgentConfig } from "~/lib/config";
+import { Loader } from "~/components/Loader";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 
 async function loader({ request, params }: LoaderFunctionArgs) {
     const response = await apiFetch<Session>(`/api/sessions/${params.id}`);
@@ -51,7 +53,6 @@ function SessionPage() {
     const agentConfig = requireAgentConfig(config, session.agent);
 
     const selectedItemId = activeItems.find((a: any) => a.id === searchParams.get('itemId'))?.id ?? undefined;
-
 
     const setselectedItemId = (id: string | undefined) => {
         if (id === selectedItemId) {
@@ -221,13 +222,13 @@ function SessionPage() {
 
                         return {
                             id: item.id,
-                            itemComponent: <div 
-                                className={`relative pl-6 py-2 pr-[420px] group ${selectedItemId === item.id ? "bg-gray-50" : "hover:bg-gray-50"}`} 
+                            itemComponent: <div
+                                className={`relative pl-6 py-2 pr-[420px] group ${selectedItemId === item.id ? "bg-gray-50" : "hover:bg-gray-50"}`}
                                 onClick={() => {
-                                     if (selectedItemId === item.id) { 
-                                        setselectedItemId(undefined) 
-                                    } else { 
-                                        setselectedItemId(item?.id) 
+                                    if (selectedItemId === item.id) {
+                                        setselectedItemId(undefined)
+                                    } else {
+                                        setselectedItemId(item?.id)
                                     }
                                 }}
                             >
@@ -245,8 +246,8 @@ function SessionPage() {
                             //         <Button variant="outline" size="icon_xs" onClick={() => { setselectedItemId(item.id) }}><MessageSquareTextIcon /></Button>
                             //     </div>} */}
                             // </div>,
-                            commentsComponent: (hasComments || (selectedItemId === item.id)) ? 
-                            <div className="relative pt-2 pr-4"><CommentSessionFloatingBox
+                            commentsComponent: (hasComments || (selectedItemId === item.id)) ?
+                                <div className="relative pt-2 pr-4"><CommentSessionFloatingBox
                                     item={item}
                                     session={session}
                                     selected={selectedItemId === item.id}
@@ -254,11 +255,34 @@ function SessionPage() {
                                 /></div> : undefined
                         }
                     })} selectedItemId={selectedItemId}
+                        belowElement={<div className="px-6 pt-3 pr-[420px]">
+                            <div className="pr-[10%]">
+
+                            {lastRun?.state === "in_progress" && <div className="text-muted-foreground">
+                                <Loader />
+                            </div>}
+
+                            {lastRun?.state === "failed" && <Alert variant="destructive">
+                                <AlertCircleIcon />
+                                {/* <AlertTitle>Run failed.</AlertTitle> */}
+                                <AlertDescription>{lastRun?.failReason?.message ?? "Unknown reason"}</AlertDescription>
+                            </Alert>}
+
+                            {/* {lastRun?.state === "failed" && <div className="text-red-500 flex items-center gap-2">
+                                {lastRun?.failReason?.message ?? "Unknown reason"}
+                                {lastRun?.responseData && <Button variant="outline" size="sm" onClick={() => {
+                                    console.log(lastRun.responseData)
+                                }}>Log details</Button>}
+                            </div>} */}
+                            </div>
+
+                        </div>}
                     />
 
                 </div>
 
             </div>
+
 
             {session.client.simulatedBy === user.id && <InputForm session={session} agentConfig={agentConfig} />}
 
@@ -322,7 +346,7 @@ function SessionDetails({ session, agentConfig }: { session: Session, agentConfi
     );
 }
 
-function ShareForm({ session }: { session: Session}) {
+function ShareForm({ session }: { session: Session }) {
     const fetcher = useFetcher();
     if (session.client.isShared) {
         return <div className="flex flex-row gap-1 items-center text-xs text-white bg-cyan-700 px-2 py-1 rounded-md font-medium"><UsersIcon className="size-3" />Shared</div>
@@ -344,8 +368,6 @@ function InputForm({ session, agentConfig }: { session: Session, agentConfig: Ag
     const [formError, setFormError] = useState<string | null>(null)
 
     const lastRun = getLastRun(session)
-    const sessionStatus = lastRun?.state === "completed" ? "idle" : (lastRun?.state ?? "idle")
-
     const revalidator = useRevalidator()
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -459,17 +481,6 @@ function InputForm({ session, agentConfig }: { session: Session, agentConfig: Ag
                 }}>Cancel <SquareIcon /></Button>}
 
                 <div className="gap-2 text-sm text-muted-foreground">
-                    {!formError && <div>
-                        {sessionStatus === "in_progress" && <div>Running...</div>}
-                        {sessionStatus === "failed" && (
-                            <div className="text-red-500 flex items-center gap-2">
-                                {lastRun?.failReason?.message ?? "Unknown reason"}
-                                {lastRun?.responseData && <Button variant="outline" size="sm" onClick={() => {
-                                    console.log(lastRun.responseData)
-                                }}>Log details</Button>}
-                            </div>
-                        )}
-                    </div>}
                     {formError && <div className="text-red-500">{formError}</div>}
                 </div>
 
@@ -498,6 +509,6 @@ function InputFormFields({ inputConfig }: { inputConfig: SessionItemConfig }) {
 }
 
 export const sessionRoute: RouteObject = {
-  Component,
-  loader,
+    Component,
+    loader,
 }

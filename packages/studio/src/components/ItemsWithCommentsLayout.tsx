@@ -13,9 +13,10 @@ export type ItemsWithCommentsLayoutProps = {
         commentsComponent?: React.ReactNode;
     }[];
     selectedItemId?: string;
+    belowElement?: React.ReactNode;
 }
 
-export function ItemsWithCommentsLayout({ items, selectedItemId }: ItemsWithCommentsLayoutProps) {
+export function ItemsWithCommentsLayout({ items, selectedItemId, belowElement }: ItemsWithCommentsLayoutProps) {
     const selectedItem = items.find(item => item.id === selectedItemId);
 
     // Refs for items and comment boxes
@@ -158,6 +159,8 @@ export function ItemsWithCommentsLayout({ items, selectedItemId }: ItemsWithComm
                         {item.itemComponent}
                     </div>
                 ))}
+
+                {belowElement}
 
                 <div className="h-[300px]" /> {/* TODO: safe area that prevents bottom of page to jump too much when bottom comment section is resized */}
 
