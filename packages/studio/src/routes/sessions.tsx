@@ -6,15 +6,16 @@ import { PlusIcon } from "lucide-react";
 import { Header, HeaderTitle } from "~/components/header";
 import { getListParams, toQueryParams } from "~/lib/utils";
 import { apiFetch } from "~/lib/apiFetch";
-import type { Session } from "~/lib/shared/apiTypes";
+import type { SessionBase, SessionsPaginatedResponse } from "~/lib/shared/apiTypes";
 import { timeAgoShort } from "~/lib/timeAgo";
 import { useSessionContext } from "~/lib/SessionContext";
 import { NotificationBadge } from "~/components/NotificationBadge";
+import { PaginationControls } from "~/components/PaginationControls";
 
 async function loader({ request }: LoaderFunctionArgs) {
   const listParams = getListParams(request);
 
-  const sessionsResponse = await apiFetch<Session[]>(`/api/sessions?${toQueryParams(listParams)}`);
+  const sessionsResponse = await apiFetch<SessionsPaginatedResponse>(`/api/sessions?${toQueryParams(listParams)}`);
   if (!sessionsResponse.ok) {
     throw data(sessionsResponse.error, { status: sessionsResponse.status });
   }
@@ -25,14 +26,15 @@ async function loader({ request }: LoaderFunctionArgs) {
   }
 
   return {
-    sessions: sessionsResponse.data,
+    sessions: sessionsResponse.data.sessions,
+    pagination: sessionsResponse.data.pagination,
     allStats: statsResponse.data,
     listParams
   }
 }
 
 function Component() {
-  const { sessions, listParams, allStats } = useLoaderData<typeof loader>();
+  const { sessions, pagination, listParams, allStats } = useLoaderData<typeof loader>();
 
   return <div className="flex flex-row items-stretch h-full">
 
@@ -46,11 +48,9 @@ function Component() {
       </Header>
 
       <div className="flex-1 overflow-y-auto">
-        <div className="px-3 py-1 text-xs text-muted-foreground border-b">
-        Page 1 of 10
-        </div>
-        {sessions.length > 0 && sessions.map((session) => <SessionCard session={session} listParams={listParams} sessionStats={allStats.sessions[session.id]} />)}
+        {sessions.length > 0 && sessions.map(session => <SessionCard session={session} listParams={listParams} sessionStats={allStats.sessions[session.id]} />)}
         {sessions.length === 0 && <div className="px-3 py-4 text-muted-foreground">No sessions available.</div>}
+        <PaginationControls pagination={pagination} listParams={listParams} />
       </div>
 
     </div>
@@ -60,7 +60,7 @@ function Component() {
 }
 
 
-export function SessionCard({ session, listParams, sessionStats }: { session: Session, listParams: ReturnType<typeof getListParams>, sessionStats: any }) {
+export function SessionCard({ session, listParams, sessionStats }: { session: SessionBase, listParams: ReturnType<typeof getListParams>, sessionStats: any }) {
   const { user } = useSessionContext();
   const date = session.createdAt;
 

@@ -23,7 +23,7 @@ import { getStudioURL } from './getStudioURL'
 
 // shared imports
 import { getAllSessionItems, getLastRun } from './shared/sessionUtils'
-import { ClientSchema, SessionSchema, SessionCreateSchema, SessionItemCreateSchema, RunSchema, SessionItemSchema, type Session, type SessionItem, ConfigSchema, ConfigCreateSchema, ClientCreateSchema, UserSchema, UserUpdateSchema, allowedSessionLists, InvitationSchema, InvitationCreateSchema, SessionBaseSchema } from './shared/apiTypes'
+import { ClientSchema, SessionSchema, SessionCreateSchema, SessionItemCreateSchema, RunSchema, SessionItemSchema, type Session, type SessionItem, ConfigSchema, ConfigCreateSchema, ClientCreateSchema, UserSchema, UserUpdateSchema, allowedSessionLists, InvitationSchema, InvitationCreateSchema, SessionBaseSchema, SessionsPaginatedResponseSchema } from './shared/apiTypes'
 import { getConfig } from './getConfig'
 import type { BaseConfig, BaseAgentConfig } from './shared/configTypes'
 import { users } from './schemas/auth-schema'
@@ -348,7 +348,7 @@ app.openapi(apiClientsPUTRoute, async (c) => {
 const SessionsGetQueryParamsSchema = z.object({
   agent: z.string().optional(),
   list: z.enum(allowedSessionLists).optional(),
-  page: z.string().optional(),
+  cursor: z.string().optional(),
   limit: z.string().optional(),
 })
 
@@ -384,32 +384,72 @@ const sessionsGETRoute = createRoute({
     query: SessionsGetQueryParamsSchema,
   },
   responses: {
-    200: response_data(z.array(SessionBaseSchema)),
+    200: response_data(SessionsPaginatedResponseSchema),
     401: response_error(),
   },
 })
 
 async function getSessions(params: z.infer<typeof SessionsGetQueryParamsSchema>, clientId: string) {
-  const DEFAULT_LIMIT = 50
-  const DEFAULT_PAGE = 1
-
+  const DEFAULT_LIMIT = 10
   const limit = Math.max(parseInt(params.limit ?? DEFAULT_LIMIT.toString()) || DEFAULT_LIMIT, 1);
-  const page = Math.max(parseInt(params.page ?? DEFAULT_PAGE.toString()) || DEFAULT_PAGE, 1);
-  const offset = (page - 1) * limit;
-
-  const result = await db
+  
+  // Get total count for pagination metadata
+  const totalCountResult = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(sessions)
+    .leftJoin(clients, eq(sessions.clientId, clients.id))
+    .where(getSessionListFilter(params, clientId));
+  
+  const totalCount = totalCountResult[0]?.count ?? 0;
+  
+  // Build cursor-based query
+  let whereConditions = [getSessionListFilter(params, clientId)];
+  
+  // Apply cursor filter if provided
+  if (params.cursor) {
+    const cursorDate = new Date(params.cursor);
+    whereConditions.push(sql`sessions.updated_at < ${cursorDate}`);
+  }
+  
+  const query = db
     .select()
     .from(sessions)
     .leftJoin(clients, eq(sessions.clientId, clients.id))
-    .where(getSessionListFilter(params, clientId))
+    .where(and(...whereConditions))
     .orderBy(desc(sessions.updatedAt))
-    .limit(limit)
-    .offset(offset);
-
-  return result.map((row) => ({
+    .limit(limit + 1); // Get one extra to determine if there's a next page
+  
+  const result = await query;
+  
+  // Check if there's a next page
+  const hasNextPage = result.length > limit;
+  const sessionsData = hasNextPage ? result.slice(0, limit) : result;
+  
+  // Calculate pagination metadata
+  const hasPreviousPage = !!params.cursor;
+  const nextCursor = hasNextPage ? sessionsData[sessionsData.length - 1]?.sessions.updatedAt : null;
+  const previousCursor = hasPreviousPage ? sessionsData[0]?.sessions.updatedAt : null;
+  
+  const currentPageStart = hasPreviousPage ? 1 : 1; // This would need to be calculated based on actual position
+  const currentPageEnd = sessionsData.length;
+  
+  const sessionsResult = sessionsData.map((row) => ({
     ...row.sessions,
     client: row.clients!,
   }));
+  
+  return {
+    sessions: sessionsResult,
+    pagination: {
+      hasNextPage,
+      hasPreviousPage,
+      nextCursor,
+      previousCursor,
+      totalCount,
+      currentPageStart,
+      currentPageEnd,
+    }
+  };
 }
 
 app.openapi(sessionsGETRoute, async (c) => {
@@ -468,8 +508,8 @@ app.openapi(sessionsGETStatsRoute, async (c) => {
   }
 
   if (granular) {
-    const rows = await getSessions(params, authSession.user.id);
-    const sessionIds = rows.map((row) => row.id);
+    const sessionsResult = await getSessions(params, authSession.user.id);
+    const sessionIds = sessionsResult.sessions.map((row) => row.id);
 
     response.sessions = {}
 

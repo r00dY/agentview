@@ -81,10 +81,10 @@ export function getListParams(request: Request) {
     throw new Error(`Session agent is required`);
   }
 
-  const page = url.searchParams.get('page') ?? undefined
+  const cursor = url.searchParams.get('cursor') ?? undefined
   const limit = url.searchParams.get('limit') ?? undefined
 
-  return { list, agent, page, limit }
+  return { list, agent, cursor, limit }
 }
 
 export function toQueryParams(obj: Record<string, any>) {
