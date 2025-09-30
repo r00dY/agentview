@@ -13,7 +13,7 @@ import { NotificationBadge } from "~/components/NotificationBadge";
 
 async function loader({ request }: LoaderFunctionArgs) {
   const listParams = getListParams(request);
-  
+
   const sessionsResponse = await apiFetch<Session[]>(`/api/sessions?${toQueryParams(listParams)}`);
   if (!sessionsResponse.ok) {
     throw data(sessionsResponse.error, { status: sessionsResponse.status });
@@ -46,6 +46,9 @@ function Component() {
       </Header>
 
       <div className="flex-1 overflow-y-auto">
+        <div className="px-3 py-1 text-xs text-muted-foreground border-b">
+        Page 1 of 10
+        </div>
         {sessions.length > 0 && sessions.map((session) => <SessionCard session={session} listParams={listParams} sessionStats={allStats.sessions[session.id]} />)}
         {sessions.length === 0 && <div className="px-3 py-4 text-muted-foreground">No sessions available.</div>}
       </div>
