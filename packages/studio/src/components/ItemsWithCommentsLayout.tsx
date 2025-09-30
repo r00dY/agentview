@@ -167,7 +167,7 @@ export function ItemsWithCommentsLayout({ items, selectedItemId, belowElement }:
                 <div ref={bottomSpacerRef}/>
             </div>
 
-            <div ref={containerRef} className="w-[400px] absolute left-[680px] top-0 overflow-hidden h-full pointer-events-none">
+            <div ref={containerRef} className="w-[400px] absolute left-[800px] top-0 overflow-hidden h-full pointer-events-none">
                 {items.map((item) => {
                     if (!item.commentsComponent) {
                         return null;

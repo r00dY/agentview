@@ -220,8 +220,6 @@ function SessionPage() {
                             content = <itemConfig.displayComponent value={item.content} options={itemConfig.options} />
                         }
 
-                        console.log(item.content)
-
                         return {
                             id: item.id,
                             itemComponent: <div
