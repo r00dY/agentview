@@ -145,7 +145,7 @@ export function ItemsWithCommentsLayout({ items, selectedItemId, belowElement }:
     // const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
     return (
-        <div className="flex flex-row gap-4 relative">
+        <div className="flex flex-row gap-4 relative pt-6">
             <div className="flex-1 flex flex-col">
                 {items.map((item) => (
                     <div
@@ -167,7 +167,7 @@ export function ItemsWithCommentsLayout({ items, selectedItemId, belowElement }:
                 <div ref={bottomSpacerRef}/>
             </div>
 
-            <div ref={containerRef} className="w-[400px] absolute left-[800px] top-0 overflow-hidden h-full pointer-events-none">
+            <div ref={containerRef} className="w-[400px] absolute left-[768px] top-0 overflow-hidden h-full pointer-events-none">
                 {items.map((item) => {
                     if (!item.commentsComponent) {
                         return null;

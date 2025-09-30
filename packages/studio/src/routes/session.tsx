@@ -10,7 +10,7 @@ import { getLastRun, getAllSessionItems, getVersions } from "~/lib/shared/sessio
 import { type Session } from "~/lib/shared/apiTypes";
 import { getListParams, toQueryParams } from "~/lib/utils";
 import { PropertyList } from "~/components/PropertyList";
-import { AlertCircleIcon, MessageCircleIcon, MessageCirclePlus, MessageSquareTextIcon, SendHorizonalIcon, Share, SquareIcon, UserIcon, UsersIcon } from "lucide-react";
+import { AlertCircleIcon, InfoIcon, MessageCircleIcon, MessageCirclePlus, MessageSquareTextIcon, PlayCircleIcon, ReceiptIcon, ReceiptText, SendHorizonalIcon, Share, SquareIcon, ThumbsDown, ThumbsUp, UserIcon, UsersIcon, WrenchIcon } from "lucide-react";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
 import { useSessionContext } from "~/lib/SessionContext";
 import type { SessionItemConfig, AgentConfig } from "~/types";
@@ -165,9 +165,9 @@ function SessionPage() {
         {/* <div className="basis-[720px] flex-shrink-0 flex-grow-0 border-r  flex flex-col"> */}
         <div className="flex-shrink-0 flex-grow-1 border-r  flex flex-col">
 
+
             <Header>
                 <HeaderTitle title={`Session ${session.number}`} />
-
                 <ShareForm session={session} />
             </Header>
             <div className="flex-1 overflow-y-auto">
@@ -233,18 +233,30 @@ function SessionPage() {
                                 //     }
                                 // }}
                             >
-                                <div className="absolute pl-2 left-[800px] pt-2 text-muted-foreground text-xs font-medium group-hover:visible invisible animate-none">
-                                    <Button variant="outline" size="icon_xs" onClick={() => { setselectedItemId(item.id) }}><MessageCirclePlus className="size-3" /></Button>
+                                <div className="absolute pl-2 left-[720px] pt-2 text-muted-foreground text-xs font-medium flex flex-row gap-1">
+
+                                    {/* { item.role === "user" && <Button variant="ghost" size="xs" onClick={() => { setselectedItemId(item.id) }}><InfoIcon className="size-4" /></Button> } */}
+                                    { !hasComments && <Button className="group-hover:visible invisible" variant="outline" size="icon_xs" onClick={() => { setselectedItemId(item.id) }}><MessageCirclePlus className="size-3" /></Button> }
+
                                     {/* <MessageCirclePlus className="size-3" /> */}
                                 </div>
                                 {/* <div className="absolute left-0 pl-6 pt-2 ">
                                     { item.role === "user" && <div className="text-muted-foreground text-xs ">
-                                        #1
+                                        <PlayCircleIcon className="size-3" />
                                     </div> }
 
                                 </div> */}
-                                <div className="relative max-w-[800px] py-2 pl-6">
+                                <div className="relative max-w-[720px] py-2 pl-6">
+
                                 {content}
+
+                                { item.role === "assistant" && <div className="text-xs flex justify-start mb-8 mt-2 gap-1 text-muted-foreground">
+                                    <Button variant="outline" size="icon_xs"><ThumbsUp className="size-4" /></Button>
+
+                                    <Button variant="outline" size="icon_xs"><ThumbsDown className="size-4" /></Button>
+
+                                    <Button variant="outline" size="xs">Details <WrenchIcon className="size-4" /></Button>
+                                    </div> }
                                 </div>
                                 {/* { !hasComments && <div className="absolute top-[8px] right-[408px] opacity-0 group-hover:opacity-100">
                                     <Button variant="outline" size="icon_xs" onClick={() => { setselectedItemId(item.id) }}><MessageSquareTextIcon /></Button>
@@ -431,6 +443,8 @@ function InputForm({ session, agentConfig }: { session: Session, agentConfig: Ag
 
     return <div className="p-6 border-t">
 
+        <div className="max-w-[720px]">
+
         {inputConfigs.length === 0 && <div className="text-sm text-muted-foreground">No input fields</div>}
 
         <form method="post" onSubmit={handleSubmit}>
@@ -499,6 +513,7 @@ function InputForm({ session, agentConfig }: { session: Session, agentConfig: Ag
 
             </div>
         </form>
+        </div>
     </div>
 }
 
