@@ -8,7 +8,7 @@ import { apiFetch } from "~/lib/apiFetch";
 import type { ActionResponse } from "~/lib/errors";
 
 async function loader({ params }: LoaderFunctionArgs) {
-  const response = await apiFetch(`/api/members`);
+  const response = await apiFetch(`/api/users`);
 
   if (!response.ok) {
     throw new Error('Failed to fetch members');
