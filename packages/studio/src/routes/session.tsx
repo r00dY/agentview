@@ -51,7 +51,7 @@ function SessionPage() {
     const [searchParams, setSearchParams] = useSearchParams();
     const activeItems = getAllSessionItems(session, { activeOnly: true })
     const lastRun = getLastRun(session)
-    
+
     const agentConfig = requireAgentConfig(config, session.agent);
 
     const selectedItemId = activeItems.find((a: any) => a.id === searchParams.get('itemId'))?.id ?? undefined;
@@ -178,7 +178,7 @@ function SessionPage() {
                     <SessionDetails session={session} agentConfig={agentConfig} />
                 </div>
 
-                <div className="">
+                <div>
                     {/* <div className="flex flex-col pb-16">
                         {activeItems.map((item) => {
 
@@ -195,7 +195,6 @@ function SessionPage() {
                             return <div className={`px-6 py-4  ${params.itemId === item.id ? "bg-stone-50" : "hover:bg-gray-50"}`} onClick={() => { navigate(`/sessions/${session.id}/items/${item.id}?${toQueryParams(listParams)}`) }}>
                                 {content}
                             </div>
-
 
                             // return <itemView
                             //     item={item}
@@ -239,14 +238,18 @@ function SessionPage() {
 
                                         {content}
 
-                                        { run.state === "failed" && <div className="text-xs flex justify-start my-3 gap-1">
+                                        {run.state === "in_progress" && <div className="text-muted-foreground my-3">
+                                            <Loader />
+                                        </div>}
+                                        
+                                        {run.state === "failed" && <div className="text-xs flex justify-start my-3 gap-1">
                                             <Alert variant="destructive">
                                                 <AlertCircleIcon />
                                                 {run.failReason?.message ?? "Unknown reason"}
                                             </Alert>
                                         </div>}
 
-                                        {isLastRunItem && <div className="text-xs flex justify-start mb-8 mt-2 gap-1">
+                                        {run.state !== "in_progress" && isLastRunItem && <div className="text-xs flex justify-start mb-8 mt-2 gap-1">
                                             {/* <Button variant="outline" size="icon_xs"><ThumbsUp className="size-4" /></Button>
                                             <Button variant="outline" size="icon_xs"><ThumbsDown className="size-4" /></Button> */}
 
@@ -278,27 +281,6 @@ function SessionPage() {
                             }
                         })
                     }).flat()} selectedItemId={selectedItemId}
-                        belowElement={<div className="px-6 pt-3 pr-[420px]">
-                            <div className="pr-[10%]">
-
-                                {lastRun?.state === "in_progress" && <div className="text-muted-foreground">
-                                    <Loader />
-                                </div>}
-
-                                {/* {lastRun?.state === "failed" && <Alert variant="destructive">
-                                    <AlertCircleIcon />
-                                    <AlertDescription>{lastRun?.failReason?.message ?? "Unknown reason"}</AlertDescription>
-                                </Alert>} */}
-
-                                {/* {lastRun?.state === "failed" && <div className="text-red-500 flex items-center gap-2">
-                                {lastRun?.failReason?.message ?? "Unknown reason"}
-                                {lastRun?.responseData && <Button variant="outline" size="sm" onClick={() => {
-                                    console.log(lastRun.responseData)
-                                }}>Log details</Button>}
-                            </div>} */}
-                            </div>
-
-                        </div>}
                     />
 
                 </div>

@@ -113,11 +113,6 @@ function Component() {
                 }}><TerminalIcon className="size-4" />Print all details to console</Button>
                 <p className="text-sm text-muted-foreground">See request / response of your Agent API call, full error details or metadata click the button below.</p>
 
-
-                
-
-
-
                 </div>
                 
             </DialogBody>
