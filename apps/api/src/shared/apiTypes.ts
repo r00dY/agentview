@@ -83,7 +83,6 @@ export type CommentMessage = z.infer<typeof CommentMessageSchema>
 
 export const SessionItemSchema = z.object({
     id: z.string(),
-    number: z.number(),
     createdAt: z.iso.date(),
     updatedAt: z.iso.date(),
     content: z.any(),

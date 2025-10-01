@@ -34,7 +34,7 @@ function Component() {
 
     return <div className="flex-1  flex flex-col">
         <Header>
-            <HeaderTitle title={`Item ${item.number}`} />
+            <HeaderTitle title={`Session Item`} />
         </Header>
         <div className="flex-1 overflow-y-auto">
             <CommentThread

@@ -87,7 +87,6 @@ export const runs = pgTable("runs", {
 
 export const sessionItems = pgTable("session_items", {
   id: uuid("id").primaryKey().defaultRandom(),
-  number: serial("string").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   content: jsonb("content"),
