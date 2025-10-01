@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, varchar, jsonb, boolean, uniqueIndex, integer, bigserial, bigint, serial, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, varchar, jsonb, boolean, uniqueIndex, integer, bigserial, bigint, serial, unique, smallint } from "drizzle-orm/pg-core";
 import { users, accounts, verifications, authSessions } from "./auth-schema";
 import { relations, sql } from "drizzle-orm";
 
@@ -63,13 +63,15 @@ export const clientAuthSessions = pgTable("client_auth_sessions", {
 
 export const sessions = pgTable("sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
-  number: serial("string").notNull(),
+  handleNumber: integer("handle_number").notNull(),
+  handleSuffix: varchar("handle_suffix", { length: 255 }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   metadata: jsonb("data"),
   clientId: uuid("client_id").notNull().references(() => clients.id, { onDelete: 'cascade' }),
   agent: varchar("agent", { length: 255 }).notNull(),
-});
+}, (table) => [uniqueIndex('sessions_handle_unique').on(table.handleNumber, table.handleSuffix)]);
+
 
 export const runs = pgTable("runs", {
   id: uuid("id").primaryKey().defaultRandom(),

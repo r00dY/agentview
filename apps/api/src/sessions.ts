@@ -34,7 +34,17 @@ export async function fetchSessions(session_id?: string, tx?: Transaction) {
       }
     });
 
-    return sessionRows;
+    return sessionRows.map((row) => ({
+      id: row.id,
+      handle: row.handleNumber.toString() + (row.handleSuffix ?? ""),
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      metadata: row.metadata,
+      agent: row.agent,
+      clientId: row.clientId,
+      client: row.client,
+      runs: row.runs,
+    }));
   }
   
   export async function fetchSession(session_id: string, tx? : Transaction) {

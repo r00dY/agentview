@@ -169,7 +169,7 @@ function SessionPage() {
 
 
             <Header>
-                <HeaderTitle title={`Session ${session.number}`} />
+                <HeaderTitle title={`Session ${session.handle}`} />
                 <ShareForm session={session} />
             </Header>
             <div className="flex-1 overflow-y-auto">

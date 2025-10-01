@@ -415,9 +415,16 @@ async function getSessions(params: z.infer<typeof SessionsGetQueryParamsSchema>,
     .orderBy(desc(sessions.updatedAt))
     .limit(limit)
     .offset(offset);
+
+  
   
   const sessionsResult = result.map((row) => ({
-    ...row.sessions,
+    id: row.sessions.id,
+    handle: row.sessions.handleNumber.toString() + (row.sessions.handleSuffix ?? ""),
+    createdAt: row.sessions.createdAt,
+    updatedAt: row.sessions.updatedAt,
+    metadata: row.sessions.metadata,
+    agent: row.sessions.agent,
     client: row.clients!,
   }));
   
@@ -579,7 +586,22 @@ app.openapi(sessionsPOSTRoute, async (c) => {
   }
 
   const newSession = await db.transaction(async (tx) => {
-    const [newSessionRow] = await tx.insert(sessions).values({ ...body, clientId: client.id }).returning();
+    const handleSuffix = auth.type === 'client' ? "" : "s";
+
+    const sessionWithHighestHandleNumber = await tx.query.sessions.findFirst({
+      orderBy: (sessions, { desc }) => [desc(sessions.handleNumber)],
+      where: eq(sessions.handleSuffix, handleSuffix),
+    });
+
+    const newHandleNumber = sessionWithHighestHandleNumber ? sessionWithHighestHandleNumber.handleNumber + 1 : 1;
+
+    const [newSessionRow] = await tx.insert(sessions).values({ 
+      handleNumber: newHandleNumber,
+      handleSuffix: handleSuffix,
+      metadata: body.metadata,
+      agent: body.agent,
+      clientId: client.id 
+    }).returning();
 
     // add event (only for users, not clients)
     if (auth.type === 'user') {

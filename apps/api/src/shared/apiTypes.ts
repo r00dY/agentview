@@ -120,7 +120,7 @@ export type Run = z.infer<typeof RunSchema>
 
 export const SessionBaseSchema = z.object({
     id: z.string(),
-    number: z.number(),
+    handle: z.string(),
     createdAt: z.iso.date(),
     updatedAt: z.iso.date(),
     metadata: z.any(),
