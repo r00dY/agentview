@@ -98,7 +98,6 @@ function Component() {
 
 
                 <div className="mt-8 flex flex-col gap-2 items-start">  
-                <p className="text-sm">To see request / response of your Agent API call, full error details or metadata click the button below.</p>
                 <Button variant="outline" onClick={() => {
                     console.log({
                         id: run.id,
@@ -112,6 +111,8 @@ function Component() {
                         error: run.failReason,
                     })
                 }}><TerminalIcon className="size-4" />Print all details to console</Button>
+                <p className="text-sm text-muted-foreground">See request / response of your Agent API call, full error details or metadata click the button below.</p>
+
 
                 
 
