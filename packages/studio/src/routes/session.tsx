@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { parseSSE } from "~/lib/parseSSE";
 import { apiFetch } from "~/lib/apiFetch";
 import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
-import { getLastRun, getAllSessionItems, getVersions } from "~/lib/shared/sessionUtils";
+import { getLastRun, getAllSessionItems, getVersions, getActiveRuns } from "~/lib/shared/sessionUtils";
 import { type Session } from "~/lib/shared/apiTypes";
 import { getListParams, toQueryParams } from "~/lib/listParams";
 import { PropertyList } from "~/components/PropertyList";
@@ -209,82 +209,75 @@ function SessionPage() {
                         </div>}
                     </div> */}
 
-                    <ItemsWithCommentsLayout items={activeItems.map((item) => {
-                        const hasComments = item.commentMessages.filter((m: any) => !m.deletedAt).length > 0
+                    <ItemsWithCommentsLayout items={getActiveRuns(session).map((run) => {
 
-                        let content: React.ReactNode = null;
+                        return run.sessionItems.map((item, index) => {
 
-                        const itemConfig = agentConfig.items.find((a) => a.type === item.type && (!a.role || a.role === item.role));
-                        if (!itemConfig) {
-                            content = <div className="text-muted-foreground italic">No component (type: "{item.type}")</div>
-                        }
-                        else {
-                            content = <itemConfig.displayComponent value={item.content} options={itemConfig.options} />
-                        }
+                            const isLastRunItem = index === run.sessionItems.length - 1;
 
-                        const run = session.runs.find((run) => run.id === item.runId)!;
+                            const hasComments = item.commentMessages.filter((m: any) => !m.deletedAt).length > 0
 
-                        return {
-                            id: item.id,
-                            itemComponent: <div
-                                // className={`relative group ${selectedItemId === item.id ? "bg-gray-50" : "hover:bg-gray-50"}`}
-                                className={`relative group`}
-                            // onClick={() => {
-                            //     if (selectedItemId === item.id) {
-                            //         setselectedItemId(undefined)
-                            //     } else {
-                            //         setselectedItemId(item?.id)
-                            //     }
-                            // }}
-                            >
-                                <div className="absolute pl-2 left-[720px] pt-2 text-muted-foreground text-xs font-medium flex flex-row gap-1">
+                            let content: React.ReactNode = null;
 
-                                    {/* { item.role === "user" && <Button variant="ghost" size="xs" onClick={() => { setselectedItemId(item.id) }}><InfoIcon className="size-4" /></Button> } */}
-                                    {!hasComments && <Button className="group-hover:visible invisible" variant="outline" size="icon_xs" onClick={() => { setselectedItemId(item.id) }}><MessageCirclePlus className="size-3" /></Button>}
+                            const itemConfig = agentConfig.items.find((a) => a.type === item.type && (!a.role || a.role === item.role));
+                            if (!itemConfig) {
+                                content = <div className="text-muted-foreground italic">No component (type: "{item.type}")</div>
+                            }
+                            else {
+                                content = <itemConfig.displayComponent value={item.content} options={itemConfig.options} />
+                            }
 
-                                    {/* <MessageCirclePlus className="size-3" /> */}
-                                </div>
-                                {/* <div className="absolute left-0 pl-6 pt-2 ">
-                                    { item.role === "user" && <div className="text-muted-foreground text-xs ">
-                                        <PlayCircleIcon className="size-3" />
-                                    </div> }
+                            return {
+                                id: item.id,
+                                itemComponent: <div
+                                    className={`relative group`}
+                                >
+                                    <div className="absolute pl-2 left-[720px] pt-2 text-muted-foreground text-xs font-medium flex flex-row gap-1">
+                                        {!hasComments && <Button className="group-hover:visible invisible" variant="outline" size="icon_xs" onClick={() => { setselectedItemId(item.id) }}><MessageCirclePlus className="size-3" /></Button>}
+                                    </div>
+                                    <div className="relative max-w-[720px] py-2 pl-6">
 
-                                </div> */}
-                                <div className="relative max-w-[720px] py-2 pl-6">
+                                        {content}
 
-                                    {content}
+                                        { run.state === "failed" && <div className="text-xs flex justify-start my-3 gap-1">
+                                            <Alert variant="destructive">
+                                                <AlertCircleIcon />
+                                                {run.failReason?.message ?? "Unknown reason"}
+                                            </Alert>
+                                        </div>}
 
-                                    {item.role === "assistant" && <div className="text-xs flex justify-start mb-8 mt-2 gap-1">
-                                        <Button variant="outline" size="icon_xs"><ThumbsUp className="size-4" /></Button>
-                                        <Button variant="outline" size="icon_xs"><ThumbsDown className="size-4" /></Button>
+                                        {isLastRunItem && <div className="text-xs flex justify-start mb-8 mt-2 gap-1">
+                                            {/* <Button variant="outline" size="icon_xs"><ThumbsUp className="size-4" /></Button>
+                                            <Button variant="outline" size="icon_xs"><ThumbsDown className="size-4" /></Button> */}
 
-                                        <Button asChild variant="outline" size="xs">
-                                            <Link to={`/sessions/${session.id}/runs/${run.id}?${toQueryParams(listParams)}`}>Details <WrenchIcon className="size-4" /></Link>
-                                        </Button>
-                                    </div>}
-                                </div>
-                                {/* { !hasComments && <div className="absolute top-[8px] right-[408px] opacity-0 group-hover:opacity-100">
-                                    <Button variant="outline" size="icon_xs" onClick={() => { setselectedItemId(item.id) }}><MessageSquareTextIcon /></Button>
-                                </div>} */}
-                            </div>,
-                            // itemComponent: <div 
-                            //     className={`relative pl-6 py-2 pr-[444px] group ${params.itemId === item.id ? "bg-gray-50" : "hover:bg-gray-50"}`} 
-                            //     onClick={() => { navigate(`/sessions/${session.id}/items/${item?.id}?${toQueryParams(listParams)}`) }}>
+                                            <Button asChild variant="outline" size="xs">
+                                                <Link to={`/sessions/${session.id}/runs/${run.id}?${toQueryParams(listParams)}`}>Run <WrenchIcon className="size-4" /></Link>
+                                            </Button>
+                                        </div>}
+                                    </div>
+                                    {/* { !hasComments && <div className="absolute top-[8px] right-[408px] opacity-0 group-hover:opacity-100">
+                                        <Button variant="outline" size="icon_xs" onClick={() => { setselectedItemId(item.id) }}><MessageSquareTextIcon /></Button>
+                                    </div>} */}
+                                </div>,
+                                // itemComponent: <div 
+                                //     className={`relative pl-6 py-2 pr-[444px] group ${params.itemId === item.id ? "bg-gray-50" : "hover:bg-gray-50"}`} 
+                                //     onClick={() => { navigate(`/sessions/${session.id}/items/${item?.id}?${toQueryParams(listParams)}`) }}>
 
-                            //     {content}
-                            //     {/* { !hasComments && <div className="absolute top-[8px] right-[408px] opacity-0 group-hover:opacity-100">
-                            //         <Button variant="outline" size="icon_xs" onClick={() => { setselectedItemId(item.id) }}><MessageSquareTextIcon /></Button>
-                            //     </div>} */}
-                            // </div>,
-                            commentsComponent: (hasComments || (selectedItemId === item.id)) ?
-                                <div className="relative pt-2 pr-4"><CommentSessionFloatingBox
-                                    item={item}
-                                    session={session}
-                                    selected={selectedItemId === item.id}
-                                    onSelect={(a) => { setselectedItemId(a?.id) }}
-                                /></div> : undefined
-                        }
-                    })} selectedItemId={selectedItemId}
+                                //     {content}
+                                //     {/* { !hasComments && <div className="absolute top-[8px] right-[408px] opacity-0 group-hover:opacity-100">
+                                //         <Button variant="outline" size="icon_xs" onClick={() => { setselectedItemId(item.id) }}><MessageSquareTextIcon /></Button>
+                                //     </div>} */}
+                                // </div>,
+                                commentsComponent: (hasComments || (selectedItemId === item.id)) ?
+                                    <div className="relative pt-2 pr-4"><CommentSessionFloatingBox
+                                        item={item}
+                                        session={session}
+                                        selected={selectedItemId === item.id}
+                                        onSelect={(a) => { setselectedItemId(a?.id) }}
+                                    /></div> : undefined
+                            }
+                        })
+                    }).flat()} selectedItemId={selectedItemId}
                         belowElement={<div className="px-6 pt-3 pr-[420px]">
                             <div className="pr-[10%]">
 
@@ -292,11 +285,10 @@ function SessionPage() {
                                     <Loader />
                                 </div>}
 
-                                {lastRun?.state === "failed" && <Alert variant="destructive">
+                                {/* {lastRun?.state === "failed" && <Alert variant="destructive">
                                     <AlertCircleIcon />
-                                    {/* <AlertTitle>Run failed.</AlertTitle> */}
                                     <AlertDescription>{lastRun?.failReason?.message ?? "Unknown reason"}</AlertDescription>
-                                </Alert>}
+                                </Alert>} */}
 
                                 {/* {lastRun?.state === "failed" && <div className="text-red-500 flex items-center gap-2">
                                 {lastRun?.failReason?.message ?? "Unknown reason"}

@@ -53,7 +53,6 @@ export async function* callAgentAPI(request: { session: any }, url: string): Asy
 
     if (!response.ok) {
       const content = tryParseJSON(await response.text());
-      console.log('content', content)
       responseData.response.body = content;
 
       yield {
@@ -65,7 +64,7 @@ export async function* callAgentAPI(request: { session: any }, url: string): Asy
       throw new AgentAPIError({
         ...error,
         message: `HTTP error response (${response.status}): ${error.message}`,
-      })  
+      })
     }
 
     const contentType = response.headers.get('Content-Type');

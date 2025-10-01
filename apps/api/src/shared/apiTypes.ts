@@ -113,6 +113,7 @@ export const RunSchema = z.object({
     responseData: z.any().nullable(),
     sessionItems: z.array(SessionItemSchema),
     version: VersionSchema.nullable(),
+    metadata: z.any().nullable(),
 })
 
 export type Run = z.infer<typeof RunSchema>

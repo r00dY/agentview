@@ -10,6 +10,7 @@ import { Button } from "~/components/ui/button";
 import { getListParams, toQueryParams } from "~/lib/listParams";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { PropertyList } from "~/components/PropertyList";
+import { TerminalIcon } from "lucide-react";
 
 function loader({ request, params }: LoaderFunctionArgs) {
     const listParams = getListParams(request);
@@ -57,7 +58,7 @@ function Component() {
                     <PropertyList.Item>
                         <PropertyList.Title>Version</PropertyList.Title>
                         <PropertyList.TextValue>
-                            {run.version?.version ?? "Unknown"}
+                            {run.version?.version ?? "-"}
                         </PropertyList.TextValue>
                     </PropertyList.Item>
 
@@ -88,11 +89,36 @@ function Component() {
                         <PropertyList.Item>
                             <PropertyList.Title>Fail reason</PropertyList.Title>
                             <PropertyList.TextValue className="text-red-500">
-                                {run.failReason}
+                                {run.failReason.message ?? "Unknown reason"}
                             </PropertyList.TextValue>
                         </PropertyList.Item>
                     )}
+
                 </PropertyList.Root>
+
+
+                <div className="mt-8 flex flex-col gap-2 items-start">  
+                <p className="text-sm">To see request / response of your Agent API call, full error details or metadata click the button below.</p>
+                <Button variant="outline" onClick={() => {
+                    console.log({
+                        id: run.id,
+                        createdAt: run.createdAt,
+                        finishedAt: run.finishedAt,
+                        state: run.state,
+                        version: run.version,
+                        request: run.responseData?.request,
+                        response: run.responseData?.response,
+                        metadata: run.metadata,
+                        error: run.failReason,
+                    })
+                }}><TerminalIcon className="size-4" />Print all details to console</Button>
+
+                
+
+
+
+                </div>
+                
             </DialogBody>
             <DialogFooter>
                 <Button variant="default" onClick={close}>Close</Button>
