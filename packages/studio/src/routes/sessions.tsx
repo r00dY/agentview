@@ -122,7 +122,7 @@ export function SessionCard({ session, listParams, sessionStats }: { session: Se
           <div className="flex flex-col gap-1">
 
             <div className="flex flex-row gap-1 justify-between">
-              <div className={`text-sm ${hasUnreads ? 'font-semibold' : 'font-normal'}`}>Session {session.number}</div>
+              <div className={`text-sm ${hasUnreads ? 'font-semibold' : 'font-normal'}`}>Session {session.number}s</div>
 
               <div className="flex flex-row gap-1 items-center">
                 <div className="text-xs text-gray-500">{timeAgoShort(date)}</div>
