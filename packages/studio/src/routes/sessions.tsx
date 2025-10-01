@@ -15,7 +15,16 @@ async function loader({ request }: LoaderFunctionArgs) {
   const { listParams, needsRedirect } = getListParamsAndCheckForRedirect(request);
 
   if (needsRedirect) {
-    return redirect(`/sessions?${toQueryParams(listParams)}`);
+    const url = new URL(request.url);
+    for(const [key, value] of Object.entries(listParams)) {
+      if (value === undefined) {
+        url.searchParams.delete(key);
+      }
+      else {
+        url.searchParams.set(key, value)
+      }
+    }
+    return redirect(url.toString());
   }
 
   const sessionsResponse = await apiFetch<SessionsPaginatedResponse>(`/api/sessions?${toQueryParams(listParams)}`);
