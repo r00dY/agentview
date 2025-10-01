@@ -90,6 +90,7 @@ export const SessionItemSchema = z.object({
     sessionId: z.string(),
     type: z.string(),
     role: z.string().nullable(),
+    runId: z.string(),
     commentMessages: z.array(CommentMessageSchema),
 })
 

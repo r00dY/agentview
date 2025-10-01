@@ -23,6 +23,7 @@ import { changePasswordRoute } from "./routes/change-password";
 import { loginRoute} from "./routes/login";
 import { signupRoute } from "./routes/signup";
 import { rootRoute } from "./root";
+import { sessionRunRoute } from "./routes/sessionRun";
 
 export const router = createBrowserRouter([
   {
@@ -94,6 +95,10 @@ export const router = createBrowserRouter([
                   {
                     path: "items/:itemId",
                     ...sessionItemRoute,
+                  },
+                  {
+                    path: "runs/:runId",
+                    ...sessionRunRoute,
                   },
                   {
                     path: "items/:itemId/comments",

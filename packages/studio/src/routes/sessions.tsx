@@ -1,10 +1,10 @@
-import { useLoaderData, Outlet, Link, Form, data, NavLink } from "react-router";
+import { useLoaderData, Outlet, Link, Form, data, NavLink, redirect } from "react-router";
 import type { LoaderFunctionArgs, RouteObject } from "react-router";
 
 import { Button } from "~/components/ui/button";
 import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from "lucide-react";
 import { Header, HeaderTitle } from "~/components/header";
-import { getListParams, toQueryParams } from "~/lib/utils";
+import { getListParams, getListParamsAndCheckForRedirect, toQueryParams } from "~/lib/listParams";
 import { apiFetch } from "~/lib/apiFetch";
 import type { Pagination, SessionBase, SessionsPaginatedResponse } from "~/lib/shared/apiTypes";
 import { timeAgoShort } from "~/lib/timeAgo";
@@ -12,7 +12,11 @@ import { useSessionContext } from "~/lib/SessionContext";
 import { NotificationBadge } from "~/components/NotificationBadge";
 
 async function loader({ request }: LoaderFunctionArgs) {
-  const listParams = getListParams(request);
+  const { listParams, needsRedirect } = getListParamsAndCheckForRedirect(request);
+
+  if (needsRedirect) {
+    return redirect(`/sessions?${toQueryParams(listParams)}`);
+  }
 
   const sessionsResponse = await apiFetch<SessionsPaginatedResponse>(`/api/sessions?${toQueryParams(listParams)}`);
   if (!sessionsResponse.ok) {

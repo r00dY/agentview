@@ -66,34 +66,3 @@ export function extractMentions(content: string): Record<string, string[]> {
 // extractMentions("Hello @[user_id:abc123] and @[user_id:def456]!") 
 // Returns: { "user_id": ["abc123", "def456"] }
 
-
-export function getListParams(request: Request) {
-  const url = new URL(request.url);
-  const list = url.searchParams.get('list') ?? "real";
-
-  if (!allowedSessionLists.includes(list)) {
-    throw new Error(`Invalid list: ${list}. Allowed lists are: ${allowedSessionLists.join(", ")}`);
-  }
-
-  const agent = url.searchParams.get('agent');
-
-  if (!agent) {
-    throw new Error(`Session agent is required`);
-  }
-
-  const page = url.searchParams.get('page') ?? undefined
-  const limit = url.searchParams.get('limit') ?? undefined
-
-  return { list, agent, page, limit }
-}
-
-export function toQueryParams(obj: Record<string, any>) {
-  const definedValues : Record<string, any> = {}
-  for(const [key, value] of Object.entries(obj)) {
-    if(value !== undefined) {
-      definedValues[key] = value
-    }
-  }
-
-  return new URLSearchParams(definedValues).toString();
-}

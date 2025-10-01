@@ -8,7 +8,7 @@ import { apiFetch } from "~/lib/apiFetch";
 import { getAPIBaseUrl } from "~/lib/getAPIBaseUrl";
 import { getLastRun, getAllSessionItems, getVersions } from "~/lib/shared/sessionUtils";
 import { type Session } from "~/lib/shared/apiTypes";
-import { getListParams, toQueryParams } from "~/lib/utils";
+import { getListParams, toQueryParams } from "~/lib/listParams";
 import { PropertyList } from "~/components/PropertyList";
 import { AlertCircleIcon, InfoIcon, MessageCircleIcon, MessageCirclePlus, MessageSquareTextIcon, PlayCircleIcon, ReceiptIcon, ReceiptText, SendHorizonalIcon, Share, SquareIcon, ThumbsDown, ThumbsUp, UserIcon, UsersIcon, WrenchIcon } from "lucide-react";
 import { useFetcherSuccess } from "~/hooks/useFetcherSuccess";
@@ -33,7 +33,8 @@ async function loader({ request, params }: LoaderFunctionArgs) {
     }
 
     return {
-        session: response.data
+        session: response.data,
+        listParams: getListParams(request)
     };
 }
 
@@ -42,6 +43,7 @@ function SessionPage() {
     const loaderData = useLoaderData<typeof loader>();
     const revalidator = useRevalidator();
     const { user } = useSessionContext();
+    const listParams = loaderData.listParams;
 
     const [session, setSession] = useState(loaderData.session)
     const [isStreaming, setStreaming] = useState(false)
@@ -49,7 +51,7 @@ function SessionPage() {
     const [searchParams, setSearchParams] = useSearchParams();
     const activeItems = getAllSessionItems(session, { activeOnly: true })
     const lastRun = getLastRun(session)
-
+    
     const agentConfig = requireAgentConfig(config, session.agent);
 
     const selectedItemId = activeItems.find((a: any) => a.id === searchParams.get('itemId'))?.id ?? undefined;
@@ -220,6 +222,8 @@ function SessionPage() {
                             content = <itemConfig.displayComponent value={item.content} options={itemConfig.options} />
                         }
 
+                        const run = session.runs.find((run) => run.id === item.runId)!;
+
                         return {
                             id: item.id,
                             itemComponent: <div
@@ -253,7 +257,10 @@ function SessionPage() {
                                     {item.role === "assistant" && <div className="text-xs flex justify-start mb-8 mt-2 gap-1">
                                         <Button variant="outline" size="icon_xs"><ThumbsUp className="size-4" /></Button>
                                         <Button variant="outline" size="icon_xs"><ThumbsDown className="size-4" /></Button>
-                                        <Button variant="outline" size="xs">Details <WrenchIcon className="size-4" /></Button>
+
+                                        <Button asChild variant="outline" size="xs">
+                                            <Link to={`/sessions/${session.id}/runs/${run.id}?${toQueryParams(listParams)}`}>Details <WrenchIcon className="size-4" /></Link>
+                                        </Button>
                                     </div>}
                                 </div>
                                 {/* { !hasComments && <div className="absolute top-[8px] right-[408px] opacity-0 group-hover:opacity-100">
