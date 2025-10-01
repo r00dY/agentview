@@ -225,18 +225,18 @@ function SessionPage() {
                             itemComponent: <div
                                 // className={`relative group ${selectedItemId === item.id ? "bg-gray-50" : "hover:bg-gray-50"}`}
                                 className={`relative group`}
-                                // onClick={() => {
-                                //     if (selectedItemId === item.id) {
-                                //         setselectedItemId(undefined)
-                                //     } else {
-                                //         setselectedItemId(item?.id)
-                                //     }
-                                // }}
+                            // onClick={() => {
+                            //     if (selectedItemId === item.id) {
+                            //         setselectedItemId(undefined)
+                            //     } else {
+                            //         setselectedItemId(item?.id)
+                            //     }
+                            // }}
                             >
                                 <div className="absolute pl-2 left-[720px] pt-2 text-muted-foreground text-xs font-medium flex flex-row gap-1">
 
                                     {/* { item.role === "user" && <Button variant="ghost" size="xs" onClick={() => { setselectedItemId(item.id) }}><InfoIcon className="size-4" /></Button> } */}
-                                    { !hasComments && <Button className="group-hover:visible invisible" variant="outline" size="icon_xs" onClick={() => { setselectedItemId(item.id) }}><MessageCirclePlus className="size-3" /></Button> }
+                                    {!hasComments && <Button className="group-hover:visible invisible" variant="outline" size="icon_xs" onClick={() => { setselectedItemId(item.id) }}><MessageCirclePlus className="size-3" /></Button>}
 
                                     {/* <MessageCirclePlus className="size-3" /> */}
                                 </div>
@@ -248,15 +248,13 @@ function SessionPage() {
                                 </div> */}
                                 <div className="relative max-w-[720px] py-2 pl-6">
 
-                                {content}
+                                    {content}
 
-                                { item.role === "assistant" && <div className="text-xs flex justify-start mb-8 mt-2 gap-1 text-muted-foreground">
-                                    <Button variant="outline" size="icon_xs"><ThumbsUp className="size-4" /></Button>
-
-                                    <Button variant="outline" size="icon_xs"><ThumbsDown className="size-4" /></Button>
-
-                                    <Button variant="outline" size="xs">Details <WrenchIcon className="size-4" /></Button>
-                                    </div> }
+                                    {item.role === "assistant" && <div className="text-xs flex justify-start mb-8 mt-2 gap-1">
+                                        <Button variant="outline" size="icon_xs"><ThumbsUp className="size-4" /></Button>
+                                        <Button variant="outline" size="icon_xs"><ThumbsDown className="size-4" /></Button>
+                                        <Button variant="outline" size="xs">Details <WrenchIcon className="size-4" /></Button>
+                                    </div>}
                                 </div>
                                 {/* { !hasComments && <div className="absolute top-[8px] right-[408px] opacity-0 group-hover:opacity-100">
                                     <Button variant="outline" size="icon_xs" onClick={() => { setselectedItemId(item.id) }}><MessageSquareTextIcon /></Button>
@@ -283,17 +281,17 @@ function SessionPage() {
                         belowElement={<div className="px-6 pt-3 pr-[420px]">
                             <div className="pr-[10%]">
 
-                            {lastRun?.state === "in_progress" && <div className="text-muted-foreground">
-                                <Loader />
-                            </div>}
+                                {lastRun?.state === "in_progress" && <div className="text-muted-foreground">
+                                    <Loader />
+                                </div>}
 
-                            {lastRun?.state === "failed" && <Alert variant="destructive">
-                                <AlertCircleIcon />
-                                {/* <AlertTitle>Run failed.</AlertTitle> */}
-                                <AlertDescription>{lastRun?.failReason?.message ?? "Unknown reason"}</AlertDescription>
-                            </Alert>}
+                                {lastRun?.state === "failed" && <Alert variant="destructive">
+                                    <AlertCircleIcon />
+                                    {/* <AlertTitle>Run failed.</AlertTitle> */}
+                                    <AlertDescription>{lastRun?.failReason?.message ?? "Unknown reason"}</AlertDescription>
+                                </Alert>}
 
-                            {/* {lastRun?.state === "failed" && <div className="text-red-500 flex items-center gap-2">
+                                {/* {lastRun?.state === "failed" && <div className="text-red-500 flex items-center gap-2">
                                 {lastRun?.failReason?.message ?? "Unknown reason"}
                                 {lastRun?.responseData && <Button variant="outline" size="sm" onClick={() => {
                                     console.log(lastRun.responseData)
@@ -441,20 +439,20 @@ function InputForm({ session, agentConfig }: { session: Session, agentConfig: Ag
 
     const inputConfigs = agentConfig.items.filter((item) => item.input)
 
-    return <div className="p-6 border-t">
+    return <div className="border-t">
 
-        <div className="max-w-[720px]">
+        <div className="p-6 pr-0 max-w-[720px]">
 
-        {inputConfigs.length === 0 && <div className="text-sm text-muted-foreground">No input fields</div>}
+            {inputConfigs.length === 0 && <div className="text-sm text-muted-foreground">No input fields</div>}
 
-        <form method="post" onSubmit={handleSubmit}>
+            <form method="post" onSubmit={handleSubmit}>
 
-            {inputConfigs.length === 1 ? (
-                // Single input config - no tabs
-                <div>
+                {inputConfigs.length === 1 ? (
+                    // Single input config - no tabs
+                    <div>
 
-                    <InputFormFields inputConfig={inputConfigs[0]} />
-                    {/* 
+                        <InputFormFields inputConfig={inputConfigs[0]} />
+                        {/* 
                     {inputConfigs[0].input && (
 
                         <FormField
@@ -467,52 +465,52 @@ function InputForm({ session, agentConfig }: { session: Session, agentConfig: Ag
                             options={inputConfigs[0].options}
                         />
                     )} */}
-                </div>
-            ) : (
-                // Multiple input configs - use tabs
-                <Tabs defaultValue={`${inputConfigs[0].type}-${inputConfigs[0].role || 'default'}`}>
-                    <TabsList>
+                    </div>
+                ) : (
+                    // Multiple input configs - use tabs
+                    <Tabs defaultValue={`${inputConfigs[0].type}-${inputConfigs[0].role || 'default'}`}>
+                        <TabsList>
+                            {inputConfigs.map((inputConfig, index) => {
+                                const tabName = inputConfig.title || (inputConfig.role
+                                    ? `${inputConfig.type} / ${inputConfig.role}`
+                                    : inputConfig.type)
+                                const tabValue = `${inputConfig.type}-${inputConfig.role || 'default'}`;
+
+                                return (
+                                    <TabsTrigger key={index} value={tabValue}>
+                                        {tabName}
+                                    </TabsTrigger>
+                                );
+                            })}
+                        </TabsList>
+
                         {inputConfigs.map((inputConfig, index) => {
-                            const tabName = inputConfig.title || (inputConfig.role
-                                ? `${inputConfig.type} / ${inputConfig.role}`
-                                : inputConfig.type)
                             const tabValue = `${inputConfig.type}-${inputConfig.role || 'default'}`;
 
                             return (
-                                <TabsTrigger key={index} value={tabValue}>
-                                    {tabName}
-                                </TabsTrigger>
+                                <TabsContent key={index} value={tabValue}>
+                                    <InputFormFields inputConfig={inputConfig} />
+                                </TabsContent>
                             );
                         })}
-                    </TabsList>
+                    </Tabs>
+                )}
 
-                    {inputConfigs.map((inputConfig, index) => {
-                        const tabValue = `${inputConfig.type}-${inputConfig.role || 'default'}`;
+                {/* <Textarea name="message" placeholder="Reply here..." rows={1} className="mb-2" /> */}
 
-                        return (
-                            <TabsContent key={index} value={tabValue}>
-                                <InputFormFields inputConfig={inputConfig} />
-                            </TabsContent>
-                        );
-                    })}
-                </Tabs>
-            )}
+                <div className="flex flex-row gap-2 items-center mt-2">
 
-            {/* <Textarea name="message" placeholder="Reply here..." rows={1} className="mb-2" /> */}
+                    {lastRun?.state !== 'in_progress' && <Button type="submit">Send <SendHorizonalIcon /></Button>}
+                    {lastRun?.state === 'in_progress' && <Button type="button" onClick={() => {
+                        handleCancel()
+                    }}>Cancel <SquareIcon /></Button>}
 
-            <div className="flex flex-row gap-2 items-center mt-2">
+                    <div className="gap-2 text-sm text-muted-foreground">
+                        {formError && <div className="text-red-500">{formError}</div>}
+                    </div>
 
-                {lastRun?.state !== 'in_progress' && <Button type="submit">Send <SendHorizonalIcon /></Button>}
-                {lastRun?.state === 'in_progress' && <Button type="button" onClick={() => {
-                    handleCancel()
-                }}>Cancel <SquareIcon /></Button>}
-
-                <div className="gap-2 text-sm text-muted-foreground">
-                    {formError && <div className="text-red-500">{formError}</div>}
                 </div>
-
-            </div>
-        </form>
+            </form>
         </div>
     </div>
 }
