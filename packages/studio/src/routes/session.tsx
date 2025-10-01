@@ -179,34 +179,6 @@ function SessionPage() {
                 </div>
 
                 <div>
-                    {/* <div className="flex flex-col pb-16">
-                        {activeItems.map((item) => {
-
-                            let content: React.ReactNode = null;
-
-                            const itemConfig = agentConfig.items.find((a) => a.type === item.type && (!a.role || a.role === item.role));
-                            if (!itemConfig) {
-                                content = <div className="text-muted-foreground italic">No component (type: "{item.type}")</div>
-                            }
-                            else {
-                                content = <itemConfig.display value={item.content} options={itemConfig.options} />
-                            }
-
-                            return <div className={`px-6 py-4  ${params.itemId === item.id ? "bg-stone-50" : "hover:bg-gray-50"}`} onClick={() => { navigate(`/sessions/${session.id}/items/${item.id}?${toQueryParams(listParams)}`) }}>
-                                {content}
-                            </div>
-
-                            // return <itemView
-                            //     item={item}
-                            //     onSelect={(a) => { navigate(`/sessions/${session.id}/items/${a?.id}?${toQueryParams(listParams)}`) }}
-                            //     selected={params.itemId === item.id}
-                            // />
-                        })}
-
-                        {lastRun?.state === "in_progress" && <div className="px-6 gap-2 pt-3 flex flex-row items-end text-muted-foreground">
-                            <Loader />
-                        </div>}
-                    </div> */}
 
                     <ItemsWithCommentsLayout items={getActiveRuns(session).map((run) => {
 
@@ -238,7 +210,7 @@ function SessionPage() {
 
                                         {content}
 
-                                        {run.state === "in_progress" && <div className="text-muted-foreground my-3">
+                                        {run.state === "in_progress" && <div className="text-muted-foreground mt-5">
                                             <Loader />
                                         </div>}
                                         
