@@ -9,6 +9,7 @@ import { ProductSelect } from "./ProductSelect";
 import { ScoreBadge } from "./ScoreBadge";
 
 export default defineConfig({
+    apiBaseUrl: "http://localhost:8080",
     agents: [
         {
             name: "simple_chat",

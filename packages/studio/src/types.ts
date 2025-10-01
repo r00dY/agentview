@@ -40,5 +40,6 @@ export type SessionItemConfig = InputSessionItemConfig | StepSessionItemConfig;
 export type AgentConfig = BaseAgentConfig<SessionItemConfig>;
   
 export type AgentViewConfig = {
+  apiBaseUrl: string;
   agents?: AgentConfig[],  
 }
