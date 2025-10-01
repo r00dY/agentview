@@ -38,7 +38,7 @@ import { authClient } from "~/lib/auth-client";
 import { SessionContext } from "~/lib/SessionContext";
 import { apiFetch } from "~/lib/apiFetch";
 import { NotificationBadge } from "~/components/NotificationBadge";
-import { createOrUpdateSchema } from "~/lib/remoteConfig";
+import { createOrUpdateConfig } from "~/lib/remoteConfig";
 import { config } from "~/config";
 import { type User, allowedSessionLists } from "~/lib/shared/apiTypes";
 
@@ -57,7 +57,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
   }
   
-  await createOrUpdateSchema(); // update schema on every page load
+  await createOrUpdateConfig(); // update schema on every page load
 
   const membersResponse = await apiFetch<User[]>('/api/users');
 
@@ -103,13 +103,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
     user,
     members: membersResponse.data,
     locale,
-    isDeveloper: true,
     listStats
   };
 }
 
 function Component() {
-  const { user, isDeveloper, members, locale, listStats } = useLoaderData<typeof loader>()
+  const { user, members, locale, listStats } = useLoaderData<typeof loader>()
   const [editProfileOpen, setEditProfileOpen] = React.useState(false)
   const [changePasswordOpen, setChangePasswordOpen] = React.useState(false)
 
@@ -189,7 +188,7 @@ function Component() {
 
 
             {user.role === "admin" && <SidebarGroup>
-              <SidebarGroupLabel>Organization</SidebarGroupLabel>
+              {/* <SidebarGroupLabel>Menu</SidebarGroupLabel> */}
               <SidebarGroupContent>
                 <SidebarMenu>
                   <SidebarMenuItem>
@@ -203,12 +202,20 @@ function Component() {
                     </SidebarMenuButton>
 
                   </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <Link to="/config">
+                        <Database className="mr-2 h-4 w-4" />
+                        <span>Config</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>}
 
-            {isDeveloper && <SidebarGroup>
-              <SidebarGroupLabel>Developer</SidebarGroupLabel>
+            {import.meta.env.DEV && <SidebarGroup>
+              <SidebarGroupLabel>Development</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
                   <SidebarMenuItem>
@@ -219,14 +226,6 @@ function Component() {
                       </Link>
                     </SidebarMenuButton>
 
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
-                      <Link to="/configs">
-                        <Database className="mr-2 h-4 w-4" />
-                        <span>Config</span>
-                      </Link>
-                    </SidebarMenuButton>
                   </SidebarMenuItem>
                 </SidebarMenu>
               </SidebarGroupContent>

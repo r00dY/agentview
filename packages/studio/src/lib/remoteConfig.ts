@@ -29,7 +29,7 @@ export async function updateRemoteConfig() {
     return response.data;
 }
 
-export async function createOrUpdateSchema() {
+export async function createOrUpdateConfig() {
     const remoteConfigRow = await getRemoteConfig();
 
     const remoteConfig = remoteConfigRow?.config ?? null;

@@ -113,7 +113,7 @@ export const router = createBrowserRouter([
             ],
           },
           {
-            path: "configs",
+            path: "config",
             ...configsRoute,
           },
           {
