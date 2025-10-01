@@ -53,7 +53,7 @@ function Component() {
       <div className="flex-1 overflow-y-auto pb-12">
         {sessions.length > 0 && sessions.map(session => <SessionCard session={session} listParams={listParams} sessionStats={allStats.sessions[session.id]} />)}
         {sessions.length === 0 && <div className="px-3 py-4 text-muted-foreground">No sessions available.</div>}
-        <PaginationControls pagination={pagination} listParams={listParams} />
+        { sessions.length > 0 && <PaginationControls pagination={pagination} listParams={listParams} />}
       </div>
 
     </div>
