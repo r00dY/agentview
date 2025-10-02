@@ -63,18 +63,20 @@ export function ItemUserMessageComponent({ value, options }: DisplayComponentPro
 // }
 
 export function ItemAssistantMessageComponent({ value, options }: DisplayComponentProps<string>) {
-    return <div className="pt-2 prose prose-ul:list-disc prose-ol:list-decimal prose-a:underline" dangerouslySetInnerHTML={{__html: marked.parse(value, { async: false })}}></div>
+    return <div className="prose prose-ul:list-disc prose-ol:list-decimal prose-a:underline" dangerouslySetInnerHTML={{__html: marked.parse(value, { async: false })}}></div>
 }
 
 
-// import { z } from "zod";
+import { z } from "zod";
+(window as any).z = z;
+
 
 // function test_zod(schema: z.ZodString, x: string) {
 //     return schema.parse(x)
 // }
 
 
-// function test_zod2<S extends z.ZodType<string>>(schema: S, x: string) {
+// function test_zod2<S extends z.ZodType<string | null>>(schema: S, x: string) {
 //     // you can safely parse to string here
 //     type Out = z.output<S>; // string
 //   }
@@ -99,8 +101,9 @@ export function ItemAssistantMessageComponent({ value, options }: DisplayCompone
 
 // test_zod2(z.string(), "test")
 // test_zod2(z.string().min(10), "test")
-// test_zod2(z.email(), "test") // wrong!!!
+// test_zod2(z.email(), "test")
 // test_zod2(z.uuid(), "test")
+// test_zod2(z.string().nullable(), "test")
 
 // test_zod2(z.number(), "test")
 // test_zod2(z.boolean(), "test")

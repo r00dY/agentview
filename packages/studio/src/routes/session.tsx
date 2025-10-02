@@ -203,10 +203,10 @@ function SessionPage() {
                                 itemComponent: <div
                                     className={`relative group`}
                                 >
-                                    <div className="absolute pl-2 left-[720px] pt-2 text-muted-foreground text-xs font-medium flex flex-row gap-1">
+                                    <div className="absolute pl-2 left-[720px] text-muted-foreground text-xs font-medium flex flex-row gap-1">
                                         {!hasComments && <Button className="group-hover:visible invisible" variant="outline" size="icon_xs" onClick={() => { setselectedItemId(item.id) }}><MessageCirclePlus className="size-3" /></Button>}
                                     </div>
-                                    <div className="relative max-w-[720px] py-2 pl-6">
+                                    <div className="relative max-w-[720px] pl-6">
 
                                         {content}
 
@@ -244,7 +244,7 @@ function SessionPage() {
                                 //     </div>} */}
                                 // </div>,
                                 commentsComponent: (hasComments || (selectedItemId === item.id)) ?
-                                    <div className="relative pt-2 pr-4"><CommentSessionFloatingBox
+                                    <div className="relative pr-4"><CommentSessionFloatingBox
                                         item={item}
                                         session={session}
                                         selected={selectedItemId === item.id}
