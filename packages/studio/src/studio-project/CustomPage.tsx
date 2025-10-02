@@ -42,8 +42,9 @@ function ProfileForm() {
         <FormField
           control={form.control}
           name="username"
-          render={({ field }) => (
-            <FormItem>
+          render={({ field }) => {  
+            console.log(field)
+            return <FormItem>
               <FormLabel>Username</FormLabel>
               <FormControl>
                 <Input placeholder="shadcn" {...field} />
@@ -53,7 +54,7 @@ function ProfileForm() {
               </FormDescription>
               <FormMessage />
             </FormItem>
-          )}
+          }}
         />
         <Button type="submit">Submit</Button>
       </form>
