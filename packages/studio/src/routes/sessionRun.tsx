@@ -96,8 +96,31 @@ function Component() {
 
                 </PropertyList.Root>
 
+                <div className="mt-8 border p-4 rounded-lg flex flex-row gap-4 items-center">  
 
-                <div className="mt-8 flex flex-col gap-2 items-start">  
+                    <div>
+                        <div className="text-sm font-medium">Debug in console</div>
+                        <div className="text-sm text-muted-foreground">
+                            See request / response of your Agent API call, full error details or metadata.
+                        </div>
+                    </div>
+                        <Button variant="default" onClick={() => {
+                    console.log({
+                        id: run.id,
+                        createdAt: run.createdAt,
+                        finishedAt: run.finishedAt,
+                        state: run.state,
+                        version: run.version,
+                        request: run.responseData?.request,
+                        response: run.responseData?.response,
+                        metadata: run.metadata,
+                        error: run.failReason,
+                    })
+                }}>Print to console</Button>
+
+                </div>
+
+                {/* <div className="mt-8 flex flex-col gap-2 items-start">  
                 <Button variant="outline" onClick={() => {
                     console.log({
                         id: run.id,
@@ -113,12 +136,12 @@ function Component() {
                 }}><TerminalIcon className="size-4" />Print all details to console</Button>
                 <p className="text-sm text-muted-foreground">See request / response of your Agent API call, full error details or metadata click the button below.</p>
 
-                </div>
+                </div> */}
                 
             </DialogBody>
-            <DialogFooter>
+            {/* <DialogFooter>
                 <Button variant="default" onClick={close}>Close</Button>
-            </DialogFooter>
+            </DialogFooter> */}
 
         </DialogContent>
     </Dialog>
