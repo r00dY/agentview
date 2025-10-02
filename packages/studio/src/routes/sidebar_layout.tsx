@@ -146,12 +146,12 @@ function Component() {
                     
                     return (
                       <SidebarMenuItem key={agent.name}>
-                        <SidebarMenuButton>{agent.name}</SidebarMenuButton>
+                        <SidebarMenuButton>                                <MessageCircle className="h-4 w-4" />
+                        {agent.name}</SidebarMenuButton>
                         <SidebarMenuSub className="mr-0">
                           <SidebarMenuSubItem className={realUnseenCount > 0 ? "flex justify-between items-center" : ""}>
                             <SidebarMenuSubButton asChild>
                               <Link to={`/sessions?agent=${agent.name}`}>
-                                <MessageCircle className="h-4 w-4" />
                                 <span>Production</span>
                               </Link>
                             </SidebarMenuSubButton>
@@ -160,7 +160,7 @@ function Component() {
                           <SidebarMenuSubItem className={simulatedPrivateUnseenCount > 0 ? "flex justify-between items-center" : ""}>
                             <SidebarMenuSubButton asChild>
                               <Link to={`/sessions?agent=${agent.name}&list=simulated_private`}>
-                                <UserIcon className="h-4 w-4" />
+                                {/* <UserIcon className="h-4 w-4" /> */}
                                 <span>Simulated Private</span>
                               </Link>
                             </SidebarMenuSubButton>
@@ -170,7 +170,7 @@ function Component() {
                           <SidebarMenuSubItem className={simulatedSharedUnseenCount > 0 ? "flex justify-between items-center" : ""}>
                             <SidebarMenuSubButton asChild>
                               <Link to={`/sessions?agent=${agent.name}&list=simulated_shared`}>
-                                <Users className="h-4 w-4" />
+                                {/* <Users className="h-4 w-4" /> */}
                                 <span>Simulated Shared</span>
                               </Link>
                             </SidebarMenuSubButton>
