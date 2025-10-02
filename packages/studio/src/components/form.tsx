@@ -10,6 +10,8 @@ import {
 } from "./ui/toggle-group"
 import { Textarea } from "./ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { FormDescription, FormItem, FormLabel, FormMessage, useFormField, FormField as FormFieldShadcn } from "./ui/form";
+import React from "react";
 
 export type FormFieldBaseProps = {
     id: string,
@@ -112,7 +114,7 @@ export const SelectInput: React.ComponentType<FormInputProps<string | undefined>
             <SelectValue placeholder="Pick option" />
         </SelectTrigger>
         <SelectContent>
-            { options.items.map((item: any) => {
+            {options.items.map((item: any) => {
                 const value = typeof item === 'string' ? item : item.value;
                 const label = typeof item === 'string' ? item : (item.label ?? item.value)
 
@@ -126,3 +128,63 @@ export const SelectInput: React.ComponentType<FormInputProps<string | undefined>
 
 
 
+export type ControlComponentProps<V> = {
+    name: string,
+    value: V,
+    onChange: (value: V) => void,
+    controlProps: {
+        id: string,
+        "aria-describedby": string,
+        "aria-invalid": boolean
+    }
+}
+
+export type ControlComponent<V> = React.ComponentType<ControlComponentProps<V>>;
+
+export const TextInput2 = ({ value, onChange, name, controlProps, ...inputProps }: React.ComponentProps<"input"> & ControlComponentProps<string | undefined>) => {
+    return <Input
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value === "" ? undefined : e.target.value)}
+        name={name}
+        {...controlProps}
+        {...inputProps}
+    />
+}
+
+export type FormField2Props<V = any> = {
+    name: string,
+    label?: string,
+    description?: string,
+    control: React.ReactElement<ControlComponentProps<V>>
+}
+
+export function FormField2(props: FormField2Props) {
+    const { error, formItemId, formDescriptionId, formMessageId } = useFormField()
+
+    const id = formItemId;
+    const ariaDescribedby = !error
+        ? `${formDescriptionId}`
+        : `${formDescriptionId} ${formMessageId}`;
+    const ariaInvalid = !!error;
+
+    return <FormFieldShadcn
+        name={props.name}
+        render={({ field }) => {
+            return <FormItem>
+                <FormLabel>{props.label}</FormLabel>
+                {React.cloneElement(props.control, {
+                    ...field,
+                    controlProps: {
+                        id,
+                        "aria-describedby": ariaDescribedby,
+                        "aria-invalid": ariaInvalid
+                    }
+                })}
+                {props.description && <FormDescription>
+                    {props.description}
+                </FormDescription>}
+                <FormMessage />
+            </FormItem>
+        }}
+    />
+}
