@@ -188,7 +188,7 @@ function Component() {
 
 
             {user.role === "admin" && <SidebarGroup>
-              {/* <SidebarGroupLabel>Menu</SidebarGroupLabel> */}
+              <SidebarGroupLabel>Organisation</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
                   <SidebarMenuItem>
