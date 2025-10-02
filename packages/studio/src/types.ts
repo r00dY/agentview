@@ -1,5 +1,6 @@
 import type { RouteObject } from "react-router";
 import type { BaseScoreConfig, BaseSessionItemConfig, BaseAgentConfig, BaseConfig } from "./lib/shared/configTypes";
+import type { Session } from "./lib/shared/apiTypes";
 
 export type FormInputProps<T=any> = {
   id: string,
@@ -43,7 +44,14 @@ export type CustomRoute = {
   title: React.ReactNode,
 }
 
-export type AgentConfig = BaseAgentConfig<SessionItemConfig>;
+export type DisplayedProperty = {
+  title?: string;
+  value: any;
+}
+
+export type AgentConfig = BaseAgentConfig<SessionItemConfig> & {
+  displayedProperties?: (args: { session: Session }) => DisplayedProperty[];
+};
   
 export type AgentViewConfig = {
   apiBaseUrl: string;

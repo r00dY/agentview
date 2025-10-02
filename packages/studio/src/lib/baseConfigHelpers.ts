@@ -12,7 +12,7 @@ export function getBaseConfig(config: AgentViewConfig): BaseConfig {
     agents: (config.agents ?? []).map((agent) => ({
       name: agent.name,
       url: agent.url,
-      metadata: agent.metadata,
+      context: agent.context,
       items: agent.items.map((item) => ({
       type: item.type,
         role: item.role,

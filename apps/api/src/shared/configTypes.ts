@@ -16,7 +16,7 @@ export interface BaseSessionItemConfig<ScoreConfigType> {
 export interface BaseAgentConfig<SessionItemType> {
     name: string;
     url: string;
-    metadata?: any;//z.ZodType; // TODO: fix this
+    context?: z.ZodType;
     items: SessionItemType[];
 }
 

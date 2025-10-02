@@ -423,7 +423,7 @@ async function getSessions(params: z.infer<typeof SessionsGetQueryParamsSchema>,
     handle: row.sessions.handleNumber.toString() + (row.sessions.handleSuffix ?? ""),
     createdAt: row.sessions.createdAt,
     updatedAt: row.sessions.updatedAt,
-    metadata: row.sessions.metadata,
+    context: row.sessions.context,
     agent: row.sessions.agent,
     client: row.clients!,
   }));
@@ -578,11 +578,13 @@ app.openapi(sessionsPOSTRoute, async (c) => {
     }
   })()
 
-  // Validate metadata against the schema
-  try {
-    agentConfig.metadata?.parse(body.metadata);
-  } catch (error: any) {
-    return c.json({ message: error.message }, 400);
+  // Validate context against the schema
+  if (agentConfig.context) {
+    try {
+      agentConfig.context.parse(body.context);
+    } catch (error: any) {
+      return c.json({ message: error.message }, 400);
+    }
   }
 
   const newSession = await db.transaction(async (tx) => {
@@ -598,7 +600,7 @@ app.openapi(sessionsPOSTRoute, async (c) => {
     const [newSessionRow] = await tx.insert(sessions).values({ 
       handleNumber: newHandleNumber,
       handleSuffix: handleSuffix,
-      metadata: body.metadata,
+      context: body.context,
       agent: body.agent,
       clientId: client.id 
     }).returning();
@@ -772,7 +774,7 @@ app.openapi(runsPOSTRoute, async (c) => {
         id: session.id,
         createdAt: session.createdAt,
         updatedAt: session.updatedAt,
-        metadata: session.metadata,
+        context: session.context,
         clientId: session.clientId,
         agent: session.agent,
         items: getAllSessionItems(session),

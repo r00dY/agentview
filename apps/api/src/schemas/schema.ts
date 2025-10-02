@@ -67,7 +67,7 @@ export const sessions = pgTable("sessions", {
   handleSuffix: varchar("handle_suffix", { length: 255 }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
-  metadata: jsonb("data"),
+  context: jsonb("data"),
   clientId: uuid("client_id").notNull().references(() => clients.id, { onDelete: 'cascade' }),
   agent: varchar("agent", { length: 255 }).notNull(),
 }, (table) => [uniqueIndex('sessions_handle_unique').on(table.handleNumber, table.handleSuffix)]);

@@ -57,7 +57,7 @@ export async function fetchSessions(session_id?: string, tx?: Transaction) {
     handle: row.handleNumber.toString() + (row.handleSuffix ?? ""),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
-    metadata: row.metadata,
+    context: row.context,
     agent: row.agent,
     clientId: row.clientId,
     client: row.client,

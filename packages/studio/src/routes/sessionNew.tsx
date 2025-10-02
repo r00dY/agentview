@@ -17,14 +17,14 @@ async function loader({ request }: LoaderFunctionArgs) {
   const listParams = getListParams(request);
   const agentConfig = requireAgentConfig(config, listParams.agent);
  
-  if (agentConfig.metadata && (agentConfig.metadata?.length > 0)) {
+  if (agentConfig.context) {
     return {
       agentConfig,
       listParams
     }
   }
 
-  /** NO METADATA CASE **/
+  /** NO CONTEXT CASE **/
 
   const clientResponse = await apiFetch('/api/clients', {
     method: 'POST',
@@ -75,7 +75,7 @@ async function action({ request, params }: ActionFunctionArgs): Promise<ActionRe
     body: {
       agent: agentConfig.name,
       clientId: clientResponse.data.id,
-      metadata: parsedData.metadata
+      context: parsedData.context
     }
   });
 
@@ -119,9 +119,11 @@ function Content() {
 
     <Form method="post" ref={formRef} className="max-w-xl">
 
-      {agentConfig.metadata?.length > 0 && (<div>
+      {agentConfig.context && (<div>
 
-        <div className="space-y-2">
+        Form
+
+        {/* <div className="space-y-2">
           {agentConfig.metadata?.map((metafield: any) => (<FormField
             key={metafield.name}
             id={metafield.name}
@@ -134,7 +136,7 @@ function Content() {
             options={metafield.options}
           />
           ))}
-        </div>
+        </div> */}
 
       </div>)}
 

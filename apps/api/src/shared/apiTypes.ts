@@ -122,7 +122,7 @@ export const SessionBaseSchema = z.object({
     handle: z.string(),
     createdAt: z.iso.date(),
     updatedAt: z.iso.date(),
-    metadata: z.any(),
+    context: z.any(),
     agent: z.string(),
     client: ClientSchema,
 })
@@ -137,7 +137,7 @@ export type Session = z.infer<typeof SessionSchema>
 
 export const SessionCreateSchema = SessionBaseSchema.pick({
     agent: true,
-    metadata: true,
+    context: true,
 }).extend({
     clientId: z.string().optional(),
     isShared: z.boolean().optional(),

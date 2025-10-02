@@ -54,15 +54,19 @@ export default defineConfig({
         {
             name: "pdp_chat",
             url: "http://127.0.0.1:8000/product_chat",
-            metadata: [
-                {
-                    name: "product_id",
-                    title: "Product",
-                    schema: z.string(),
-                    input: ProductSelect,
-                    display: ProductDisplay
-                }
-            ],
+            context: z.object({
+                product_id: z.string(),
+            }),
+            
+            // metadata: [
+            //     {
+            //         name: "product_id",
+            //         title: "Product",
+            //         schema: z.string(),
+            //         input: ProductSelect,
+            //         display: ProductDisplay
+            //     }
+            // ],
             items: [
                 {
                     input: true,

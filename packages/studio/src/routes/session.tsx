@@ -310,13 +310,21 @@ function SessionDetails({ session, agentConfig }: { session: Session, agentConfi
                     </PropertyList.TextValue>
                 </PropertyList.Item>
 
+                <PropertyList.Item>
+                    <PropertyList.Title>
+                        Context
+                    </PropertyList.Title>
+                    <PropertyList.TextValue>
+                        {session.context ? <pre className="text-xs">{JSON.stringify(session.context, null, 2)}</pre> : "-"}
+                    </PropertyList.TextValue>
+                </PropertyList.Item>
 
-                {(agentConfig.metadata ?? []).map((metafield: any) => (
+                {/* {(agentConfig.metadata ?? []).map((metafield: any) => (
                     <PropertyList.Item className="items-start">
                         <PropertyList.Title>{metafield.title ?? metafield.name}</PropertyList.Title>
                         <PropertyList.TextValue><metafield.display value={session.metadata?.[metafield.name]} options={metafield.options} /></PropertyList.TextValue>
                     </PropertyList.Item>
-                ))}
+                ))} */}
             </PropertyList.Root>
         </div>
     );

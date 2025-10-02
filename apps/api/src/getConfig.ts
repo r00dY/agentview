@@ -9,7 +9,7 @@ function parseConfig(config: any): BaseConfig {
         agents: config.agents.map((agent: any) => ({
             name: agent.name,
             url: agent.url,
-            metadata: agent.metadata ? convertJsonSchemaToZod(agent.metadata) : undefined,
+            context: agent.context ? convertJsonSchemaToZod(agent.context) : undefined,
             items: agent.items?.map((item: any) => ({
                 ...item,
                 content: convertJsonSchemaToZod(item.content),
