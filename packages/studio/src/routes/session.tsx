@@ -403,21 +403,7 @@ function InputForm({ session, agentConfig }: { session: Session, agentConfig: Ag
                 {inputConfigs.length === 1 ? (
                     // Single input config - no tabs
                     <div>
-
                         <InputFormFields inputConfig={inputConfigs[0]} />
-                        {/* 
-                    {inputConfigs[0].input && (
-
-                        <FormField
-                            id={"inputFormValue"}
-                            // error={fetcher.data?.error?.fieldErrors?.[`metadata.${metafield.name}`]}
-                            name={"inputFormValue"}
-                            defaultValue={undefined}
-                            // defaultValue={scores[metafield.name] ?? undefined}
-                            InputComponent={inputConfigs[0].input}
-                            options={inputConfigs[0].options}
-                        />
-                    )} */}
                     </div>
                 ) : (
                     // Multiple input configs - use tabs
