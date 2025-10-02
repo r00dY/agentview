@@ -151,7 +151,7 @@ function Component() {
                           <SidebarMenuSubItem className={realUnseenCount > 0 ? "flex justify-between items-center" : ""}>
                             <SidebarMenuSubButton asChild>
                               <Link to={`/sessions?agent=${agent.name}`}>
-                                <MessageCircle className="mr-2 h-4 w-4" />
+                                <MessageCircle className="h-4 w-4" />
                                 <span>Production</span>
                               </Link>
                             </SidebarMenuSubButton>
@@ -160,7 +160,7 @@ function Component() {
                           <SidebarMenuSubItem className={simulatedPrivateUnseenCount > 0 ? "flex justify-between items-center" : ""}>
                             <SidebarMenuSubButton asChild>
                               <Link to={`/sessions?agent=${agent.name}&list=simulated_private`}>
-                                <UserIcon className="mr-2 h-4 w-4" />
+                                <UserIcon className="h-4 w-4" />
                                 <span>Simulated Private</span>
                               </Link>
                             </SidebarMenuSubButton>
@@ -170,7 +170,7 @@ function Component() {
                           <SidebarMenuSubItem className={simulatedSharedUnseenCount > 0 ? "flex justify-between items-center" : ""}>
                             <SidebarMenuSubButton asChild>
                               <Link to={`/sessions?agent=${agent.name}&list=simulated_shared`}>
-                                <Users className="mr-2 h-4 w-4" />
+                                <Users className="h-4 w-4" />
                                 <span>Simulated Shared</span>
                               </Link>
                             </SidebarMenuSubButton>
@@ -195,7 +195,7 @@ function Component() {
 
                     <SidebarMenuButton asChild>
                       <Link to="/members">
-                        <Users className="mr-2 h-4 w-4" />
+                        <Users className="h-4 w-4" />
                         <span>Members</span>
                       </Link>
 
@@ -205,12 +205,29 @@ function Component() {
                   <SidebarMenuItem>
                     <SidebarMenuButton asChild>
                       <Link to="/config">
-                        <Database className="mr-2 h-4 w-4" />
+                        <Database className="h-4 w-4" />
                         <span>Config</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                </SidebarMenu>
+
+                {config.customRoutes?.filter(route => route.scope === "loggedIn").map((route) => {
+                  if (!route.route.path) {
+                    throw new Error("Custom route path is required")
+                  }
+                  
+                  return (
+                    <SidebarMenuItem key={route.route.path}>
+                      <SidebarMenuButton asChild>
+                        <Link to={route.route.path}>
+                          { route.title }
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  )
+                })}               
+                 </SidebarMenu>
+
               </SidebarGroupContent>
             </SidebarGroup>}
 
@@ -221,7 +238,7 @@ function Component() {
                   <SidebarMenuItem>
                     <SidebarMenuButton asChild>
                       <Link to="/emails">
-                        <Mail className="mr-2 h-4 w-4" />
+                        <Mail className="h-4 w-4" />
                         <span>Emails</span>
                       </Link>
                     </SidebarMenuButton>
@@ -248,16 +265,16 @@ function Component() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent side="top" className="w-[--radix-popper-anchor-width]">
                     <DropdownMenuItem onClick={() => { setEditProfileOpen(true) }}>
-                      <Edit className="mr-2 h-4 w-4" />
+                      <Edit className="h-4 w-4" />
                       Edit Account
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => { setChangePasswordOpen(true) }}>
-                      <Lock className="mr-2 h-4 w-4" />
+                      <Lock className="h-4 w-4" />
                       Change Password
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
                       <Link to="/logout">
-                        <LogOut className="mr-2 h-4 w-4" />
+                        <LogOut className="h-4 w-4" />
                         Log out
                       </Link>
                     </DropdownMenuItem>

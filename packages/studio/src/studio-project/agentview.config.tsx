@@ -1,12 +1,13 @@
 import { defineConfig } from "~";
 import { z } from "zod";
-import { ThumbsDown, ThumbsUp } from "lucide-react";
+import { Book, ThumbsDown, ThumbsUp } from "lucide-react";
 import { SelectInput, TextareaInput, ToggleBooleanInput } from "~/components/form";
 import { ItemAssistantMessageComponent, ItemUserMessageComponent, DisplayBooleanComponent } from "~/components/display";
 import { marked } from "marked";
 import { ProductDisplay } from "./ProductDisplay";
 import { ProductSelect } from "./ProductSelect";
 import { ScoreBadge } from "./ScoreBadge";
+import { CustomPage } from "./CustomPage";
 
 export default defineConfig({
     apiBaseUrl: "http://localhost:8080",
@@ -172,6 +173,19 @@ export default defineConfig({
                     ]
                 },
             ]
+        }
+    ],
+    customRoutes: [
+        {
+            route: {
+                path: "/custom",
+                Component: CustomPage
+            },
+            scope: "loggedIn",
+            title: <>
+                <Book className="size-4" />
+                <span>Custom</span>
+            </>
         }
     ]
 })

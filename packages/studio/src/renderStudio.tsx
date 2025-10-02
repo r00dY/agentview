@@ -1,4 +1,4 @@
-import { RouterProvider } from "react-router";
+import { createBrowserRouter, RouterProvider } from "react-router";
 import type { AgentViewConfig } from "./types";
 import { createRoot } from "react-dom/client";
 
@@ -10,8 +10,9 @@ export async function renderStudio(rootElement: HTMLElement | null, config: Agen
     config
   }
 
-  import("./routes").then(({ router }) => {
+  import("./routes").then(({ routes }) => {
     const root = createRoot(rootElement);
-    root.render(<RouterProvider router={router} />)
+    console.log(routes(config.customRoutes))
+    root.render(<RouterProvider router={createBrowserRouter(routes(config.customRoutes))} />)
   })
 }

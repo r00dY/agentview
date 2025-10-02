@@ -1,3 +1,4 @@
+import type { RouteObject } from "react-router";
 import type { BaseScoreConfig, BaseSessionItemConfig, BaseAgentConfig, BaseConfig } from "./lib/shared/configTypes";
 
 export type FormInputProps<T=any> = {
@@ -36,10 +37,16 @@ export type StepSessionItemConfig = BaseSessionItemConfig<ScoreConfig> & {
 
 export type SessionItemConfig = InputSessionItemConfig | StepSessionItemConfig;
 
+export type CustomRoute = {
+  route: RouteObject;
+  scope: "default" | "loggedIn",
+  title: React.ReactNode,
+}
 
 export type AgentConfig = BaseAgentConfig<SessionItemConfig>;
   
 export type AgentViewConfig = {
   apiBaseUrl: string;
-  agents?: AgentConfig[],  
+  agents?: AgentConfig[],
+  customRoutes?: CustomRoute[],
 }

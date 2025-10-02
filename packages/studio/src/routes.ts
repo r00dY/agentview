@@ -1,5 +1,5 @@
-import { createBrowserRouter, type NonIndexRouteObject } from "react-router";
-import { sidebarLayoutRoute} from "./routes/sidebar_layout";
+import { createBrowserRouter, type NonIndexRouteObject, type RouteObject } from "react-router";
+import { sidebarLayoutRoute } from "./routes/sidebar_layout";
 import { homeRoute } from "./routes/home";
 import { userRoute } from "./routes/user";
 import { membersRoute } from "./routes/members";
@@ -20,120 +20,129 @@ import { sessionItemCommentRoute } from "./routes/sessionItemComment";
 import { configsRoute } from "./routes/configs";
 import { logoutRoute } from "./routes/logout";
 import { changePasswordRoute } from "./routes/change-password";
-import { loginRoute} from "./routes/login";
+import { loginRoute } from "./routes/login";
 import { signupRoute } from "./routes/signup";
 import { rootRoute } from "./root";
 import { sessionRunRoute } from "./routes/sessionRun";
+import type { AgentViewConfig } from "./types";
 
-export const router = createBrowserRouter([
-  {
-    path: "/",
-    ...rootRoute,
-    children: [
-      {
-        path: "/",
-        ...sidebarLayoutRoute,
-        children: [
-          {
-            ...homeRoute,
-            index: true,
-          },
-          {
-            path: "user",
-            ...userRoute,
-          },
-          {
-            path: "members",
-            ...membersRoute,
-            children: [
-              {
-                path: "invitations/new",
-                ...membersInviteRoute,
-              },
-              {
-                path: "invitations/:invitationId/cancel",
-                ...membersInviteCancelRoute,
-              },
-              {
-                path: ":userId/edit",
-                ...membersEditRoute,
-              },
-              {
-                path: ":userId/delete",
-                ...membersDeleteRoute,
-              },
-            ],
-          },
-          {
-            path: "emails",
-            ...emailsRoute,
-          },
-          {
-            path: "emails/:id",
-            ...emailDetailRoute,
-          },
-          {
-            path: "clients/:clientId/share",
-            ...clientShareRoute,
-          },
-          {
-            path: "sessions",
-            ...sessionsRoute,
-            children: [
-              {
-                ...sessionsIndexRoute,
-                index: true,
-              },
-              {
-                path: "new",
-                ...sessionNewRoute,
-              },
-              {
-                path: ":id",
-                ...sessionRoute,
-                children: [
-                  {
-                    path: "items/:itemId",
-                    ...sessionItemRoute,
-                  },
-                  {
-                    path: "runs/:runId",
-                    ...sessionRunRoute,
-                  },
-                  {
-                    path: "items/:itemId/comments",
-                    ...sessionItemCommentsRoute,
-                  },
-                  {
-                    path: "items/:itemId/comments/:commentId",
-                    ...sessionItemCommentRoute,
-                  },
-                ],
-              },
-            ],
-          },
-          {
-            path: "config",
-            ...configsRoute,
-          },
-          {
-            path: "change-password",
-            ...changePasswordRoute,
-          },
-        ],
-      },
-      {
-        path: "logout",
-        ...logoutRoute
-      },
-      {
-        path: "login",
-        ...loginRoute
-      },
-      {
-        path: "signup",
-        ...signupRoute
-      },
-    ],
-  } as NonIndexRouteObject
-]);
+export function routes(customRoutes: AgentViewConfig["customRoutes"]): RouteObject[] {
+
+  const defaultRoutes = (customRoutes?.filter(route => route.scope === "default") || []).map(route => route.route);
+  const loggedInRoutes = (customRoutes?.filter(route => route.scope === "loggedIn") || []).map(route => route.route);
+
+  return [
+    {
+      path: "/",
+      ...rootRoute,
+      children: [
+        {
+          path: "/",
+          ...sidebarLayoutRoute,
+          children: [
+            {
+              ...homeRoute,
+              index: true,
+            },
+            {
+              path: "user",
+              ...userRoute,
+            },
+            {
+              path: "members",
+              ...membersRoute,
+              children: [
+                {
+                  path: "invitations/new",
+                  ...membersInviteRoute,
+                },
+                {
+                  path: "invitations/:invitationId/cancel",
+                  ...membersInviteCancelRoute,
+                },
+                {
+                  path: ":userId/edit",
+                  ...membersEditRoute,
+                },
+                {
+                  path: ":userId/delete",
+                  ...membersDeleteRoute,
+                },
+              ],
+            },
+            {
+              path: "emails",
+              ...emailsRoute,
+            },
+            {
+              path: "emails/:id",
+              ...emailDetailRoute,
+            },
+            {
+              path: "clients/:clientId/share",
+              ...clientShareRoute,
+            },
+            {
+              path: "sessions",
+              ...sessionsRoute,
+              children: [
+                {
+                  ...sessionsIndexRoute,
+                  index: true,
+                },
+                {
+                  path: "new",
+                  ...sessionNewRoute,
+                },
+                {
+                  path: ":id",
+                  ...sessionRoute,
+                  children: [
+                    {
+                      path: "items/:itemId",
+                      ...sessionItemRoute,
+                    },
+                    {
+                      path: "runs/:runId",
+                      ...sessionRunRoute,
+                    },
+                    {
+                      path: "items/:itemId/comments",
+                      ...sessionItemCommentsRoute,
+                    },
+                    {
+                      path: "items/:itemId/comments/:commentId",
+                      ...sessionItemCommentRoute,
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              path: "config",
+              ...configsRoute,
+            },
+            {
+              path: "change-password",
+              ...changePasswordRoute,
+            },
+            ...loggedInRoutes
+          ],
+        },
+        {
+          path: "logout",
+          ...logoutRoute
+        },
+        {
+          path: "login",
+          ...loginRoute
+        },
+        {
+          path: "signup",
+          ...signupRoute
+        },
+        ...defaultRoutes
+      ],
+    } as NonIndexRouteObject
+  ]
+}
