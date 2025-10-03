@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { useOnFormReset } from '~/hooks/useOnFormReset';
-import type { FormInputProps } from "~/types";
+import type { AgentSessionInputComponent, FormInputProps } from "~/types";
 import { Input } from "./ui/input";
 import { Switch } from "./ui/switch";
 import {
@@ -13,6 +13,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { FormDescription, FormItem, FormLabel, FormMessage, useFormField, FormField as FormFieldShadcn, FormControl } from "./ui/form";
 import React from "react";
 import type { ControllerRenderProps, FieldValues } from "react-hook-form";
+
+
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Form } from "./ui/form";
+import { Alert } from "./ui/alert";
+import { AlertCircleIcon } from "lucide-react";
+import { AlertDescription } from "./ui/alert";
+import { Button } from "./ui/button";
+import { z } from "zod";
 
 export type FormFieldBaseProps = {
     id: string,
@@ -143,8 +153,6 @@ export type AVFormFieldProps<TInput = any, TOutput = TInput> = {
 }
 
 export function AVFormField<TInput = any, TOutput = TInput>(props: AVFormFieldProps<TInput, TOutput>) {    
-    console.log('AVFormField', props)
-
     const Control = props.control;
 
     return <FormFieldShadcn
@@ -173,3 +181,50 @@ export const AVInput = ({ value, onChange, name, ...inputProps }: React.Componen
         />
     </FormControl>
 }
+
+export type AVFormHelperField<TValue extends z.ZodTypeAny = any, TInput = any, TOutput = TInput> = AVFormFieldProps<TInput, TOutput> & {
+    schema: TValue
+    defaultValue?: z.infer<TValue>
+}
+
+export function form(fields: AVFormHelperField[]) : AgentSessionInputComponent {
+    const defaultValues : Record<string, any> = {}
+    for (const field of fields) {
+        defaultValues[field.name] = field.defaultValue;
+    }
+
+    return ({ onSubmit, error, schema }) => {
+        const form = useForm({
+            resolver: zodResolver<any, any, any>(schema),
+            defaultValues
+        })
+    
+        return <Form {...form}>
+            { error && <Alert variant="destructive" className="mb-4">
+                <AlertCircleIcon className="h-4 w-4" />
+                <AlertDescription>{error.message}</AlertDescription>
+            </Alert> }
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                {fields.map((field) => {
+                    const { defaultValue, ...fieldProps } = field;
+                    return <AVFormField
+                        {...fieldProps}
+                    />
+                })}
+                <Button type="submit">Submit</Button>
+            </form>
+        </Form>
+    }
+}
+
+export function field<TValue extends z.ZodTypeAny = any, TInput = any, TOutput = TInput>(props: AVFormHelperField<TValue, TInput, TOutput>) {
+    return props;
+}
+
+const test = field({
+    name: "username",
+    label: "Username",
+    control: AVInput,
+    schema: z.number(),
+    defaultValue: 10
+})

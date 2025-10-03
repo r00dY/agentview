@@ -1,7 +1,7 @@
 import { defineConfig } from "~";
 import { z } from "zod";
 import { Book, ThumbsDown, ThumbsUp } from "lucide-react";
-import { SelectInput, TextareaInput, ToggleBooleanInput } from "~/components/form";
+import { field, form, SelectInput, TextareaInput, ToggleBooleanInput } from "~/components/form";
 import { ItemAssistantMessageComponent, ItemUserMessageComponent, DisplayBooleanComponent } from "~/components/display";
 import { marked } from "marked";
 import { ProductDisplay } from "./ProductDisplay";
@@ -58,17 +58,14 @@ export default defineConfig({
             context: z.object({
                 product_id: z.string(),
             }),
-            inputComponent: ProductChatInputForm,
-            
-            // metadata: [
-            //     {
-            //         name: "product_id",
-            //         title: "Product",
-            //         schema: z.string(),
-            //         input: ProductSelect,
-            //         display: ProductDisplay
-            //     }
-            // ],
+            inputComponent: form([
+                {
+                    name: "product_id",
+                    label: "Product",
+                    schema: z.string(),
+                    control: ProductSelect,
+                }
+            ]),
             items: [
                 {
                     input: true,

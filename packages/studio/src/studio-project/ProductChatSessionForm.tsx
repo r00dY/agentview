@@ -29,6 +29,3 @@ export const ProductChatInputForm: AgentSessionInputComponent = ({ onSubmit, err
         </form>
     </Form>
 }
-
-import { z } from "zod";
-(window as any).z = z;
