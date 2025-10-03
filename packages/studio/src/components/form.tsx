@@ -141,12 +141,21 @@ export type ControlComponentProps<V> = {
 
 export type ControlComponent<V> = React.ComponentType<ControlComponentProps<V>>;
 
+// export const TextInput2 = ({ value, onChange, name, controlProps, ...inputProps }: React.ComponentProps<"input"> & ControlComponentProps<string | undefined>) => {
+//     return <Input
+//         value={value ?? ""}
+//         onChange={(e) => onChange(e.target.value === "" ? undefined : e.target.value)}
+//         name={name}
+//         {...controlProps}
+//         {...inputProps}
+//     />
+// }
+
 export const TextInput2 = ({ value, onChange, name, controlProps, ...inputProps }: React.ComponentProps<"input"> & ControlComponentProps<string | undefined>) => {
     return <Input
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value === "" ? undefined : e.target.value)}
         name={name}
-        {...controlProps}
         {...inputProps}
     />
 }
@@ -155,7 +164,8 @@ export type FormField2Props<V = any> = {
     name: string,
     label?: string,
     description?: string,
-    control: React.ReactElement<ControlComponentProps<V>>
+    // control: React.ReactElement<ControlComponentProps<V>>
+    control: (props: ControlComponentProps<V>) => React.ReactNode
 }
 
 export function FormField2(props: FormField2Props) {
@@ -172,7 +182,7 @@ export function FormField2(props: FormField2Props) {
         render={({ field }) => {
             return <FormItem>
                 <FormLabel>{props.label}</FormLabel>
-                {React.cloneElement(props.control, {
+                {props.control({
                     ...field,
                     controlProps: {
                         id,

@@ -481,7 +481,7 @@ function RootForm({ schema, errors, onSubmit }: RootFormProps) {
         name="username"
         label="Username"
         description="This is your public display name."
-        control={<TextInput2 placeholder="Dupa" />}
+        control={(props) => <TextInput2 {...props} placeholder="Dupa" />}
       />
       <Button type="submit">Submit</Button>
     </form>
@@ -518,3 +518,4 @@ export function CustomPage() {
     </div>
   </div>
 }
+
