@@ -5,7 +5,7 @@ import { HTTPException } from 'hono/http-exception'
 import { cors } from 'hono/cors'
 import { streamSSE } from 'hono/streaming'
 import { APIError as BetterAuthAPIError } from "better-auth/api";
-import type { User as BetterAuthUser } from "better-auth";
+import type { User as BetterAuthUser, ZodError } from "better-auth";
 
 import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
 import { swaggerUI } from '@hono/swagger-ui'
@@ -580,13 +580,13 @@ app.openapi(sessionsPOSTRoute, async (c) => {
 
   // Validate context against the schema
   if (agentConfig.context) {
-
-    return c.json({ message: "This is big error" }, 400);
-
     try {
-      agentConfig.context.parse(body.context);
-    } catch (error: any) {
-      return c.json({ message: error.message }, 400);
+      agentConfig.context.parse("xxx")//body.context);
+    } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        return c.json({ message: "Error parsing the session context.", code: 'parse.schema', details: error.issues }, 400);
+      }
+      throw new Error("Unreachable");
     }
   }
 
@@ -728,7 +728,7 @@ app.openapi(runsPOSTRoute, async (c) => {
   try {
     itemConfig.content.parse(content);
   } catch (error: any) {
-    return c.json({ message: `Invalid content: ${error.message}` }, 400);
+    return c.json({ message: `Invalid content: ${error.message}`, code: 'parse.schema', issues: error.issues }, 400);
   }
 
   const lastRun = getLastRun(session)
@@ -1131,10 +1131,9 @@ function validateScore(config: BaseConfig, session: Session, item: SessionItem, 
   }
 
   // Validate value against the schema
-  try {
-    scoreConfig.schema.parse(scoreValue);
-  } catch (error: any) {
-    throw new Error(`Invalid score value: ${error.message}`);
+  const result = scoreConfig.schema.safeParse(scoreValue);
+  if (!result) {
+    throw new HTTPException(400, { message: `Error parsing the score value for score "${scoreName}"`}); // todo: add result.error.issues and "parse.schema" error code.
   }
 }
 

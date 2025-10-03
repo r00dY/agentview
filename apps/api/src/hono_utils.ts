@@ -15,7 +15,7 @@ export function response_data<T extends z.ZodTypeAny>(schema: T, description?: s
     return {
       content: {
         'application/json': {
-          schema: z.object({ message: z.string() }),
+          schema: z.object({ message: z.string(), code: z.string().optional() }),
         },
       },
       description: description ?? 'Undescribed',
