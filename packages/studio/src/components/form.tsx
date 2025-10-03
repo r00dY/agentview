@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { useOnFormReset } from '~/hooks/useOnFormReset';
-import type { AgentSessionInputComponent, FormInputProps } from "~/types";
+import type { FormInputProps, InputComponent } from "~/types";
 import { Input } from "./ui/input";
 import { Switch } from "./ui/switch";
 import {
@@ -187,13 +187,13 @@ export type AVFormHelperField<TValue extends z.ZodTypeAny = any, TInput = any, T
     defaultValue?: z.infer<TValue>
 }
 
-export function form(fields: AVFormHelperField[]) : AgentSessionInputComponent {
+export function form(fields: AVFormHelperField[]) : InputComponent {
     const defaultValues : Record<string, any> = {}
     for (const field of fields) {
         defaultValues[field.name] = field.defaultValue;
     }
 
-    return ({ onSubmit, error, schema }) => {
+    return ({ submit, error, schema, isSubmitting }) => {
         const form = useForm({
             resolver: zodResolver<any, any, any>(schema),
             defaultValues
@@ -204,7 +204,7 @@ export function form(fields: AVFormHelperField[]) : AgentSessionInputComponent {
                 <AlertCircleIcon className="h-4 w-4" />
                 <AlertDescription>{error.message}</AlertDescription>
             </Alert> }
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(submit)} className="space-y-4">
                 {fields.map((field) => {
                     const { defaultValue, ...fieldProps } = field;
                     return <AVFormField
@@ -220,11 +220,3 @@ export function form(fields: AVFormHelperField[]) : AgentSessionInputComponent {
 export function field<TValue extends z.ZodTypeAny = any, TInput = any, TOutput = TInput>(props: AVFormHelperField<TValue, TInput, TOutput>) {
     return props;
 }
-
-const test = field({
-    name: "username",
-    label: "Username",
-    control: AVInput,
-    schema: z.number(),
-    defaultValue: 10
-})

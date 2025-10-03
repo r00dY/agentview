@@ -66,6 +66,12 @@ export default defineConfig({
                     control: ProductSelect
                 }
             ]),
+            displayedProperties: ({ session }) => [
+                {
+                    title: "Product",
+                    value: <ProductDisplay value={session.context.product_id} />
+                }
+            ],
             items: [
                 {
                     input: true,

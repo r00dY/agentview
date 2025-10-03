@@ -73,7 +73,12 @@ function Component() {
 
     <div className="flex-1 overflow-y-auto">
       <div className="p-6 max-w-4xl space-y-6">
-        {agentConfig.inputComponent && <agentConfig.inputComponent onSubmit={(values) => {fetcher.submit({ context: values }, { method: 'post', encType: 'application/json' })}} schema={agentConfig.context!} error={error} />}
+        {agentConfig.inputComponent && <agentConfig.inputComponent
+         submit={(values) => {fetcher.submit({ context: values }, { method: 'post', encType: 'application/json' })}}
+         schema={agentConfig.context!}
+         error={error}
+         isSubmitting={fetcher.state === "submitting"}
+        />}
       </div>
     </div>
   </div>

@@ -2,6 +2,7 @@ import type { RouteObject } from "react-router";
 import type { BaseScoreConfig, BaseSessionItemConfig, BaseAgentConfig, BaseConfig } from "./lib/shared/configTypes";
 import type { Session } from "./lib/shared/apiTypes";
 import type { z } from "zod";
+import type { BaseError } from "./lib/errors";
 
 export type FormInputProps<T=any> = {
   id: string,
@@ -46,21 +47,22 @@ export type CustomRoute = {
 }
 
 export type DisplayedProperty = {
-  title?: string;
+  title: string;
   value: any;
 }
 
-export type AgentSessionInputComponentProps = {
-  onSubmit: (value: any) => void,
-  error: any,
+export type InputComponentProps = {
+  submit: (value: any) => void,
+  isSubmitting: boolean,
+  error?: BaseError,
   schema: z.ZodTypeAny,
 }
 
-export type AgentSessionInputComponent = React.ComponentType<AgentSessionInputComponentProps>;
+export type InputComponent = React.ComponentType<InputComponentProps>;
 
 export type AgentConfig = BaseAgentConfig<SessionItemConfig> & {
   displayedProperties?: (args: { session: Session }) => DisplayedProperty[];
-  inputComponent?: React.ComponentType<AgentSessionInputComponentProps>;
+  inputComponent?: React.ComponentType<InputComponentProps>;
 };
 
 export type AgentViewConfig = {
