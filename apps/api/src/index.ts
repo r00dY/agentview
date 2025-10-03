@@ -581,7 +581,7 @@ app.openapi(sessionsPOSTRoute, async (c) => {
   // Validate context against the schema
   if (agentConfig.context) {
     try {
-      agentConfig.context.parse("xxx")//body.context);
+      agentConfig.context.parse(body.context);
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
         return c.json({ message: "Error parsing the session context.", code: 'parse.schema', details: error.issues }, 400);
