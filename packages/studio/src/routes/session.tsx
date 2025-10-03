@@ -24,6 +24,7 @@ import { config } from "~/config";
 import { findItemConfig, requireAgentConfig, requireItemConfig } from "~/lib/config";
 import { Loader } from "~/components/Loader";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import type { BaseError } from "~/lib/errors";
 
 async function loader({ request, params }: LoaderFunctionArgs) {
     const response = await apiFetch<Session>(`/api/sessions/${params.id}`);
@@ -350,50 +351,37 @@ function Component() {
 }
 
 function InputForm({ session, agentConfig }: { session: Session, agentConfig: AgentConfig }) {
-    const [formError, setFormError] = useState<string | null>(null)
+    const [error, setError] = useState<BaseError | undefined>(undefined)
 
     const lastRun = getLastRun(session)
     const revalidator = useRevalidator()
 
-    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault()
-
-        setFormError(null)
-
-        const formData = new FormData(e.target as HTMLFormElement)
-        const data = parseFormData(formData, { excludedFields: ['type', 'role'] })
-
-        const type = formData.get('type') as string;
-        const role = formData.get('role') === "" ? undefined : formData.get('role') as string;
-
-        if (data.value) {
-            try {
-                const response = await apiFetch(`/api/sessions/${session.id}/runs`, {
-                    method: 'POST',
-                    body: {
-                        input: {
-                            type,
-                            role,
-                            content: data.value
-                        }
+    const submit = async (values: any, inputItemConfig: SessionItemConfig) => {
+        try {
+            const response = await apiFetch(`/api/sessions/${session.id}/runs`, {
+                method: 'POST',
+                body: {
+                    input: {
+                        type: inputItemConfig.type,
+                        role: inputItemConfig.role,
+                        content: values
                     }
-                });
+                }
+            });
 
-                if (!response.ok) {
-                    console.error(response.error)
-                    setFormError('response not ok') // FIXME: error format fucked up (Zod)
-                }
-                else {
-                    revalidator.revalidate();
-                }
-            } catch (error) {
-                console.error(error)
-                setFormError(error instanceof Error ? error.message : 'Unknown error')
+            if (!response.ok) {
+                setError(response.error)
             }
+            else {
+                revalidator.revalidate();
+            }
+
+        } catch (error) {
+            setError(error instanceof Error ? { message: error.message } : { message: 'Unknown error' })
         }
     }
 
-    const handleCancel = async () => {
+    const cancel = async () => {
         await apiFetch(`/api/sessions/${session.id}/cancel_run`, {
             method: 'POST',
         })
@@ -409,16 +397,15 @@ function InputForm({ session, agentConfig }: { session: Session, agentConfig: Ag
 
             {runConfigs.length === 0 && <div className="text-sm text-muted-foreground">No runs</div>}
 
-            <form method="post" onSubmit={handleSubmit}>
-
                 {runConfigs.length === 1 ? (
                     // Single input config - no tabs
                     <div>
                         { FirstInputComponent && <FirstInputComponent
-                            submit={(values) => { handleSubmit(values) }}
+                            cancel={cancel}
+                            submit={(values) => { submit(values, runConfigs[0].input) }}
                             schema={runConfigs[0].input.content}
-                            error={undefined}
-                            isSubmitting={false}
+                            error={error}
+                            isRunning={lastRun?.state === 'in_progress'}
                         /> }
                     </div>
                 ) : (
@@ -443,7 +430,6 @@ function InputForm({ session, agentConfig }: { session: Session, agentConfig: Ag
 
                         {runConfigs.map((runConfig, index) => {
                             const inputConfig = runConfig.input;
-                            
                             const tabValue = `${inputConfig.type}-${inputConfig.role || 'default'}`;
 
                             const InputComponent = runConfig.inputComponent;
@@ -451,10 +437,11 @@ function InputForm({ session, agentConfig }: { session: Session, agentConfig: Ag
                             return (
                                 <TabsContent key={index} value={tabValue}>
                                     { InputComponent && <InputComponent
-                                        submit={(values) => { handleSubmit(values) }}
+                                        cancel={cancel}
+                                        submit={(values) => { submit(values, inputConfig) }}
                                         schema={inputConfig.content}
-                                        error={undefined}
-                                        isSubmitting={false}
+                                        error={error}
+                                        isRunning={lastRun?.state === 'in_progress'}
                                     /> }
                                 </TabsContent>
                             );
@@ -463,7 +450,7 @@ function InputForm({ session, agentConfig }: { session: Session, agentConfig: Ag
                 )}
 
                 {/* <Textarea name="message" placeholder="Reply here..." rows={1} className="mb-2" /> */}
-
+{/* 
                 <div className="flex flex-row gap-2 items-center mt-2">
 
                     {lastRun?.state !== 'in_progress' && <Button type="submit">Send <SendHorizonalIcon /></Button>}
@@ -476,7 +463,8 @@ function InputForm({ session, agentConfig }: { session: Session, agentConfig: Ag
                     </div>
 
                 </div>
-            </form>
+            </form> */}
+            
         </div>
     </div>
 }

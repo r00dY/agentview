@@ -77,7 +77,7 @@ function Component() {
          submit={(values) => {fetcher.submit({ context: values }, { method: 'post', encType: 'application/json' })}}
          schema={agentConfig.context!}
          error={error}
-         isSubmitting={fetcher.state === "submitting"}
+         isRunning={fetcher.state === "submitting"}
         />}
       </div>
     </div>

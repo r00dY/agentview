@@ -1,7 +1,7 @@
 import { defineConfig } from "~";
 import { z } from "zod";
 import { Book, ThumbsDown, ThumbsUp } from "lucide-react";
-import { field, form, SelectInput, TextareaInput, ToggleBooleanInput } from "~/components/form";
+import { AVTextarea, controlForm, field, form, SelectInput, TextareaInput, ToggleBooleanInput } from "~/components/form";
 import { ItemAssistantMessageComponent, ItemUserMessageComponent, DisplayBooleanComponent } from "~/components/display";
 import { marked } from "marked";
 import { ProductDisplay } from "./ProductDisplay";
@@ -49,7 +49,10 @@ export default defineConfig({
                             }
                         ]
                     },
-                    inputComponent: () => <div>dupa</div>,
+                    inputComponent: controlForm({
+                        defaultValue: "",
+                        control: AVTextarea
+                    })
                 }
             ]
         },
@@ -88,7 +91,7 @@ export default defineConfig({
                         content: z.string(),
                         displayComponent: ItemAssistantMessageComponent
                     },
-                    inputComponent: ({ submit, isSubmitting, error, schema }) => {
+                    inputComponent: ({ submit, isRunning, error, schema }) => {
                         return <div>pizda</div>
                     }
                 },
@@ -141,9 +144,14 @@ export default defineConfig({
                             }
                         ]
                     },
-                    inputComponent: ({ submit, isSubmitting, error, schema }) => {
-                        return <div>gówno</div>
-                    }
+                    inputComponent: form([
+                        {
+                            name: "value",
+                            label: "Message",
+                            schema: z.string(),
+                            control: AVTextarea
+                        }
+                    ])
                 }
             ]
             // items: [

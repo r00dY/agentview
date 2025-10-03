@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { useOnFormReset } from '~/hooks/useOnFormReset';
-import type { FormInputProps, InputComponent } from "~/types";
+import type { FormInputProps, InputComponent, InputComponentProps } from "~/types";
 import { Input } from "./ui/input";
 import { Switch } from "./ui/switch";
 import {
@@ -152,7 +152,7 @@ export type AVFormFieldProps<TInput = any, TOutput = TInput> = {
     control: AVFormControl<TInput, TOutput>
 }
 
-export function AVFormField<TInput = any, TOutput = TInput>(props: AVFormFieldProps<TInput, TOutput>) {    
+export function AVFormField<TInput = any, TOutput = TInput>(props: AVFormFieldProps<TInput, TOutput>) {
     const Control = props.control;
 
     return <FormFieldShadcn
@@ -182,28 +182,39 @@ export const AVInput = ({ value, onChange, name, ...inputProps }: React.Componen
     </FormControl>
 }
 
+export const AVTextarea = ({ value, onChange, name, ...textareaProps }: React.ComponentProps<"textarea"> & AVFormControlProps<string | undefined>) => {
+    return <FormControl>
+        <Textarea
+            value={value ?? ""}
+            onChange={(e) => onChange(e.target.value)}
+            name={name}
+            {...textareaProps}
+        />
+    </FormControl>
+}
+
 export type AVFormHelperField<TValue extends z.ZodTypeAny = any, TInput = any, TOutput = TInput> = AVFormFieldProps<TInput, TOutput> & {
     schema: TValue
     defaultValue?: z.infer<TValue>
 }
 
-export function form(fields: AVFormHelperField[]) : InputComponent {
-    const defaultValues : Record<string, any> = {}
+export function form(fields: AVFormHelperField[]): InputComponent {
+    const defaultValues: Record<string, any> = {}
     for (const field of fields) {
         defaultValues[field.name] = field.defaultValue;
     }
 
-    return ({ submit, error, schema, isSubmitting }) => {
+    return ({ submit, error, schema, isRunning }) => {
         const form = useForm({
             resolver: zodResolver<any, any, any>(schema),
             defaultValues
         })
-    
+
         return <Form {...form}>
-            { error && <Alert variant="destructive" className="mb-4">
+            {(error) && <Alert variant="destructive" className="mb-4">
                 <AlertCircleIcon className="h-4 w-4" />
                 <AlertDescription>{error.message}</AlertDescription>
-            </Alert> }
+            </Alert>}
             <form onSubmit={form.handleSubmit(submit)} className="space-y-4">
                 {fields.map((field) => {
                     const { defaultValue, ...fieldProps } = field;
@@ -211,7 +222,7 @@ export function form(fields: AVFormHelperField[]) : InputComponent {
                         {...fieldProps}
                     />
                 })}
-                <Button type="submit">Submit</Button>
+                <Button type="submit">{isRunning ? 'Submitting' : 'Submit'}</Button>
             </form>
         </Form>
     }
@@ -220,3 +231,38 @@ export function form(fields: AVFormHelperField[]) : InputComponent {
 export function field<TValue extends z.ZodTypeAny = any, TInput = any, TOutput = TInput>(props: AVFormHelperField<TValue, TInput, TOutput>) {
     return props;
 }
+
+export function controlForm(field: { defaultValue: any, control: any }): InputComponent {
+    const { defaultValue, ...fieldProps } = field;
+    const Control = field.control;
+
+    const defaultValues = {
+        value: defaultValue
+    }
+
+    return ({ submit, error, schema, isRunning }) => {
+        const form = useForm({
+            resolver: zodResolver<any, any, any>(z.object({ value: schema })),
+            defaultValues
+        })
+
+        return <Form {...form}>
+            {error && <Alert variant="destructive" className="mb-4">
+                <AlertCircleIcon className="h-4 w-4" />
+                <AlertDescription>{error.message}</AlertDescription>
+            </Alert>}
+            <form onSubmit={form.handleSubmit((values) => submit(values.value))} className="space-y-2">
+                <FormFieldShadcn
+                    name={"value"}
+                    render={({ field }) => {
+                        return <FormItem>
+                            <Control {...field} />
+                        </FormItem>
+                    }}
+                />
+                <Button type="submit" disabled={isRunning}>{isRunning ? 'Submitting' : 'Submit'}</Button>
+            </form>
+        </Form>
+    }
+}
+

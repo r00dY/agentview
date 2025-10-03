@@ -29,7 +29,8 @@ export type DisplayedProperty = {
 
 export type InputComponentProps = {
   submit: (value: any) => void,
-  isSubmitting: boolean,
+  cancel: () => void,
+  isRunning: boolean,
   error?: BaseError,
   schema: z.ZodTypeAny,
 }

@@ -754,6 +754,7 @@ app.openapi(runsPOSTRoute, async (c) => {
 
   // Validate content against the schema
   try {
+    // return c.json({ message: `Error parsing session item`, code: 'parse.schema' }, 400);
     itemConfig.content.parse(content);
   } catch (error: any) {
     return c.json({ message: `Invalid content: ${error.message}`, code: 'parse.schema', issues: error.issues }, 400);
