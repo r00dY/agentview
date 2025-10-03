@@ -139,17 +139,21 @@ export type AVFormFieldProps<TInput = any, TOutput = TInput> = {
     label?: string,
     description?: string,
     disabled?: boolean,
-    control: (props: AVFormControlProps<TInput, TOutput>) => React.ReactNode
+    control: AVFormControl<TInput, TOutput>
 }
 
-export function AVFormField<TInput = any, TOutput = TInput>(props: AVFormFieldProps<TInput, TOutput>) {
+export function AVFormField<TInput = any, TOutput = TInput>(props: AVFormFieldProps<TInput, TOutput>) {    
+    console.log('AVFormField', props)
+
+    const Control = props.control;
+
     return <FormFieldShadcn
         name={props.name}
         disabled={props.disabled}
         render={({ field }) => {
             return <FormItem>
-                <FormLabel>{props.label}</FormLabel>
-                {props.control(field)}
+                <FormLabel>{props.label ?? props.name}</FormLabel>
+                <Control {...field} />
                 {props.description && <FormDescription>
                     {props.description}
                 </FormDescription>}

@@ -18,7 +18,6 @@ import {
 import { Input } from "~/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select"
 import React from "react"
-import { Slot } from "@radix-ui/react-slot"
 
 const formSchema = z.object({
   username: z.string().min(2, {

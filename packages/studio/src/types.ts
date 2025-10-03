@@ -1,6 +1,7 @@
 import type { RouteObject } from "react-router";
 import type { BaseScoreConfig, BaseSessionItemConfig, BaseAgentConfig, BaseConfig } from "./lib/shared/configTypes";
 import type { Session } from "./lib/shared/apiTypes";
+import type { z } from "zod";
 
 export type FormInputProps<T=any> = {
   id: string,
@@ -49,10 +50,19 @@ export type DisplayedProperty = {
   value: any;
 }
 
+export type AgentSessionInputComponentProps = {
+  onSubmit: (value: any) => void,
+  errors: any,
+  schema: z.ZodTypeAny,
+}
+
+export type AgentSessionInputComponent = React.ComponentType<AgentSessionInputComponentProps>;
+
 export type AgentConfig = BaseAgentConfig<SessionItemConfig> & {
   displayedProperties?: (args: { session: Session }) => DisplayedProperty[];
+  inputComponent?: React.ComponentType<AgentSessionInputComponentProps>;
 };
-  
+
 export type AgentViewConfig = {
   apiBaseUrl: string;
   agents?: AgentConfig[],

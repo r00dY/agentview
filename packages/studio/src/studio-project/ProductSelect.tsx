@@ -4,8 +4,9 @@ import { Button } from "~/components/ui/button"
 import { Check, ChevronsUpDown } from "lucide-react"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "~/components/ui/command"
 import { products } from "./products"
+import type { AVFormControl, AVFormControlProps } from "~/components/form"
 
-export function ProductSelect({ value, onChange }: { value: string, onChange?: (product: string | undefined) => void }) {
+export const ProductSelect = ({ value, onChange } : AVFormControlProps<string | undefined, string>) => {
   const [open, setOpen] = React.useState(false)
   const [selectedProduct, setSelectedProduct] = React.useState(products.find((product) => product.id === value))
 

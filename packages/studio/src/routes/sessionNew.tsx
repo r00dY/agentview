@@ -116,29 +116,11 @@ function Content() {
       </Alert>
     )}
 
+    {agentConfig.inputComponent && <agentConfig.inputComponent onSubmit={(values) => { console.log(values) }} schema={agentConfig.context!} errors={fetcher.data?.error} />}
+    
+    {/* <Form method="post" ref={formRef} className="max-w-xl">
 
-    <Form method="post" ref={formRef} className="max-w-xl">
-
-      {agentConfig.context && (<div>
-
-        Form
-
-        {/* <div className="space-y-2">
-          {agentConfig.metadata?.map((metafield: any) => (<FormField
-            key={metafield.name}
-            id={metafield.name}
-            label={metafield.title ?? metafield.name}
-            error={fetcher.data?.error?.fieldErrors?.[`metadata.${metafield.name}`]}
-            name={'metadata.' + metafield.name}
-            defaultValue={undefined}
-            // defaultValue={scores[metafield.name] ?? undefined}
-            InputComponent={metafield.input}
-            options={metafield.options}
-          />
-          ))}
-        </div> */}
-
-      </div>)}
+      {agentConfig.inputComponent && <agentConfig.inputComponent onSubmit={() => {}} schema={agentConfig.context} />}
 
       <div className={`gap-2 justify-start mt-4 flex`}>
         <Button
@@ -159,7 +141,7 @@ function Content() {
           Cancel
         </Button>
       </div>
-    </Form>
+    </Form> */}
   </div>
 }
 

@@ -8,6 +8,7 @@ import { ProductDisplay } from "./ProductDisplay";
 import { ProductSelect } from "./ProductSelect";
 import { ScoreBadge } from "./ScoreBadge";
 import { CustomPage } from "./CustomPage";
+import { ProductChatInputForm } from "./ProductChatSessionForm";
 
 export default defineConfig({
     apiBaseUrl: "http://localhost:8080",
@@ -57,6 +58,7 @@ export default defineConfig({
             context: z.object({
                 product_id: z.string(),
             }),
+            inputComponent: ProductChatInputForm,
             
             // metadata: [
             //     {

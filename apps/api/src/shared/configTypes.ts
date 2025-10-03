@@ -6,18 +6,18 @@ export interface BaseScoreConfig {
     options?: any
 }
 
-export interface BaseSessionItemConfig<ScoreConfigType> {
+export interface BaseSessionItemConfig<TScoreConfig> {
     type: string;
     role?: string;
     content: z.ZodType;
-    scores?: ScoreConfigType[];
+    scores?: TScoreConfig[];
 }
 
-export interface BaseAgentConfig<SessionItemType> {
+export interface BaseAgentConfig<TSessionItem> {
     name: string;
     url: string;
-    context?: z.ZodType;
-    items: SessionItemType[];
+    context?: z.ZodTypeAny;
+    items: TSessionItem[];
 }
 
 export type BaseConfig = {
