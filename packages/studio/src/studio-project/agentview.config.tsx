@@ -63,7 +63,7 @@ export default defineConfig({
                     name: "product_id",
                     label: "Product",
                     schema: z.string(),
-                    control: ProductSelect,
+                    control: ProductSelect
                 }
             ]),
             items: [
