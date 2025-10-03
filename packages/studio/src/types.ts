@@ -52,7 +52,7 @@ export type DisplayedProperty = {
 
 export type AgentSessionInputComponentProps = {
   onSubmit: (value: any) => void,
-  errors: any,
+  error: any,
   schema: z.ZodTypeAny,
 }
 

@@ -580,6 +580,9 @@ app.openapi(sessionsPOSTRoute, async (c) => {
 
   // Validate context against the schema
   if (agentConfig.context) {
+
+    return c.json({ message: "This is big error" }, 400);
+
     try {
       agentConfig.context.parse(body.context);
     } catch (error: any) {

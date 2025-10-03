@@ -16,49 +16,28 @@ import { requireAgentConfig } from "~/lib/config";
 async function loader({ request }: LoaderFunctionArgs) {
   const listParams = getListParams(request);
   const agentConfig = requireAgentConfig(config, listParams.agent);
- 
-  if (agentConfig.context) {
-    return {
-      agentConfig,
-      listParams
-    }
+
+  return {
+    agentConfig,
+    listParams
   }
-
-  /** NO CONTEXT CASE **/
-
-  const clientResponse = await apiFetch('/api/clients', {
-    method: 'POST',
-    body: {
-      isShared: false
-    }
-  });
-
-  if (!clientResponse.ok) {
-    throw data(clientResponse.error, { status: clientResponse.status });
-  }
-
-  const sessionResponse = await apiFetch('/api/sessions', {
-    method: 'POST',
-    body: {
-      agent: agentConfig.name,
-      clientId: clientResponse.data.id
-    }
-  });
-
-  if (!sessionResponse.ok) {
-    throw data(sessionResponse.error, { status: sessionResponse.status });
-  }
-
-  return redirect(`/sessions/${sessionResponse.data.id}?${toQueryParams(listParams)}`);
 }
 
 async function action({ request, params }: ActionFunctionArgs): Promise<ActionResponse | Response> {
   const listParams = getListParams(request);
   const agentConfig = requireAgentConfig(config, listParams.agent);
-  
-  const formData = await request.formData();
-  const parsedData = parseFormData(formData);
 
+  // This action only supports JSON payloads, other encoding methods (like form data) treat this request as if context was not provided
+  let payload: any = undefined;
+  if(request.headers.get("Content-Type") === "application/json") {
+    payload = await request.json();
+  }
+
+  // Lack of "context" property is treated as attempt to creaate context-less session. If session requires context, we redirect to the form.
+  if (agentConfig.context && !payload?.context) {
+    return redirect(`/sessions/new?${toQueryParams(listParams)}`, { status: 303 });
+  }
+  
   const clientResponse = await apiFetch('/api/clients', {
     method: 'POST',
     body: {
@@ -75,7 +54,7 @@ async function action({ request, params }: ActionFunctionArgs): Promise<ActionRe
     body: {
       agent: agentConfig.name,
       clientId: clientResponse.data.id,
-      context: parsedData.context
+      context: payload?.context
     }
   });
 
@@ -87,7 +66,12 @@ async function action({ request, params }: ActionFunctionArgs): Promise<ActionRe
 }
 
 function Component() {
+  const { agentConfig } = useLoaderData<typeof loader>();
+
   const actionData = useActionData<typeof action>();
+  const fetcher = useFetcher();
+  const data = actionData ?? fetcher.data;
+  const error = data?.ok === false ? data.error : undefined;
 
   return <div className="flex-1">
     <Header>
@@ -96,52 +80,9 @@ function Component() {
 
     <div className="flex-1 overflow-y-auto">
       <div className="p-6 max-w-4xl space-y-6">
-        <Content />
+        {agentConfig.inputComponent && <agentConfig.inputComponent onSubmit={(values) => {fetcher.submit({ context: values }, { method: 'post', encType: 'application/json' })}} schema={agentConfig.context!} error={error} />}
       </div>
     </div>
-  </div>
-}
-
-function Content() {
-  const { agentConfig } = useLoaderData<typeof loader>();
-
-  const fetcher = useFetcher();
-  const formRef = useRef<HTMLFormElement>(null);
-
-  return <div>
-    {fetcher.state === 'idle' && fetcher.data?.ok === false && (
-      <Alert variant="destructive" className="mb-4">
-        <AlertCircleIcon className="h-4 w-4" />
-        <AlertDescription>{fetcher.data.error.message}</AlertDescription>
-      </Alert>
-    )}
-
-    {agentConfig.inputComponent && <agentConfig.inputComponent onSubmit={(values) => { console.log(values) }} schema={agentConfig.context!} errors={fetcher.data?.error} />}
-    
-    {/* <Form method="post" ref={formRef} className="max-w-xl">
-
-      {agentConfig.inputComponent && <agentConfig.inputComponent onSubmit={() => {}} schema={agentConfig.context} />}
-
-      <div className={`gap-2 justify-start mt-4 flex`}>
-        <Button
-          type="submit"
-          size="sm"
-          disabled={fetcher.state !== 'idle'}
-        >
-          {fetcher.state !== 'idle' ? 'Posting...' : 'Submit'}
-        </Button>
-        <Button
-          type="reset"
-          variant="secondary"
-          size="sm"
-          onClick={(e) => {
-            formRef.current?.reset();
-          }}
-        >
-          Cancel
-        </Button>
-      </div>
-    </Form> */}
   </div>
 }
 
