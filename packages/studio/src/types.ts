@@ -1,6 +1,6 @@
 import type { RouteObject } from "react-router";
-import type { BaseScoreConfig, BaseSessionItemConfig, BaseAgentConfig, BaseConfig } from "./lib/shared/configTypes";
-import type { Session } from "./lib/shared/apiTypes";
+import type { BaseScoreConfig, BaseSessionItemConfig, BaseAgentConfig, BaseConfig, BaseRunConfig } from "./lib/shared/configTypes";
+import type { Run, Session } from "./lib/shared/apiTypes";
 import type { z } from "zod";
 import type { BaseError } from "./lib/errors";
 
@@ -16,29 +16,6 @@ export type DisplayComponentProps<T=any> = {
   value: T,
   options?: any
 }
-
-export type ScoreConfig<T=any> = BaseScoreConfig & {
-  title?: string;
-  inputComponent: React.ComponentType<FormInputProps>;
-  displayComponent: React.ComponentType<DisplayComponentProps>;
-}
-
-export type InputSessionItemConfig = BaseSessionItemConfig<ScoreConfig> & {
-  input: true;
-  title?: string;
-  options?: any;
-  inputComponent: React.ComponentType<FormInputProps>;
-  displayComponent: React.ComponentType<DisplayComponentProps>;
-};
-
-export type StepSessionItemConfig = BaseSessionItemConfig<ScoreConfig> & {
-  input?: false;
-  title?: string;
-  options?: any;
-  displayComponent: React.ComponentType<DisplayComponentProps>;
-};
-
-export type SessionItemConfig = InputSessionItemConfig | StepSessionItemConfig;
 
 export type CustomRoute = {
   route: RouteObject;
@@ -60,7 +37,24 @@ export type InputComponentProps = {
 
 export type InputComponent = React.ComponentType<InputComponentProps>;
 
-export type AgentConfig = BaseAgentConfig<SessionItemConfig> & {
+
+export type ScoreConfig<T=any> = BaseScoreConfig & {
+  title?: string;
+  inputComponent: React.ComponentType<FormInputProps>;
+  displayComponent: React.ComponentType<DisplayComponentProps>;
+}
+
+export type StepSessionItemConfig = BaseSessionItemConfig<ScoreConfig> & {
+  displayComponent: React.ComponentType<DisplayComponentProps>;
+};
+
+export type OutputSessionItemConfig = StepSessionItemConfig;
+
+export type InputSessionItemConfig = StepSessionItemConfig & { inputComponent: React.ComponentType<InputComponentProps> };
+
+export type RunConfig = BaseRunConfig<InputSessionItemConfig, OutputSessionItemConfig, StepSessionItemConfig>;
+
+export type AgentConfig = BaseAgentConfig<RunConfig> & {
   displayedProperties?: (args: { session: Session }) => DisplayedProperty[];
   inputComponent?: React.ComponentType<InputComponentProps>;
 };

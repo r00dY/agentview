@@ -25,7 +25,7 @@ import { getStudioURL } from './getStudioURL'
 import { getAllSessionItems, getLastRun } from './shared/sessionUtils'
 import { ClientSchema, SessionSchema, SessionCreateSchema, SessionItemCreateSchema, RunSchema, SessionItemSchema, type Session, type SessionItem, ConfigSchema, ConfigCreateSchema, ClientCreateSchema, UserSchema, UserUpdateSchema, allowedSessionLists, InvitationSchema, InvitationCreateSchema, SessionBaseSchema, SessionsPaginatedResponseSchema } from './shared/apiTypes'
 import { getConfig } from './getConfig'
-import type { BaseConfig, BaseAgentConfig } from './shared/configTypes'
+import type { BaseConfig, BaseAgentConfig, BaseSessionItemConfig, BaseScoreConfig } from './shared/configTypes'
 import { users } from './schemas/auth-schema'
 import { getUsersCount } from './users'
 import { updateInboxes } from './updateInboxes'
@@ -124,12 +124,34 @@ function requireAgentConfig(config: BaseConfig, name: string) {
   return agentConfig
 }
 
-function requireItemConfig(agentConfig: ReturnType<typeof requireAgentConfig>, type: string, role?: string | null) {
-  const itemConfig = agentConfig.items?.find((item) => item.type === type && (!item.role || item.role === role))
+function checkItemConfigMatch(itemConfig: BaseSessionItemConfig<BaseScoreConfig>, type: string, role?: string | null) {
+  return itemConfig.type === type && (!itemConfig.role || itemConfig.role === role)
+}
+
+function requireItemConfig(agentConfig: ReturnType<typeof requireAgentConfig>, type: string, role?: string | null, runItemType?: "input" | "output" | "step") {
+  let itemConfig: BaseSessionItemConfig<BaseScoreConfig> | undefined = undefined;
+
+  for (const run of agentConfig.runs) {
+    if (!runItemType || runItemType === "input") {
+      if (checkItemConfigMatch(run.input, type, role)) {
+        itemConfig = run.input
+      }
+    }
+    else if (!runItemType || runItemType === "output") {
+      if (checkItemConfigMatch(run.output, type, role)) {
+        itemConfig = run.output
+      }
+    }
+    else if (!runItemType || runItemType === "step") {
+      itemConfig = run.steps?.find((step) => checkItemConfigMatch(step, type, role))
+    }
+  }
+
+  // const itemConfig = agentConfig.items?.find((item) => item.type === type && (!item.role || item.role === role))
   const itemTypeCuteName = `${type}' / '${role}`
 
   if (!itemConfig) {
-    throw new HTTPException(400, { message: `Item '${itemTypeCuteName}' not found in configuration for agent '${agentConfig.name}'` });
+    throw new HTTPException(400, { message: `Item '${itemTypeCuteName}' not found in configuration for agent '${agentConfig.name}'. ${runItemType ? `For run item type: ${runItemType}` : ''}` });
   }
 
   return itemConfig
@@ -722,7 +744,7 @@ app.openapi(runsPOSTRoute, async (c) => {
   const session = await requireSession(sessionId, auth)
   const config = await requireConfig()
   const agentConfig = requireAgentConfig(config, session.agent)
-  const itemConfig = requireItemConfig(agentConfig, type, role)
+  const itemConfig = requireItemConfig(agentConfig, type, role, "input")
 
   // Validate content against the schema
   try {

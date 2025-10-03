@@ -1,6 +1,6 @@
-import type { AgentViewConfig } from "../types";
+import type { AgentViewConfig, SessionItemConfig } from "../types";
 import * as z from "zod"
-import type { BaseConfig } from "./shared/configTypes";
+import type { BaseConfig, BaseScoreConfig, BaseSessionItemConfig } from "./shared/configTypes";
 
 
 export function serializeBaseConfig(config: BaseConfig): any {
@@ -13,16 +13,24 @@ export function getBaseConfig(config: AgentViewConfig): BaseConfig {
       name: agent.name,
       url: agent.url,
       context: agent.context,
-      items: agent.items.map((item) => ({
-      type: item.type,
-        role: item.role,
-        content: item.content,
-        scores: item.scores?.map((score) => ({
-          name: score.name,
-          schema: score.schema,
-          options: filterOutReactAndFunctions(score.options)
-        }))
+      runs: agent.runs.map((run) => ({
+        input: getBaseSessionItem(run.input),
+        output: getBaseSessionItem(run.output),
+        steps: run.steps?.map((step) => getBaseSessionItem(step)),
       }))
+    }))
+  }
+}
+
+function getBaseSessionItem(item: SessionItemConfig): BaseSessionItemConfig<BaseScoreConfig> {
+  return {
+    type: item.type,
+    role: item.role,
+    content: item.content,
+    scores: item.scores?.map((score) => ({
+      name: score.name,
+      schema: score.schema,
+      options: filterOutReactAndFunctions(score.options)
     }))
   }
 }
