@@ -21,7 +21,7 @@ import { ItemsWithCommentsLayout } from "~/components/ItemsWithCommentsLayout";
 import { CommentSessionFloatingBox } from "~/components/comments";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody } from "~/components/ui/dialog";
 import { config } from "~/config";
-import { requireAgentConfig } from "~/lib/config";
+import { findItemConfig, requireAgentConfig, requireItemConfig } from "~/lib/config";
 import { Loader } from "~/components/Loader";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 
@@ -181,6 +181,9 @@ function SessionPage() {
                 <div>
 
                     <ItemsWithCommentsLayout items={getActiveRuns(session).map((run) => {
+                        console.log('#########')
+                        console.log('agent config', agentConfig)
+
 
                         return run.sessionItems.map((item, index) => {
 
@@ -190,12 +193,12 @@ function SessionPage() {
 
                             let content: React.ReactNode = null;
 
-                            const itemConfig = agentConfig.items.find((a) => a.type === item.type && (!a.role || a.role === item.role));
-                            if (!itemConfig) {
-                                content = <div className="text-muted-foreground italic">No component (type: "{item.type}")</div>
+                            const itemConfig = findItemConfig(agentConfig, item.type, item.role);
+                            if (!itemConfig?.displayComponent) {
+                                content = <div className="text-muted-foreground italic">No component (type: "{item.type}"{item.role ? `, role: "${item.role}"` : ""})</div>
                             }
                             else {
-                                content = <itemConfig.displayComponent value={item.content} options={itemConfig.options} />
+                                content = <itemConfig.displayComponent value={item.content} />
                             }
 
                             return {
@@ -396,27 +399,36 @@ function InputForm({ session, agentConfig }: { session: Session, agentConfig: Ag
         })
     }
 
-    const inputConfigs = agentConfig.items.filter((item) => item.input)
+    const runConfigs = agentConfig.runs;
+
+    const FirstInputComponent = runConfigs[0]?.inputComponent;
 
     return <div className="border-t">
 
         <div className="p-6 pr-0 max-w-[720px]">
 
-            {inputConfigs.length === 0 && <div className="text-sm text-muted-foreground">No input fields</div>}
+            {runConfigs.length === 0 && <div className="text-sm text-muted-foreground">No runs</div>}
 
             <form method="post" onSubmit={handleSubmit}>
 
-                {inputConfigs.length === 1 ? (
+                {runConfigs.length === 1 ? (
                     // Single input config - no tabs
                     <div>
-                        <InputFormFields inputConfig={inputConfigs[0]} />
+                        { FirstInputComponent && <FirstInputComponent
+                            submit={(values) => { handleSubmit(values) }}
+                            schema={runConfigs[0].input.content}
+                            error={undefined}
+                            isSubmitting={false}
+                        /> }
                     </div>
                 ) : (
                     // Multiple input configs - use tabs
-                    <Tabs defaultValue={`${inputConfigs[0].type}-${inputConfigs[0].role || 'default'}`}>
+                    <Tabs defaultValue={`${runConfigs[0].input.type}-${runConfigs[0].input.role || 'default'}`}>
                         <TabsList>
-                            {inputConfigs.map((inputConfig, index) => {
-                                const tabName = inputConfig.title || (inputConfig.role
+                            {runConfigs.map((runConfig, index) => {
+                                const inputConfig = runConfig.input;
+
+                                const tabName = runConfig.title || (inputConfig.role
                                     ? `${inputConfig.type} / ${inputConfig.role}`
                                     : inputConfig.type)
                                 const tabValue = `${inputConfig.type}-${inputConfig.role || 'default'}`;
@@ -429,12 +441,21 @@ function InputForm({ session, agentConfig }: { session: Session, agentConfig: Ag
                             })}
                         </TabsList>
 
-                        {inputConfigs.map((inputConfig, index) => {
+                        {runConfigs.map((runConfig, index) => {
+                            const inputConfig = runConfig.input;
+                            
                             const tabValue = `${inputConfig.type}-${inputConfig.role || 'default'}`;
+
+                            const InputComponent = runConfig.inputComponent;
 
                             return (
                                 <TabsContent key={index} value={tabValue}>
-                                    <InputFormFields inputConfig={inputConfig} />
+                                    { InputComponent && <InputComponent
+                                        submit={(values) => { handleSubmit(values) }}
+                                        schema={inputConfig.content}
+                                        error={undefined}
+                                        isSubmitting={false}
+                                    /> }
                                 </TabsContent>
                             );
                         })}
@@ -460,24 +481,24 @@ function InputForm({ session, agentConfig }: { session: Session, agentConfig: Ag
     </div>
 }
 
-function InputFormFields({ inputConfig }: { inputConfig: SessionItemConfig }) {
-    return <>
-        <input type="hidden" name="type" value={inputConfig.type} />
-        <input type="hidden" name="role" value={inputConfig.role} />
+// function InputFormFields({ inputConfig }: { inputConfig: SessionItemConfig }) {
+//     return <>
+//         <input type="hidden" name="type" value={inputConfig.type} />
+//         <input type="hidden" name="role" value={inputConfig.role} />
 
-        {inputConfig.input && (
-            <FormField
-                id={"inputFormValue"}
-                // error={fetcher.data?.error?.fieldErrors?.[`metadata.${metafield.name}`]}
-                name={"value"}
-                defaultValue={undefined}
-                // defaultValue={scores[metafield.name] ?? undefined}
-                InputComponent={inputConfig.inputComponent}
-                options={inputConfig.options}
-            />
-        )}
-    </>
-}
+//         {inputConfig.input && (
+//             <FormField
+//                 id={"inputFormValue"}
+//                 // error={fetcher.data?.error?.fieldErrors?.[`metadata.${metafield.name}`]}
+//                 name={"value"}
+//                 defaultValue={undefined}
+//                 // defaultValue={scores[metafield.name] ?? undefined}
+//                 InputComponent={inputConfig.inputComponent}
+//                 options={inputConfig.options}
+//             />
+//         )}
+//     </>
+// }
 
 export const sessionRoute: RouteObject = {
     Component,

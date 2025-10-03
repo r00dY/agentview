@@ -8,25 +8,36 @@ export function requireAgentConfig(config: AgentViewConfig, agentName: string) {
     return agentConfig;
 }
 
-export function requireItemConfig(agentConfig: AgentConfig, type: string, role?: string | null, runItemType?: "input" | "output" | "step") {
+export function findItemConfig(agentConfig: AgentConfig, type: string, role?: string | null, runItemType?: "input" | "output" | "step") {
     let itemConfig: SessionItemConfig | undefined = undefined;
 
     for (const run of agentConfig.runs) {
         if (!runItemType || runItemType === "input") {
             if (checkItemConfigMatch(run.input, type, role)) {
                 itemConfig = run.input
+                break;
             }
         }
-        else if (!runItemType || runItemType === "output") {
+        if (!runItemType || runItemType === "output") {
             if (checkItemConfigMatch(run.output, type, role)) {
                 itemConfig = run.output
+                break;
             }
         }
-        else if (!runItemType || runItemType === "step") {
-            itemConfig = run.steps?.find((step) => checkItemConfigMatch(step, type, role))
+        if (!runItemType || runItemType === "step") {
+            const result = run.steps?.find((step) => checkItemConfigMatch(step, type, role))
+            if (result) {
+                itemConfig = result;
+                break;
+            }
         }
     }
 
+    return itemConfig;
+}
+
+export function requireItemConfig(agentConfig: AgentConfig, type: string, role?: string | null, runItemType?: "input" | "output" | "step") {
+    const itemConfig = findItemConfig(agentConfig, type, role, runItemType);
     if (!itemConfig) {
         throw new Error(`Item config not found for item '${type}' for agent '${agentConfig.name}'. ${runItemType ? `For run item type: ${runItemType}` : ''}`);
     }

@@ -132,19 +132,25 @@ function requireItemConfig(agentConfig: ReturnType<typeof requireAgentConfig>, t
   let itemConfig: BaseSessionItemConfig<BaseScoreConfig> | undefined = undefined;
 
   for (const run of agentConfig.runs) {
-    if (!runItemType || runItemType === "input") {
-      if (checkItemConfigMatch(run.input, type, role)) {
-        itemConfig = run.input
+      if (!runItemType || runItemType === "input") {
+          if (checkItemConfigMatch(run.input, type, role)) {
+              itemConfig = run.input
+              break;
+          }
       }
-    }
-    else if (!runItemType || runItemType === "output") {
-      if (checkItemConfigMatch(run.output, type, role)) {
-        itemConfig = run.output
+      if (!runItemType || runItemType === "output") {
+          if (checkItemConfigMatch(run.output, type, role)) {
+              itemConfig = run.output
+              break;
+          }
       }
-    }
-    else if (!runItemType || runItemType === "step") {
-      itemConfig = run.steps?.find((step) => checkItemConfigMatch(step, type, role))
-    }
+      if (!runItemType || runItemType === "step") {
+          const result = run.steps?.find((step) => checkItemConfigMatch(step, type, role))
+          if (result) {
+              itemConfig = result;
+              break;
+          }
+      }
   }
 
   // const itemConfig = agentConfig.items?.find((item) => item.type === type && (!item.role || item.role === role))

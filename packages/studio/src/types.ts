@@ -14,7 +14,6 @@ export type FormInputProps<T=any> = {
 
 export type DisplayComponentProps<T=any> = {
   value: T,
-  options?: any
 }
 
 export type CustomRoute = {
@@ -41,18 +40,17 @@ export type InputComponent = React.ComponentType<InputComponentProps>;
 export type ScoreConfig<T=any> = BaseScoreConfig & {
   title?: string;
   inputComponent: React.ComponentType<FormInputProps>;
-  displayComponent: React.ComponentType<DisplayComponentProps>;
+  displayComponent?: React.ComponentType<DisplayComponentProps>;
 }
 
-export type StepSessionItemConfig = BaseSessionItemConfig<ScoreConfig> & {
-  displayComponent: React.ComponentType<DisplayComponentProps>;
+export type SessionItemConfig = BaseSessionItemConfig<ScoreConfig> & {
+  displayComponent?: React.ComponentType<DisplayComponentProps>;
 };
 
-export type OutputSessionItemConfig = StepSessionItemConfig;
-
-export type InputSessionItemConfig = StepSessionItemConfig & { inputComponent: React.ComponentType<InputComponentProps> };
-
-export type RunConfig = BaseRunConfig<InputSessionItemConfig, OutputSessionItemConfig, StepSessionItemConfig>;
+export type RunConfig = BaseRunConfig<SessionItemConfig> & {
+  title?: string;
+  inputComponent?: React.ComponentType<InputComponentProps>;
+};
 
 export type AgentConfig = BaseAgentConfig<RunConfig> & {
   displayedProperties?: (args: { session: Session }) => DisplayedProperty[];
