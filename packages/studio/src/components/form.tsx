@@ -10,8 +10,9 @@ import {
 } from "./ui/toggle-group"
 import { Textarea } from "./ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { FormDescription, FormItem, FormLabel, FormMessage, useFormField, FormField as FormFieldShadcn } from "./ui/form";
+import { FormDescription, FormItem, FormLabel, FormMessage, useFormField, FormField as FormFieldShadcn, FormControl } from "./ui/form";
 import React from "react";
+import type { ControllerRenderProps, FieldValues } from "react-hook-form";
 
 export type FormFieldBaseProps = {
     id: string,
@@ -126,70 +127,29 @@ export const SelectInput: React.ComponentType<FormInputProps<string | undefined>
 
 /** NEW VERSION **/
 
-
-
-export type ControlComponentProps<V> = {
-    name: string,
-    value: V,
-    onChange: (value: V) => void,
-    controlProps: {
-        id: string,
-        "aria-describedby": string,
-        "aria-invalid": boolean
-    }
+export type AVFormControlProps<TInput = any, TOutput = TInput> = ControllerRenderProps<FieldValues, any> & {
+    value: TInput
+    onChange: (value: TOutput) => void
 }
 
-export type ControlComponent<V> = React.ComponentType<ControlComponentProps<V>>;
+export type AVFormControl<TInput = any, TOutput = TInput> = React.ComponentType<AVFormControlProps<TInput, TOutput>>;
 
-// export const TextInput2 = ({ value, onChange, name, controlProps, ...inputProps }: React.ComponentProps<"input"> & ControlComponentProps<string | undefined>) => {
-//     return <Input
-//         value={value ?? ""}
-//         onChange={(e) => onChange(e.target.value === "" ? undefined : e.target.value)}
-//         name={name}
-//         {...controlProps}
-//         {...inputProps}
-//     />
-// }
-
-export const TextInput2 = ({ value, onChange, name, controlProps, ...inputProps }: React.ComponentProps<"input"> & ControlComponentProps<string | undefined>) => {
-    return <Input
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value === "" ? undefined : e.target.value)}
-        name={name}
-        {...inputProps}
-    />
-}
-
-export type FormField2Props<V = any> = {
+export type AVFormFieldProps<TInput = any, TOutput = TInput> = {
     name: string,
     label?: string,
     description?: string,
-    // control: React.ReactElement<ControlComponentProps<V>>
-    control: (props: ControlComponentProps<V>) => React.ReactNode
+    disabled?: boolean,
+    control: (props: AVFormControlProps<TInput, TOutput>) => React.ReactNode
 }
 
-export function FormField2(props: FormField2Props) {
-    const { error, formItemId, formDescriptionId, formMessageId } = useFormField()
-
-    const id = formItemId;
-    const ariaDescribedby = !error
-        ? `${formDescriptionId}`
-        : `${formDescriptionId} ${formMessageId}`;
-    const ariaInvalid = !!error;
-
+export function AVFormField<TInput = any, TOutput = TInput>(props: AVFormFieldProps<TInput, TOutput>) {
     return <FormFieldShadcn
         name={props.name}
+        disabled={props.disabled}
         render={({ field }) => {
             return <FormItem>
                 <FormLabel>{props.label}</FormLabel>
-                {props.control({
-                    ...field,
-                    controlProps: {
-                        id,
-                        "aria-describedby": ariaDescribedby,
-                        "aria-invalid": ariaInvalid
-                    }
-                })}
+                {props.control(field)}
                 {props.description && <FormDescription>
                     {props.description}
                 </FormDescription>}
@@ -197,4 +157,15 @@ export function FormField2(props: FormField2Props) {
             </FormItem>
         }}
     />
+}
+
+export const AVInput = ({ value, onChange, name, ...inputProps }: React.ComponentProps<"input"> & AVFormControlProps<string | undefined>) => {
+    return <FormControl>
+        <Input
+            value={value ?? ""}
+            onChange={(e) => onChange(e.target.value === "" ? undefined : e.target.value)}
+            name={name}
+            {...inputProps}
+        />
+    </FormControl>
 }

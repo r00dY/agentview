@@ -460,7 +460,7 @@ function ProfileForm2() {
   )
 }
 
-import { FormField2, TextInput2 } from "~/components/form"
+import { AVFormField, AVInput } from "~/components/form"
 
 
 type RootFormProps = {
@@ -477,11 +477,11 @@ function RootForm({ schema, errors, onSubmit }: RootFormProps) {
 
   return <Form {...form}>
     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-      <FormField2 
+      <AVFormField 
         name="username"
         label="Username"
         description="This is your public display name."
-        control={(props) => <TextInput2 {...props} placeholder="Dupa" />}
+        control={(props) => <AVInput {...props} placeholder="Dupa" />}
       />
       <Button type="submit">Submit</Button>
     </form>
