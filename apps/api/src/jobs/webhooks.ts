@@ -1,7 +1,7 @@
 import { db__dangerous } from '../db';
 import { withOrg } from '../withOrg';
 import { webhookJobs, environments } from '../schemas/schema';
-import { eq, and, lt, or, isNull } from 'drizzle-orm';
+import { eq, and, lt, or, isNull, inArray } from 'drizzle-orm';
 import { generateSessionSummary } from '../summaries';
 
 // Webhook job retry delays: 5s, 30s, 2min
@@ -11,44 +11,49 @@ export async function processWebhookJobs() {
   try {
     const now = new Date().toISOString();
 
-    // Find jobs ready to be processed (cross-org scan needs db__dangerous)
-    const jobs = await db__dangerous
-      .select()
-      .from(webhookJobs)
+    // Claim up to 10 pending jobs in one atomic query
+    const claimed = await db__dangerous
+      .update(webhookJobs)
+      .set({ status: 'processing', updatedAt: now })
       .where(
         and(
           eq(webhookJobs.status, 'pending'),
-          or(isNull(webhookJobs.nextAttemptAt), lt(webhookJobs.nextAttemptAt, now))
+          inArray(
+            webhookJobs.id,
+            db__dangerous
+              .select({ id: webhookJobs.id })
+              .from(webhookJobs)
+              .where(
+                and(
+                  eq(webhookJobs.status, 'pending'),
+                  or(isNull(webhookJobs.nextAttemptAt), lt(webhookJobs.nextAttemptAt, now))
+                )
+              )
+              .limit(10)
+          )
         )
       )
-      .limit(10);
+      .returning();
 
-    for (const job of jobs) {
-      // CAS: claim job only if still pending
-      const [claimed] = await db__dangerous
-        .update(webhookJobs)
-        .set({ status: 'processing', updatedAt: new Date().toISOString() })
-        .where(and(eq(webhookJobs.id, job.id), eq(webhookJobs.status, 'pending')))
-        .returning({ id: webhookJobs.id });
-
-      if (!claimed) continue;
-
-      const environment = await withOrg(job.organizationId, async (tx) => {
-        return tx.query.environments.findFirst({
-          where: eq(environments.id, job.environmentId),
+    await Promise.allSettled(
+      claimed.map(async (job) => {
+        const environment = await withOrg(job.organizationId, async (tx) => {
+          return tx.query.environments.findFirst({
+            where: eq(environments.id, job.environmentId),
+          });
         });
-      });
 
-      if (!environment) {
-        console.error(`Environment ${job.environmentId} not found`);
-        continue;
-      }
+        if (!environment) {
+          console.error(`Environment ${job.environmentId} not found`);
+          return;
+        }
 
-      const config = environment.config as any;
-      const webhookUrl = config?.webhookUrl;
+        const config = environment.config as any;
+        const webhookUrl = config?.webhookUrl;
 
-      await processWebhookJob(job, config, webhookUrl);
-    }
+        await processWebhookJob(job, config, webhookUrl);
+      })
+    );
   } catch (error) {
     console.error('Error in webhook job processor:', error);
   }

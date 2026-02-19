@@ -22,25 +22,25 @@ export async function processExpiredRuns() {
       return;
     }
 
-    // Update each expired run (using withOrg for RLS enforcement)
-    for (const run of expiredRuns) {
-      await withOrg(run.organizationId, async (tx) => {
-        await tx
-          .update(runs)
-          .set({
-            expiresAt: null,
-            finishedAt: now,
-            status: 'failed',
-            failReason: { message: 'Timeout' },
-            fetchStatus: null,
-          })
-          .where(eq(runs.id, run.id));
-      });
-    }
+    // Update each expired run in parallel (CAS via status check for idempotency)
+    await Promise.allSettled(
+      expiredRuns.map(async (run) => {
+        await withOrg(run.organizationId, async (tx) => {
+          await tx
+            .update(runs)
+            .set({
+              expiresAt: null,
+              finishedAt: now,
+              status: 'failed',
+              failReason: { message: 'Timeout' },
+              fetchStatus: null,
+            })
+            .where(and(eq(runs.id, run.id), eq(runs.status, 'in_progress')));
+        });
+      })
+    );
 
-    if (expiredRuns.length > 0) {
-      console.log(`Processed ${expiredRuns.length} expired run(s)`);
-    }
+    console.log(`Processed ${expiredRuns.length} expired run(s)`);
 
   } catch (error) {
     console.error('Error processing expired runs:', error);
