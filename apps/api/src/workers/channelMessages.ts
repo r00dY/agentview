@@ -93,6 +93,10 @@ async function processChannelMessage(message: ChannelMessage) {
     throw new Error(`Agent '${agentName}' not found in config`);
   }
 
+  if (agentConfig.protocol !== 'ai-sdk') {
+    throw new Error(`Unsupported agent protocol: ${agentConfig.protocol}`);
+  }
+
   await withOrg(message.organizationId, async (tx) => {
     // Find or create user
     let user: typeof endUsers.$inferSelect | undefined;
