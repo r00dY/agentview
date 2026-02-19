@@ -32,7 +32,7 @@ export const channelMessageWorker = createWorker<ChannelMessage>({
       await processChannelMessage(message);
     } catch (msgError) {
       console.error(`[${NAME}] Error processing message ${message.id}:`, msgError);
-      
+
       await withOrg(message.organizationId, async (tx) => {
         await tx.update(channelMessages).set({
           status: 'failed',
@@ -85,18 +85,29 @@ async function processChannelMessage(message: ChannelMessage) {
 
     if (message.contactKind === 'email') {
       user = await findUser(tx, { email: message.contact, organizationId: message.organizationId });
+
+      if (!user) {
+        const [newUser] = await tx.insert(endUsers).values({
+          organizationId: message.organizationId,
+          email: message.contactKind === 'email' ? message.contact : null,
+          space,
+          createdBy,
+          token: randomBytes(32).toString('hex'),
+        }).returning();
+
+        user = newUser;
+      }
+
+    }
+    else {
+      throw new Error(`Unsupported contact kind: ${message.contactKind}`);
     }
 
     if (!user) {
-      const [newUser] = await tx.insert(endUsers).values({
-        organizationId: message.organizationId,
-        email: message.contactKind === 'email' ? message.contact : null,
-        space,
-        createdBy,
-        token: randomBytes(32).toString('hex'),
-      }).returning();
-      user = newUser;
+      throw new Error(`Unreachable error: user not found and not created`);
     }
+
+    
 
     // // Find existing session by channelId + channelThreadId + agent
     // let session = await tx.query.sessions.findFirst({
