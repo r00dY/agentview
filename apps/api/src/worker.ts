@@ -157,43 +157,6 @@ async function processWebhookJob(job: typeof webhookJobs.$inferSelect, config: a
       console.log(`Webhook job ${job.id} completed successfully`);
     }
 
-
-    // // Deliver webhook if URL is configured
-    // if (webhookUrl) {
-    //   const response = await fetch(webhookUrl, {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify({
-    //       event: job.eventType,
-    //       payload: job.payload,
-    //       job_id: job.id,
-    //     }),
-    //   });
-
-    //   if (!response.ok) {
-    //     throw new Error(`Webhook returned ${response.status}: ${await response.text()}`);
-    //   }
-
-    //   console.log(`Webhook job ${job.id} completed successfully`);
-    // }
-
-    // // Generate summary for session.on_first_run_created events (best-effort, doesn't fail the job)
-    // if (job.eventType === 'session.on_first_run_created') {
-    //   const payload = job.payload as { session_id: string };
-    //   const disableSummaries = config?.__internal?.disableSummaries;
-
-    //   if (!disableSummaries && process.env.OPENAI_API_KEY) {
-    //     try {
-    //       await generateSessionSummary(payload.session_id, job.organizationId);
-    //       console.log(`Summary generated for session ${payload.session_id}`);
-    //     } catch (err) {
-    //       console.error(`Summary generation failed for session ${payload.session_id}:`, err);
-    //       // Don't fail the job - summary is best-effort
-    //     }
-    //   }
-    // }
-
-
     // Success - mark as completed
     await withOrg(job.organizationId, async (tx) => {
       await tx.update(webhookJobs)
