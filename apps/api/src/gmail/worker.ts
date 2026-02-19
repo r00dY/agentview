@@ -4,8 +4,15 @@ import { withOrg } from '../withOrg';
 import { channels } from '../schemas/schema';
 import { setupWatch } from './api';
 import type { GmailChannelConfig } from './types';
+import { createPeriodicWorker } from '../workers/createPeriodicWorker';
 
-export async function processGmailWatchRenewals() {
+export const gmailWorker = createPeriodicWorker({
+  name: 'gmail-watch-renewal',
+  intervalMs: 60 * 60 * 1000,
+  run: processGmailWatchRenewals,
+});
+
+async function processGmailWatchRenewals() {
   try {
     // Find all active Gmail channels
     const gmailChannels = await db__dangerous

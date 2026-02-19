@@ -1,2 +1,2 @@
 export { gmailApp } from './routes';
-export { processGmailWatchRenewals } from './worker';
+export { gmailWorker } from './worker';
