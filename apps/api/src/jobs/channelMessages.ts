@@ -1,7 +1,7 @@
 import { db__dangerous } from '../db';
 import { withOrg } from '../withOrg';
 import { channelMessages, channels, environments, sessions, endUsers } from '../schemas/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, desc } from 'drizzle-orm';
 import { BaseConfigSchemaToZod } from 'agentview/configUtils';
 import { findUser } from '../users';
 import { randomBytes } from 'crypto';
@@ -16,13 +16,14 @@ export async function processChannelMessages() {
 
     for (const message of received) {
       try {
-        // Set status → processing
-        await withOrg(message.organizationId, async (tx) => {
-          await tx.update(channelMessages).set({
-            status: 'processing',
-            updatedAt: new Date().toISOString(),
-          }).where(eq(channelMessages.id, message.id));
-        });
+        // CAS: claim message only if still received
+        const [claimed] = await db__dangerous
+          .update(channelMessages)
+          .set({ status: 'processing', updatedAt: new Date().toISOString() })
+          .where(and(eq(channelMessages.id, message.id), eq(channelMessages.status, 'received')))
+          .returning({ id: channelMessages.id });
+
+        if (!claimed) continue;
 
         // Look up the channel
         const channel = await db__dangerous.query.channels.findFirst({

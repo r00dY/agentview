@@ -24,6 +24,15 @@ export async function processWebhookJobs() {
       .limit(10);
 
     for (const job of jobs) {
+      // CAS: claim job only if still pending
+      const [claimed] = await db__dangerous
+        .update(webhookJobs)
+        .set({ status: 'processing', updatedAt: new Date().toISOString() })
+        .where(and(eq(webhookJobs.id, job.id), eq(webhookJobs.status, 'pending')))
+        .returning({ id: webhookJobs.id });
+
+      if (!claimed) continue;
+
       const environment = await withOrg(job.organizationId, async (tx) => {
         return tx.query.environments.findFirst({
           where: eq(environments.id, job.environmentId),
@@ -47,13 +56,6 @@ export async function processWebhookJobs() {
 
 async function processWebhookJob(job: typeof webhookJobs.$inferSelect, config: any, webhookUrl: string | undefined) {
   const now = new Date();
-
-  // Mark as processing (using withOrg for RLS enforcement)
-  await withOrg(job.organizationId, async (tx) => {
-    await tx.update(webhookJobs)
-      .set({ status: 'processing', updatedAt: now.toISOString() })
-      .where(eq(webhookJobs.id, job.id));
-  });
 
   try {
     // summary generation
