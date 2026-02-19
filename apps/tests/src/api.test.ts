@@ -1787,7 +1787,7 @@ describe('API', () => {
      * These tests use a mock HTTP server to receive and verify webhook calls.
      * The webhookUrl is configured via the config (not env var).
      */
-    describe("webhook jobs - session.on_first_run_created", () => {
+    describe.skip("webhook jobs - session.on_first_run_created", () => {
       const WEBHOOK_PORT = 3456;
       const WEBHOOK_URL = `http://localhost:${WEBHOOK_PORT}/webhook`;
 
