@@ -144,10 +144,6 @@ async function processChannelMessage(message: ChannelMessage) {
     });
 
     if (!existingSession) {
-
-      console.log('createing session for user')
-      console.log('user', user);
-
       await createSession(tx, {
         organizationId: message.organizationId,
         agentConfig,
