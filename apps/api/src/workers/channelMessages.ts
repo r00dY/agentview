@@ -15,9 +15,7 @@ export const channelMessageWorker = createWorker<ChannelMessage>({
   name: NAME,
   pollIntervalMs: 2000,
   maxConcurrency: 20,
-  async claim(limit) {
-    console.log(`[${NAME}] Claiming ${limit} messages`);
-    
+  async claim(limit) {    
     return db__dangerous
       .update(channelMessages)
       .set({ status: 'processing', updatedAt: new Date().toISOString() })
@@ -34,14 +32,13 @@ export const channelMessageWorker = createWorker<ChannelMessage>({
       await processChannelMessage(message);
     } catch (msgError) {
       console.error(`[${NAME}] Error processing message ${message.id}:`, msgError);
-      try {
-        await withOrg(message.organizationId, async (tx) => {
-          await tx.update(channelMessages).set({
-            status: 'failed',
-            updatedAt: new Date().toISOString(),
-          }).where(eq(channelMessages.id, message.id));
-        });
-      } catch { /* best-effort */ }
+      
+      await withOrg(message.organizationId, async (tx) => {
+        await tx.update(channelMessages).set({
+          status: 'failed',
+          updatedAt: new Date().toISOString(),
+        }).where(eq(channelMessages.id, message.id));
+      });
     }
   },
 });
