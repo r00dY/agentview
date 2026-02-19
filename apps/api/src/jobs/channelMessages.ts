@@ -1,28 +1,22 @@
 import { db__dangerous } from '../db';
 import { withOrg } from '../withOrg';
 import { channelMessages, channels, environments, sessions, endUsers } from '../schemas/schema';
-import { eq, and, isNull, inArray } from 'drizzle-orm';
+import { eq, and, isNull, inArray, sql } from 'drizzle-orm';
 import { BaseConfigSchemaToZod } from 'agentview/configUtils';
 import { findUser } from '../users';
 import { randomBytes } from 'crypto';
 
 export async function processChannelMessages() {
   try {
-    // Claim up to 20 messages in one atomic query
+    // Claim up to 20 messages in one atomic query.
+    // FOR UPDATE SKIP LOCKED prevents concurrent workers from claiming the same rows.
     const claimed = await db__dangerous
       .update(channelMessages)
       .set({ status: 'processing', updatedAt: new Date().toISOString() })
       .where(
-        and(
-          eq(channelMessages.status, 'received'),
-          inArray(
-            channelMessages.id,
-            db__dangerous
-              .select({ id: channelMessages.id })
-              .from(channelMessages)
-              .where(eq(channelMessages.status, 'received'))
-              .limit(20)
-          )
+        inArray(
+          channelMessages.id,
+          sql`(SELECT ${channelMessages.id} FROM ${channelMessages} WHERE ${channelMessages.status} = 'received' LIMIT 20 FOR UPDATE SKIP LOCKED)`
         )
       )
       .returning();

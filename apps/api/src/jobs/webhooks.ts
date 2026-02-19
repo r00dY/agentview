@@ -1,7 +1,7 @@
 import { db__dangerous } from '../db';
 import { withOrg } from '../withOrg';
 import { webhookJobs, environments } from '../schemas/schema';
-import { eq, and, lt, or, isNull, inArray } from 'drizzle-orm';
+import { eq, and, lt, or, isNull, inArray, sql } from 'drizzle-orm';
 import { generateSessionSummary } from '../summaries';
 
 // Webhook job retry delays: 5s, 30s, 2min
@@ -11,47 +11,22 @@ export async function processWebhookJobs() {
   try {
     const now = new Date().toISOString();
 
-    // Claim up to 10 pending jobs in one atomic query
-    const claimed = await db__dangerous
+    // Claim up to 10 pending jobs in one atomic query.
+    // FOR UPDATE SKIP LOCKED prevents concurrent workers from claiming the same rows.
+    const jobs = await db__dangerous
       .update(webhookJobs)
       .set({ status: 'processing', updatedAt: now })
       .where(
-        and(
-          eq(webhookJobs.status, 'pending'),
-          inArray(
-            webhookJobs.id,
-            db__dangerous
-              .select({ id: webhookJobs.id })
-              .from(webhookJobs)
-              .where(
-                and(
-                  eq(webhookJobs.status, 'pending'),
-                  or(isNull(webhookJobs.nextAttemptAt), lt(webhookJobs.nextAttemptAt, now))
-                )
-              )
-              .limit(10)
-          )
+        inArray(
+          webhookJobs.id,
+          sql`(SELECT ${webhookJobs.id} FROM ${webhookJobs} WHERE ${webhookJobs.status} = 'pending' AND (${webhookJobs.nextAttemptAt} IS NULL OR ${webhookJobs.nextAttemptAt} < ${now}) LIMIT 10 FOR UPDATE SKIP LOCKED)`
         )
       )
       .returning();
 
     await Promise.allSettled(
-      claimed.map(async (job) => {
-        const environment = await withOrg(job.organizationId, async (tx) => {
-          return tx.query.environments.findFirst({
-            where: eq(environments.id, job.environmentId),
-          });
-        });
-
-        if (!environment) {
-          console.error(`Environment ${job.environmentId} not found`);
-          return;
-        }
-
-        const config = environment.config as any;
-        const webhookUrl = config?.webhookUrl;
-
-        await processWebhookJob(job, config, webhookUrl);
+      jobs.map(async (job) => {
+        await processWebhookJob(job);
       })
     );
   } catch (error) {
@@ -59,10 +34,23 @@ export async function processWebhookJobs() {
   }
 }
 
-async function processWebhookJob(job: typeof webhookJobs.$inferSelect, config: any, webhookUrl: string | undefined) {
+async function processWebhookJob(job: typeof webhookJobs.$inferSelect) {
   const now = new Date();
 
   try {
+    const environment = await withOrg(job.organizationId, async (tx) => {
+      return tx.query.environments.findFirst({
+        where: eq(environments.id, job.environmentId),
+      });
+    });
+
+    if (!environment) {
+      throw new Error(`Environment ${job.environmentId} not found`);
+    }
+
+    const config = environment.config as any;
+    const webhookUrl = config?.webhookUrl;
+
     // summary generation
     if (job.eventType === 'session.generate_summary') {
       const payload = job.payload as { session_id: string };
