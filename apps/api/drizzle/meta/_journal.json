@@ -71,6 +71,13 @@
       "when": 1771450000000,
       "tag": "0009_channel_processing",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1771540000000,
+      "tag": "0010_channel_message_fail_reason",
+      "breakpoints": true
     }
   ]
 }

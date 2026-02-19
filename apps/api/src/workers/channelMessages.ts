@@ -1,11 +1,13 @@
 import { db__dangerous } from '../db';
 import { withOrg } from '../withOrg';
-import { channelMessages, channels, environments, sessions, endUsers } from '../schemas/schema';
+import { channelMessages, channels, sessions, endUsers } from '../schemas/schema';
 import { eq, and, isNull, inArray, sql } from 'drizzle-orm';
 import { BaseConfigSchemaToZod } from 'agentview/configUtils';
 import { findUser } from '../users';
 import { randomBytes } from 'crypto';
 import { createWorker } from './utils';
+import { createSession } from '../sessions';
+import { AgentViewError } from 'agentview/AgentViewError';
 
 type ChannelMessage = typeof channelMessages.$inferSelect;
 
@@ -33,9 +35,18 @@ export const channelMessageWorker = createWorker<ChannelMessage>({
     } catch (msgError) {
       console.error(`[${NAME}] Error processing message ${message.id}:`, msgError);
 
+      const failReason: Record<string, any> = {
+        message: msgError instanceof Error ? msgError.message : String(msgError),
+      };
+      if (msgError instanceof AgentViewError) {
+        failReason.statusCode = msgError.statusCode;
+        if (msgError.details) failReason.details = msgError.details;
+      }
+
       await withOrg(message.organizationId, async (tx) => {
         await tx.update(channelMessages).set({
           status: 'failed',
+          failReason,
           updatedAt: new Date().toISOString(),
         }).where(eq(channelMessages.id, message.id));
       });
@@ -70,6 +81,9 @@ async function processChannelMessage(message: ChannelMessage) {
   const space = environment.userId ? 'playground' : 'production';
   const createdBy = environment.userId;
 
+  console.log('environment userId', environment.userId);
+  console.log(`[${NAME}] Space: ${space} | Created by: ${createdBy}`);
+
   // Find agent
   const agentName = channel.agent;
 
@@ -84,7 +98,17 @@ async function processChannelMessage(message: ChannelMessage) {
     let user: typeof endUsers.$inferSelect | undefined;
 
     if (message.contactKind === 'email') {
-      user = await findUser(tx, { email: message.contact, organizationId: message.organizationId });
+      // user = await findUser(tx, { email: message.contact, organizationId: message.organizationId });
+
+      user = await tx.query.endUsers.findFirst({
+        where: and(
+          eq(endUsers.email, message.contact),
+          eq(endUsers.space, space),
+          eq(endUsers.createdBy, createdBy)
+        ),
+      });
+
+
 
       if (!user) {
         const [newUser] = await tx.insert(endUsers).values({
@@ -107,45 +131,32 @@ async function processChannelMessage(message: ChannelMessage) {
       throw new Error(`Unreachable error: user not found and not created`);
     }
 
-    
+    // Find existing session by channelId + channelThreadId + agent
+    const existingSession = await tx.query.sessions.findFirst({
+      where: and(
+        eq(sessions.channelId, message.channelId),
+        eq(sessions.agent, channel.agent!),
+        eq(sessions.userId, user.id),
+        message.threadId
+          ? eq(sessions.channelThreadId, message.threadId)
+          : isNull(sessions.channelThreadId),
+      ),
+    });
 
-    // // Find existing session by channelId + channelThreadId + agent
-    // let session = await tx.query.sessions.findFirst({
-    //   where: and(
-    //     eq(sessions.channelId, message.channelId),
-    //     eq(sessions.agent, channel.agent!),
-    //     eq(sessions.userId, user.id),
-    //     message.threadId
-    //       ? eq(sessions.channelThreadId, message.threadId)
-    //       : isNull(sessions.channelThreadId),
-    //   ),
-    // });
+    if (!existingSession) {
 
-    // if (!session) {
-    //   // Generate handle number — production users have empty suffix
-    //   const handleSuffix = '';
-    //   const sessionWithHighestHandle = await tx.query.sessions.findFirst({
-    //     orderBy: (sessions, { desc }) => [desc(sessions.handleNumber)],
-    //     where: eq(sessions.handleSuffix, handleSuffix),
-    //   });
-    //   const newHandleNumber = sessionWithHighestHandle ? sessionWithHighestHandle.handleNumber + 1 : 1;
+      console.log('createing session for user')
+      console.log('user', user);
 
-    //   const [newSession] = await tx.insert(sessions).values({
-    //     organizationId: message.organizationId,
-    //     handleNumber: newHandleNumber,
-    //     handleSuffix,
-    //     agent: channel.agent!,
-    //     userId: user.id,
-    //     channelId: message.channelId,
-    //     channelThreadId: message.threadId ?? null,
-    //   }).returning();
-    //   session = newSession;
-    // }
+      await createSession(tx, {
+        organizationId: message.organizationId,
+        agentConfig,
+        userId: user.id,
+        channelId: message.channelId,
+        channelThreadId: message.threadId ?? null,
+      });
+    }
 
-    // const providerData = message.providerData as any;
-    // const handle = session.handleNumber.toString() + (session.handleSuffix ?? '');
-
-    const subject = (message.providerData as any)?.subject;
     console.log(`[${NAME}] Processed → user: ${user.email ?? user.id} | subject: ${subject ?? '-'}`);
 
     // Set status → processed
@@ -154,73 +165,4 @@ async function processChannelMessage(message: ChannelMessage) {
       updatedAt: new Date().toISOString(),
     }).where(eq(channelMessages.id, message.id));
   });
-
-  // // Find or create session
-
-
-
-
-
-  // // Find or create end user
-  // await withOrg(message.organizationId, async (tx) => {
-  //   let user: typeof endUsers.$inferSelect | undefined;
-
-  //   if (message.contactKind === 'email') {
-  //     user = await findUser(tx, { email: message.contact, organizationId: message.organizationId });
-  //   }
-
-  //   if (!user) {
-  //     const [newUser] = await tx.insert(endUsers).values({
-  //       organizationId: message.organizationId,
-  //       email: message.contactKind === 'email' ? message.contact : null,
-  //       createdBy: null,
-  //       space: 'production',
-  //       token: randomBytes(32).toString('hex'),
-  //     }).returning();
-  //     user = newUser;
-  //   }
-
-  //   // Find existing session by channelId + channelThreadId + agent
-  //   let session = await tx.query.sessions.findFirst({
-  //     where: and(
-  //       eq(sessions.channelId, message.channelId),
-  //       eq(sessions.agent, channel.agent!),
-  //       eq(sessions.userId, user.id),
-  //       message.threadId
-  //         ? eq(sessions.channelThreadId, message.threadId)
-  //         : isNull(sessions.channelThreadId),
-  //     ),
-  //   });
-
-  //   if (!session) {
-  //     // Generate handle number — production users have empty suffix
-  //     const handleSuffix = '';
-  //     const sessionWithHighestHandle = await tx.query.sessions.findFirst({
-  //       orderBy: (sessions, { desc }) => [desc(sessions.handleNumber)],
-  //       where: eq(sessions.handleSuffix, handleSuffix),
-  //     });
-  //     const newHandleNumber = sessionWithHighestHandle ? sessionWithHighestHandle.handleNumber + 1 : 1;
-
-  //     const [newSession] = await tx.insert(sessions).values({
-  //       organizationId: message.organizationId,
-  //       handleNumber: newHandleNumber,
-  //       handleSuffix,
-  //       agent: channel.agent!,
-  //       userId: user.id,
-  //       channelId: message.channelId,
-  //       channelThreadId: message.threadId ?? null,
-  //     }).returning();
-  //     session = newSession;
-  //   }
-
-  //   const providerData = message.providerData as any;
-  //   const handle = session.handleNumber.toString() + (session.handleSuffix ?? '');
-  //   console.log(`[channel-message] Processed → session #${handle} | user: ${user.email ?? user.id} | subject: ${providerData?.subject ?? '-'}`);
-
-  //   // Set status → processed
-  //   await tx.update(channelMessages).set({
-  //     status: 'processed',
-  //     updatedAt: new Date().toISOString(),
-  //   }).where(eq(channelMessages.id, message.id));
-  // });
 }

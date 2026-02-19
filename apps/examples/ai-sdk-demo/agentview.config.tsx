@@ -15,7 +15,7 @@ export default defineConfig({
       url: "http://localhost:3000/api/chat",
       protocol: "ai-sdk",
       metadata: {
-        userLocation: z.string()
+        userLocation: z.string().nullable()
       },
       newSessionComponent: ({ submit, isRunning }) => {
         const [selectedCity, setSelectedCity] = React.useState<string>("");

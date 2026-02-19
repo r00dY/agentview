@@ -489,6 +489,7 @@ export const channelMessages = pgTable('channel_messages', {
   attachments: jsonb('attachments'),
   providerData: jsonb('provider_data'),
   status: varchar('status', { length: 32 }).notNull(), // 'received' | 'processing' | 'processed' | 'pending' | 'sending' | 'sent' | 'failed'
+  failReason: jsonb('fail_reason'),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
 }, (table) => [

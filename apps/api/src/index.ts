@@ -42,7 +42,7 @@ import {
   CommentMessageCreateSchema,
   ScoreCreateSchema
 } from 'agentview/apiTypes';
-import { type BaseAgentViewConfig, type BaseRunConfig, type Metadata } from 'agentview/configTypes';
+import { type BaseAgentViewConfig, type BaseRunConfig } from 'agentview/configTypes';
 import { BaseConfigSchema, BaseConfigSchemaToZod, findItemConfig, findItemConfigById, requireRunConfig } from 'agentview/configUtils';
 import { getAllSessionItems, getLastRun } from 'agentview/sessionUtils';
 import packageJson from '../package.json';
@@ -53,12 +53,13 @@ import { isInboxItemUnread } from './inboxItems';
 import { initDb } from './initDb';
 import { requireValidInvitation } from './invitations';
 import { members, organizations, users } from './schemas/auth-schema';
-import { fetchLastRunStatus, fetchSession } from './sessions';
+import { createSession, fetchLastRunStatus, fetchSession } from './sessions';
 import type { Transaction } from './types';
 import { updateInboxes } from './updateInboxes';
 import { findUser } from './users';
 import { randomBytes } from 'crypto';
 import { applyRunPatch } from './applyRunPatch';
+import { parseMetadata } from './parseMetadata';
 import { resolveVersion } from './versions';
 import { authn, authnUser, authorize, requireMemberPrincipal, getMemberId, requireMemberId, getEnv, type PrivatePrincipal, type Principal, type MemberPrincipal, type ApiKeyPrincipal, type UserPrincipal } from './authMiddleware';
 
@@ -245,33 +246,6 @@ async function requireCommentMessageFromUser(tx: Transaction, itemId: string, co
   return comment
 }
 
-function parseMetadata(metadataConfig: Metadata | undefined, allowUnknownKeys: boolean = true, inputMetadata: Record<string, any> | undefined | null, existingMetadata: Record<string, any> | undefined | null): Record<string, any> {
-  const metafields = metadataConfig ?? {};
-
-  for (const [key, value] of Object.entries(metafields)) {
-    if (value.safeParse(null).success && !(value instanceof z.ZodDefault)) {
-      metafields[key] = value.default(null); // nullable fields without default should default to null
-    }
-  }
-
-  let schema = z.object(metafields);
-  if (allowUnknownKeys) {
-    schema = schema.loose();
-  } else {
-    schema = schema.strict();
-  }
-
-  const metadata = {
-    ...(existingMetadata ?? {}), // existing metadata overrides nulls
-    ...(inputMetadata ?? {}), // input overrides existing metadata
-  }
-
-  const result = schema.safeParse(metadata);
-  if (!result.success) {
-    throw new AgentViewError("Error parsing the metadata.", 422, { code: 'parse.schema', issues: result.error.issues });
-  }
-  return result.data;
-}
 
 
 /* --------- COMMENT OPERATIONS --------- */
@@ -1356,46 +1330,14 @@ app.openapi(sessionsPOSTRoute, async (c) => {
 
     authorize(principal, { action: "end-user:update", user });
 
-    /**
-     * METADATA
-     */
-    const metadata = parseMetadata(agentConfig.metadata, agentConfig.allowUnknownMetadata, body.metadata ?? {}, {});
-
-    const handleSuffix = user.createdBy ? "s" : "";
-
-    const sessionWithHighestHandleNumber = await tx.query.sessions.findFirst({
-      orderBy: (sessions, { desc }) => [desc(sessions.handleNumber)],
-      where: eq(sessions.handleSuffix, handleSuffix),
-    });
-
-    const newHandleNumber = sessionWithHighestHandleNumber ? sessionWithHighestHandleNumber.handleNumber + 1 : 1;
-
-    const [newSessionRow] = await tx.insert(sessions).values({
+    const newSession = await createSession(tx, {
       organizationId: principal.organizationId,
-      handleNumber: newHandleNumber,
-      handleSuffix: handleSuffix,
-      metadata: metadata,
-      agent: body.agent,
+      agentConfig,
       userId: user.id,
-      summary: body.summary
-    }).returning();
-
-    // add event (only for users, not endUsers)
-    const [event] = await tx.insert(events).values({
-      organizationId: principal.organizationId,
-      type: 'session_created',
+      metadata: body.metadata,
+      summary: body.summary,
       authorId: getMemberId(principal),
-      payload: {
-        session_id: newSessionRow.id,
-      }
-    }).returning();
-
-    const newSession = await fetchSession(tx, newSessionRow.id);
-    if (!newSession) {
-      throw new Error("[Internal Error] Session not found");
-    }
-
-    await updateInboxes(tx, event, newSession, null);
+    });
 
     return c.json(newSession, 201);
   })

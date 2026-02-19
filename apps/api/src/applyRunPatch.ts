@@ -2,10 +2,10 @@ import { eq } from 'drizzle-orm';
 import { runs, sessionItems } from './schemas/schema';
 import type { Transaction } from './types';
 import type { RunUpdate } from 'agentview/apiTypes';
-import type { BaseAgentConfig, BaseRunConfig, Metadata } from 'agentview/configTypes';
+import type { BaseAgentConfig, BaseRunConfig } from 'agentview/configTypes';
 import { requireRunConfig, findItemConfig } from 'agentview/configUtils';
 import { AgentViewError } from 'agentview/AgentViewError';
-import { z } from '@hono/zod-openapi';
+import { parseMetadata } from './parseMetadata';
 
 export const DEFAULT_IDLE_TIME = 1000 * 60; // 60 seconds
 
@@ -93,33 +93,6 @@ export function validateNonInputItems(runConfig: BaseRunConfig, previousRunItems
 }
 
 
-export function parseMetadata(metadataConfig: Metadata | undefined, allowUnknownKeys: boolean = true, inputMetadata: Record<string, any> | undefined | null, existingMetadata: Record<string, any> | undefined | null): Record<string, any> {
-  const metafields = metadataConfig ?? {};
-
-  for (const [key, value] of Object.entries(metafields)) {
-    if (value.safeParse(null).success && !(value instanceof z.ZodDefault)) {
-      metafields[key] = value.default(null); // nullable fields without default should default to null
-    }
-  }
-
-  let schema = z.object(metafields);
-  if (allowUnknownKeys) {
-    schema = schema.loose();
-  } else {
-    schema = schema.strict();
-  }
-
-  const metadata = {
-    ...(existingMetadata ?? {}), // existing metadata overrides nulls
-    ...(inputMetadata ?? {}), // input overrides existing metadata
-  }
-
-  const result = schema.safeParse(metadata);
-  if (!result.success) {
-    throw new AgentViewError("Error parsing the metadata.", 422, { code: 'parse.schema', issues: result.error.issues });
-  }
-  return result.data;
-}
 
 
 /**

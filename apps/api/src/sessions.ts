@@ -1,8 +1,11 @@
 import { and, desc, eq } from "drizzle-orm";
-import { runs, sessionItems, sessions } from "./schemas/schema"
+import { endUsers, events, runs, sessionItems, sessions } from "./schemas/schema"
 import type { Transaction } from "./types";
 import { isUUID } from "./isUUID";
 import type { Session } from "agentview/apiTypes";
+import type { BaseAgentConfig } from "agentview/configTypes";
+import { updateInboxes } from "./updateInboxes";
+import { parseMetadata } from "./parseMetadata";
 
 export type LastRunStatus = {
   id: string;
@@ -103,6 +106,64 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
     state,
     versions: row.versions ?? []
   } as Session;
+}
+
+export async function createSession(tx: Transaction, params: {
+  organizationId: string;
+  agentConfig: BaseAgentConfig;
+  userId: string;
+  metadata?: Record<string, any> | null;
+  summary?: string | null;
+  channelId?: string | null;
+  channelThreadId?: string | null;
+  authorId?: string | null;
+}): Promise<Session> {
+  const metadata = parseMetadata(params.agentConfig.metadata, params.agentConfig.allowUnknownMetadata ?? true, params.metadata ?? {}, {});
+
+  const user = await tx.query.endUsers.findFirst({
+    where: eq(endUsers.id, params.userId),
+  });
+  if (!user) {
+    throw new Error("[Internal Error] User not found");
+  }
+  const handleSuffix = user.createdBy ? "s" : "";
+
+  const sessionWithHighestHandleNumber = await tx.query.sessions.findFirst({
+    orderBy: (sessions, { desc }) => [desc(sessions.handleNumber)],
+    where: eq(sessions.handleSuffix, handleSuffix),
+  });
+
+  const newHandleNumber = sessionWithHighestHandleNumber ? sessionWithHighestHandleNumber.handleNumber + 1 : 1;
+
+  const [newSessionRow] = await tx.insert(sessions).values({
+    organizationId: params.organizationId,
+    handleNumber: newHandleNumber,
+    handleSuffix,
+    metadata,
+    agent: params.agentConfig.name,
+    userId: params.userId,
+    summary: params.summary ?? null,
+    channelId: params.channelId ?? null,
+    channelThreadId: params.channelThreadId ?? null,
+  }).returning();
+
+  const [event] = await tx.insert(events).values({
+    organizationId: params.organizationId,
+    type: 'session_created',
+    authorId: params.authorId ?? null,
+    payload: {
+      session_id: newSessionRow.id,
+    }
+  }).returning();
+
+  const newSession = await fetchSession(tx, newSessionRow.id);
+  if (!newSession) {
+    throw new Error("[Internal Error] Session not found");
+  }
+
+  await updateInboxes(tx, event, newSession, null);
+
+  return newSession;
 }
 
 async function fetchSessionState(tx: Transaction, session_id: string) {
