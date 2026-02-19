@@ -1,7 +1,7 @@
 import { db__dangerous } from '../db';
 import { withOrg } from '../withOrg';
 import { runs, environments } from '../schemas/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray, sql } from 'drizzle-orm';
 import { getEnvironment, type Env } from '../environments';
 import { fetchSession } from '../sessions';
 import { callAgentAPI, AgentAPIError } from '../agentApi';
@@ -10,37 +10,33 @@ import { BaseConfigSchemaToZod } from 'agentview/configUtils';
 import { applyRunPatch } from '../applyRunPatch';
 import { resolveVersion } from '../versions';
 import type { RunBody } from 'agentview/apiTypes';
+import { createWorker } from './createWorker';
 
-export async function processAgentFetches() {
-  try {
-    // Find runs with fetchStatus = 'pending'
-    const pendingRuns = await db__dangerous
-      .select()
-      .from(runs)
-      .where(eq(runs.fetchStatus, 'pending'))
-      .limit(5);
+type Run = typeof runs.$inferSelect;
 
-    for (const run of pendingRuns) {
-      // CAS: set fetchStatus to 'fetching' only if still 'pending'
-      const [updated] = await db__dangerous
-        .update(runs)
-        .set({ fetchStatus: 'fetching', updatedAt: new Date().toISOString() })
-        .where(and(eq(runs.id, run.id), eq(runs.fetchStatus, 'pending')))
-        .returning({ id: runs.id });
+export const agentFetchWorker = createWorker<Run>({
+  name: 'agent-fetch',
+  pollIntervalMs: 1000,
+  maxConcurrency: 5,
+  async claim(limit) {
+    // Atomic claim: FOR UPDATE SKIP LOCKED prevents concurrent workers from double-claiming
+    return db__dangerous
+      .update(runs)
+      .set({ fetchStatus: 'fetching', updatedAt: new Date().toISOString() })
+      .where(
+        inArray(
+          runs.id,
+          sql`(SELECT ${runs.id} FROM ${runs} WHERE ${runs.fetchStatus} = 'pending' LIMIT ${sql.raw(String(limit))} FOR UPDATE SKIP LOCKED)`
+        )
+      )
+      .returning();
+  },
+  async process(run) {
+    await processAgentFetch(run);
+  },
+});
 
-      if (updated) {
-        // Fire and forget - don't await
-        processAgentFetch(run).catch((error) => {
-          console.error(`Unhandled error in processAgentFetch for run ${run.id}:`, error);
-        });
-      }
-    }
-  } catch (error) {
-    console.error('Error in agent fetch processor:', error);
-  }
-}
-
-async function processAgentFetch(run: typeof runs.$inferSelect) {
+async function processAgentFetch(run: Run) {
   const abortController = new AbortController();
 
   try {

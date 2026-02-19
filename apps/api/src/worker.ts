@@ -1,8 +1,9 @@
 import { initDb } from './initDb';
-import { processExpiredRuns } from './jobs/expiredRuns';
-import { processWebhookJobs } from './jobs/webhooks';
-import { processAgentFetches } from './jobs/agentFetch';
-import { processChannelMessages } from './jobs/channelMessages';
+import { expiredRunsWorker } from './workers/expiredRuns';
+import { webhookWorker } from './workers/webhooks';
+import { agentFetchWorker } from './workers/agentFetch';
+import { channelMessageWorker } from './workers/channelMessages';
+import { createPeriodicWorker } from './workers/createPeriodicWorker';
 import { processGmailWatchRenewals } from './gmail/index';
 
 await initDb();
@@ -16,34 +17,14 @@ await initDb();
  *   to enforce RLS as defense-in-depth
  */
 
-// Run expired runs processor every second
-setInterval(() => {
-  processExpiredRuns();
-}, 1000);
+const gmailWorker = createPeriodicWorker({
+  name: 'gmail-watch-renewal',
+  intervalMs: 60 * 60 * 1000,
+  run: processGmailWatchRenewals,
+});
 
-// Run webhook job processor every 3 seconds
-setInterval(() => {
-  processWebhookJobs();
-}, 3000);
-
-// Run agent fetch processor every second
-setInterval(() => {
-  processAgentFetches();
-}, 1000);
-
-// Run channel message processor every 2 seconds
-setInterval(() => {
-  processChannelMessages();
-}, 2000);
-
-// Run Gmail watch renewal every hour
-setInterval(() => {
-  processGmailWatchRenewals();
-}, 60 * 60 * 1000);
-
-// Run immediately on startup
-processExpiredRuns();
-processWebhookJobs();
-processAgentFetches();
-processChannelMessages();
-processGmailWatchRenewals();
+expiredRunsWorker.start();
+webhookWorker.start();
+agentFetchWorker.start();
+channelMessageWorker.start();
+gmailWorker.start();

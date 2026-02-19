@@ -1,40 +1,38 @@
 import { db__dangerous } from '../db';
 import { withOrg } from '../withOrg';
 import { webhookJobs, environments } from '../schemas/schema';
-import { eq, and, lt, or, isNull, inArray, sql } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { generateSessionSummary } from '../summaries';
+import { createWorker } from './createWorker';
 
 // Webhook job retry delays: 5s, 30s, 2min
 const RETRY_DELAYS = [5_000, 30_000, 120_000];
 
-export async function processWebhookJobs() {
-  try {
-    const now = new Date().toISOString();
+type WebhookJob = typeof webhookJobs.$inferSelect;
 
-    // Claim up to 10 pending jobs in one atomic query.
-    // FOR UPDATE SKIP LOCKED prevents concurrent workers from claiming the same rows.
-    const jobs = await db__dangerous
+export const webhookWorker = createWorker<WebhookJob>({
+  name: 'webhooks',
+  pollIntervalMs: 3000,
+  maxConcurrency: 10,
+  async claim(limit) {
+    const now = new Date().toISOString();
+    return db__dangerous
       .update(webhookJobs)
       .set({ status: 'processing', updatedAt: now })
       .where(
         inArray(
           webhookJobs.id,
-          sql`(SELECT ${webhookJobs.id} FROM ${webhookJobs} WHERE ${webhookJobs.status} = 'pending' AND (${webhookJobs.nextAttemptAt} IS NULL OR ${webhookJobs.nextAttemptAt} < ${now}) LIMIT 10 FOR UPDATE SKIP LOCKED)`
+          sql`(SELECT ${webhookJobs.id} FROM ${webhookJobs} WHERE ${webhookJobs.status} = 'pending' AND (${webhookJobs.nextAttemptAt} IS NULL OR ${webhookJobs.nextAttemptAt} < ${now}) LIMIT ${sql.raw(String(limit))} FOR UPDATE SKIP LOCKED)`
         )
       )
       .returning();
+  },
+  async process(job) {
+    await processWebhookJob(job);
+  },
+});
 
-    await Promise.allSettled(
-      jobs.map(async (job) => {
-        await processWebhookJob(job);
-      })
-    );
-  } catch (error) {
-    console.error('Error in webhook job processor:', error);
-  }
-}
-
-async function processWebhookJob(job: typeof webhookJobs.$inferSelect) {
+async function processWebhookJob(job: WebhookJob) {
   const now = new Date();
 
   try {
@@ -65,7 +63,7 @@ async function processWebhookJob(job: typeof webhookJobs.$inferSelect) {
     // webhook
     else {
       if (!webhookUrl) {
-        throw new Error(`Webhook URL is not configured`); // if webhook url disappeared while job is pending -> fail the job.
+        throw new Error(`Webhook URL is not configured`);
       }
 
       const response = await fetch(webhookUrl, {

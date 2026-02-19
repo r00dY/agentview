@@ -5,45 +5,44 @@ import { eq, and, isNull, inArray, sql } from 'drizzle-orm';
 import { BaseConfigSchemaToZod } from 'agentview/configUtils';
 import { findUser } from '../users';
 import { randomBytes } from 'crypto';
+import { createWorker } from './createWorker';
 
-export async function processChannelMessages() {
-  try {
-    // Claim up to 20 messages in one atomic query.
-    // FOR UPDATE SKIP LOCKED prevents concurrent workers from claiming the same rows.
-    const claimed = await db__dangerous
+type ChannelMessage = typeof channelMessages.$inferSelect;
+
+export const channelMessageWorker = createWorker<ChannelMessage>({
+  name: 'channel-messages',
+  pollIntervalMs: 2000,
+  maxConcurrency: 20,
+  async claim(limit) {
+    return db__dangerous
       .update(channelMessages)
       .set({ status: 'processing', updatedAt: new Date().toISOString() })
       .where(
         inArray(
           channelMessages.id,
-          sql`(SELECT ${channelMessages.id} FROM ${channelMessages} WHERE ${channelMessages.status} = 'received' LIMIT 20 FOR UPDATE SKIP LOCKED)`
+          sql`(SELECT ${channelMessages.id} FROM ${channelMessages} WHERE ${channelMessages.status} = 'received' LIMIT ${sql.raw(String(limit))} FOR UPDATE SKIP LOCKED)`
         )
       )
       .returning();
+  },
+  async process(message) {
+    try {
+      await processChannelMessage(message);
+    } catch (msgError) {
+      console.error(`[channel-message] Error processing message ${message.id}:`, msgError);
+      try {
+        await withOrg(message.organizationId, async (tx) => {
+          await tx.update(channelMessages).set({
+            status: 'failed',
+            updatedAt: new Date().toISOString(),
+          }).where(eq(channelMessages.id, message.id));
+        });
+      } catch { /* best-effort */ }
+    }
+  },
+});
 
-    await Promise.allSettled(
-      claimed.map(async (message) => {
-        try {
-          await processChannelMessage(message);
-        } catch (msgError) {
-          console.error(`[channel-message] Error processing message ${message.id}:`, msgError);
-          try {
-            await withOrg(message.organizationId, async (tx) => {
-              await tx.update(channelMessages).set({
-                status: 'failed',
-                updatedAt: new Date().toISOString(),
-              }).where(eq(channelMessages.id, message.id));
-            });
-          } catch { /* best-effort */ }
-        }
-      })
-    );
-  } catch (error) {
-    console.error('Error in channel message processor:', error);
-  }
-}
-
-async function processChannelMessage(message: typeof channelMessages.$inferSelect) {
+async function processChannelMessage(message: ChannelMessage) {
   // Look up the channel
   const channel = await db__dangerous.query.channels.findFirst({
     where: eq(channels.id, message.channelId),
