@@ -1661,7 +1661,7 @@ describe('API', () => {
 
     })
 
-    describe.skip("keep-alive and expiration", () => {
+    describe("keep-alive and expiration", () => {
       const SHORT_TIMEOUT = 3000; // 3 seconds - worker runs every 1s
 
       const updateConfigWithTimeout = async (idleTimeout: number) => {
@@ -1787,7 +1787,7 @@ describe('API', () => {
      * These tests use a mock HTTP server to receive and verify webhook calls.
      * The webhookUrl is configured via the config (not env var).
      */
-    describe.skip("webhook jobs - session.on_first_run_created", () => {
+    describe("webhook jobs - session.on_first_run_created", () => {
       const WEBHOOK_PORT = 3456;
       const WEBHOOK_URL = `http://localhost:${WEBHOOK_PORT}/webhook`;
 
