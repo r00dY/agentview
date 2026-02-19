@@ -104,11 +104,11 @@ async function processChannelMessage(message: ChannelMessage) {
         where: and(
           eq(endUsers.email, message.contact),
           eq(endUsers.space, space),
-          eq(endUsers.createdBy, createdBy)
+          createdBy
+            ? eq(endUsers.createdBy, createdBy)
+            : isNull(endUsers.createdBy)
         ),
       });
-
-
 
       if (!user) {
         const [newUser] = await tx.insert(endUsers).values({
