@@ -1,7 +1,7 @@
 import { db__dangerous } from '../db';
 import { runs } from '../schemas/schema';
 import { eq, and, lt } from 'drizzle-orm';
-import { createPeriodicWorker } from './createPeriodicWorker';
+import { createPeriodicWorker } from './utils';
 
 export const expiredRunsWorker = createPeriodicWorker({
   name: 'expired-runs',

@@ -3,7 +3,7 @@ import { withOrg } from '../withOrg';
 import { webhookJobs, environments } from '../schemas/schema';
 import { eq, inArray, sql } from 'drizzle-orm';
 import { generateSessionSummary } from '../summaries';
-import { createWorker } from './createWorker';
+import { createWorker } from './utils';
 
 // Webhook job retry delays: 5s, 30s, 2min
 const RETRY_DELAYS = [5_000, 30_000, 120_000];

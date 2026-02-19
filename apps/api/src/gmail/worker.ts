@@ -4,7 +4,7 @@ import { withOrg } from '../withOrg';
 import { channels } from '../schemas/schema';
 import { setupWatch } from './api';
 import type { GmailChannelConfig } from './types';
-import { createPeriodicWorker } from '../workers/createPeriodicWorker';
+import { createPeriodicWorker } from '../workers/utils';
 
 export const gmailWorker = createPeriodicWorker({
   name: 'gmail-watch-renewal',

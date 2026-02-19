@@ -10,7 +10,7 @@ import { BaseConfigSchemaToZod } from 'agentview/configUtils';
 import { applyRunPatch } from '../applyRunPatch';
 import { resolveVersion } from '../versions';
 import type { RunBody } from 'agentview/apiTypes';
-import { createWorker } from './createWorker';
+import { createWorker } from './utils';
 
 type Run = typeof runs.$inferSelect;
 

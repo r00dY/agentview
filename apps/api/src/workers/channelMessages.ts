@@ -5,7 +5,7 @@ import { eq, and, isNull, inArray, sql } from 'drizzle-orm';
 import { BaseConfigSchemaToZod } from 'agentview/configUtils';
 import { findUser } from '../users';
 import { randomBytes } from 'crypto';
-import { createWorker } from './createWorker';
+import { createWorker } from './utils';
 
 type ChannelMessage = typeof channelMessages.$inferSelect;
 

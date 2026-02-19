@@ -1,14 +1,16 @@
+export interface WorkerHandle {
+  start(): void;
+  stop(): void;
+}
+
+// -- Concurrency-controlled poll loop --
+
 export interface WorkerConfig<T> {
   name: string;
   pollIntervalMs: number;
   maxConcurrency: number;
   claim: (limit: number) => Promise<T[]>;
   process: (item: T) => Promise<void>;
-}
-
-export interface WorkerHandle {
-  start(): void;
-  stop(): void;
 }
 
 export function createWorker<T>(config: WorkerConfig<T>): WorkerHandle {
@@ -47,6 +49,40 @@ export function createWorker<T>(config: WorkerConfig<T>): WorkerHandle {
     start() {
       poll();
       timer = setInterval(poll, pollIntervalMs);
+    },
+    stop() {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    },
+  };
+}
+
+// -- Simple periodic runner --
+
+export interface PeriodicWorkerConfig {
+  name: string;
+  intervalMs: number;
+  run: () => Promise<void>;
+}
+
+export function createPeriodicWorker(config: PeriodicWorkerConfig): WorkerHandle {
+  const { name, intervalMs, run } = config;
+  let timer: ReturnType<typeof setInterval> | null = null;
+
+  async function execute() {
+    try {
+      await run();
+    } catch (error) {
+      console.error(`[${name}] Error:`, error);
+    }
+  }
+
+  return {
+    start() {
+      execute();
+      timer = setInterval(execute, intervalMs);
     },
     stop() {
       if (timer) {
