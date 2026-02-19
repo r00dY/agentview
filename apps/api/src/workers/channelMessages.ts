@@ -16,6 +16,8 @@ export const channelMessageWorker = createWorker<ChannelMessage>({
   pollIntervalMs: 2000,
   maxConcurrency: 20,
   async claim(limit) {
+    console.log(`[${NAME}] Claiming ${limit} messages`);
+    
     return db__dangerous
       .update(channelMessages)
       .set({ status: 'processing', updatedAt: new Date().toISOString() })
