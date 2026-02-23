@@ -1602,55 +1602,11 @@ app.openapi(runsPOSTRoute, async (c) => {
 
     authorize(principal, { action: "end-user:update", user: session.user });
 
-    const config = await requireConfig(tx, principal)
-    const agentConfig = requireAgentConfig(config, session.agent)
-
     const organizationId = principal.organizationId;
     const env = getEnv(principal);
     const environment = await requireEnvironment(tx, env);
 
-    await createRun(tx, {
-      organizationId,
-      session,
-      agentConfig,
-      items: body.items,
-      version: body.version,
-      metadata: body.metadata,
-      status: body.status,
-      state: body.state,
-      failReason: body.failReason,
-      isDevEnv: env.type === 'dev',
-    });
-
-    const lastRun = getLastRun(session);
-
-    // Queue webhook job on first run (for summary generation and/or webhook delivery)
-    const isFirstRun = lastRun === undefined;
-    if (isFirstRun) {
-      if (config.webhookUrl) { // enqueue job if 
-        await tx.insert(webhookJobs).values({
-          organizationId,
-          eventType: 'session.on_first_run_created',
-          payload: { session_id: body.sessionId },
-          sessionId: body.sessionId,
-          status: 'pending',
-          nextAttemptAt: new Date().toISOString(),
-          environmentId: environment.id,
-        });
-      }
-
-      if (!config.__internal?.disableSummaries) {
-        await tx.insert(webhookJobs).values({
-          organizationId,
-          eventType: 'session.generate_summary',
-          payload: { session_id: body.sessionId },
-          sessionId: body.sessionId,
-          status: 'pending',
-          nextAttemptAt: new Date().toISOString(),
-          environmentId: environment.id,
-        });
-      }
-    }
+    await createRun(tx, organizationId, environment, body);
 
     const updatedSession = await requireSession(tx, body.sessionId);
     const newRun = getLastRun(updatedSession)!;

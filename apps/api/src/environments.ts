@@ -2,6 +2,8 @@ import { environments } from "./schemas/schema";
 import { eq, isNull, and } from "drizzle-orm";
 import type { Transaction } from "./types";
 import { HTTPException } from "hono/http-exception";
+import { BaseConfigSchemaToZod } from "agentview/configUtils";
+import type { Environment } from "agentview/apiTypes";
 
 export type ProdEnv = {
     type: 'prod'
@@ -56,4 +58,8 @@ export async function requireEnvironment(tx: Transaction, env: Env) {
         throw new HTTPException(404, { message: "Environment not found" });
     }
     return environment;
+}
+
+export function getConfigFromEnvironment(environment: Environment) {
+  return BaseConfigSchemaToZod.parse(environment.config)
 }

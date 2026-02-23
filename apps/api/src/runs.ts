@@ -1,13 +1,15 @@
 import { eq } from 'drizzle-orm';
-import { runs, sessionItems } from './schemas/schema';
+import { runs, sessionItems, webhookJobs } from './schemas/schema';
 import type { Transaction } from './types';
-import type { Run, RunUpdate, Session } from 'agentview/apiTypes';
+import type { Environment, Run, RunCreate, RunUpdate, Session } from 'agentview/apiTypes';
 import type { BaseAgentConfig, BaseRunConfig } from 'agentview/configTypes';
 import { requireRunConfig, findItemConfig } from 'agentview/configUtils';
 import { AgentViewError } from 'agentview/AgentViewError';
 import { parseMetadata } from './parseMetadata';
 import { resolveVersion } from './versions';
 import { getLastRun } from 'agentview/sessionUtils';
+import { fetchSession } from './sessions';
+import { getConfigFromEnvironment } from './environments';
 
 export const DEFAULT_IDLE_TIME = 1000 * 60; // 60 seconds
 
@@ -208,22 +210,27 @@ export async function applyRunPatch(
  */
 export async function createRun(
   tx: Transaction,
-  params: {
-    organizationId: string;
-    session: Session;
-    agentConfig: BaseAgentConfig;
-    items: any[];
-    version?: string;
-    metadata?: Record<string, any>;
-    status?: 'in_progress' | 'completed' | 'cancelled' | 'failed';
-    state?: any;
-    failReason?: any;
-    isDevEnv: boolean; // for version only
-  }
+  organizationId: string,
+  environment: Environment,
+  body: RunCreate
 ): Promise<typeof runs.$inferSelect> {
-  const { organizationId, session, agentConfig, items, isDevEnv } = params;
-  const isAutoFetch = !!agentConfig.url;
+  const session = await fetchSession(tx, body.sessionId);
+  if (!session) {
+    throw new AgentViewError("Session not found.", 404);
+  }
+
   const lastRun = getLastRun(session);
+
+  const config = getConfigFromEnvironment(environment);
+  const agentConfig = config.agents?.find(a => a.name === session.agent);
+
+  if (!agentConfig) {
+    throw new AgentViewError("Agent not found in environment config.", 404);
+  }
+
+  const isAutoFetch = !!agentConfig.url;
+
+  const { items } = body;
 
   /** Only one in_progress run is allowed per session **/
   if (lastRun?.status === 'in_progress') {
@@ -235,21 +242,21 @@ export async function createRun(
     if (items.length !== 1) {
       throw new AgentViewError("When agent has a url, run must have exactly 1 item (input).", 422);
     }
-    if (params.status && params.status !== 'in_progress') {
+    if (body.status && body.status !== 'in_progress') {
       throw new AgentViewError("When agent has a url, status must be 'in_progress' (or omitted).", 422);
     }
-    if (params.state !== undefined) {
+    if (body.state !== undefined) {
       throw new AgentViewError("When agent has a url, state cannot be set on creation.", 422);
     }
-    if (params.failReason !== undefined && params.failReason !== null) {
+    if (body.failReason !== undefined && body.failReason !== null) {
       throw new AgentViewError("When agent has a url, failReason cannot be set on creation.", 422);
     }
-    if (params.version !== undefined) {
+    if (body.version !== undefined) {
       throw new AgentViewError("When agent has a url, version cannot be set on creation (the agent endpoint provides it).", 422);
     }
   }
 
-  if (!isAutoFetch && !params.version) {
+  if (!isAutoFetch && !body.version) {
     throw new AgentViewError("Version is required.", 422);
   }
 
@@ -257,9 +264,9 @@ export async function createRun(
 
   if (!isAutoFetch) {
     const resolved = await resolveVersion(tx, {
-      versionString: params.version!,
-      isProduction: !isDevEnv,
-      isDev: isDevEnv,
+      versionString: body.version!,
+      isProduction: environment.user === null,
+      isDev: environment.user !== null,
       lastRunVersion: lastRun?.version ?? null,
       organizationId,
       sessionId: session.id,
@@ -278,15 +285,15 @@ export async function createRun(
   const parsedInput = [runConfig.input.schema.parse(inputItem)];
 
   /** Validate rest items **/
-  const parsedNonInputItems = validateNonInputItems(runConfig, [parsedInput], nonInputItems, params.status ?? 'in_progress');
+  const parsedNonInputItems = validateNonInputItems(runConfig, [parsedInput], nonInputItems, body.status ?? 'in_progress');
   const parsedItems = [...parsedInput, ...parsedNonInputItems];
 
   /** Metadata **/
-  const metadata = parseMetadata(runConfig.metadata, runConfig.allowUnknownMetadata ?? true, params.metadata ?? {}, {});
+  const metadata = parseMetadata(runConfig.metadata, runConfig.allowUnknownMetadata ?? true, body.metadata ?? {}, {});
 
   /** Status, finished at, failReason **/
-  const status = params.status ?? 'in_progress';
-  const failReason = params.failReason ?? null;
+  const status = body.status ?? 'in_progress';
+  const failReason = body.failReason ?? null;
 
   if (failReason && status !== 'failed') {
     throw new AgentViewError("failReason can only be set when status is 'failed'.", 422);
@@ -320,14 +327,42 @@ export async function createRun(
   );
 
   // insert state item
-  if (params.state !== undefined) {
+  if (body.state !== undefined) {
     await tx.insert(sessionItems).values({
       organizationId,
       sessionId: session.id,
-      content: params.state,
+      content: body.state,
       runId: insertedRun.id,
       isState: true,
     });
+  }
+
+  // Queue webhook job on first run (for summary generation and/or webhook delivery)
+  const isFirstRun = lastRun === undefined;
+  if (isFirstRun) {
+    if (config.webhookUrl) { // enqueue job if 
+      await tx.insert(webhookJobs).values({
+        organizationId,
+        eventType: 'session.on_first_run_created',
+        payload: { session_id: body.sessionId },
+        sessionId: body.sessionId,
+        status: 'pending',
+        nextAttemptAt: new Date().toISOString(),
+        environmentId: environment.id,
+      });
+    }
+
+    if (!config.__internal?.disableSummaries) {
+      await tx.insert(webhookJobs).values({
+        organizationId,
+        eventType: 'session.generate_summary',
+        payload: { session_id: body.sessionId },
+        sessionId: body.sessionId,
+        status: 'pending',
+        nextAttemptAt: new Date().toISOString(),
+        environmentId: environment.id,
+      });
+    }
   }
 
   return insertedRun;
