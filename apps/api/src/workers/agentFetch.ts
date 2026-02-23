@@ -80,13 +80,11 @@ async function processAgentFetch(run: Run) {
 
     const callFn = agentConfig.protocol === 'ai-sdk' ? callAgentAPIAISDK : callAgentAPI;
 
-    let streamCompleted = false;
+    // let streamCompleted = false;
     let versionReceived = false;
 
-    for await (const event of callFn(body, agentUrl, abortController.signal)) {
-
-      // Check for cancellation on each event
-      const runStatus = await withOrg(run.organizationId, async (tx) => {
+    const getCurrentRunStatus = async () => {
+      return await withOrg(run.organizationId, async (tx) => {
         const [currentRun] = await tx
           .select({ status: runs.status })
           .from(runs)
@@ -94,10 +92,14 @@ async function processAgentFetch(run: Run) {
           .limit(1);
         return currentRun.status;
       });
+    }
 
+    for await (const event of callFn(body, agentUrl, abortController.signal)) {
+      // Check for cancellation after each new event received. We immediately abort the stream if the run is not in progress.
+      const runStatus = await getCurrentRunStatus();
       if (runStatus !== 'in_progress') {
         abortController.abort();
-        return;
+        break;
       }
 
       if (event.name === 'response_data') {
@@ -136,83 +138,28 @@ async function processAgentFetch(run: Run) {
           throw new Error('Agent must provide X-AgentView-Version response header');
         }
 
-        try {
-          await withOrg(run.organizationId, async (tx) => {
-            await applyRunPatch(
-              tx,
-              run.id,
-              agentConfig,
-              event.data
-            );
-          });
+        await withOrg(run.organizationId, async (tx) => {
+          await applyRunPatch(
+            tx,
+            run.id,
+            agentConfig,
+            event.data
+          );
+        });
 
-          // if (updatedRun.status === 'completed' || updatedRun.status === 'failed' || updatedRun.status === 'cancelled') {
-          //   streamCompleted = true;
-          //   abortController.abort();
-          //   break;
-          // }
-
-          // Check if the patch completed the run
-          // const [afterPatch] = await db__dangerous
-          //   .select({ status: runs.status })
-          //   .from(runs)
-          //   .where(eq(runs.id, run.id))
-          //   .limit(1);
-
-          // if (afterPatch && (afterPatch.status === 'completed' || afterPatch.status === 'failed' || afterPatch.status === 'cancelled')) {
-          //   streamCompleted = true;
-          //   abortController.abort();
-          //   break;
-          // }
-        } catch (error) {
-          // Patch validation failed - mark run as failed
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          await withOrg(run.organizationId, async (tx) => {
-            await tx.update(runs).set({
-              status: 'failed',
-              failReason: {
-                message: `Agent stream event failed validation: ${errorMessage}`,
-                event: event.data,
-              },
-              finishedAt: new Date().toISOString(),
-              fetchStatus: null,
-              expiresAt: null,
-              updatedAt: new Date().toISOString(),
-            }).where(eq(runs.id, run.id));
-          });
-          abortController.abort();
-          return;
-        }
       }
     }
 
-    // Stream ended - check if run was completed
-    if (!streamCompleted) {
-      // Check current status
-      const [finalRun] = await db__dangerous
-        .select({ status: runs.status, fetchStatus: runs.fetchStatus })
-        .from(runs)
-        .where(eq(runs.id, run.id))
-        .limit(1);
-
-      if (finalRun && finalRun.fetchStatus !== null && finalRun.status === 'in_progress') {
-        // Stream ended without completing the run
-        await withOrg(run.organizationId, async (tx) => {
-          await tx.update(runs).set({
-            status: 'failed',
-            failReason: { message: 'Agent stream ended without completing' },
-            finishedAt: new Date().toISOString(),
-            fetchStatus: null,
-            expiresAt: null,
-            updatedAt: new Date().toISOString(),
-          }).where(eq(runs.id, run.id));
-        });
-      }
+    // Automatically fail the run if it is not in progress after stream is finished
+    const finalRunStatus = await getCurrentRunStatus();
+    if (finalRunStatus === 'in_progress') {
+      throw new Error('Agent stream ended without completing');
     }
 
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      return; // Expected when we abort
+      // This is OK since abort is only than on the condition of the run being *not* in progress
+      return;
     }
 
     const errorMessage = error instanceof AgentAPIError
