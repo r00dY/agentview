@@ -488,6 +488,7 @@ export const channelMessages = pgTable('channel_messages', {
   text: text('text'),
   attachments: jsonb('attachments'),
   providerData: jsonb('provider_data'),
+  runId: uuid('run_id').references(() => runs.id, { onDelete: 'set null' }),
   status: varchar('status', { length: 32 }).notNull(), // 'received' | 'processing' | 'processed' | 'pending' | 'sending' | 'sent' | 'failed'
   failReason: jsonb('fail_reason'),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
@@ -497,6 +498,7 @@ export const channelMessages = pgTable('channel_messages', {
   index('channel_messages_channel_id_idx').on(table.channelId),
   index('channel_messages_contact_idx').on(table.contact),
   index('channel_messages_channel_thread_idx').on(table.channelId, table.threadId),
+  index('channel_messages_run_id_idx').on(table.runId),
   createTenantPolicy('channel_messages'),
 ]);
 
@@ -513,6 +515,10 @@ export const channelMessagesRelations = relations(channelMessages, ({ one }) => 
   channel: one(channels, {
     fields: [channelMessages.channelId],
     references: [channels.id],
+  }),
+  run: one(runs, {
+    fields: [channelMessages.runId],
+    references: [runs.id],
   }),
 }));
 

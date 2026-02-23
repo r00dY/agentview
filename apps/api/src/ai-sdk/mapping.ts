@@ -27,10 +27,14 @@ export function sessionToUIMessages(session: Session): UIMessage[] {
     const inputItem = items[0];
     const inputContent = inputItem.content;
 
+    const userParts = Array.isArray(inputContent.parts)
+      ? inputContent.parts
+      : [{ type: 'text', text: typeof inputContent === 'string' ? inputContent : (inputContent.content ?? JSON.stringify(inputContent)) }];
+
     const userMessage: UIMessage = {
       id: inputItem.id,
       role: 'user',
-      parts: [{ type: 'text', text: typeof inputContent === 'string' ? inputContent : (inputContent.content ?? JSON.stringify(inputContent)) }],
+      parts: userParts,
     };
     if (inputContent.metadata) {
       userMessage.metadata = inputContent.metadata;

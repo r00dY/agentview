@@ -1,13 +1,15 @@
 import { db__dangerous } from '../db';
 import { withOrg } from '../withOrg';
-import { channelMessages, channels, sessions, endUsers } from '../schemas/schema';
+import { channelMessages, channels, sessions, endUsers, runs } from '../schemas/schema';
 import { eq, and, isNull, inArray, sql } from 'drizzle-orm';
 import { BaseConfigSchemaToZod } from 'agentview/configUtils';
 import { findUser } from '../users';
 import { randomBytes } from 'crypto';
 import { createWorker } from './utils';
-import { createSession } from '../sessions';
+import { createSession, fetchSession } from '../sessions';
 import { AgentViewError } from 'agentview/AgentViewError';
+import { createRun } from '../runs';
+import { getLastRun } from 'agentview/sessionUtils';
 
 type ChannelMessage = typeof channelMessages.$inferSelect;
 
@@ -157,12 +159,95 @@ async function processChannelMessage(message: ChannelMessage) {
       });
     }
 
-    console.log(`[${NAME}] Processed → user: ${user.email ?? user.id} | subject: ${subject ?? '-'}`);
-
-    // Set status → processed
+    // Mark current message as processed
     await tx.update(channelMessages).set({
       status: 'processed',
       updatedAt: new Date().toISOString(),
     }).where(eq(channelMessages.id, message.id));
+
+    // Find session (may have just been created)
+    const session = await tx.query.sessions.findFirst({
+      where: and(
+        eq(sessions.channelId, message.channelId),
+        eq(sessions.agent, channel.agent!),
+        eq(sessions.userId, user.id),
+        message.threadId
+          ? eq(sessions.channelThreadId, message.threadId)
+          : isNull(sessions.channelThreadId),
+      ),
+    });
+
+    if (!session) {
+      throw new Error('Unreachable: session not found after create');
+    }
+
+    // Fetch full session with runs
+    const fullSession = await fetchSession(tx, session.id);
+    if (!fullSession) {
+      throw new Error('Unreachable: full session not found');
+    }
+
+    // Cancel in-progress run if one exists
+    const lastRun = getLastRun(fullSession);
+    if (lastRun?.status === 'in_progress') {
+      await tx.update(runs).set({
+        status: 'cancelled',
+        finishedAt: new Date().toISOString(),
+        fetchStatus: null,
+        updatedAt: new Date().toISOString(),
+      }).where(eq(runs.id, lastRun.id));
+
+      // Re-fetch session after cancellation so createRun sees clean state
+      const refreshedSession = await fetchSession(tx, session.id);
+      if (!refreshedSession) {
+        throw new Error('Unreachable: session not found after cancel');
+      }
+      Object.assign(fullSession, refreshedSession);
+    }
+
+    // Find all pending incoming messages for this session (processed, no runId, same channel+thread)
+    const pendingMessages = await tx.query.channelMessages.findMany({
+      where: and(
+        eq(channelMessages.channelId, message.channelId),
+        eq(channelMessages.direction, 'incoming'),
+        eq(channelMessages.status, 'processed'),
+        isNull(channelMessages.runId),
+        message.threadId
+          ? eq(channelMessages.threadId, message.threadId)
+          : isNull(channelMessages.threadId),
+      ),
+      orderBy: (cm, { asc }) => [asc(cm.createdAt)],
+    });
+
+    if (pendingMessages.length === 0) {
+      console.log(`[${NAME}] No pending messages to process into a run`);
+      return;
+    }
+
+    // Build merged input in AI-SDK format
+    const inputItem = {
+      role: 'user',
+      parts: pendingMessages.map(msg => ({
+        type: 'text' as const,
+        text: msg.text ?? '',
+      })),
+    };
+
+    // Create a run (auto-fetch agent, no version/env needed)
+    const run = await createRun(tx, {
+      organizationId: message.organizationId,
+      session: fullSession,
+      agentConfig,
+      items: [inputItem],
+    });
+
+    // Link all consumed messages to the new run
+    const pendingMessageIds = pendingMessages.map(m => m.id);
+    await tx.update(channelMessages).set({
+      runId: run.id,
+      updatedAt: new Date().toISOString(),
+    }).where(inArray(channelMessages.id, pendingMessageIds));
+
+    console.log(`[${NAME}] Processed → user: ${user.email ?? user.id} | subject: ${subject ?? '-'} | run: ${run.id} | messages: ${pendingMessages.length}`);
   });
 }

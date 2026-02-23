@@ -1,13 +1,13 @@
 import { db__dangerous } from '../db';
 import { withOrg } from '../withOrg';
-import { runs, environments } from '../schemas/schema';
+import { runs, environments, sessions, channelMessages } from '../schemas/schema';
 import { eq, and, inArray, sql } from 'drizzle-orm';
 import { getEnvironment, type Env } from '../environments';
 import { fetchSession } from '../sessions';
 import { callAgentAPI, AgentAPIError } from '../agentApi';
 import { callAgentAPIAISDK } from '../ai-sdk/agentApi';
 import { BaseConfigSchemaToZod } from 'agentview/configUtils';
-import { applyRunPatch } from '../runs';
+import { applyRunPatch, getRun } from '../runs';
 import { resolveVersion } from '../versions';
 import type { RunBody } from 'agentview/apiTypes';
 import { createWorker } from './utils';
@@ -154,6 +154,65 @@ async function processAgentFetch(run: Run) {
     const finalRunStatus = await getCurrentRunStatus();
     if (finalRunStatus === 'in_progress') {
       throw new Error('Agent stream ended without completing');
+    }
+
+    // Create outgoing channel message if session has a channel
+    if (finalRunStatus === 'completed') {
+      await withOrg(run.organizationId, async (tx) => {
+        // Check if session has a channel
+        const sessionRow = await tx.query.sessions.findFirst({
+          where: eq(sessions.id, run.sessionId),
+          columns: { channelId: true },
+        });
+        if (!sessionRow?.channelId) return;
+
+        // Get the completed run with its items
+        const completedRun = await getRun(tx, run.id);
+        if (!completedRun || completedRun.sessionItems.length <= 1) return;
+
+        // Extract text from output items (skip input at index 0)
+        const outputItems = completedRun.sessionItems.slice(1);
+        const textParts: string[] = [];
+        for (const item of outputItems) {
+          const content = item.content as any;
+          if (typeof content === 'string') {
+            textParts.push(content);
+          } else if (content?.type === 'text' && content?.text) {
+            textParts.push(content.text);
+          } else if (Array.isArray(content?.parts)) {
+            for (const part of content.parts) {
+              if (part.type === 'text' && part.text) {
+                textParts.push(part.text);
+              }
+            }
+          }
+        }
+
+        const outputText = textParts.join('\n') || null;
+
+        // Find an incoming channel message linked to this run (for contact info)
+        const incomingMessage = await tx.query.channelMessages.findFirst({
+          where: and(
+            eq(channelMessages.runId, run.id),
+            eq(channelMessages.direction, 'incoming'),
+          ),
+        });
+
+        if (!incomingMessage) return;
+
+        // Insert outgoing channel message
+        await tx.insert(channelMessages).values({
+          organizationId: run.organizationId,
+          channelId: incomingMessage.channelId,
+          direction: 'outgoing',
+          contactKind: incomingMessage.contactKind,
+          contact: incomingMessage.contact,
+          threadId: incomingMessage.threadId,
+          text: outputText,
+          runId: run.id,
+          status: 'pending',
+        });
+      });
     }
 
   } catch (error) {

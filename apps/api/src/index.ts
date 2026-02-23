@@ -42,8 +42,8 @@ import {
   CommentMessageCreateSchema,
   ScoreCreateSchema
 } from 'agentview/apiTypes';
-import { type BaseAgentViewConfig, type BaseRunConfig } from 'agentview/configTypes';
-import { BaseConfigSchema, BaseConfigSchemaToZod, findItemConfig, findItemConfigById, requireRunConfig } from 'agentview/configUtils';
+import { type BaseAgentViewConfig } from 'agentview/configTypes';
+import { BaseConfigSchema, BaseConfigSchemaToZod, findItemConfigById, requireRunConfig } from 'agentview/configUtils';
 import { getAllSessionItems, getLastRun } from 'agentview/sessionUtils';
 import packageJson from '../package.json';
 import { equalJSON } from './equalJSON';
@@ -58,9 +58,8 @@ import type { Transaction } from './types';
 import { updateInboxes } from './updateInboxes';
 import { findUser } from './users';
 import { randomBytes } from 'crypto';
-import { applyRunPatch, getRun } from './runs';
+import { applyRunPatch, getRun, createRun, DEFAULT_IDLE_TIME } from './runs';
 import { parseMetadata } from './parseMetadata';
-import { resolveVersion } from './versions';
 import { authn, authnUser, authorize, requireMemberPrincipal, getMemberId, requireMemberId, getEnv, type PrivatePrincipal, type Principal, type MemberPrincipal, type ApiKeyPrincipal, type UserPrincipal } from './authMiddleware';
 
 export { authn, authorize, requireMemberPrincipal, requireMemberId } from './authMiddleware';
@@ -1579,119 +1578,6 @@ app.openapi(sessionSeenRoute, async (c) => {
 
 
 
-/**
- * We process each item one by one. We don't think of consecutive ones in the loop.
- * 
- * - !validateSteps -> we allow any item. Only need to check the last one for "output" if "complete" and it works.
- * - validateSteps=true -> each item must be either STEP or OUTPUT. If last item is OUTPUT, then any next item is ERROR.
- * 
- * - new item shows up
- * - if !validateSteps -> always insert
- * - if validateSteps -> check if it's step or output. If not, then error.
- * -    if step -> insert
- * -    if output -> 
- * 
- * 
- * If validation is on -> if the last item *output* but not *step* -> error.
- * 
- * 
- * if !validateSteps -> anything is allowed. Only if "completed" -> validate last item "as an extra"
- * if validateSteps -> 
- * - if "completed" ->  
- * 
- * 
- * INPUT KNOWLEDGE:
- * - previous run was in_progress
- * - we don't know whether it had validation or not (we can't make such assumption). If it didn't it might have complete garbage, multiple output items etc.
- * - we know whether we want validation *NOW*
- * 
- */
-
-
-function validateNonInputItems(runConfig: BaseRunConfig, previousRunItems: any[], items: any[], status: 'in_progress' | 'completed' | 'cancelled' | 'failed') {
-  const validateSteps = runConfig.validateSteps ?? false;
-
-  const parsedItems: any[] = [];
-
-  const validateStepItems = (stepItems: any[]) => {
-    for (const stepItem of stepItems) {
-      const stepItemConfig = findItemConfig(runConfig, [...previousRunItems, ...parsedItems], stepItem, [], "step");
-      if (stepItemConfig) {
-        parsedItems.push(stepItemConfig.content);
-      }
-      else if (!validateSteps) {
-        parsedItems.push(stepItem);
-      }
-      else {
-        throw new AgentViewError("Couldn't find a matching step item.", 422, { item: stepItem });
-      }
-    }
-  }
-
-  if (status === "completed") { // last item must exist and must be output
-    if (items.length === 0) {
-      if (previousRunItems.length <= 1) {
-        throw new AgentViewError("Run set as 'completed' must have at least 2 items, input and output.", 422);
-      }
-
-      // when completing run without items, we only validate the last item against output schema
-      const lastItemOutputConfig = findItemConfig(runConfig, previousRunItems.slice(0, -1), previousRunItems[previousRunItems.length - 1], [], "output");
-
-      if (!lastItemOutputConfig) {
-        throw new AgentViewError("Last item must be an output.", 422, { item: previousRunItems[previousRunItems.length - 1] });
-      }
-    }
-    else {
-
-      const outputItem = items[items.length - 1];
-
-      validateStepItems(items.slice(0, -1));
-
-      const outputItemConfig = findItemConfig(runConfig, [...previousRunItems, ...parsedItems], outputItem, [], "output");
-      if (!outputItemConfig) {
-        throw new AgentViewError("Couldn't find a matching output item.", 422, { item: outputItem });
-      }
-      else {
-        parsedItems.push(outputItemConfig.content);
-      }
-    }
-
-  }
-  else if (status === "failed" || status === "cancelled") { // last item, if exists, should be either step or output
-    if (items.length === 0) {
-      validateStepItems(items);
-    }
-    else {
-      const lastItem = items[items.length - 1];
-      validateStepItems(items.slice(0, -1));
-
-      // last item must be either step or output. We first try to match step, if not successful then output
-      const lastItemStepConfig = findItemConfig(runConfig, [...previousRunItems, ...parsedItems], lastItem, [], "step");
-      const lastItemOutputConfig = findItemConfig(runConfig, [...previousRunItems, ...parsedItems], lastItem, [], "output");
-
-      if (lastItemStepConfig) {
-        parsedItems.push(lastItemStepConfig.content);
-      }
-      else if (lastItemOutputConfig) {
-        parsedItems.push(lastItemOutputConfig.content);
-      }
-      else if (!validateSteps) {
-        // we don't validate steps, so if no match, then we assume it's unknown step
-        parsedItems.push(lastItem);
-      }
-      else {
-        throw new AgentViewError("Last item must be either step or output.", 422, { item: lastItem });
-      }
-    }
-  }
-  else if (status === "in_progress") {
-    validateStepItems(items);
-  }
-
-  return parsedItems;
-}
-
-
 const runsPOSTRoute = createRoute({
   method: 'post',
   path: '/api/runs',
@@ -1707,8 +1593,6 @@ const runsPOSTRoute = createRoute({
   },
 })
 
-const DEFAULT_IDLE_TIME = 1000 * 60; // 60 seconds
-
 app.openapi(runsPOSTRoute, async (c) => {
   const principal = await authn(c.req.raw.headers)
   const body = await c.req.valid('json')
@@ -1721,122 +1605,24 @@ app.openapi(runsPOSTRoute, async (c) => {
     const config = await requireConfig(tx, principal)
     const agentConfig = requireAgentConfig(config, session.agent)
 
-    const isAutoFetch = !!agentConfig.url;
-
-    const lastRun = getLastRun(session)
-
-    /** Only one in_progress run is allowed per session **/
-    if (lastRun?.status === 'in_progress') {
-      throw new AgentViewError(`Can't create a run because session has already a run in progress.`, 422);
-    }
-
-    /** Auto-fetch validation: when agent has url, restrict what can be set on creation **/
-    if (isAutoFetch) {
-      if (body.items.length !== 1) {
-        throw new AgentViewError("When agent has a url, run must have exactly 1 item (input).", 422);
-      }
-      if (body.status && body.status !== 'in_progress') {
-        throw new AgentViewError("When agent has a url, status must be 'in_progress' (or omitted).", 422);
-      }
-      if (body.state !== undefined) {
-        throw new AgentViewError("When agent has a url, state cannot be set on creation.", 422);
-      }
-      if (body.failReason !== undefined && body.failReason !== null) {
-        throw new AgentViewError("When agent has a url, failReason cannot be set on creation.", 422);
-      }
-      if (body.version !== undefined) {
-        throw new AgentViewError("When agent has a url, version cannot be set on creation (the agent endpoint provides it).", 422);
-      }
-    }
-
-    if (!isAutoFetch && !body.version) {
-      throw new AgentViewError("Version is required.", 422);
-    }
-
     const organizationId = principal.organizationId;
     const env = getEnv(principal);
     const environment = await requireEnvironment(tx, env);
 
-    let versionId: string | null = null;
-    let version: string | null = null;
-
-    if (!isAutoFetch) {
-      const resolved = await resolveVersion(tx, {
-        versionString: body.version!,
-        isProduction: session.user.space === 'production',
-        isDev: env.type === 'dev',
-        lastRunVersion: lastRun?.version ?? null,
-        organizationId,
-        sessionId: body.sessionId,
-        existingSessionVersions: (session.versions as string[]) ?? [],
-      });
-      versionId = resolved.versionId;
-      version = resolved.version;
-    }
-
-    /** Validate input item **/
-    if (body.items.length === 0) {
-      throw new AgentViewError("New run must have at least 1 item, input.", 422);
-    }
-    const [inputItem, ...nonInputItems] = body.items;
-
-    const runConfig = requireRunConfig(agentConfig, inputItem);
-
-    const parsedInput = [runConfig.input.schema.parse(inputItem)] // must be true, because of line above
-
-    /** Validate rest items **/
-    const parsedNonInputItems = validateNonInputItems(runConfig, [parsedInput], nonInputItems, body.status ?? 'in_progress');
-
-    const parsedItems = [...parsedInput, ...parsedNonInputItems];
-
-    /** Metadata **/
-    const metadata = parseMetadata(runConfig.metadata, runConfig.allowUnknownMetadata ?? true, body.metadata ?? {}, {})
-
-    /** STATUS, FINISHED_AT, FAIL_REASON */
-    const status = body.status ?? 'in_progress';
-    const failReason = body.failReason ?? null;
-
-    if (failReason && status !== 'failed') {
-      throw new AgentViewError("failReason can only be set when status is 'failed'.", 422);
-    }
-
-    const isFinished = status === 'completed' || status === 'cancelled' || status === 'failed';
-    const finishedAt = isFinished ? new Date().toISOString() : null;
-    const idleTimeout = runConfig.idleTimeout ?? DEFAULT_IDLE_TIME;
-    const expiresAt = isFinished ? null : new Date(Date.now() + idleTimeout).toISOString();
-
-    // Create run and items
-    const [insertedRun] = await tx.insert(runs).values({
+    await createRun(tx, {
       organizationId,
-      sessionId: body.sessionId,
-      status,
-      failReason,
-      expiresAt,
-      finishedAt,
-      versionId,
-      metadata,
-      fetchStatus: isAutoFetch ? 'pending' : null,
-    }).returning();
+      session,
+      agentConfig,
+      items: body.items,
+      version: body.version,
+      metadata: body.metadata,
+      status: body.status,
+      state: body.state,
+      failReason: body.failReason,
+      isDevEnv: env.type === 'dev',
+    });
 
-    await tx.insert(sessionItems).values(
-      parsedItems.map(item => ({
-        organizationId,
-        sessionId: body.sessionId,
-        content: item,
-        runId: insertedRun.id,
-      }))
-    ).returning();
-
-    // insert state item
-    if (body.state !== undefined) {
-      await tx.insert(sessionItems).values({
-        organizationId,
-        sessionId: body.sessionId,
-        content: body.state,
-        runId: insertedRun.id,
-        isState: true,
-      })
-    }
+    const lastRun = getLastRun(session);
 
     // Queue webhook job on first run (for summary generation and/or webhook delivery)
     const isFirstRun = lastRun === undefined;
