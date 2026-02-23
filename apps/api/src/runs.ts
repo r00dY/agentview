@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { runs, sessionItems } from './schemas/schema';
 import type { Transaction } from './types';
-import type { RunUpdate } from 'agentview/apiTypes';
+import type { Run, RunUpdate } from 'agentview/apiTypes';
 import type { BaseAgentConfig, BaseRunConfig } from 'agentview/configTypes';
 import { requireRunConfig, findItemConfig } from 'agentview/configUtils';
 import { AgentViewError } from 'agentview/AgentViewError';
@@ -92,7 +92,19 @@ export function validateNonInputItems(runConfig: BaseRunConfig, previousRunItems
   return parsedItems;
 }
 
+export async function getRun(tx: Transaction, runId: string) {
+  const run = await tx.query.runs.findFirst({
+    where: eq(runs.id, runId),
+    with: {
+      sessionItems: {
+        orderBy: (sessionItem, { asc }) => [asc(sessionItem.sortOrder)],
+        where: (sessionItem, { eq }) => eq(sessionItem.isState, false),
+      },
+    },
+  });
 
+  return run;
+}
 
 
 /**
@@ -101,20 +113,16 @@ export function validateNonInputItems(runConfig: BaseRunConfig, previousRunItems
  */
 export async function applyRunPatch(
   tx: Transaction,
-  organizationId: string,
   runId: string,
-  run: {
-    id: string;
-    status: string;
-    metadata: any;
-    finishedAt: string | null;
-    sessionId: string;
-    sessionItems: { content: any }[];
-  },
-  sessionId: string,
   agentConfig: BaseAgentConfig,
   body: RunUpdate
-): Promise<void> {
+) {
+
+  const run = await getRun(tx, runId);
+  if (!run) {
+    throw new AgentViewError("Run not found.", 404);
+  }
+
   /** Find matching run config **/
   const inputItem = run.sessionItems[0].content;
   const runConfig = requireRunConfig(agentConfig, inputItem);
@@ -162,8 +170,8 @@ export async function applyRunPatch(
   if (parsedItems.length > 0) {
     await tx.insert(sessionItems).values(
       parsedItems.map(item => ({
-        organizationId,
-        sessionId,
+        organizationId: run.organizationId,
+        sessionId: run.sessionId,
         content: item,
         runId: run.id
       }))
@@ -181,11 +189,13 @@ export async function applyRunPatch(
 
   if (body.state !== undefined) {
     await tx.insert(sessionItems).values({
-      organizationId,
-      sessionId,
+      organizationId: run.organizationId,
+      sessionId: run.sessionId,
       content: body.state,
       runId: run.id,
       isState: true,
     });
   }
+
+  return (await getRun(tx, runId))!;
 }

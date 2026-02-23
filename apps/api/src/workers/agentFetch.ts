@@ -7,7 +7,7 @@ import { fetchSession } from '../sessions';
 import { callAgentAPI, AgentAPIError } from '../agentApi';
 import { callAgentAPIAISDK } from '../ai-sdk/agentApi';
 import { BaseConfigSchemaToZod } from 'agentview/configUtils';
-import { applyRunPatch } from '../applyRunPatch';
+import { applyRunPatch } from '../runs';
 import { resolveVersion } from '../versions';
 import type { RunBody } from 'agentview/apiTypes';
 import { createWorker } from './utils';
@@ -85,23 +85,17 @@ async function processAgentFetch(run: Run) {
 
     for await (const event of callFn(body, agentUrl, abortController.signal)) {
 
-      console.log('----');
-      console.log('event', event);
       // Check for cancellation on each event
       const runStatus = await withOrg(run.organizationId, async (tx) => {
-
         const [currentRun] = await tx
           .select({ status: runs.status })
           .from(runs)
           .where(eq(runs.id, run.id))
           .limit(1);
-
         return currentRun.status;
       });
-      console.log('run status', runStatus);
 
       if (runStatus !== 'in_progress') {
-        console.log('aborting');
         abortController.abort();
         return;
       }
@@ -144,44 +138,32 @@ async function processAgentFetch(run: Run) {
 
         try {
           await withOrg(run.organizationId, async (tx) => {
-            // Re-fetch run to get current state (items may have been added)
-            const currentRunData = await tx.query.runs.findFirst({
-              where: eq(runs.id, run.id),
-              with: {
-                sessionItems: {
-                  orderBy: (si, { asc }) => [asc(si.sortOrder)],
-                  where: (si, { eq }) => eq(si.isState, false),
-                },
-              },
-            });
-
-            if (!currentRunData) {
-              throw new Error('Run not found');
-            }
-
             await applyRunPatch(
               tx,
-              run.organizationId,
               run.id,
-              currentRunData,
-              run.sessionId,
               agentConfig,
               event.data
             );
           });
 
-          // Check if the patch completed the run
-          const [afterPatch] = await db__dangerous
-            .select({ status: runs.status })
-            .from(runs)
-            .where(eq(runs.id, run.id))
-            .limit(1);
+          // if (updatedRun.status === 'completed' || updatedRun.status === 'failed' || updatedRun.status === 'cancelled') {
+          //   streamCompleted = true;
+          //   abortController.abort();
+          //   break;
+          // }
 
-          if (afterPatch && (afterPatch.status === 'completed' || afterPatch.status === 'failed' || afterPatch.status === 'cancelled')) {
-            streamCompleted = true;
-            abortController.abort();
-            break;
-          }
+          // Check if the patch completed the run
+          // const [afterPatch] = await db__dangerous
+          //   .select({ status: runs.status })
+          //   .from(runs)
+          //   .where(eq(runs.id, run.id))
+          //   .limit(1);
+
+          // if (afterPatch && (afterPatch.status === 'completed' || afterPatch.status === 'failed' || afterPatch.status === 'cancelled')) {
+          //   streamCompleted = true;
+          //   abortController.abort();
+          //   break;
+          // }
         } catch (error) {
           // Patch validation failed - mark run as failed
           const errorMessage = error instanceof Error ? error.message : String(error);

@@ -58,7 +58,7 @@ import type { Transaction } from './types';
 import { updateInboxes } from './updateInboxes';
 import { findUser } from './users';
 import { randomBytes } from 'crypto';
-import { applyRunPatch } from './applyRunPatch';
+import { applyRunPatch } from './runs';
 import { parseMetadata } from './parseMetadata';
 import { resolveVersion } from './versions';
 import { authn, authnUser, authorize, requireMemberPrincipal, getMemberId, requireMemberId, getEnv, type PrivatePrincipal, type Principal, type MemberPrincipal, type ApiKeyPrincipal, type UserPrincipal } from './authMiddleware';
@@ -1916,7 +1916,7 @@ app.openapi(runPATCHRoute, async (c) => {
 
     authorize(principal, { action: "end-user:update", user: session.user });
 
-    // Guard: if run has active fetchStatus, only allow cancellation
+    // Guard: API can only cancel auto-fetch runs which are being auto-fetched
     if (run.fetchStatus) {
       const hasOnlyStatus = body.status === 'cancelled'
         && !body.items?.length
@@ -1928,7 +1928,7 @@ app.openapi(runPATCHRoute, async (c) => {
         throw new AgentViewError("Cannot modify a run while agent fetch is in progress. Only cancellation is allowed.", 422);
       }
 
-      // Cancel the auto-fetch run (it passes the 'applyRunPatch' which is not allowed when auto fetching)
+      // Cancel the auto-fetch run (it bypasses the 'applyRunPatch' which is not allowed when auto fetching)
       await tx.update(runs).set({
         status: 'cancelled',
         finishedAt: new Date().toISOString(),
@@ -1936,15 +1936,16 @@ app.openapi(runPATCHRoute, async (c) => {
         updatedAt: new Date().toISOString(),
       }).where(eq(runs.id, run.id));
 
-      const updatedSession = await requireSession(tx, session.id);
-      const newRun = getLastRun(updatedSession)!;
-      return c.json(newRun, 201);
+      // const updatedSession = await requireSession(tx, session.id);
+      // const newRun = getLastRun(updatedSession)!;
+      // return c.json(newRun, 201);
     }
-
-    const config = await requireConfig(tx, principal)
-    const agentConfig = requireAgentConfig(config, session.agent)
-
-    await applyRunPatch(tx, principal.organizationId, run.id, run, session.id, agentConfig, body);
+    else {
+      const config = await requireConfig(tx, principal)
+      const agentConfig = requireAgentConfig(config, session.agent)
+  
+      await applyRunPatch(tx, run.id, agentConfig, body);
+    }
 
     const updatedSession = await requireSession(tx, session.id);
     const newRun = getLastRun(updatedSession)!;
