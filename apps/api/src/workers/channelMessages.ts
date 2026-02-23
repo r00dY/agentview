@@ -175,32 +175,6 @@ async function processChannelMessage(message: ChannelMessage) {
       throw new Error('Unreachable: full session not found');
     }
 
-
-    // TODO!!!!!: NOT HERE 'processed'
-
-    // // Mark current message as processed
-    // await tx.update(channelMessages).set({
-    //   status: 'processed',
-    //   updatedAt: new Date().toISOString(),
-    // }).where(eq(channelMessages.id, message.id));
-
-    // // // Find session (may have just been created)
-    // const session = await tx.query.sessions.findFirst({
-    //   where: and(
-    //     eq(sessions.channelId, message.channelId),
-    //     eq(sessions.agent, channel.agent!),
-    //     eq(sessions.userId, user.id),
-    //     message.threadId
-    //       ? eq(sessions.channelThreadId, message.threadId)
-    //       : isNull(sessions.channelThreadId),
-    //   ),
-    // });
-
-    // if (!session) {
-    //   throw new Error('Unreachable: session not found after create');
-    // }
-
-
     // Cancel in-progress run if one exists
     const lastRun = getLastRun(session);
     let cancelledRunId: string | undefined = undefined;
@@ -208,71 +182,61 @@ async function processChannelMessage(message: ChannelMessage) {
     if (lastRun?.status === 'in_progress') {
       applyRunPatch(tx, lastRun.id, agentConfig, { status: 'cancelled' });
       cancelledRunId = lastRun.id;
-      // await tx.update(runs).set({
-      //   status: 'cancelled',
-      //   finishedAt: new Date().toISOString(),
-      //   fetchStatus: null,
-      //   updatedAt: new Date().toISOString(),
-      // }).where(eq(runs.id, lastRun.id));
-
-      // // Re-fetch session after cancellation so createRun sees clean state
-      // const refreshedSession = await fetchSession(tx, session.id);
-      // if (!refreshedSession) {
-      //   throw new Error('Unreachable: session not found after cancel');
-      // }
-      // Object.assign(session, refreshedSession);
+      throw new Error('Unreachable: in_progress run found');
     }
 
-    // Find all pending incoming messages for this session (processed, no runId, same channel+thread)
-    const pendingMessages = await tx.query.channelMessages.findMany({
-      where: and(
-        eq(channelMessages.channelId, message.channelId),
-        eq(channelMessages.direction, 'incoming'),
-        eq(channelMessages.status, 'processed'),
-        or(
-          isNull(channelMessages.runId), // we take messages without a runId
-          eq(channelMessages.runId, cancelledRunId ?? ''), // ... or messages that are linked to the last run, that was just cancelled
-        ),
-        message.threadId
-          ? eq(channelMessages.threadId, message.threadId)
-          : isNull(channelMessages.threadId),
-      ),
-      orderBy: (cm, { asc }) => [asc(cm.createdAt)],
-    });
+    const pendingMessages = [message]; // FIXME: using only current message temporary
 
-    if (pendingMessages.length === 0) {
-      console.log(`[${NAME}] No pending messages to process into a run`);
-      return;
-    }
+    // // Find all pending incoming messages for this session (processed, no runId, same channel+thread)
+    // const pendingMessages = await tx.query.channelMessages.findMany({
+    //   where: and(
+    //     eq(channelMessages.channelId, message.channelId),
+    //     eq(channelMessages.direction, 'incoming'),
+    //     eq(channelMessages.status, 'processed'),
+    //     or(
+    //       isNull(channelMessages.runId), // we take messages without a runId
+    //       eq(channelMessages.runId, cancelledRunId ?? ''), // ... or messages that are linked to the last run, that was just cancelled
+    //     ),
+    //     message.threadId
+    //       ? eq(channelMessages.threadId, message.threadId)
+    //       : isNull(channelMessages.threadId),
+    //   ),
+    //   orderBy: (cm, { asc }) => [asc(cm.createdAt)],
+    // });
 
-    // Build merged input in AI-SDK format
-    const inputItem = {
-      role: 'user',
-      parts: pendingMessages.map(msg => ({
-        type: 'text' as const,
-        text: msg.text ?? '',
-      })),
-    };
+    // if (pendingMessages.length === 0) {
+    //   console.log(`[${NAME}] No pending messages to process into a run`);
+    //   return;
+    // }
 
-    // Create a run (auto-fetch agent, no version/env needed)
-    const run = await createRun(
-      tx,
-      message.organizationId,
-      environment,
-      {
-        sessionId: session.id,
-        items: [inputItem],
-      }
-    );
+    // // Build merged input in AI-SDK format
+    // const inputItem = {
+    //   role: 'user',
+    //   parts: pendingMessages.map(msg => ({
+    //     type: 'text' as const,
+    //     text: msg.text ?? '',
+    //   })),
+    // };
+
+    // // Create a run (auto-fetch agent, no version/env needed)
+    // const run = await createRun(
+    //   tx,
+    //   message.organizationId,
+    //   environment,
+    //   {
+    //     sessionId: session.id,
+    //     items: [inputItem],
+    //   }
+    // );
 
     // Link all consumed messages to the new run
     const pendingMessageIds = pendingMessages.map(m => m.id);
     await tx.update(channelMessages).set({
-      runId: run.id,
+      // runId: run.id,
       status: 'processed',
       updatedAt: new Date().toISOString(),
     }).where(inArray(channelMessages.id, pendingMessageIds));
 
-    console.log(`[${NAME}] Processed → user: ${user.email ?? user.id} | subject: ${subject ?? '-'} | run: ${run.id} | messages: ${pendingMessages.length}`);
+    console.log(`[${NAME}] Processed → user: ${user.email ?? user.id} | subject: ${subject ?? '-'} | messages: ${pendingMessages.length}`);
   });
 }
