@@ -50,7 +50,6 @@ export async function ingestMessage(channel: Channel, params: {
   contact: string;
   contactKind: string;
   sourceThreadId?: string | null;
-  direction: 'incoming' | 'outgoing';
   sourceId?: string | null;
   text?: string | null;
   providerData?: any;
@@ -101,7 +100,7 @@ export async function ingestMessage(channel: Channel, params: {
       .values({
         organizationId: channel.organizationId,
         channelThreadId: thread.id,
-        direction: params.direction,
+        direction: 'incoming',
         sourceId: params.sourceId ?? null,
         text: params.text ?? null,
         providerData: params.providerData ?? null,

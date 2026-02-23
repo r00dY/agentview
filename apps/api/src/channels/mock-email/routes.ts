@@ -102,7 +102,6 @@ mockEmailApp.openapi(sendMockEmailRoute, async (c) => {
     contact: body.contact,
     contactKind: 'email',
     sourceThreadId: body.threadId,
-    direction: 'incoming',
     text: body.body,
     providerData: body.subject ? { subject: body.subject } : null,
   });

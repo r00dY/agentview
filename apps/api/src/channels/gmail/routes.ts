@@ -188,7 +188,6 @@ gmailApp.post('/api/gmail/webhook', async (c) => {
         contact: fromEmail,
         contactKind: 'email',
         sourceThreadId: email.threadId,
-        direction: 'incoming',
         sourceId: email.id,
         text: email.textBody,
         providerData: {
