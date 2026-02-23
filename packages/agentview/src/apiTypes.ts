@@ -266,14 +266,25 @@ export const ChannelSchema = z.object({
 
 export type Channel = z.infer<typeof ChannelSchema>
 
-export const ChannelMessageSchema = z.object({
+export const ChannelThreadSchema = z.object({
   id: z.string(),
   organizationId: z.string(),
   channelId: z.string(),
-  direction: z.string(),
-  contactKind: z.string(),
+  sourceThreadId: z.string().nullable(),
   contact: z.string(),
-  threadId: z.string().nullable(),
+  contactKind: z.string(),
+  status: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+export type ChannelThread = z.infer<typeof ChannelThreadSchema>
+
+export const ChannelMessageSchema = z.object({
+  id: z.string(),
+  organizationId: z.string(),
+  channelThreadId: z.string(),
+  direction: z.string(),
   sourceId: z.string().nullable(),
   text: z.string().nullable(),
   attachments: z.any().nullable(),

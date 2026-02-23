@@ -23,6 +23,7 @@ import {
   type ScoreCreate,
   type SessionStreamEvent,
   type Channel,
+  type ChannelThread,
   type ChannelMessage,
   type Pagination,
 } from './apiTypes.js'
@@ -225,10 +226,6 @@ export class AgentView {
     return await this.request<Environment>('PATCH', `/api/environment`, { ...body, config: serializeConfig(config) })
   }
 
-  async createChannel(data: { type: string, name?: string, address: string, config?: any }): Promise<Channel> {
-    return await this.request<Channel>('POST', `/api/channels`, data)
-  }
-
   async getChannels(): Promise<Channel[]> {
     return await this.request<Channel[]>('GET', `/api/channels`)
   }
@@ -237,20 +234,41 @@ export class AgentView {
     return await this.request<Channel>('PATCH', `/api/channels/${channelId}`, data)
   }
 
-  async getChannelMessages(options: { channelId: string, page?: number, limit?: number, contact?: string, threadId?: string }): Promise<{ messages: ChannelMessage[], pagination: Pagination }> {
-    let path = `/api/channels/${options.channelId}/messages`
-    const params = new URLSearchParams()
-    if (options.page) params.append('page', options.page.toString())
-    if (options.limit) params.append('limit', options.limit.toString())
-    if (options.contact) params.append('contact', options.contact)
-    if (options.threadId) params.append('threadId', options.threadId)
+  // async getChannelMessages(options: { channelId: string, page?: number, limit?: number }): Promise<{ messages: ChannelMessage[], pagination: Pagination }> {
+  //   let path = `/api/channels/${options.channelId}/messages`
+  //   const params = new URLSearchParams()
+  //   if (options.page) params.append('page', options.page.toString())
+  //   if (options.limit) params.append('limit', options.limit.toString())
 
-    const queryString = params.toString()
-    if (queryString) {
-      path += `?${queryString}`
-    }
+  //   const queryString = params.toString()
+  //   if (queryString) {
+  //     path += `?${queryString}`
+  //   }
 
-    return await this.request<{ messages: ChannelMessage[], pagination: Pagination }>('GET', path)
+  //   return await this.request<{ messages: ChannelMessage[], pagination: Pagination }>('GET', path)
+  // }
+
+  // --- Mock-email (internal/testing) ---
+
+  __internal = {
+    createMockEmailChannel: async (data: { name?: string, address: string }): Promise<Channel> => {
+      return await this.request<Channel>('POST', `/api/channels/mock-email`, data)
+    },
+
+    sendMockEmail: async (data: { address: string, contact: string, subject?: string, body: string, threadId?: string }): Promise<{ message: ChannelMessage, thread: ChannelThread }> => {
+      return await this.request<{ message: ChannelMessage, thread: ChannelThread }>('POST', `/api/channels/mock-email/messages`, data)
+    },
+
+    getMockEmailMessages: async (params: { address: string, contact?: string, direction?: string }): Promise<{ messages: ChannelMessage[] }> => {
+      let path = `/api/channels/mock-email/messages`
+      const searchParams = new URLSearchParams()
+      searchParams.append('address', params.address)
+      if (params.contact) searchParams.append('contact', params.contact)
+      if (params.direction) searchParams.append('direction', params.direction)
+      path += `?${searchParams.toString()}`
+
+      return await this.request<{ messages: ChannelMessage[] }>('GET', path)
+    },
   }
 
   as(userOrToken: User | string) {

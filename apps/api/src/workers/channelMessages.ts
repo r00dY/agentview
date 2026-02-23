@@ -1,9 +1,8 @@
 import { db__dangerous } from '../db';
 import { withOrg } from '../withOrg';
-import { channelMessages, channels, sessions, endUsers, runs } from '../schemas/schema';
+import { channelMessages, channelThreads, channels, sessions, endUsers, runs } from '../schemas/schema';
 import { eq, and, isNull, inArray, sql, or } from 'drizzle-orm';
 import { BaseConfigSchemaToZod } from 'agentview/configUtils';
-import { findUser } from '../users';
 import { randomBytes } from 'crypto';
 import { createWorker } from './utils';
 import { createSession, fetchSession } from '../sessions';
@@ -11,59 +10,61 @@ import { AgentViewError } from 'agentview/AgentViewError';
 import { applyRunPatch, createRun } from '../runs';
 import { getLastRun } from 'agentview/sessionUtils';
 
-type ChannelMessage = typeof channelMessages.$inferSelect;
+type ChannelThread = typeof channelThreads.$inferSelect;
 
-const NAME = 'channel-messages';
+const NAME = 'channel-threads';
 
-export const channelMessageWorker = createWorker<ChannelMessage>({
+export const channelThreadWorker = createWorker<ChannelThread>({
   name: NAME,
   pollIntervalMs: 2000,
   maxConcurrency: 20,
   async claim(limit) {
     return db__dangerous
-      .update(channelMessages)
+      .update(channelThreads)
       .set({ status: 'processing', updatedAt: new Date().toISOString() })
       .where(
         inArray(
-          channelMessages.id,
-          sql`(SELECT ${channelMessages.id} FROM ${channelMessages} WHERE ${channelMessages.status} = 'received' LIMIT ${sql.raw(String(limit))} FOR UPDATE SKIP LOCKED)`
+          channelThreads.id,
+          sql`(SELECT ${channelThreads.id} FROM ${channelThreads} WHERE ${channelThreads.status} = 'dirty' LIMIT ${sql.raw(String(limit))} FOR UPDATE SKIP LOCKED)`
         )
       )
       .returning();
   },
-  async process(message) {
+  async process(thread) {
     try {
-      await processChannelMessage(message);
-    } catch (msgError) {
-      console.error(`[${NAME}] Error processing message ${message.id}:`, msgError);
+      await processChannelThread(thread);
+    } catch (err) {
+      console.error(`[${NAME}] Error processing thread ${thread.id}:`, err);
 
-      const failReason: Record<string, any> = {
-        message: msgError instanceof Error ? msgError.message : String(msgError),
-      };
-      if (msgError instanceof AgentViewError) {
-        failReason.statusCode = msgError.statusCode;
-        if (msgError.details) failReason.details = msgError.details;
-      }
-
-      await withOrg(message.organizationId, async (tx) => {
+      // Mark received messages as failed, set thread idle
+      await withOrg(thread.organizationId, async (tx) => {
         await tx.update(channelMessages).set({
           status: 'failed',
-          failReason,
+          failReason: { message: err instanceof Error ? err.message : String(err) },
           updatedAt: new Date().toISOString(),
-        }).where(eq(channelMessages.id, message.id));
+        }).where(
+          and(
+            eq(channelMessages.channelThreadId, thread.id),
+            eq(channelMessages.status, 'received'),
+          )
+        );
+
+        await tx.update(channelThreads).set({
+          status: 'idle',
+          updatedAt: new Date().toISOString(),
+        }).where(eq(channelThreads.id, thread.id));
       });
     }
   },
 });
 
-async function processChannelMessage(message: ChannelMessage) {
-  const subject = (message.providerData as any)?.subject;
-  console.log(`[${NAME}] Processing → subject: ${subject ?? '-'}`);
+async function processChannelThread(thread: ChannelThread) {
+  console.log(`[${NAME}] Processing thread ${thread.id} (contact: ${thread.contact})`);
 
   // Look up the channel
-  const channel = await withOrg(message.organizationId, async (tx) => {
+  const channel = await withOrg(thread.organizationId, async (tx) => {
     return tx.query.channels.findFirst({
-      where: eq(channels.id, message.channelId),
+      where: eq(channels.id, thread.channelId),
       with: {
         environment: {
           with: {
@@ -78,7 +79,6 @@ async function processChannelMessage(message: ChannelMessage) {
     throw new Error(`Channel inactive or not found`);
   }
 
-  // Find environment and space
   const environment = channel.environment;
   if (!environment) {
     throw new Error(`Channel is not routed to any environment`);
@@ -87,12 +87,7 @@ async function processChannelMessage(message: ChannelMessage) {
   const space = environment.userId ? 'playground' : 'production';
   const createdBy = environment.userId;
 
-  console.log('environment userId', environment.userId);
-  console.log(`[${NAME}] Space: ${space} | Created by: ${createdBy}`);
-
-  // Find agent
   const agentName = channel.agent;
-
   const config = BaseConfigSchemaToZod.parse(environment.config);
   const agentConfig = config.agents?.find((a) => a.name === channel.agent);
   if (!agentConfig) {
@@ -103,16 +98,32 @@ async function processChannelMessage(message: ChannelMessage) {
     throw new Error(`Unsupported agent protocol: ${agentConfig.protocol}`);
   }
 
-  await withOrg(message.organizationId, async (tx) => {
-    // Find or create user
+  await withOrg(thread.organizationId, async (tx) => {
+    // Fetch all received messages for this thread
+    const receivedMessages = await tx.query.channelMessages.findMany({
+      where: and(
+        eq(channelMessages.channelThreadId, thread.id),
+        eq(channelMessages.status, 'received'),
+      ),
+      orderBy: (cm, { asc }) => [asc(cm.createdAt)],
+    });
+
+    if (receivedMessages.length === 0) {
+      // No messages to process, set thread idle
+      await tx.update(channelThreads).set({
+        status: 'idle',
+        updatedAt: new Date().toISOString(),
+      }).where(eq(channelThreads.id, thread.id));
+      return;
+    }
+
+    // Find or create end user
     let user: typeof endUsers.$inferSelect | undefined;
 
-    if (message.contactKind === 'email') {
-      // user = await findUser(tx, { email: message.contact, organizationId: message.organizationId });
-
+    if (thread.contactKind === 'email') {
       user = await tx.query.endUsers.findFirst({
         where: and(
-          eq(endUsers.email, message.contact),
+          eq(endUsers.email, thread.contact),
           eq(endUsers.space, space),
           createdBy
             ? eq(endUsers.createdBy, createdBy)
@@ -122,34 +133,28 @@ async function processChannelMessage(message: ChannelMessage) {
 
       if (!user) {
         const [newUser] = await tx.insert(endUsers).values({
-          organizationId: message.organizationId,
-          email: message.contactKind === 'email' ? message.contact : null,
+          organizationId: thread.organizationId,
+          email: thread.contact,
           space,
           createdBy,
           token: randomBytes(32).toString('hex'),
         }).returning();
-
         user = newUser;
       }
-
-    }
-    else {
-      throw new Error(`Unsupported contact kind: ${message.contactKind}`);
+    } else {
+      throw new Error(`Unsupported contact kind: ${thread.contactKind}`);
     }
 
     if (!user) {
       throw new Error(`Unreachable error: user not found and not created`);
     }
 
-    // Find existing session by channelId + channelThreadId + agent
+    // Find existing session by channelThreadId + agent + userId
     const existingSession = await tx.query.sessions.findFirst({
       where: and(
-        eq(sessions.channelId, message.channelId),
+        eq(sessions.channelThreadId, thread.id),
         eq(sessions.agent, channel.agent!),
         eq(sessions.userId, user.id),
-        message.threadId
-          ? eq(sessions.channelThreadId, message.threadId)
-          : isNull(sessions.channelThreadId),
       ),
     });
 
@@ -157,11 +162,10 @@ async function processChannelMessage(message: ChannelMessage) {
 
     if (!existingSession) {
       const newSession = await createSession(tx, {
-        organizationId: message.organizationId,
+        organizationId: thread.organizationId,
         agentConfig,
         userId: user.id,
-        channelId: message.channelId,
-        channelThreadId: message.threadId ?? null,
+        channelThreadId: thread.id,
       });
       sessionId = newSession.id;
     }
@@ -177,66 +181,30 @@ async function processChannelMessage(message: ChannelMessage) {
 
     // Cancel in-progress run if one exists
     const lastRun = getLastRun(session);
-    let cancelledRunId: string | undefined = undefined;
-
     if (lastRun?.status === 'in_progress') {
       applyRunPatch(tx, lastRun.id, agentConfig, { status: 'cancelled' });
-      cancelledRunId = lastRun.id;
-      throw new Error('Unreachable: in_progress run found');
     }
 
-    const pendingMessages = [message]; // FIXME: using only current message temporary
-
-    // // Find all pending incoming messages for this session (processed, no runId, same channel+thread)
-    // const pendingMessages = await tx.query.channelMessages.findMany({
-    //   where: and(
-    //     eq(channelMessages.channelId, message.channelId),
-    //     eq(channelMessages.direction, 'incoming'),
-    //     eq(channelMessages.status, 'processed'),
-    //     or(
-    //       isNull(channelMessages.runId), // we take messages without a runId
-    //       eq(channelMessages.runId, cancelledRunId ?? ''), // ... or messages that are linked to the last run, that was just cancelled
-    //     ),
-    //     message.threadId
-    //       ? eq(channelMessages.threadId, message.threadId)
-    //       : isNull(channelMessages.threadId),
-    //   ),
-    //   orderBy: (cm, { asc }) => [asc(cm.createdAt)],
-    // });
-
-    // if (pendingMessages.length === 0) {
-    //   console.log(`[${NAME}] No pending messages to process into a run`);
-    //   return;
-    // }
-
-    // // Build merged input in AI-SDK format
-    // const inputItem = {
-    //   role: 'user',
-    //   parts: pendingMessages.map(msg => ({
-    //     type: 'text' as const,
-    //     text: msg.text ?? '',
-    //   })),
-    // };
-
-    // // Create a run (auto-fetch agent, no version/env needed)
-    // const run = await createRun(
-    //   tx,
-    //   message.organizationId,
-    //   environment,
-    //   {
-    //     sessionId: session.id,
-    //     items: [inputItem],
-    //   }
-    // );
-
-    // Link all consumed messages to the new run
-    const pendingMessageIds = pendingMessages.map(m => m.id);
+    // Mark messages as processed
+    const messageIds = receivedMessages.map(m => m.id);
     await tx.update(channelMessages).set({
-      // runId: run.id,
       status: 'processed',
       updatedAt: new Date().toISOString(),
-    }).where(inArray(channelMessages.id, pendingMessageIds));
+    }).where(inArray(channelMessages.id, messageIds));
 
-    console.log(`[${NAME}] Processed → user: ${user.email ?? user.id} | subject: ${subject ?? '-'} | messages: ${pendingMessages.length}`);
+    // Check for remaining received messages (could have arrived during processing)
+    const remaining = await tx.query.channelMessages.findFirst({
+      where: and(
+        eq(channelMessages.channelThreadId, thread.id),
+        eq(channelMessages.status, 'received'),
+      ),
+    });
+
+    await tx.update(channelThreads).set({
+      status: remaining ? 'dirty' : 'idle',
+      updatedAt: new Date().toISOString(),
+    }).where(eq(channelThreads.id, thread.id));
+
+    console.log(`[${NAME}] Processed thread ${thread.id} → user: ${user.email ?? user.id} | messages: ${receivedMessages.length}`);
   });
 }

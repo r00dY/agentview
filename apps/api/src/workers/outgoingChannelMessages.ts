@@ -25,7 +25,7 @@ export const outgoingChannelMessageWorker = createWorker<ChannelMessage>({
       .returning();
   },
   async process(message) {
-    console.log(`[${NAME}] Sending message ${message.id} to ${message.contact}: ${message.text?.substring(0, 100) ?? '(empty)'}...`);
+    console.log(`[${NAME}] Sending message ${message.id}: ${message.text?.substring(0, 100) ?? '(empty)'}...`);
 
     // TODO: integrate with actual channel provider (e.g. Gmail send)
     // For now, just mark as sent

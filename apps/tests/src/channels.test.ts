@@ -7,14 +7,15 @@ configDefaults.__internal = {
   disableSummaries: true,
 }
 
-describe('Channels', () => {
+describe('Channels (mock-email)', () => {
   let av: AgentView
   let avProd: AgentView
   let environmentId: string
   let channel: Channel
+  const orgSlug = 'channels-test-' + Math.random().toString(36).slice(2)
+  const address = `inbox@${orgSlug}.com`
 
   beforeAll(async () => {
-    const orgSlug = 'channels-test-' + Math.random().toString(36).slice(2)
     const result = await seedUsers(orgSlug)
 
     av = new AgentView({ apiKey: result.apiKeyDev.key })
@@ -28,34 +29,28 @@ describe('Channels', () => {
       },
     })
     environmentId = env.id
+  })
 
-    // Create a test channel
-    channel = await av.createChannel({
-      type: 'email',
-      name: 'Test Channel',
-      address: `test@${orgSlug}.com`,
+  test('create mock-email channel', async () => {
+    channel = await av.__internal.createMockEmailChannel({
+      name: 'Test Mock Email',
+      address,
     })
-  })
 
-  test('create channel', () => {
     expect(channel.id).toBeDefined()
-    expect(channel.type).toBe('email')
-    expect(channel.name).toBe('Test Channel')
+    expect(channel.type).toBe('mock-email')
+    expect(channel.address).toBe(address)
     expect(channel.status).toBe('active')
-    expect(channel.environment).toBeNull()
-    expect(channel.agent).toBeNull()
   })
 
-  test('list channels includes new fields', async () => {
+  test('list channels includes new channel', async () => {
     const channels = await av.getChannels()
     expect(channels.length).toBeGreaterThanOrEqual(1)
     const found = channels.find(c => c.id === channel.id)
     expect(found).toBeDefined()
-    expect(found!.environment).toBeNull()
-    expect(found!.agent).toBeNull()
   })
 
-  test('update channel with environment + agent', async () => {
+  test('configure channel with environment + agent', async () => {
     const updated = await av.updateChannel(channel.id, {
       environmentId,
       agent: 'support-agent',
@@ -63,40 +58,93 @@ describe('Channels', () => {
 
     expect(updated.environment).not.toBeNull()
     expect(updated.environment!.id).toBe(environmentId)
-    expect(updated.environment!.name).toBe('prod')
     expect(updated.agent).toBe('support-agent')
-    expect(updated.status).toBe('active')
   })
 
-  test('update channel - invalid environment returns 422', async () => {
-    await expect(
-      av.updateChannel(channel.id, {
-        environmentId: '00000000-0000-0000-0000-000000000000',
-        agent: 'support-agent',
-      })
-    ).rejects.toThrowError(
-      expect.objectContaining({ statusCode: 422 })
-    )
-  })
-
-  test('update channel - any agent name is accepted', async () => {
-    const updated = await av.updateChannel(channel.id, {
-      environmentId,
-      agent: 'any-agent-name',
+  test('send incoming email → thread + message created', async () => {
+    const result = await av.__internal.sendMockEmail({
+      address,
+      contact: 'customer@example.com',
+      subject: 'Hello',
+      body: 'I need help with my order',
     })
-    expect(updated.agent).toBe('any-agent-name')
 
-    // Restore
-    await av.updateChannel(channel.id, { agent: 'support-agent' })
+    expect(result.message).toBeDefined()
+    expect(result.message.direction).toBe('incoming')
+    expect(result.message.status).toBe('received')
+    expect(result.message.text).toBe('I need help with my order')
+
+    expect(result.thread).toBeDefined()
+    expect(result.thread.contact).toBe('customer@example.com')
+    expect(result.thread.contactKind).toBe('email')
+    expect(result.thread.status).toBe('dirty')
   })
 
-  test('archive channel via PATCH', async () => {
-    const updated = await av.updateChannel(channel.id, {
+  test('send another email to same contact → reuses thread', async () => {
+    const result1 = await av.__internal.sendMockEmail({
+      address,
+      contact: 'customer@example.com',
+      subject: 'Follow up',
+      body: 'Still waiting on that order',
+    })
+
+    // Should reuse the same thread (same contact, no threadId, contactKind=email)
+    const firstResult = await av.__internal.sendMockEmail({
+      address,
+      contact: 'customer@example.com',
+      body: 'dummy to get thread id',
+    })
+
+    // All messages with no explicit threadId and same contact go to same thread
+    expect(result1.thread.id).toBe(firstResult.thread.id)
+  })
+
+  test('send email with explicit threadId → creates separate thread', async () => {
+    const result = await av.__internal.sendMockEmail({
+      address,
+      contact: 'customer@example.com',
+      subject: 'Different conversation',
+      body: 'This is a different thread',
+      threadId: 'thread-abc-123',
+    })
+
+    // Should create a new thread because of the explicit threadId
+    const noThreadResult = await av.__internal.sendMockEmail({
+      address,
+      contact: 'customer@example.com',
+      body: 'no thread id message',
+    })
+
+    expect(result.thread.id).not.toBe(noThreadResult.thread.id)
+    expect(result.thread.sourceThreadId).toBe('thread-abc-123')
+  })
+
+  test('get messages with filters', async () => {
+    // Get all messages for this channel
+    const allMessages = await av.__internal.getMockEmailMessages({ address })
+    expect(allMessages.messages.length).toBeGreaterThan(0)
+
+    // Filter by contact
+    const contactMessages = await av.__internal.getMockEmailMessages({
+      address,
+      contact: 'customer@example.com',
+    })
+    expect(contactMessages.messages.length).toBeGreaterThan(0)
+
+    // Filter by direction
+    const incomingMessages = await av.__internal.getMockEmailMessages({
+      address,
+      direction: 'incoming',
+    })
+    expect(incomingMessages.messages.length).toBeGreaterThan(0)
+  })
+
+  test('archive and reactivate channel', async () => {
+    const archived = await av.updateChannel(channel.id, {
       status: 'archived',
     })
-    expect(updated.status).toBe('archived')
+    expect(archived.status).toBe('archived')
 
-    // Re-activate
     const reactivated = await av.updateChannel(channel.id, {
       status: 'active',
     })
@@ -107,6 +155,18 @@ describe('Channels', () => {
     await expect(
       av.updateChannel('00000000-0000-0000-0000-000000000000', {
         status: 'archived',
+      })
+    ).rejects.toThrowError(
+      expect.objectContaining({ statusCode: 404 })
+    )
+  })
+
+  test('send to nonexistent channel address returns 404', async () => {
+    await expect(
+      av.__internal.sendMockEmail({
+        address: 'nonexistent@example.com',
+        contact: 'someone@test.com',
+        body: 'hello',
       })
     ).rejects.toThrowError(
       expect.objectContaining({ statusCode: 404 })

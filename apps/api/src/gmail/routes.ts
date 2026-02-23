@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { authn, authorize, requireMemberId } from '../authMiddleware';
 import { withOrg } from '../withOrg';
 import { db__dangerous } from '../db';
-import { channels, channelMessages } from '../schemas/schema';
+import { channels, channelThreads, channelMessages } from '../schemas/schema';
 import { response_data, response_error } from '../hono_utils';
 import {
   createOAuth2Client,
@@ -193,19 +193,46 @@ gmailApp.post('/api/gmail/webhook', async (c) => {
       onTokenRefresh,
     );
 
-    // Insert channel messages
+    // Insert channel messages via threads
     for (const email of result.emails) {
       // Extract bare email address from "Name <email>" format
       const fromEmail = extractEmailAddress(email.from);
 
       await withOrg(channel.organizationId, async (tx) => {
+        // Find or create channel thread
+        let thread = await tx.query.channelThreads.findFirst({
+          where: and(
+            eq(channelThreads.channelId, channel.id),
+            eq(channelThreads.sourceThreadId, email.threadId),
+            eq(channelThreads.contact, fromEmail),
+            eq(channelThreads.contactKind, 'email'),
+          ),
+        });
+
+        if (!thread) {
+          const [newThread] = await tx
+            .insert(channelThreads)
+            .values({
+              organizationId: channel.organizationId,
+              channelId: channel.id,
+              sourceThreadId: email.threadId,
+              contact: fromEmail,
+              contactKind: 'email',
+              status: 'dirty',
+            })
+            .returning();
+          thread = newThread;
+        } else if (thread.status !== 'processing') {
+          await tx
+            .update(channelThreads)
+            .set({ status: 'dirty', updatedAt: new Date().toISOString() })
+            .where(eq(channelThreads.id, thread.id));
+        }
+
         await tx.insert(channelMessages).values({
           organizationId: channel.organizationId,
-          channelId: channel.id,
+          channelThreadId: thread.id,
           direction: 'incoming',
-          contactKind: 'email',
-          contact: fromEmail,
-          threadId: email.threadId,
           sourceId: email.id,
           text: email.textBody,
           providerData: {
@@ -217,7 +244,7 @@ gmailApp.post('/api/gmail/webhook', async (c) => {
           },
           status: 'received',
         }).onConflictDoNothing({
-          target: [channelMessages.channelId, channelMessages.sourceId],
+          target: [channelMessages.channelThreadId, channelMessages.sourceId],
         });
       });
     }

@@ -2,7 +2,7 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { authn, authorize } from '../authMiddleware';
 import { withOrg } from '../withOrg';
-import { channels, channelMessages, environments } from '../schemas/schema';
+import { channels, channelThreads, channelMessages, environments } from '../schemas/schema';
 import { users } from '../schemas/auth-schema';
 import { response_data, response_error } from '../hono_utils';
 import { ChannelSchema, EnvironmentBaseSchema } from 'agentview/apiTypes';
@@ -75,74 +75,6 @@ function formatChannelRow(row: {
   };
 }
 
-// --- POST /api/channels ---
-
-const channelPOSTRoute = createRoute({
-  method: 'post',
-  path: '/api/channels',
-  summary: 'Create channel',
-  tags: ['Channels'],
-  request: {
-    body: {
-      content: {
-        'application/json': {
-          schema: z.object({
-            type: z.string(),
-            name: z.string().optional(),
-            address: z.string(),
-            config: z.any().optional(),
-          }),
-        },
-      },
-    },
-  },
-  responses: {
-    200: response_data(ChannelSchema),
-    401: response_error(),
-  },
-});
-
-channelsApp.openapi(channelPOSTRoute, async (c) => {
-  const principal = await authn(c.req.raw.headers);
-  authorize(principal, { action: 'environment:write' });
-
-  const body = c.req.valid('json');
-
-  return withOrg(principal.organizationId, async (tx) => {
-    const [channel] = await tx
-      .insert(channels)
-      .values({
-        organizationId: principal.organizationId,
-        type: body.type,
-        name: body.name ?? null,
-        address: body.address,
-        status: 'active',
-        config: body.config ?? {},
-      })
-      .onConflictDoUpdate({
-        target: [channels.organizationId, channels.type, channels.address],
-        set: {
-          name: body.name ?? null,
-          config: body.config ?? {},
-          status: 'active',
-          updatedAt: new Date().toISOString(),
-        },
-      })
-      .returning({
-        id: channels.id,
-        type: channels.type,
-        name: channels.name,
-        address: channels.address,
-        status: channels.status,
-        agent: channels.agent,
-        createdAt: channels.createdAt,
-        updatedAt: channels.updatedAt,
-      });
-
-    return c.json({ ...channel, environment: null }, 200);
-  });
-});
-
 // --- GET /api/channels ---
 
 const channelsGETRoute = createRoute({
@@ -212,8 +144,6 @@ const channelMessagesGETRoute = createRoute({
     query: z.object({
       page: z.union([z.number(), z.string()]).optional(),
       limit: z.union([z.number(), z.string()]).optional(),
-      contact: z.string().optional(),
-      threadId: z.string().optional(),
     }),
   },
   responses: {
@@ -247,30 +177,37 @@ channelsApp.openapi(channelMessagesGETRoute, async (c) => {
       return c.json({ message: 'Channel not found' }, 404);
     }
 
-    // Build filters
-    const filters: any[] = [eq(channelMessages.channelId, channelId)];
-
-    if (query.contact) {
-      filters.push(eq(channelMessages.contact, query.contact));
-    }
-    if (query.threadId) {
-      filters.push(eq(channelMessages.threadId, query.threadId));
-    }
-
-    const whereClause = and(...filters);
+    // Join through channel_threads to get messages
+    const whereClause = eq(channelThreads.channelId, channelId);
 
     // Count
     const countResult = await tx
       .select({ count: sql<number>`cast(count(*) as integer)` })
       .from(channelMessages)
+      .innerJoin(channelThreads, eq(channelMessages.channelThreadId, channelThreads.id))
       .where(whereClause);
 
     const totalCount = countResult[0]?.count ?? 0;
 
     // Fetch messages
     const messages = await tx
-      .select()
+      .select({
+        id: channelMessages.id,
+        organizationId: channelMessages.organizationId,
+        channelThreadId: channelMessages.channelThreadId,
+        direction: channelMessages.direction,
+        sourceId: channelMessages.sourceId,
+        text: channelMessages.text,
+        attachments: channelMessages.attachments,
+        providerData: channelMessages.providerData,
+        runId: channelMessages.runId,
+        status: channelMessages.status,
+        failReason: channelMessages.failReason,
+        createdAt: channelMessages.createdAt,
+        updatedAt: channelMessages.updatedAt,
+      })
       .from(channelMessages)
+      .innerJoin(channelThreads, eq(channelMessages.channelThreadId, channelThreads.id))
       .where(whereClause)
       .orderBy(desc(channelMessages.createdAt))
       .limit(limit)

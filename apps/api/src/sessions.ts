@@ -114,7 +114,6 @@ export async function createSession(tx: Transaction, params: {
   userId: string;
   metadata?: Record<string, any> | null;
   summary?: string | null;
-  channelId?: string | null;
   channelThreadId?: string | null;
   authorId?: string | null;
 }): Promise<Session> {
@@ -143,7 +142,6 @@ export async function createSession(tx: Transaction, params: {
     agent: params.agentConfig.name,
     userId: params.userId,
     summary: params.summary ?? null,
-    channelId: params.channelId ?? null,
     channelThreadId: params.channelThreadId ?? null,
   }).returning();
 

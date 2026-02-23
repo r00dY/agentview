@@ -2,7 +2,7 @@ import { initDb } from './initDb';
 import { expiredRunsWorker } from './workers/expiredRuns';
 import { webhookWorker } from './workers/webhooks';
 import { agentFetchWorker } from './workers/agentFetch';
-import { channelMessageWorker } from './workers/channelMessages';
+import { channelThreadWorker } from './workers/channelMessages';
 import { outgoingChannelMessageWorker } from './workers/outgoingChannelMessages';
 import { gmailWorker } from './gmail/worker';
 
@@ -20,6 +20,6 @@ await initDb();
 expiredRunsWorker.start();
 webhookWorker.start();
 agentFetchWorker.start();
-channelMessageWorker.start();
+channelThreadWorker.start();
 outgoingChannelMessageWorker.start();
 gmailWorker.start();

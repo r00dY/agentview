@@ -87,11 +87,10 @@ export const sessions = pgTable("sessions", {
   agent: varchar("agent", { length: 255 }).notNull(),
   summary: text("summary"),
   versions: jsonb("versions").$type<string[]>().default([]),
-  channelId: uuid("channel_id").references(() => channels.id),
-  channelThreadId: varchar("channel_thread_id", { length: 255 }),
+  channelThreadId: uuid("channel_thread_id").references(() => channelThreads.id, { onDelete: 'set null' }),
 }, (table) => [
   uniqueIndex('sessions_handle_org_unique').on(table.handleNumber, table.handleSuffix, table.organizationId),
-  index('sessions_channel_thread_idx').on(table.channelId, table.channelThreadId),
+  index('sessions_channel_thread_idx').on(table.channelThreadId),
   createTenantPolicy('sessions'),
 ]);
 
@@ -294,9 +293,9 @@ export const sessionRelations = relations(sessions, ({ many, one }) => ({
   }),
   inboxItems: many(inboxItems),
   starredSessions: many(starredSessions),
-  channel: one(channels, {
-    fields: [sessions.channelId],
-    references: [channels.id],
+  channelThread: one(channelThreads, {
+    fields: [sessions.channelThreadId],
+    references: [channelThreads.id],
   }),
 }));
 
@@ -461,7 +460,7 @@ export const starredSessionsRelations = relations(starredSessions, ({ one }) => 
 export const channels = pgTable('channels', {
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: text('organization_id').notNull().references(() => organizations.id),
-  type: varchar('type', { length: 64 }).notNull(), // 'gmail', etc.
+  type: varchar('type', { length: 64 }).notNull(), // 'gmail', 'mock-email', etc.
   name: varchar('name', { length: 255 }),
   address: varchar('address', { length: 255 }).notNull(),
   status: varchar('status', { length: 64 }).notNull().default('active'),
@@ -476,14 +475,28 @@ export const channels = pgTable('channels', {
   createTenantPolicy('channels'),
 ]);
 
-export const channelMessages = pgTable('channel_messages', {
+export const channelThreads = pgTable('channel_threads', {
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: text('organization_id').notNull().references(() => organizations.id),
   channelId: uuid('channel_id').notNull().references(() => channels.id, { onDelete: 'cascade' }),
-  direction: varchar('direction', { length: 16 }).notNull(), // 'incoming' | 'outgoing'
-  contactKind: varchar('contact_kind', { length: 32 }).notNull(), // 'email', 'phone', 'externalId', etc.
+  sourceThreadId: varchar('source_thread_id', { length: 255 }),
   contact: varchar('contact', { length: 255 }).notNull(),
-  threadId: varchar('thread_id', { length: 255 }),
+  contactKind: varchar('contact_kind', { length: 32 }).notNull(), // 'email'
+  status: varchar('status', { length: 32 }).notNull().default('idle'), // 'idle' | 'dirty' | 'processing'
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+}, (table) => [
+  unique('channel_threads_channel_source_contact_unique').on(table.channelId, table.sourceThreadId, table.contact, table.contactKind),
+  index('channel_threads_channel_id_idx').on(table.channelId),
+  index('channel_threads_status_idx').on(table.status),
+  createTenantPolicy('channel_threads'),
+]);
+
+export const channelMessages = pgTable('channel_messages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: text('organization_id').notNull().references(() => organizations.id),
+  channelThreadId: uuid('channel_thread_id').notNull().references(() => channelThreads.id, { onDelete: 'cascade' }),
+  direction: varchar('direction', { length: 16 }).notNull(), // 'incoming' | 'outgoing'
   sourceId: varchar('source_id', { length: 255 }),
   text: text('text'),
   attachments: jsonb('attachments'),
@@ -494,27 +507,33 @@ export const channelMessages = pgTable('channel_messages', {
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
 }, (table) => [
-  uniqueIndex('channel_messages_channel_source_unique').on(table.channelId, table.sourceId),
-  index('channel_messages_channel_id_idx').on(table.channelId),
-  index('channel_messages_contact_idx').on(table.contact),
-  index('channel_messages_channel_thread_idx').on(table.channelId, table.threadId),
+  uniqueIndex('channel_messages_thread_source_unique').on(table.channelThreadId, table.sourceId),
+  index('channel_messages_thread_id_idx').on(table.channelThreadId),
   index('channel_messages_run_id_idx').on(table.runId),
   createTenantPolicy('channel_messages'),
 ]);
 
 export const channelsRelations = relations(channels, ({ many, one }) => ({
-  channelMessages: many(channelMessages),
-  sessions: many(sessions),
+  channelThreads: many(channelThreads),
   environment: one(environments, {
     fields: [channels.environmentId],
     references: [environments.id],
   }),
 }));
 
-export const channelMessagesRelations = relations(channelMessages, ({ one }) => ({
+export const channelThreadsRelations = relations(channelThreads, ({ one, many }) => ({
   channel: one(channels, {
-    fields: [channelMessages.channelId],
+    fields: [channelThreads.channelId],
     references: [channels.id],
+  }),
+  messages: many(channelMessages),
+  sessions: many(sessions),
+}));
+
+export const channelMessagesRelations = relations(channelMessages, ({ one }) => ({
+  channelThread: one(channelThreads, {
+    fields: [channelMessages.channelThreadId],
+    references: [channelThreads.id],
   }),
   run: one(runs, {
     fields: [channelMessages.runId],
@@ -558,6 +577,7 @@ export const schema = {
   starredSessions,
   webhookJobs,
   channels,
+  channelThreads,
   channelMessages,
 
   // endUserAuthSessionsRelations,
@@ -577,6 +597,7 @@ export const schema = {
   usersRelations,
   starredSessionsRelations,
   channelsRelations,
+  channelThreadsRelations,
   channelMessagesRelations,
   environmentsRelations
 }

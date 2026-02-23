@@ -85,6 +85,13 @@
       "when": 1771630000000,
       "tag": "0011_channel_message_run_id",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1771720000000,
+      "tag": "0012_channel_threads",
+      "breakpoints": true
     }
   ]
 }
