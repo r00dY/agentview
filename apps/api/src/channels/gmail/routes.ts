@@ -3,8 +3,9 @@ import { and, eq } from 'drizzle-orm';
 import { authn, authorize, requireMemberId } from '../../authMiddleware';
 import { withOrg } from '../../withOrg';
 import { db__dangerous } from '../../db';
-import { channels, channelThreads, channelMessages } from '../../schemas/schema';
+import { channels } from '../../schemas/schema';
 import { response_data, response_error } from '../../hono_utils';
+import { upsertChannel, ingestMessage } from '../operations';
 import {
   createOAuth2Client,
   createOAuthState,
@@ -103,26 +104,12 @@ gmailApp.get('/api/gmail/callback', async (c) => {
   };
 
   // Upsert channel (one per email per org)
-  await withOrg(organizationId, async (tx) => {
-    await tx
-      .insert(channels)
-      .values({
-        organizationId,
-        type: 'gmail',
-        name: profile.emailAddress,
-        address: profile.emailAddress,
-        status: 'active',
-        config,
-      })
-      .onConflictDoUpdate({
-        target: [channels.organizationId, channels.type, channels.address],
-        set: {
-          config,
-          name: profile.emailAddress,
-          status: 'active',
-          updatedAt: new Date().toISOString(),
-        },
-      });
+  await upsertChannel({
+    organizationId,
+    type: 'gmail',
+    name: profile.emailAddress,
+    address: profile.emailAddress,
+    config,
   });
 
   return c.html(
@@ -195,57 +182,22 @@ gmailApp.post('/api/gmail/webhook', async (c) => {
 
     // Insert channel messages via threads
     for (const email of result.emails) {
-      // Extract bare email address from "Name <email>" format
       const fromEmail = extractEmailAddress(email.from);
 
-      await withOrg(channel.organizationId, async (tx) => {
-        // Find or create channel thread
-        let thread = await tx.query.channelThreads.findFirst({
-          where: and(
-            eq(channelThreads.channelId, channel.id),
-            eq(channelThreads.sourceThreadId, email.threadId),
-            eq(channelThreads.contact, fromEmail),
-            eq(channelThreads.contactKind, 'email'),
-          ),
-        });
-
-        if (!thread) {
-          const [newThread] = await tx
-            .insert(channelThreads)
-            .values({
-              organizationId: channel.organizationId,
-              channelId: channel.id,
-              sourceThreadId: email.threadId,
-              contact: fromEmail,
-              contactKind: 'email',
-              status: 'dirty',
-            })
-            .returning();
-          thread = newThread;
-        } else if (thread.status !== 'processing') {
-          await tx
-            .update(channelThreads)
-            .set({ status: 'dirty', updatedAt: new Date().toISOString() })
-            .where(eq(channelThreads.id, thread.id));
-        }
-
-        await tx.insert(channelMessages).values({
-          organizationId: channel.organizationId,
-          channelThreadId: thread.id,
-          direction: 'incoming',
-          sourceId: email.id,
-          text: email.textBody,
-          providerData: {
-            subject: email.subject,
-            htmlBody: email.htmlBody,
-            cc: email.cc,
-            date: email.date,
-            snippet: email.snippet,
-          },
-          status: 'received',
-        }).onConflictDoNothing({
-          target: [channelMessages.channelThreadId, channelMessages.sourceId],
-        });
+      await ingestMessage(channel, {
+        contact: fromEmail,
+        contactKind: 'email',
+        sourceThreadId: email.threadId,
+        direction: 'incoming',
+        sourceId: email.id,
+        text: email.textBody,
+        providerData: {
+          subject: email.subject,
+          htmlBody: email.htmlBody,
+          cc: email.cc,
+          date: email.date,
+          snippet: email.snippet,
+        },
       });
     }
 

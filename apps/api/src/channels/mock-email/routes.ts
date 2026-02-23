@@ -1,9 +1,10 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { and, eq, isNull, desc } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { authn, authorize } from '../../authMiddleware';
 import { withOrg } from '../../withOrg';
 import { channels, channelThreads, channelMessages } from '../../schemas/schema';
 import { response_data, response_error } from '../../hono_utils';
+import { upsertChannel, ingestMessage } from '../operations';
 
 export const mockEmailApp = new OpenAPIHono();
 
@@ -38,29 +39,15 @@ mockEmailApp.openapi(createMockEmailRoute, async (c) => {
 
   const body = c.req.valid('json');
 
-  return withOrg(principal.organizationId, async (tx) => {
-    const [channel] = await tx
-      .insert(channels)
-      .values({
-        organizationId: principal.organizationId,
-        type: 'mock-email',
-        name: body.name ?? null,
-        address: body.address,
-        status: 'active',
-        config: {},
-      })
-      .onConflictDoUpdate({
-        target: [channels.organizationId, channels.type, channels.address],
-        set: {
-          name: body.name ?? null,
-          status: 'active',
-          updatedAt: new Date().toISOString(),
-        },
-      })
-      .returning();
-
-    return c.json(channel, 200);
+  const channel = await upsertChannel({
+    organizationId: principal.organizationId,
+    type: 'mock-email',
+    name: body.name,
+    address: body.address,
+    config: {},
   });
+
+  return c.json(channel, 200);
 });
 
 // --- POST /api/channels/mock-email/messages ---
@@ -98,77 +85,29 @@ mockEmailApp.openapi(sendMockEmailRoute, async (c) => {
 
   const body = c.req.valid('json');
 
-  return withOrg(principal.organizationId, async (tx) => {
-    // Look up mock-email channel by address
-    const channel = await tx.query.channels.findFirst({
+  const channel = await withOrg(principal.organizationId, async (tx) => {
+    return tx.query.channels.findFirst({
       where: and(
         eq(channels.type, 'mock-email'),
         eq(channels.address, body.address),
       ),
     });
-
-    if (!channel) {
-      return c.json({ message: 'Mock-email channel not found for this address' }, 404);
-    }
-
-    // Find or create channel thread
-    const threadWhere = body.threadId
-      ? and(
-          eq(channelThreads.channelId, channel.id),
-          eq(channelThreads.sourceThreadId, body.threadId),
-          eq(channelThreads.contact, body.contact),
-          eq(channelThreads.contactKind, 'email'),
-        )
-      : and(
-          eq(channelThreads.channelId, channel.id),
-          isNull(channelThreads.sourceThreadId),
-          eq(channelThreads.contact, body.contact),
-          eq(channelThreads.contactKind, 'email'),
-        );
-
-    let thread = await tx.query.channelThreads.findFirst({
-      where: threadWhere,
-    });
-
-    if (!thread) {
-      const [newThread] = await tx
-        .insert(channelThreads)
-        .values({
-          organizationId: principal.organizationId,
-          channelId: channel.id,
-          sourceThreadId: body.threadId ?? null,
-          contact: body.contact,
-          contactKind: 'email',
-          status: 'dirty',
-        })
-        .returning();
-      thread = newThread;
-    } else {
-      // Set status to dirty unless currently processing
-      if (thread.status !== 'processing') {
-        await tx
-          .update(channelThreads)
-          .set({ status: 'dirty', updatedAt: new Date().toISOString() })
-          .where(eq(channelThreads.id, thread.id));
-      }
-    }
-
-    // Insert channel message
-    const [message] = await tx
-      .insert(channelMessages)
-      .values({
-        organizationId: principal.organizationId,
-        channelThreadId: thread.id,
-        direction: 'incoming',
-        sourceId: null,
-        text: body.body,
-        providerData: body.subject ? { subject: body.subject } : null,
-        status: 'received',
-      })
-      .returning();
-
-    return c.json({ message, thread }, 200);
   });
+
+  if (!channel) {
+    return c.json({ message: 'Mock-email channel not found for this address' }, 404);
+  }
+
+  const result = await ingestMessage(channel, {
+    contact: body.contact,
+    contactKind: 'email',
+    sourceThreadId: body.threadId,
+    direction: 'incoming',
+    text: body.body,
+    providerData: body.subject ? { subject: body.subject } : null,
+  });
+
+  return c.json(result, 200);
 });
 
 // --- GET /api/channels/mock-email/messages ---
@@ -199,7 +138,6 @@ mockEmailApp.openapi(getMockEmailMessagesRoute, async (c) => {
   const query = c.req.valid('query');
 
   return withOrg(principal.organizationId, async (tx) => {
-    // Look up mock-email channel by address
     const channel = await tx.query.channels.findFirst({
       where: and(
         eq(channels.type, 'mock-email'),
@@ -211,7 +149,6 @@ mockEmailApp.openapi(getMockEmailMessagesRoute, async (c) => {
       return c.json({ message: 'Mock-email channel not found for this address' }, 404);
     }
 
-    // Find threads for this channel, optionally filtered by contact
     const threadFilters: any[] = [eq(channelThreads.channelId, channel.id)];
     if (query.contact) {
       threadFilters.push(eq(channelThreads.contact, query.contact));
