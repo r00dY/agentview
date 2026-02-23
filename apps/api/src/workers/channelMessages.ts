@@ -1,14 +1,14 @@
 import { db__dangerous } from '../db';
 import { withOrg } from '../withOrg';
 import { channelMessages, channels, sessions, endUsers, runs } from '../schemas/schema';
-import { eq, and, isNull, inArray, sql } from 'drizzle-orm';
+import { eq, and, isNull, inArray, sql, or } from 'drizzle-orm';
 import { BaseConfigSchemaToZod } from 'agentview/configUtils';
 import { findUser } from '../users';
 import { randomBytes } from 'crypto';
 import { createWorker } from './utils';
 import { createSession, fetchSession } from '../sessions';
 import { AgentViewError } from 'agentview/AgentViewError';
-import { createRun } from '../runs';
+import { applyRunPatch, createRun } from '../runs';
 import { getLastRun } from 'agentview/sessionUtils';
 
 type ChannelMessage = typeof channelMessages.$inferSelect;
@@ -19,7 +19,7 @@ export const channelMessageWorker = createWorker<ChannelMessage>({
   name: NAME,
   pollIntervalMs: 2000,
   maxConcurrency: 20,
-  async claim(limit) {    
+  async claim(limit) {
     return db__dangerous
       .update(channelMessages)
       .set({ status: 'processing', updatedAt: new Date().toISOString() })
@@ -65,7 +65,11 @@ async function processChannelMessage(message: ChannelMessage) {
     return tx.query.channels.findFirst({
       where: eq(channels.id, message.channelId),
       with: {
-        environment: true,
+        environment: {
+          with: {
+            user: true,
+          },
+        },
       },
     });
   });
@@ -149,60 +153,74 @@ async function processChannelMessage(message: ChannelMessage) {
       ),
     });
 
+    let sessionId: string | undefined = existingSession?.id;
+
     if (!existingSession) {
-      await createSession(tx, {
+      const newSession = await createSession(tx, {
         organizationId: message.organizationId,
         agentConfig,
         userId: user.id,
         channelId: message.channelId,
         channelThreadId: message.threadId ?? null,
       });
+      sessionId = newSession.id;
     }
 
-    // Mark current message as processed
-    await tx.update(channelMessages).set({
-      status: 'processed',
-      updatedAt: new Date().toISOString(),
-    }).where(eq(channelMessages.id, message.id));
+    if (sessionId === undefined) {
+      throw new Error('Unreachable: session not found and not created');
+    }
 
-    // Find session (may have just been created)
-    const session = await tx.query.sessions.findFirst({
-      where: and(
-        eq(sessions.channelId, message.channelId),
-        eq(sessions.agent, channel.agent!),
-        eq(sessions.userId, user.id),
-        message.threadId
-          ? eq(sessions.channelThreadId, message.threadId)
-          : isNull(sessions.channelThreadId),
-      ),
-    });
-
+    const session = await fetchSession(tx, sessionId);
     if (!session) {
-      throw new Error('Unreachable: session not found after create');
-    }
-
-    // Fetch full session with runs
-    const fullSession = await fetchSession(tx, session.id);
-    if (!fullSession) {
       throw new Error('Unreachable: full session not found');
     }
 
-    // Cancel in-progress run if one exists
-    const lastRun = getLastRun(fullSession);
-    if (lastRun?.status === 'in_progress') {
-      await tx.update(runs).set({
-        status: 'cancelled',
-        finishedAt: new Date().toISOString(),
-        fetchStatus: null,
-        updatedAt: new Date().toISOString(),
-      }).where(eq(runs.id, lastRun.id));
 
-      // Re-fetch session after cancellation so createRun sees clean state
-      const refreshedSession = await fetchSession(tx, session.id);
-      if (!refreshedSession) {
-        throw new Error('Unreachable: session not found after cancel');
-      }
-      Object.assign(fullSession, refreshedSession);
+    // TODO!!!!!: NOT HERE 'processed'
+
+    // // Mark current message as processed
+    // await tx.update(channelMessages).set({
+    //   status: 'processed',
+    //   updatedAt: new Date().toISOString(),
+    // }).where(eq(channelMessages.id, message.id));
+
+    // // // Find session (may have just been created)
+    // const session = await tx.query.sessions.findFirst({
+    //   where: and(
+    //     eq(sessions.channelId, message.channelId),
+    //     eq(sessions.agent, channel.agent!),
+    //     eq(sessions.userId, user.id),
+    //     message.threadId
+    //       ? eq(sessions.channelThreadId, message.threadId)
+    //       : isNull(sessions.channelThreadId),
+    //   ),
+    // });
+
+    // if (!session) {
+    //   throw new Error('Unreachable: session not found after create');
+    // }
+
+
+    // Cancel in-progress run if one exists
+    const lastRun = getLastRun(session);
+    let cancelledRunId: string | undefined = undefined;
+
+    if (lastRun?.status === 'in_progress') {
+      applyRunPatch(tx, lastRun.id, agentConfig, { status: 'cancelled' });
+      cancelledRunId = lastRun.id;
+      // await tx.update(runs).set({
+      //   status: 'cancelled',
+      //   finishedAt: new Date().toISOString(),
+      //   fetchStatus: null,
+      //   updatedAt: new Date().toISOString(),
+      // }).where(eq(runs.id, lastRun.id));
+
+      // // Re-fetch session after cancellation so createRun sees clean state
+      // const refreshedSession = await fetchSession(tx, session.id);
+      // if (!refreshedSession) {
+      //   throw new Error('Unreachable: session not found after cancel');
+      // }
+      // Object.assign(session, refreshedSession);
     }
 
     // Find all pending incoming messages for this session (processed, no runId, same channel+thread)
@@ -211,7 +229,10 @@ async function processChannelMessage(message: ChannelMessage) {
         eq(channelMessages.channelId, message.channelId),
         eq(channelMessages.direction, 'incoming'),
         eq(channelMessages.status, 'processed'),
-        isNull(channelMessages.runId),
+        or(
+          isNull(channelMessages.runId), // we take messages without a runId
+          eq(channelMessages.runId, cancelledRunId ?? ''), // ... or messages that are linked to the last run, that was just cancelled
+        ),
         message.threadId
           ? eq(channelMessages.threadId, message.threadId)
           : isNull(channelMessages.threadId),
@@ -234,17 +255,21 @@ async function processChannelMessage(message: ChannelMessage) {
     };
 
     // Create a run (auto-fetch agent, no version/env needed)
-    const run = await createRun(tx, {
-      organizationId: message.organizationId,
-      session: fullSession,
-      agentConfig,
-      items: [inputItem],
-    });
+    const run = await createRun(
+      tx,
+      message.organizationId,
+      environment,
+      {
+        sessionId: session.id,
+        items: [inputItem],
+      }
+    );
 
     // Link all consumed messages to the new run
     const pendingMessageIds = pendingMessages.map(m => m.id);
     await tx.update(channelMessages).set({
       runId: run.id,
+      status: 'processed',
       updatedAt: new Date().toISOString(),
     }).where(inArray(channelMessages.id, pendingMessageIds));
 

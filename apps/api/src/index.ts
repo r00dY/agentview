@@ -1661,25 +1661,31 @@ app.openapi(runPATCHRoute, async (c) => {
       if (!hasOnlyStatus) {
         throw new AgentViewError("Cannot modify a run while agent fetch is in progress. Only cancellation is allowed.", 422);
       }
-
-      // Cancel the auto-fetch run (it bypasses the 'applyRunPatch' which is not allowed when auto fetching)
-      await tx.update(runs).set({
-        status: 'cancelled',
-        finishedAt: new Date().toISOString(),
-        expiresAt: null,
-        updatedAt: new Date().toISOString(),
-      }).where(eq(runs.id, run.id));
-
-      // const updatedSession = await requireSession(tx, session.id);
-      // const newRun = getLastRun(updatedSession)!;
-      // return c.json(newRun, 201);
     }
-    else {
-      const config = await requireConfig(tx, principal)
-      const agentConfig = requireAgentConfig(config, session.agent)
+
+    //   // Cancel the auto-fetch run (it bypasses the 'applyRunPatch' which is not allowed when auto fetching)
+    //   await tx.update(runs).set({
+    //     status: 'cancelled',
+    //     finishedAt: new Date().toISOString(),
+    //     expiresAt: null,
+    //     updatedAt: new Date().toISOString(),
+    //   }).where(eq(runs.id, run.id));
+
+    //   // const updatedSession = await requireSession(tx, session.id);
+    //   // const newRun = getLastRun(updatedSession)!;
+    //   // return c.json(newRun, 201);
+    // }
+    // else {
+    //   const config = await requireConfig(tx, principal)
+    //   const agentConfig = requireAgentConfig(config, session.agent)
   
-      await applyRunPatch(tx, run.id, agentConfig, body);
-    }
+    //   await applyRunPatch(tx, run.id, agentConfig, body);
+    // }
+
+    const config = await requireConfig(tx, principal)
+    const agentConfig = requireAgentConfig(config, session.agent)
+
+    await applyRunPatch(tx, run.id, agentConfig, body);
 
     const updatedSession = await requireSession(tx, session.id);
     const newRun = getLastRun(updatedSession)!;
