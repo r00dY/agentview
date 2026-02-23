@@ -1727,7 +1727,7 @@ app.openapi(runsPOSTRoute, async (c) => {
 
     /** Only one in_progress run is allowed per session **/
     if (lastRun?.status === 'in_progress') {
-      throw new HTTPException(422, { message: `Can't create a run because session has already a run in progress.` });
+      throw new AgentViewError(`Can't create a run because session has already a run in progress.`, 422);
     }
 
     /** Auto-fetch validation: when agent has url, restrict what can be set on creation **/
