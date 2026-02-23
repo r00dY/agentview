@@ -58,7 +58,7 @@ import type { Transaction } from './types';
 import { updateInboxes } from './updateInboxes';
 import { findUser } from './users';
 import { randomBytes } from 'crypto';
-import { applyRunPatch } from './runs';
+import { applyRunPatch, getRun } from './runs';
 import { parseMetadata } from './parseMetadata';
 import { resolveVersion } from './versions';
 import { authn, authnUser, authorize, requireMemberPrincipal, getMemberId, requireMemberId, getEnv, type PrivatePrincipal, type Principal, type MemberPrincipal, type ApiKeyPrincipal, type UserPrincipal } from './authMiddleware';
@@ -194,15 +194,7 @@ async function requireSession(tx: Transaction, sessionId: string) {
 }
 
 async function requireRun(tx: Transaction, runId: string) {
-  const run = await tx.query.runs.findFirst({
-    where: eq(runs.id, runId),
-    with: {
-      sessionItems: {
-        orderBy: (sessionItem, { asc }) => [asc(sessionItem.sortOrder)],
-        where: (sessionItem, { eq }) => eq(sessionItem.isState, false),
-      },
-    },
-  });
+  const run = await getRun(tx, runId);
   if (!run) {
     throw new HTTPException(404, { message: "Run not found" });
   }
