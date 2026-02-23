@@ -1,10 +1,10 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { and, eq } from 'drizzle-orm';
-import { authn, authorize, requireMemberId } from '../authMiddleware';
-import { withOrg } from '../withOrg';
-import { db__dangerous } from '../db';
-import { channels, channelThreads, channelMessages } from '../schemas/schema';
-import { response_data, response_error } from '../hono_utils';
+import { authn, authorize, requireMemberId } from '../../authMiddleware';
+import { withOrg } from '../../withOrg';
+import { db__dangerous } from '../../db';
+import { channels, channelThreads, channelMessages } from '../../schemas/schema';
+import { response_data, response_error } from '../../hono_utils';
 import {
   createOAuth2Client,
   createOAuthState,

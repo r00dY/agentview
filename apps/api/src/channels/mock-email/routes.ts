@@ -1,9 +1,9 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { and, eq, isNull, desc } from 'drizzle-orm';
-import { authn, authorize } from '../authMiddleware';
-import { withOrg } from '../withOrg';
-import { channels, channelThreads, channelMessages } from '../schemas/schema';
-import { response_data, response_error } from '../hono_utils';
+import { authn, authorize } from '../../authMiddleware';
+import { withOrg } from '../../withOrg';
+import { channels, channelThreads, channelMessages } from '../../schemas/schema';
+import { response_data, response_error } from '../../hono_utils';
 
 export const mockEmailApp = new OpenAPIHono();
 

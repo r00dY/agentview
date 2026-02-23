@@ -4,7 +4,7 @@ import { webhookWorker } from './workers/webhooks';
 import { agentFetchWorker } from './workers/agentFetch';
 import { channelThreadWorker } from './workers/channelMessages';
 import { outgoingChannelMessageWorker } from './workers/outgoingChannelMessages';
-import { gmailWorker } from './gmail/worker';
+import { gmailWorker } from './channels/gmail/worker';
 
 await initDb();
 

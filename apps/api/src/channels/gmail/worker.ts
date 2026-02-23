@@ -1,10 +1,10 @@
 import { eq } from 'drizzle-orm';
-import { db__dangerous } from '../db';
-import { withOrg } from '../withOrg';
-import { channels } from '../schemas/schema';
+import { db__dangerous } from '../../db';
+import { withOrg } from '../../withOrg';
+import { channels } from '../../schemas/schema';
 import { setupWatch } from './api';
 import type { GmailChannelConfig } from './types';
-import { createPeriodicWorker } from '../workers/utils';
+import { createPeriodicWorker } from '../../workers/utils';
 
 export const gmailWorker = createPeriodicWorker({
   name: 'gmail-watch-renewal',
