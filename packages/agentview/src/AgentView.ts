@@ -234,19 +234,9 @@ export class AgentView {
     return await this.request<Channel>('PATCH', `/api/channels/${channelId}`, data)
   }
 
-  // async getChannelMessages(options: { channelId: string, page?: number, limit?: number }): Promise<{ messages: ChannelMessage[], pagination: Pagination }> {
-  //   let path = `/api/channels/${options.channelId}/messages`
-  //   const params = new URLSearchParams()
-  //   if (options.page) params.append('page', options.page.toString())
-  //   if (options.limit) params.append('limit', options.limit.toString())
-
-  //   const queryString = params.toString()
-  //   if (queryString) {
-  //     path += `?${queryString}`
-  //   }
-
-  //   return await this.request<{ messages: ChannelMessage[], pagination: Pagination }>('GET', path)
-  // }
+  async getChannelThreads(channelId: string): Promise<ChannelThread[]> {
+    return await this.request<ChannelThread[]>('GET', `/api/channels/${channelId}/threads`)
+  }
 
   // --- Mock-email (internal/testing) ---
 
@@ -257,17 +247,6 @@ export class AgentView {
 
     sendMockEmail: async (data: { address: string, contact: string, subject?: string, body: string, threadId?: string }): Promise<{ message: ChannelMessage, thread: ChannelThread }> => {
       return await this.request<{ message: ChannelMessage, thread: ChannelThread }>('POST', `/api/channels/mock-email/messages`, data)
-    },
-
-    getMockEmailMessages: async (params: { address: string, contact?: string, direction?: string }): Promise<{ messages: ChannelMessage[] }> => {
-      let path = `/api/channels/mock-email/messages`
-      const searchParams = new URLSearchParams()
-      searchParams.append('address', params.address)
-      if (params.contact) searchParams.append('contact', params.contact)
-      if (params.direction) searchParams.append('direction', params.direction)
-      path += `?${searchParams.toString()}`
-
-      return await this.request<{ messages: ChannelMessage[] }>('GET', path)
     },
   }
 

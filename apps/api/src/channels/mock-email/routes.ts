@@ -1,8 +1,5 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { and, eq } from 'drizzle-orm';
 import { authn, authorize } from '../../authMiddleware';
-import { withOrg } from '../../withOrg';
-import { channelThreads, channelMessages } from '../../schemas/schema';
 import { response_data, response_error } from '../../hono_utils';
 import type { channelProvider } from '../operations';
 
@@ -99,62 +96,6 @@ export function createMockEmailRoutes(mockEmail: ChannelProvider): OpenAPIHono {
     });
 
     return c.json(result, 200);
-  });
-
-  // --- GET /messages ---
-
-  const getMockEmailMessagesRoute = createRoute({
-    method: 'get',
-    path: '/messages',
-    summary: 'List mock email messages',
-    tags: ['Channels'],
-    request: {
-      query: z.object({
-        address: z.string(),
-        contact: z.string().optional(),
-        direction: z.string().optional(),
-      }),
-    },
-    responses: {
-      200: response_data(z.any()),
-      401: response_error(),
-      404: response_error(),
-    },
-  });
-
-  app.openapi(getMockEmailMessagesRoute, async (c) => {
-    const principal = await authn(c.req.raw.headers);
-    authorize(principal, { action: 'environment:read' });
-
-    const query = c.req.valid('query');
-
-    const channel = await mockEmail.getChannel(query.address);
-    if (!channel) {
-      return c.json({ message: 'Mock-email channel not found for this address' }, 404);
-    }
-
-    return withOrg(principal.organizationId, async (tx) => {
-      const threadFilters: any[] = [eq(channelThreads.channelId, channel.id)];
-      if (query.contact) {
-        threadFilters.push(eq(channelThreads.contact, query.contact));
-      }
-
-      const threads = await tx.query.channelThreads.findMany({
-        where: and(...threadFilters),
-        with: {
-          messages: {
-            where: query.direction
-              ? eq(channelMessages.direction, query.direction)
-              : undefined,
-            orderBy: (msg, { desc }) => [desc(msg.createdAt)],
-          },
-        },
-      });
-
-      const messages = threads.flatMap((t) => t.messages);
-
-      return c.json({ messages }, 200);
-    });
   });
 
   return app;

@@ -265,20 +265,6 @@ export const ChannelSchema = z.object({
 
 export type Channel = z.infer<typeof ChannelSchema>
 
-export const ChannelThreadSchema = z.object({
-  id: z.string(),
-  organizationId: z.string(),
-  channelId: z.string(),
-  sourceThreadId: z.string().nullable(),
-  contact: z.string(),
-  contactKind: z.string(),
-  status: z.string(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-})
-
-export type ChannelThread = z.infer<typeof ChannelThreadSchema>
-
 export const ChannelMessageSchema = z.object({
   id: z.string(),
   organizationId: z.string(),
@@ -294,6 +280,21 @@ export const ChannelMessageSchema = z.object({
 })
 
 export type ChannelMessage = z.infer<typeof ChannelMessageSchema>
+
+export const ChannelThreadSchema = z.object({
+  id: z.string(),
+  organizationId: z.string(),
+  channelId: z.string(),
+  sourceThreadId: z.string().nullable(),
+  contact: z.string(),
+  contactKind: z.string(),
+  status: z.string(),
+  messages: z.array(ChannelMessageSchema).optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+export type ChannelThread = z.infer<typeof ChannelThreadSchema>
 
 // run webhook / agent endpoint body
 export const RunBodySchema = z.object({

@@ -118,24 +118,22 @@ describe('Channels (mock-email)', () => {
     expect(result.thread.sourceThreadId).toBe('thread-abc-123')
   })
 
-  test('get messages with filters', async () => {
-    // Get all messages for this channel
-    const allMessages = await av.__internal.getMockEmailMessages({ address })
-    expect(allMessages.messages.length).toBeGreaterThan(0)
+  test('get channel threads with messages', async () => {
+    const threads = await av.getChannelThreads(channel.id)
+    expect(threads.length).toBeGreaterThan(0)
 
-    // Filter by contact
-    const contactMessages = await av.__internal.getMockEmailMessages({
-      address,
-      contact: 'customer@example.com',
-    })
-    expect(contactMessages.messages.length).toBeGreaterThan(0)
+    // Each thread should have messages
+    for (const thread of threads) {
+      expect(thread.messages).toBeDefined()
+      expect(thread.messages.length).toBeGreaterThan(0)
+    }
 
-    // Filter by direction
-    const incomingMessages = await av.__internal.getMockEmailMessages({
-      address,
-      direction: 'incoming',
-    })
-    expect(incomingMessages.messages.length).toBeGreaterThan(0)
+    // All messages should be incoming (we only sent incoming emails)
+    const allMessages = threads.flatMap(t => t.messages)
+    expect(allMessages.length).toBeGreaterThan(0)
+    for (const msg of allMessages) {
+      expect(msg.direction).toBe('incoming')
+    }
   })
 
   test('archive and reactivate channel', async () => {
