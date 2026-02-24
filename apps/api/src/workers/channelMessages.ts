@@ -143,7 +143,7 @@ async function processChannelThread(thread: ChannelThread) {
   /**
    * Get all messages that are staged for next run
    * - no run_id (fresh ones)
-   * - all messages from last run that was not completed
+   * - all messages from the last run that was not completed
    */
   const inputMessages = await withOrg(thread.organizationId, async (tx) => {
     return await tx.query.channelMessages.findMany({
