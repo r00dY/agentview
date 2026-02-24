@@ -289,7 +289,7 @@ export const ChannelThreadSchema = z.object({
   contact: z.string(),
   contactKind: z.string(),
   status: z.string(),
-  messages: z.array(ChannelMessageSchema).optional(),
+  messages: z.array(ChannelMessageSchema),
   createdAt: z.string(),
   updatedAt: z.string(),
 })
