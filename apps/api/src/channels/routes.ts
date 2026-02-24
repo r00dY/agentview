@@ -237,6 +237,13 @@ channelsApp.openapi(channelPATCHRoute, async (c) => {
   return withOrg(principal.organizationId, async (tx) => {
     const channel = await tx.query.channels.findFirst({
       where: eq(channels.id, channelId),
+      with: {
+        environment: {
+          with: {
+            user: true,
+          },
+        },
+      },
     });
 
     if (!channel) {
@@ -266,26 +273,17 @@ channelsApp.openapi(channelPATCHRoute, async (c) => {
       .set(updates)
       .where(eq(channels.id, channelId));
 
-    // Re-fetch with environment join
-    const [row] = await tx
-      .select({
-        id: channels.id,
-        type: channels.type,
-        address: channels.address,
-        status: channels.status,
-        agent: channels.agent,
-        createdAt: channels.createdAt,
-        updatedAt: channels.updatedAt,
-        envId: environments.id,
-        envUserId: environments.userId,
-        envCreatedAt: environments.createdAt,
-        envUserEmail: users.email,
-      })
-      .from(channels)
-      .leftJoin(environments, eq(channels.environmentId, environments.id))
-      .leftJoin(users, eq(environments.userId, users.id))
-      .where(eq(channels.id, channelId));
+    const updateChannel = await tx.query.channels.findFirst({
+      with: {
+        environment: {
+          with: {
+            user: true,
+          },
+        },
+      },
+      where: eq(channels.id, channelId),
+    });
 
-    return c.json(formatChannelRow(row), 200);
+    return c.json(updateChannel!, 200);
   });
 });
