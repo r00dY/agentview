@@ -2369,14 +2369,14 @@ app.openapi(healthRoute, async (c) => {
 
 /* --------- CHANNELS --------- */
 
-import { gmailApp } from './channels/gmail/index';
-app.route('', gmailApp);
+import { channelApps } from './channels/registry';
+for (const channel of channelApps) {
+  if (channel.routes) {
+    app.route(`/api/channels/${channel.type}`, channel.routes);
+  }
+}
 
-// Mock-email routes must be mounted before generic channel routes
-// to avoid /api/channels/mock-email/messages matching /api/channels/{channelId}/messages
-import { mockEmailApp } from './channels/mock-email/routes';
-app.route('', mockEmailApp);
-
+// Generic channel routes stay separate, mounted after channel-specific apps
 import { channelsApp } from './channels/routes';
 app.route('', channelsApp);
 

@@ -1,7 +1,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { authn, authorize, requireMemberId } from '../../authMiddleware';
 import { response_data, response_error } from '../../hono_utils';
-import { channelProvider } from '../operations';
+import type { channelProvider } from '../operations';
 import {
   createOAuth2Client,
   createOAuthState,
@@ -12,7 +12,7 @@ import {
 import { getProfile, setupWatch, fetchNewEmails } from './api';
 import type { GmailChannelConfig } from './types';
 
-const gmail = channelProvider('gmail');
+type ChannelProvider = ReturnType<typeof channelProvider>;
 
 /** Extract bare email from "Name <email>" or just "email" */
 function extractEmailAddress(from: string): string {
@@ -20,202 +20,206 @@ function extractEmailAddress(from: string): string {
   return (match ? match[1] : from).trim().toLowerCase();
 }
 
-export const gmailApp = new OpenAPIHono();
+export function createGmailRoutes(gmail: ChannelProvider): OpenAPIHono {
+  const app = new OpenAPIHono();
 
-// --- GET /api/channels/gmail/auth ---
+  // --- GET /auth ---
 
-const gmailAuthRoute = createRoute({
-  method: 'get',
-  path: '/api/channels/gmail/auth',
-  summary: 'Get Gmail OAuth URL',
-  tags: ['Gmail'],
-  responses: {
-    200: response_data(z.object({ url: z.string() })),
-    401: response_error(),
-  },
-});
-
-gmailApp.openapi(gmailAuthRoute, async (c) => {
-  const principal = await authn(c.req.raw.headers);
-  authorize(principal, { action: 'environment:write' });
-  const memberId = requireMemberId(principal);
-
-  const state = createOAuthState(principal.organizationId, memberId);
-  const client = createOAuth2Client();
-
-  const url = client.generateAuthUrl({
-    access_type: 'offline',
-    prompt: 'consent',
-    scope: GMAIL_SCOPES,
-    state,
+  const gmailAuthRoute = createRoute({
+    method: 'get',
+    path: '/auth',
+    summary: 'Get Gmail OAuth URL',
+    tags: ['Gmail'],
+    responses: {
+      200: response_data(z.object({ url: z.string() })),
+      401: response_error(),
+    },
   });
 
-  return c.json({ url }, 200);
-});
+  app.openapi(gmailAuthRoute, async (c) => {
+    const principal = await authn(c.req.raw.headers);
+    authorize(principal, { action: 'environment:write' });
+    const memberId = requireMemberId(principal);
 
-// --- GET /api/channels/gmail/callback ---
+    const state = createOAuthState(principal.organizationId, memberId);
+    const client = createOAuth2Client();
 
-gmailApp.get('/api/channels/gmail/callback', async (c) => {
-  const error = c.req.query('error');
-  if (error) {
-    return c.html('<html><body><h2>Gmail connection was denied.</h2><p>You can close this window.</p></body></html>');
-  }
+    const url = client.generateAuthUrl({
+      access_type: 'offline',
+      prompt: 'consent',
+      scope: GMAIL_SCOPES,
+      state,
+    });
 
-  const code = c.req.query('code');
-  const state = c.req.query('state');
+    return c.json({ url }, 200);
+  });
 
-  if (!code || !state) {
-    return c.html('<html><body><h2>Missing parameters.</h2></body></html>', 400);
-  }
+  // --- GET /callback ---
 
-  let statePayload: { organizationId: string; memberId: string };
-  try {
-    statePayload = verifyOAuthState(state);
-  } catch {
-    return c.html('<html><body><h2>Invalid or expired state. Please try again.</h2></body></html>', 400);
-  }
-
-  const { organizationId, memberId } = statePayload;
-
-  // Exchange code for tokens
-  const tokens = await exchangeCodeForTokens(code);
-
-  if (!tokens.access_token || !tokens.refresh_token) {
-    return c.html('<html><body><h2>Failed to obtain tokens. Please try again.</h2></body></html>', 400);
-  }
-
-  // Get email address
-  const profile = await getProfile(tokens.access_token, tokens.refresh_token);
-
-  // Setup push notifications
-  const watch = await setupWatch(tokens.access_token, tokens.refresh_token);
-
-  const config: GmailChannelConfig = {
-    accessToken: tokens.access_token,
-    refreshToken: tokens.refresh_token,
-    tokenExpiresAt: tokens.expiry_date
-      ? new Date(tokens.expiry_date).toISOString()
-      : null,
-    historyId: watch.historyId,
-    watchExpiresAt: watch.expiration,
-    connectedBy: memberId,
-  };
-
-  // Upsert: create if new, update if exists
-  const existing = await gmail.getChannel(profile.emailAddress);
-  if (existing) {
-    await gmail.updateChannel(profile.emailAddress, config);
-  } else {
-    await gmail.createChannel(organizationId, profile.emailAddress, config);
-  }
-
-  return c.html(
-    '<html><body><h2>Gmail Connected!</h2><p>You can close this window.</p></body></html>',
-  );
-});
-
-// --- POST /api/channels/gmail/webhook ---
-
-gmailApp.post('/api/channels/gmail/webhook', async (c) => {
-  // Always return 200 to avoid Pub/Sub redelivery loops
-  try {
-    const body = await c.req.json();
-
-    // Decode Pub/Sub message
-    const messageData = body?.message?.data;
-    if (!messageData) {
-      return c.json({ status: 'ok' }, 200);
+  app.get('/callback', async (c) => {
+    const error = c.req.query('error');
+    if (error) {
+      return c.html('<html><body><h2>Gmail connection was denied.</h2><p>You can close this window.</p></body></html>');
     }
 
-    const decoded = JSON.parse(Buffer.from(messageData, 'base64').toString('utf-8'));
-    const { emailAddress, historyId } = decoded;
+    const code = c.req.query('code');
+    const state = c.req.query('state');
 
-    if (!emailAddress) {
-      return c.json({ status: 'ok' }, 200);
+    if (!code || !state) {
+      return c.html('<html><body><h2>Missing parameters.</h2></body></html>', 400);
     }
 
-    // Look up channel by address (cross-org)
-    const channel = await gmail.getChannel(emailAddress);
-
-    if (!channel) {
-      console.log(`[gmail webhook] No channel found for ${emailAddress}`);
-      return c.json({ status: 'ok' }, 200);
+    let statePayload: { organizationId: string; memberId: string };
+    try {
+      statePayload = verifyOAuthState(state);
+    } catch {
+      return c.html('<html><body><h2>Invalid or expired state. Please try again.</h2></body></html>', 400);
     }
 
-    const channelConfig = channel.config as GmailChannelConfig;
+    const { organizationId, memberId } = statePayload;
 
-    if (!channelConfig.historyId) {
-      console.log(`[gmail webhook] No historyId stored for ${emailAddress}`);
-      return c.json({ status: 'ok' }, 200);
+    // Exchange code for tokens
+    const tokens = await exchangeCodeForTokens(code);
+
+    if (!tokens.access_token || !tokens.refresh_token) {
+      return c.html('<html><body><h2>Failed to obtain tokens. Please try again.</h2></body></html>', 400);
     }
 
-    // Token refresh callback: read-then-write config pattern
-    const onTokenRefresh = async (tokens: { access_token: string; expiry_date: number | null }) => {
-      const current = await gmail.requireChannel(emailAddress);
-      const currentConfig = current.config as GmailChannelConfig;
-      await gmail.updateChannel(emailAddress, {
-        ...currentConfig,
-        accessToken: tokens.access_token,
-        tokenExpiresAt: tokens.expiry_date
-          ? new Date(tokens.expiry_date).toISOString()
-          : null,
-      });
+    // Get email address
+    const profile = await getProfile(tokens.access_token, tokens.refresh_token);
+
+    // Setup push notifications
+    const watch = await setupWatch(tokens.access_token, tokens.refresh_token);
+
+    const config: GmailChannelConfig = {
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      tokenExpiresAt: tokens.expiry_date
+        ? new Date(tokens.expiry_date).toISOString()
+        : null,
+      historyId: watch.historyId,
+      watchExpiresAt: watch.expiration,
+      connectedBy: memberId,
     };
 
-    const result = await fetchNewEmails(
-      channelConfig.accessToken,
-      channelConfig.refreshToken,
-      channelConfig.historyId,
-      onTokenRefresh,
-    );
-
-    // Insert channel messages via threads
-    for (const email of result.emails) {
-      const fromEmail = extractEmailAddress(email.from);
-
-      await gmail.ingestMessage(emailAddress, {
-        contact: fromEmail,
-        contactKind: 'email',
-        sourceThreadId: email.threadId,
-        sourceId: email.id,
-        text: email.textBody,
-        providerData: {
-          subject: email.subject,
-          htmlBody: email.htmlBody,
-          cc: email.cc,
-          date: email.date,
-          snippet: email.snippet,
-        },
-      });
+    // Upsert: create if new, update if exists
+    const existing = await gmail.getChannel(profile.emailAddress);
+    if (existing) {
+      await gmail.updateChannel(profile.emailAddress, config);
+    } else {
+      await gmail.createChannel(organizationId, profile.emailAddress, config);
     }
 
-    // Update historyId in channel config
-    if (result.newHistoryId) {
-      const current = await gmail.requireChannel(emailAddress);
-      const currentConfig = current.config as GmailChannelConfig;
-      await gmail.updateChannel(emailAddress, {
-        ...currentConfig,
-        historyId: result.newHistoryId,
-      });
-    } else {
-      // historyId too old, re-setup watch
-      console.log(`[gmail webhook] History expired for ${emailAddress}, re-setting up watch`);
-      const watch = await setupWatch(
+    return c.html(
+      '<html><body><h2>Gmail Connected!</h2><p>You can close this window.</p></body></html>',
+    );
+  });
+
+  // --- POST /webhook ---
+
+  app.post('/webhook', async (c) => {
+    // Always return 200 to avoid Pub/Sub redelivery loops
+    try {
+      const body = await c.req.json();
+
+      // Decode Pub/Sub message
+      const messageData = body?.message?.data;
+      if (!messageData) {
+        return c.json({ status: 'ok' }, 200);
+      }
+
+      const decoded = JSON.parse(Buffer.from(messageData, 'base64').toString('utf-8'));
+      const { emailAddress, historyId } = decoded;
+
+      if (!emailAddress) {
+        return c.json({ status: 'ok' }, 200);
+      }
+
+      // Look up channel by address (cross-org)
+      const channel = await gmail.getChannel(emailAddress);
+
+      if (!channel) {
+        console.log(`[gmail webhook] No channel found for ${emailAddress}`);
+        return c.json({ status: 'ok' }, 200);
+      }
+
+      const channelConfig = channel.config as GmailChannelConfig;
+
+      if (!channelConfig.historyId) {
+        console.log(`[gmail webhook] No historyId stored for ${emailAddress}`);
+        return c.json({ status: 'ok' }, 200);
+      }
+
+      // Token refresh callback: read-then-write config pattern
+      const onTokenRefresh = async (tokens: { access_token: string; expiry_date: number | null }) => {
+        const current = await gmail.requireChannel(emailAddress);
+        const currentConfig = current.config as GmailChannelConfig;
+        await gmail.updateChannel(emailAddress, {
+          ...currentConfig,
+          accessToken: tokens.access_token,
+          tokenExpiresAt: tokens.expiry_date
+            ? new Date(tokens.expiry_date).toISOString()
+            : null,
+        });
+      };
+
+      const result = await fetchNewEmails(
         channelConfig.accessToken,
         channelConfig.refreshToken,
+        channelConfig.historyId,
         onTokenRefresh,
       );
-      const current = await gmail.requireChannel(emailAddress);
-      const currentConfig = current.config as GmailChannelConfig;
-      await gmail.updateChannel(emailAddress, {
-        ...currentConfig,
-        historyId: watch.historyId,
-        watchExpiresAt: watch.expiration,
-      });
-    }
-  } catch (error) {
-    console.error('[gmail webhook] Error processing webhook:', error);
-  }
 
-  return c.json({ status: 'ok' }, 200);
-});
+      // Insert channel messages via threads
+      for (const email of result.emails) {
+        const fromEmail = extractEmailAddress(email.from);
+
+        await gmail.ingestMessage(emailAddress, {
+          contact: fromEmail,
+          contactKind: 'email',
+          sourceThreadId: email.threadId,
+          sourceId: email.id,
+          text: email.textBody,
+          providerData: {
+            subject: email.subject,
+            htmlBody: email.htmlBody,
+            cc: email.cc,
+            date: email.date,
+            snippet: email.snippet,
+          },
+        });
+      }
+
+      // Update historyId in channel config
+      if (result.newHistoryId) {
+        const current = await gmail.requireChannel(emailAddress);
+        const currentConfig = current.config as GmailChannelConfig;
+        await gmail.updateChannel(emailAddress, {
+          ...currentConfig,
+          historyId: result.newHistoryId,
+        });
+      } else {
+        // historyId too old, re-setup watch
+        console.log(`[gmail webhook] History expired for ${emailAddress}, re-setting up watch`);
+        const watch = await setupWatch(
+          channelConfig.accessToken,
+          channelConfig.refreshToken,
+          onTokenRefresh,
+        );
+        const current = await gmail.requireChannel(emailAddress);
+        const currentConfig = current.config as GmailChannelConfig;
+        await gmail.updateChannel(emailAddress, {
+          ...currentConfig,
+          historyId: watch.historyId,
+          watchExpiresAt: watch.expiration,
+        });
+      }
+    } catch (error) {
+      console.error('[gmail webhook] Error processing webhook:', error);
+    }
+
+    return c.json({ status: 'ok' }, 200);
+  });
+
+  return app;
+}

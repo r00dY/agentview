@@ -4,7 +4,7 @@ import { webhookWorker } from './workers/webhooks';
 import { agentFetchWorker } from './workers/agentFetch';
 import { channelThreadWorker } from './workers/channelMessages';
 import { outgoingChannelMessageWorker } from './workers/outgoingChannelMessages';
-import { gmailWorker } from './channels/gmail/worker';
+import { channelApps } from './channels/registry';
 
 await initDb();
 
@@ -22,4 +22,8 @@ webhookWorker.start();
 agentFetchWorker.start();
 channelThreadWorker.start();
 outgoingChannelMessageWorker.start();
-gmailWorker.start();
+for (const channel of channelApps) {
+  for (const worker of channel.workers) {
+    worker.start();
+  }
+}
