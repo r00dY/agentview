@@ -103,27 +103,6 @@ channelsApp.openapi(channelsGETRoute, async (c) => {
     });
 
     return c.json(channels, 200);
-
-    // const rows = await tx
-    //   .select({
-    //     id: channels.id,
-    //     type: channels.type,
-    //     address: channels.address,
-    //     status: channels.status,
-    //     agent: channels.agent,
-    //     createdAt: channels.createdAt,
-    //     updatedAt: channels.updatedAt,
-    //     envId: environments.id,
-    //     envUserId: environments.userId,
-    //     envCreatedAt: environments.createdAt,
-    //     envUserEmail: users.email,
-    //   })
-    //   .from(channels)
-    //   .leftJoin(environments, eq(channels.environmentId, environments.id))
-    //   .leftJoin(users, eq(environments.userId, users.id))
-    //   .orderBy(desc(channels.createdAt));
-
-    // return c.json(rows.map(formatChannelRow), 200);
   });
 });
 
