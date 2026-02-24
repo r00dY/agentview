@@ -1,9 +1,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { authn, authorize } from '../../authMiddleware';
 import { response_data, response_error } from '../../hono_utils';
-import type { channelProvider } from '../operations';
-
-type ChannelProvider = ReturnType<typeof channelProvider>;
+import type { ChannelProvider } from '../defineChannel';
 
 export function createMockEmailRoutes(mockEmail: ChannelProvider): OpenAPIHono {
   const app = new OpenAPIHono();

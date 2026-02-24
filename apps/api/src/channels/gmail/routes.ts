@@ -1,7 +1,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { authn, authorize, requireMemberId } from '../../authMiddleware';
 import { response_data, response_error } from '../../hono_utils';
-import type { channelProvider } from '../operations';
+import type { ChannelProvider } from '../defineChannel';
 import {
   createOAuth2Client,
   createOAuthState,
@@ -11,8 +11,6 @@ import {
 } from './client';
 import { getProfile, setupWatch, fetchNewEmails } from './api';
 import type { GmailChannelConfig } from './types';
-
-type ChannelProvider = ReturnType<typeof channelProvider>;
 
 /** Extract bare email from "Name <email>" or just "email" */
 function extractEmailAddress(from: string): string {

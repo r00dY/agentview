@@ -1,9 +1,7 @@
-import type { channelProvider } from '../operations';
 import { setupWatch } from './api';
 import type { GmailChannelConfig } from './types';
 import { createPeriodicWorker, type WorkerHandle } from '../../workers/utils';
-
-type ChannelProvider = ReturnType<typeof channelProvider>;
+import { type ChannelProvider } from '../defineChannel';
 
 export function createGmailWorkers(gmail: ChannelProvider): WorkerHandle[] {
   const worker = createPeriodicWorker({
