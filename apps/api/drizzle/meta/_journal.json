@@ -92,6 +92,13 @@
       "when": 1771720000000,
       "tag": "0012_channel_threads",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1771810000000,
+      "tag": "0013_channels_cleanup",
+      "breakpoints": true
     }
   ]
 }

@@ -461,7 +461,6 @@ export const channels = pgTable('channels', {
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: text('organization_id').notNull().references(() => organizations.id),
   type: varchar('type', { length: 64 }).notNull(), // 'gmail', 'mock-email', etc.
-  name: varchar('name', { length: 255 }),
   address: varchar('address', { length: 255 }).notNull(),
   status: varchar('status', { length: 64 }).notNull().default('active'),
   config: jsonb('config').notNull(),
@@ -470,7 +469,7 @@ export const channels = pgTable('channels', {
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
 }, (table) => [
-  unique('channels_org_type_address_unique').on(table.organizationId, table.type, table.address),
+  unique('channels_type_address_unique').on(table.type, table.address),
   index('channels_address_idx').on(table.address),
   createTenantPolicy('channels'),
 ]);

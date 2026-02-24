@@ -2,9 +2,11 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { and, eq } from 'drizzle-orm';
 import { authn, authorize } from '../../authMiddleware';
 import { withOrg } from '../../withOrg';
-import { channels, channelThreads, channelMessages } from '../../schemas/schema';
+import { channelThreads, channelMessages } from '../../schemas/schema';
 import { response_data, response_error } from '../../hono_utils';
-import { upsertChannel, ingestMessage } from '../operations';
+import { channelProvider } from '../operations';
+
+const mockEmail = channelProvider('mock-email');
 
 export const mockEmailApp = new OpenAPIHono();
 
@@ -20,7 +22,6 @@ const createMockEmailRoute = createRoute({
       content: {
         'application/json': {
           schema: z.object({
-            name: z.string().optional(),
             address: z.string(),
           }),
         },
@@ -39,13 +40,11 @@ mockEmailApp.openapi(createMockEmailRoute, async (c) => {
 
   const body = c.req.valid('json');
 
-  const channel = await upsertChannel({
-    organizationId: principal.organizationId,
-    type: 'mock-email',
-    name: body.name,
-    address: body.address,
-    config: {},
-  });
+  const channel = await mockEmail.createChannel(
+    principal.organizationId,
+    body.address,
+    {},
+  );
 
   return c.json(channel, 200);
 });
@@ -85,20 +84,12 @@ mockEmailApp.openapi(sendMockEmailRoute, async (c) => {
 
   const body = c.req.valid('json');
 
-  const channel = await withOrg(principal.organizationId, async (tx) => {
-    return tx.query.channels.findFirst({
-      where: and(
-        eq(channels.type, 'mock-email'),
-        eq(channels.address, body.address),
-      ),
-    });
-  });
-
+  const channel = await mockEmail.getChannel(body.address);
   if (!channel) {
     return c.json({ message: 'Mock-email channel not found for this address' }, 404);
   }
 
-  const result = await ingestMessage(channel, {
+  const result = await mockEmail.ingestMessage(body.address, {
     contact: body.contact,
     contactKind: 'email',
     sourceThreadId: body.threadId,
@@ -136,18 +127,12 @@ mockEmailApp.openapi(getMockEmailMessagesRoute, async (c) => {
 
   const query = c.req.valid('query');
 
+  const channel = await mockEmail.getChannel(query.address);
+  if (!channel) {
+    return c.json({ message: 'Mock-email channel not found for this address' }, 404);
+  }
+
   return withOrg(principal.organizationId, async (tx) => {
-    const channel = await tx.query.channels.findFirst({
-      where: and(
-        eq(channels.type, 'mock-email'),
-        eq(channels.address, query.address),
-      ),
-    });
-
-    if (!channel) {
-      return c.json({ message: 'Mock-email channel not found for this address' }, 404);
-    }
-
     const threadFilters: any[] = [eq(channelThreads.channelId, channel.id)];
     if (query.contact) {
       threadFilters.push(eq(channelThreads.contact, query.contact));

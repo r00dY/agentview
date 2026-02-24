@@ -251,7 +251,7 @@ export class AgentView {
   // --- Mock-email (internal/testing) ---
 
   __internal = {
-    createMockEmailChannel: async (data: { name?: string, address: string }): Promise<Channel> => {
+    createMockEmailChannel: async (data: { address: string }): Promise<Channel> => {
       return await this.request<Channel>('POST', `/api/channels/mock-email`, data)
     },
 

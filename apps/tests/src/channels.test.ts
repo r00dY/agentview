@@ -33,7 +33,6 @@ describe('Channels (mock-email)', () => {
 
   test('create mock-email channel', async () => {
     channel = await av.__internal.createMockEmailChannel({
-      name: 'Test Mock Email',
       address,
     })
 

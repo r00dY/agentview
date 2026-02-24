@@ -46,7 +46,6 @@ function buildPaginationMetadata(totalCount: number, page: number, limit: number
 function formatChannelRow(row: {
   id: string;
   type: string;
-  name: string | null;
   address: string;
   status: string;
   agent: string | null;
@@ -60,7 +59,6 @@ function formatChannelRow(row: {
   return {
     id: row.id,
     type: row.type,
-    name: row.name,
     address: row.address,
     status: row.status,
     environment: row.envId ? {
@@ -110,7 +108,6 @@ channelsApp.openapi(channelsGETRoute, async (c) => {
     //   .select({
     //     id: channels.id,
     //     type: channels.type,
-    //     name: channels.name,
     //     address: channels.address,
     //     status: channels.status,
     //     agent: channels.agent,
@@ -295,7 +292,6 @@ channelsApp.openapi(channelPATCHRoute, async (c) => {
       .select({
         id: channels.id,
         type: channels.type,
-        name: channels.name,
         address: channels.address,
         status: channels.status,
         agent: channels.agent,

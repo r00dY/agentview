@@ -255,7 +255,6 @@ export type SessionsPaginatedResponse = z.infer<typeof SessionsPaginatedResponse
 export const ChannelSchema = z.object({
   id: z.string(),
   type: z.string(),
-  name: z.string().nullable(),
   address: z.string(),
   status: z.string(),
   environment: EnvironmentBaseSchema.nullable(),

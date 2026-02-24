@@ -28,14 +28,14 @@ describe('Gmail', () => {
     adminAuthHeaders.set('x-env', 'dev')
   })
 
-  describe('GET /api/gmail/auth', () => {
+  describe('GET /api/channels/gmail/auth', () => {
     test('requires authentication', async () => {
-      const res = await fetch(`${API_URL}/api/gmail/auth`)
+      const res = await fetch(`${API_URL}/api/channels/gmail/auth`)
       expect(res.status).toBe(401)
     })
 
     test('returns Google OAuth URL for admin (requires GMAIL_STATE_SECRET)', async () => {
-      const res = await fetch(`${API_URL}/api/gmail/auth`, {
+      const res = await fetch(`${API_URL}/api/channels/gmail/auth`, {
         headers: adminAuthHeaders,
       })
 
@@ -57,7 +57,7 @@ describe('Gmail', () => {
     })
   })
 
-  describe('POST /api/gmail/webhook', () => {
+  describe('POST /api/channels/gmail/webhook', () => {
     test('handles unknown email gracefully (200)', async () => {
       const pubsubMessage = {
         message: {
@@ -68,7 +68,7 @@ describe('Gmail', () => {
         },
       }
 
-      const res = await fetch(`${API_URL}/api/gmail/webhook`, {
+      const res = await fetch(`${API_URL}/api/channels/gmail/webhook`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(pubsubMessage),
@@ -79,7 +79,7 @@ describe('Gmail', () => {
     })
 
     test('handles malformed payload (200)', async () => {
-      const res = await fetch(`${API_URL}/api/gmail/webhook`, {
+      const res = await fetch(`${API_URL}/api/channels/gmail/webhook`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ garbage: true }),
@@ -90,7 +90,7 @@ describe('Gmail', () => {
     })
 
     test('handles empty body (200)', async () => {
-      const res = await fetch(`${API_URL}/api/gmail/webhook`, {
+      const res = await fetch(`${API_URL}/api/channels/gmail/webhook`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -99,7 +99,7 @@ describe('Gmail', () => {
     })
 
     test('handles missing data field (200)', async () => {
-      const res = await fetch(`${API_URL}/api/gmail/webhook`, {
+      const res = await fetch(`${API_URL}/api/channels/gmail/webhook`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: {} }),
