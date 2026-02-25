@@ -44,11 +44,13 @@ export function defineChannel(config: {
 }
 
 type IngestMessageParams = {
+  sourceId: string;
+  sourceThreadId?: string;
+
   contact: string;
   contactKind: string;
-  sourceThreadId?: string | null;
-  sourceId?: string | null;
-  text?: string | null;
+
+  text?: string;
   providerData?: any;
 }
 

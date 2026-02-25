@@ -72,6 +72,7 @@ describe('Channels (mock)', () => {
   test('send incoming email → thread + message created', async () => {
     const result = await av.__internal.mock.sendMessage({
       address,
+      sourceId: 'msg-1',
       contactKind: 'email',
       contact: 'customer@example.com',
       text: 'I need help with my order',
@@ -90,6 +91,7 @@ describe('Channels (mock)', () => {
   test('send another email to same contact → reuses thread', async () => {
     const result1 = await av.__internal.mock.sendMessage({
       address,
+      sourceId: 'msg-2',
       contactKind: 'email',
       contact: 'customer@example.com',
       text: 'Still waiting on that order',
@@ -98,6 +100,7 @@ describe('Channels (mock)', () => {
     // Should reuse the same thread (same contact, no threadId, contactKind=email)
     const firstResult = await av.__internal.mock.sendMessage({
       address,
+      sourceId: 'msg-3',
       contactKind: 'email',
       contact: 'customer@example.com',
       text: 'dummy to get thread id',
@@ -110,6 +113,7 @@ describe('Channels (mock)', () => {
   test('send email with explicit threadId → creates separate thread', async () => {
     const result = await av.__internal.mock.sendMessage({
       address,
+      sourceId: 'msg-4',
       contactKind: 'email',
       contact: 'customer@example.com',
       text: 'This is a different thread',
@@ -119,6 +123,7 @@ describe('Channels (mock)', () => {
     // Should create a new thread because of the explicit threadId
     const noThreadResult = await av.__internal.mock.sendMessage({
       address,
+      sourceId: 'msg-5',
       contactKind: 'email',
       contact: 'customer@example.com',
       text: 'no thread id message',
@@ -172,6 +177,7 @@ describe('Channels (mock)', () => {
     await expect(
       av.__internal.mock.sendMessage({
         address: 'nonexistent@example.com',
+        sourceId: 'msg-404',
         contactKind: 'email',
         contact: 'someone@test.com',
         text: 'hello',
@@ -312,6 +318,7 @@ describe('Channels outgoing messages', () => {
     // Send incoming email
     const result = await av.__internal.mock.sendMessage({
       address,
+      sourceId: 'outgoing-msg-1',
       contactKind: 'email',
       contact: 'user@example.com',
       text: 'I need help',
