@@ -1,7 +1,7 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
 import type { WorkerHandle } from '../workers/utils';
 import { and, eq, inArray, isNull, not, or } from 'drizzle-orm';
-import { channels, channelThreads, channelMessages, endUsers } from '../schemas/schema';
+import { channels, channelThreads, channelMessages, endUsers, sessions } from '../schemas/schema';
 import { withOrg } from '../withOrg';
 import { db__dangerous } from '../db';
 import type { Transaction } from '../types';
@@ -9,6 +9,7 @@ import { BaseConfigSchemaToZod } from 'agentview/configUtils';
 import { applyRunPatch, createRun } from '../runs';
 import { randomBytes } from 'crypto';
 import { createSession } from '../sessions';
+import { useImperativeHandle } from 'hono/jsx';
 
 export type Channel = typeof channels.$inferSelect;
 type ChannelThread = typeof channelThreads.$inferSelect;
@@ -194,7 +195,6 @@ export function channelProvider(type: string) {
       console.log('[ingestMessage] last run status: ', lastRun?.status);
       console.log('[ingestMessage] sessionId: ', sessionId);
 
-
       /**
        * Cancel the last run if it is in progress
        */
@@ -212,17 +212,15 @@ export function channelProvider(type: string) {
    * - no run_id (fresh ones)
    * - all messages from the last run that was not completed
    */
-      const inputMessages = await withOrg(thread.organizationId, async (tx) => {
-        return await tx.query.channelMessages.findMany({
-          where: and(
-            eq(channelMessages.channelThreadId, thread.id),
-            or(
-              isNull(channelMessages.runId),
-              (lastRun && lastRun.status !== 'completed') ? eq(channelMessages.runId, lastRun.id) : undefined,
-            )
-          ),
-          orderBy: (cm, { asc }) => [asc(cm.createdAt)],
-        });
+      const inputMessages = await tx.query.channelMessages.findMany({
+        where: and(
+          eq(channelMessages.channelThreadId, thread.id),
+          or(
+            isNull(channelMessages.runId),
+            (lastRun && lastRun.status !== 'completed') ? eq(channelMessages.runId, lastRun.id) : undefined,
+          )
+        ),
+        orderBy: (cm, { asc }) => [asc(cm.createdAt)],
       });
 
       console.log('[ingestMessage] inputMessages: ', inputMessages.length);
@@ -231,98 +229,115 @@ export function channelProvider(type: string) {
         throw new Error(`No input messages found for channel thread ${thread.id}`);
       }
 
-      let user: typeof endUsers.$inferSelect | undefined;
-
-    if (!sessionId) {
       /**
-       * Find or create END USER
+       * Find or create USER
        */
-      if (thread.contactKind === 'email') {
-        user = await tx.query.endUsers.findFirst({
-          where: and(
-            eq(endUsers.email, thread.contact),
-            eq(endUsers.space, space),
-            createdBy
-              ? eq(endUsers.createdBy, createdBy)
-              : isNull(endUsers.createdBy)
-          ),
+
+      let userId: string | undefined;
+
+      // If session exists, let's just use it's userId
+      if (sessionId) {
+        const session = await tx.query.sessions.findFirst({
+          where: eq(sessions.id, sessionId),
         });
-
-        console.log('[ingestMessage] user: ', user?.id);
-
-
-        if (!user) {
-          const [newUser] = await tx.insert(endUsers).values({
-            organizationId: thread.organizationId,
-            email: thread.contact,
-            space,
-            createdBy,
-            token: randomBytes(32).toString('hex'),
-          }).returning();
-          user = newUser;
-
-          console.log('[ingestMessage] creating new user: ', user?.id);
-
+        if (!session) {
+          throw new Error(`Unreachable: Session not found: ${sessionId}`);
         }
-      } else {
-        throw new Error(`Unsupported contact kind: ${thread.contactKind}`);
+        userId = session.userId;
+      }
+      else {
+
+        if (thread.contactKind === 'email') {
+          let user = await tx.query.endUsers.findFirst({
+            where: and(
+              eq(endUsers.email, thread.contact),
+              eq(endUsers.space, space),
+              createdBy
+                ? eq(endUsers.createdBy, createdBy)
+                : isNull(endUsers.createdBy)
+            ),
+          });
+
+          console.log('[ingestMessage] user: ', user?.id);
+
+
+          if (!user) {
+            const [newUser] = await tx.insert(endUsers).values({
+              organizationId: thread.organizationId,
+              email: thread.contact,
+              space,
+              createdBy,
+              token: randomBytes(32).toString('hex'),
+            }).returning();
+            user = newUser;
+
+            console.log('[ingestMessage] creating new user: ', user?.id);
+
+          }
+
+          userId = user?.id;
+
+        } else {
+          throw new Error(`Unsupported contact kind: ${thread.contactKind}`);
+        }
       }
 
-      
+      if (!userId) {
+        throw new Error(`Unreachable error: user not found and not created`);
+      }
+
 
       /**
        * Create SESSION
        */
-      const newSession = await createSession(tx, {
-        organizationId: thread.organizationId,
-        agentConfig,
-        userId: user.id,
-        channelThreadId: thread.id,
+      if (!sessionId) {
+        const newSession = await createSession(tx, {
+          organizationId: thread.organizationId,
+          agentConfig,
+          userId,
+          channelThreadId: thread.id,
+        });
+        sessionId = newSession.id;
+        console.log('[ingestMessage] new session created: ', newSession.id);
+
+      }
+
+
+
+      /**
+       * Create RUN
+       */
+      const newRun = await createRun(tx, thread.organizationId, environment, {
+        sessionId,
+        items: [{
+          role: 'user',
+          parts: inputMessages.map(m => ({
+            type: 'text',
+            text: m.text,
+          })),
+        }]
       });
 
-      console.log('[ingestMessage] new session created: ', newSession.id);
+      console.log('[ingestMessage] new run created: ', newRun.id);
 
-      sessionId = newSession.id;
-    }
+      /**
+       * Assign run_id to all input messages
+       */
+      await tx.update(channelMessages).set({
+        runId: newRun.id,
+        updatedAt: new Date().toISOString(),
+      }).where(inArray(channelMessages.id, inputMessages.map(m => m.id)));
 
-    if (!user) {
-      throw new Error(`Unreachable error: user not found and not created`);
-    }
-
-    /**
-     * Create RUN
-     */
-    const newRun = await createRun(tx, thread.organizationId, environment, {
-      sessionId,
-      items: [{
-        role: 'user',
-        parts: inputMessages.map(m => ({
-          type: 'text',
-          text: m.text,
-        })),
-      }]
-    });
-
-    console.log('[ingestMessage] new run created: ', newRun.id);
-
-    /**
-     * Assign run_id to all input messages
-     */
-    await tx.update(channelMessages).set({
-      runId: newRun.id,
-      updatedAt: new Date().toISOString(),
-    }).where(inArray(channelMessages.id, inputMessages.map(m => m.id)));
-
-    /**
-     * Set thread status
-     */
-    // await tx.update(channelThreads).set({
-    //   status: 'idle',
-    //   updatedAt: new Date().toISOString(),
-    // }).where(eq(channelThreads.id, thread.id));
+      /**
+       * Set thread status
+       */
+      // await tx.update(channelThreads).set({
+      //   status: 'idle',
+      //   updatedAt: new Date().toISOString(),
+      // }).where(eq(channelThreads.id, thread.id));
 
 
-    console.log('[ingestMessage] finished ');
+      console.log('[ingestMessage] finished ');
 
       return { thread, message };
     });

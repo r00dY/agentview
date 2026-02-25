@@ -462,7 +462,7 @@ export const channels = pgTable('channels', {
   organizationId: text('organization_id').notNull().references(() => organizations.id),
   type: varchar('type', { length: 64 }).notNull(), // 'gmail', 'mock-email', etc.
   address: varchar('address', { length: 255 }).notNull(),
-  // status: varchar('status', { length: 64 }).notNull().default('active'),
+  status: varchar('status', { length: 64 }).notNull().default('active'),
   config: jsonb('config').notNull(),
   environmentId: uuid('environment_id').references(() => environments.id, { onDelete: 'set null' }),
   agent: varchar('agent', { length: 255 }),
@@ -501,7 +501,7 @@ export const channelMessages = pgTable('channel_messages', {
   attachments: jsonb('attachments'),
   providerData: jsonb('provider_data'),
   runId: uuid('run_id').references(() => runs.id, { onDelete: 'set null' }),
-  status: varchar('status', { length: 32 }).notNull().default('whatever'), // 'received' | 'processing' | 'processed' | 'pending' | 'sending' | 'sent' | 'failed'
+  // status: varchar('status', { length: 32 }).notNull().default('whatever'), // 'received' | 'processing' | 'processed' | 'pending' | 'sending' | 'sent' | 'failed'
   failReason: jsonb('fail_reason'),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),

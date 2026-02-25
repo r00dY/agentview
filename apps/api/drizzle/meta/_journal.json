@@ -47,57 +47,8 @@
     {
       "idx": 6,
       "version": "7",
-      "when": 1771251294090,
-      "tag": "0006_daily_lockjaw",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1771267073096,
-      "tag": "0007_acoustic_stepford_cuckoos",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1771360000000,
-      "tag": "0008_channels",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "7",
-      "when": 1771450000000,
-      "tag": "0009_channel_processing",
-      "breakpoints": true
-    },
-    {
-      "idx": 10,
-      "version": "7",
-      "when": 1771540000000,
-      "tag": "0010_channel_message_fail_reason",
-      "breakpoints": true
-    },
-    {
-      "idx": 11,
-      "version": "7",
-      "when": 1771630000000,
-      "tag": "0011_channel_message_run_id",
-      "breakpoints": true
-    },
-    {
-      "idx": 12,
-      "version": "7",
-      "when": 1771720000000,
-      "tag": "0012_channel_threads",
-      "breakpoints": true
-    },
-    {
-      "idx": 13,
-      "version": "7",
-      "when": 1771810000000,
-      "tag": "0013_channels_cleanup",
+      "when": 1772020981125,
+      "tag": "0006_military_sabretooth",
       "breakpoints": true
     }
   ]

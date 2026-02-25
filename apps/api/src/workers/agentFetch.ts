@@ -37,6 +37,8 @@ export const agentFetchWorker = createWorker<Run>({
 });
 
 async function processAgentFetch(run: Run) {
+  console.log('[agentFetch] processing run: ', run.id);
+
   const abortController = new AbortController();
 
   try {
@@ -93,7 +95,9 @@ async function processAgentFetch(run: Run) {
       });
     }
 
+    console.log('[agentFetch] calling agent API');
     for await (const event of callFn(body, agentUrl, abortController.signal)) {
+      console.log('[agentFetch] event: ', event.name);
       // Check for cancellation after each new event received. We immediately abort the stream if the run is not in progress.
       const runStatus = await getCurrentRunStatus();
       if (runStatus !== 'in_progress') {

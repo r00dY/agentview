@@ -1,2 +1,0 @@
-ALTER TABLE "gmail_connections" DROP CONSTRAINT "gmail_connections_organization_id_unique";--> statement-breakpoint
-ALTER TABLE "gmail_connections" ADD CONSTRAINT "gmail_connections_org_email_unique" UNIQUE("organization_id","email_address");

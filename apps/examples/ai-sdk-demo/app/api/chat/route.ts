@@ -88,6 +88,9 @@ const weatherTool = tool({
 export async function POST(req: Request) {
   const { messages, session }: { messages: UIMessage[], session: SessionBase } = await req.json();
 
+  console.log('[chat] messages: ', messages);
+  console.log('[chat] session: ', session);
+
   const result = streamText({
     model: openai("gpt-5-mini"),
     system:
@@ -119,6 +122,9 @@ export async function POST(req: Request) {
       console.log(
         `[finish] steps=${steps.length} tokens=${JSON.stringify(usage)}`
       );
+    },
+    onError(error) {
+      console.error(error);
     },
   });
 
