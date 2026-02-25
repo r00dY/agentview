@@ -3,7 +3,7 @@ import { withOrg } from '../withOrg';
 import { channelMessages, channelThreads } from '../schemas/schema';
 import { eq, and, inArray, sql } from 'drizzle-orm';
 import { createWorker } from './utils';
-import { channelSendRegistry } from '../channels/registry';
+import { channelApps } from '../channels/registry';
 
 type ChannelMessage = typeof channelMessages.$inferSelect;
 
@@ -42,7 +42,8 @@ export const outgoingChannelMessageWorker = createWorker<ChannelMessage>({
       }
 
       const channel = channelThread.channel;
-      const sendFn = channelSendRegistry.get(channel.type);
+      const channelApp = channelApps.find((app) => app.type === channel.type);
+      const sendFn = channelApp?.sendMessage;
 
       if (!sendFn) {
         throw new Error(`No send function registered for channel type '${channel.type}'`);
