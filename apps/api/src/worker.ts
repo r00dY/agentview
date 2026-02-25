@@ -20,7 +20,7 @@ expiredRunsWorker.start();
 webhookWorker.start();
 agentFetchWorker.start();
 // channelThreadWorker.start();
-// outgoingChannelMessageWorker.start();
+outgoingChannelMessageWorker.start();
 for (const channel of channelApps) {
   for (const worker of channel.workers) {
     worker.start();

@@ -1,6 +1,7 @@
-import { describe, test, expect, beforeAll } from 'vitest'
+import { describe, test, expect, beforeAll, afterAll } from 'vitest'
 import { AgentView, configDefaults } from 'agentview'
 import type { Channel } from 'agentview'
+import { z } from 'zod'
 import { seedUsers } from './seedUsers'
 
 configDefaults.__internal = {
@@ -169,4 +170,165 @@ describe('Channels (mock-email)', () => {
       expect.objectContaining({ statusCode: 404 })
     )
   })
+})
+
+describe('Channels outgoing messages', () => {
+  const AGENT_PORT = 3459
+  const AGENT_URL = `http://localhost:${AGENT_PORT}/agent`
+
+  let av: AgentView
+  let avProd: AgentView
+  let environmentId: string
+  let channel: Channel
+  const orgSlug = 'channels-outgoing-' + Math.random().toString(36).slice(2)
+  const address = `outgoing@${orgSlug}.com`
+
+  let mockServer: {
+    server: import('http').Server
+    requests: Array<{ body: any; timestamp: number }>
+    close: () => Promise<void>
+    setHandler: (handler: (body: any, res: import('http').ServerResponse) => void) => void
+  } | null = null
+
+  async function createMockServer(port: number) {
+    const http = await import('http')
+    const requests: Array<{ body: any; timestamp: number }> = []
+    const openSockets = new Set<import('net').Socket>()
+    let handler: (body: any, res: import('http').ServerResponse) => void = (_body, res) => {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' })
+      res.end()
+    }
+
+    const server = await new Promise<import('http').Server>((resolve) => {
+      const srv = http.createServer((req, res) => {
+        let bodyStr = ''
+        req.on('data', (chunk: Buffer) => bodyStr += chunk.toString())
+        req.on('end', () => {
+          let parsedBody: any
+          try { parsedBody = JSON.parse(bodyStr) } catch { parsedBody = bodyStr }
+          requests.push({ body: parsedBody, timestamp: Date.now() })
+          handler(parsedBody, res)
+        })
+      })
+      srv.on('connection', (socket) => {
+        openSockets.add(socket)
+        socket.on('close', () => openSockets.delete(socket))
+      })
+      srv.listen(port, () => resolve(srv))
+    })
+
+    return {
+      server,
+      requests,
+      close: () => {
+        for (const socket of openSockets) socket.destroy()
+        return new Promise<void>(r => server.close(r as () => void))
+      },
+      setHandler: (h: (body: any, res: import('http').ServerResponse) => void) => { handler = h },
+    }
+  }
+
+  function writeAISDKStream(res: import('http').ServerResponse, chunks: any[], opts?: { version?: string }) {
+    const headers: Record<string, string> = {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    }
+    if (opts?.version) {
+      headers['X-AgentView-Version'] = opts.version
+    }
+    res.writeHead(200, headers)
+    for (const chunk of chunks) {
+      res.write(`data: ${JSON.stringify(chunk)}\n\n`)
+    }
+    res.write('data: [DONE]\n\n')
+    res.end()
+  }
+
+  beforeAll(async () => {
+    mockServer = await createMockServer(AGENT_PORT)
+
+    const result = await seedUsers(orgSlug)
+    av = new AgentView({ apiKey: result.apiKeyDev.key })
+    avProd = new AgentView({ apiKey: result.apiKeyProd.key })
+
+    // Set up production environment with ai-sdk agent pointing to mock server
+    const inputSchema = z.looseObject({ role: z.literal('user'), parts: z.array(z.any()) })
+    const outputSchema = z.looseObject({ type: z.literal('text'), text: z.string() })
+
+    const env = await avProd.updateEnvironment({
+      config: {
+        agents: [{
+          name: 'support-agent',
+          url: AGENT_URL,
+          protocol: 'ai-sdk',
+          runs: [{
+            input: { schema: inputSchema },
+            output: { schema: outputSchema },
+          }],
+        }],
+        __internal: { disableSummaries: true },
+      },
+    })
+    environmentId = env.id
+
+    // Create and configure channel
+    channel = await av.__internal.createMockEmailChannel({ address })
+    await av.updateChannel(channel.id, {
+      environmentId,
+      agent: 'support-agent',
+    })
+  }, 30000)
+
+  afterAll(async () => {
+    if (mockServer) {
+      await mockServer.close()
+      mockServer = null
+    }
+  }, 30000)
+
+  test('incoming email triggers run, outgoing message sent on completion', async () => {
+    // Set up mock agent to respond with text
+    mockServer!.setHandler((_body, res) => {
+      writeAISDKStream(res, [
+        { type: 'start', messageId: 'msg_1' },
+        { type: 'text-start', id: 't1' },
+        { type: 'text-delta', id: 't1', delta: 'Here is your answer' },
+        { type: 'text-end', id: 't1' },
+        { type: 'finish', finishReason: 'stop' },
+      ], { version: '1.0.0' })
+    })
+
+    // Send incoming email
+    const result = await av.__internal.sendMockEmail({
+      address,
+      contact: 'user@example.com',
+      subject: 'Help',
+      body: 'I need help',
+    })
+
+    expect(result.message.direction).toBe('incoming')
+
+    // Poll channel threads until outgoing message appears with status 'sent'
+    const startTime = Date.now()
+    const timeoutMs = 30000
+    let outgoingMessage: any = null
+
+    while (Date.now() - startTime < timeoutMs) {
+      const threads = await av.getChannelThreads(channel.id)
+      const thread = threads.find(t => t.id === result.thread.id)
+      if (thread) {
+        outgoingMessage = thread.messages.find(
+          m => m.direction === 'outgoing' && m.status === 'sent'
+        )
+        if (outgoingMessage) break
+      }
+      await new Promise(r => setTimeout(r, 500))
+    }
+
+    expect(outgoingMessage).toBeDefined()
+    expect(outgoingMessage.direction).toBe('outgoing')
+    expect(outgoingMessage.status).toBe('sent')
+    expect(outgoingMessage.text).toBe('Here is your answer')
+  }, 60000)
 })

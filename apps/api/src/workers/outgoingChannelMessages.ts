@@ -1,8 +1,9 @@
 import { db__dangerous } from '../db';
 import { withOrg } from '../withOrg';
-import { channelMessages } from '../schemas/schema';
+import { channelMessages, channelThreads } from '../schemas/schema';
 import { eq, and, inArray, sql } from 'drizzle-orm';
 import { createWorker } from './utils';
+import { channelSendRegistry } from '../channels/registry';
 
 type ChannelMessage = typeof channelMessages.$inferSelect;
 
@@ -25,18 +26,52 @@ export const outgoingChannelMessageWorker = createWorker<ChannelMessage>({
       .returning();
   },
   async process(message) {
-    console.log(`[${NAME}] Sending message ${message.id}: ${message.text?.substring(0, 100) ?? '(empty)'}...`);
+    console.log(`[${NAME}] Processing message ${message.id}: ${message.text?.substring(0, 100) ?? '(empty)'}...`);
 
-    // TODO: integrate with actual channel provider (e.g. Gmail send)
-    // For now, just mark as sent
+    try {
+      // Look up the channel thread with its channel
+      const channelThread = await db__dangerous.query.channelThreads.findFirst({
+        where: eq(channelThreads.id, message.channelThreadId),
+        with: {
+          channel: true,
+        },
+      });
 
-    await withOrg(message.organizationId, async (tx) => {
-      await tx.update(channelMessages).set({
-        status: 'sent',
-        updatedAt: new Date().toISOString(),
-      }).where(eq(channelMessages.id, message.id));
-    });
+      if (!channelThread) {
+        throw new Error(`Channel thread ${message.channelThreadId} not found`);
+      }
 
-    console.log(`[${NAME}] Sent message ${message.id}`);
+      const channel = channelThread.channel;
+      const sendFn = channelSendRegistry.get(channel.type);
+
+      if (!sendFn) {
+        throw new Error(`No send function registered for channel type '${channel.type}'`);
+      }
+
+      const result = await sendFn({ channel, channelThread, message });
+
+      // On success: mark as sent, optionally store sourceId/providerData
+      await withOrg(message.organizationId, async (tx) => {
+        await tx.update(channelMessages).set({
+          status: 'sent',
+          ...(result?.sourceId ? { sourceId: result.sourceId } : {}),
+          ...(result?.providerData ? { providerData: result.providerData } : {}),
+          updatedAt: new Date().toISOString(),
+        }).where(eq(channelMessages.id, message.id));
+      });
+
+      console.log(`[${NAME}] Sent message ${message.id}`);
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      console.error(`[${NAME}] Failed to send message ${message.id}:`, errorMessage);
+
+      await withOrg(message.organizationId, async (tx) => {
+        await tx.update(channelMessages).set({
+          status: 'failed',
+          failReason: { message: errorMessage },
+          updatedAt: new Date().toISOString(),
+        }).where(eq(channelMessages.id, message.id));
+      });
+    }
   },
 });

@@ -1,0 +1,2 @@
+ALTER TABLE "channel_messages" ADD COLUMN "status" varchar(32) DEFAULT 'received' NOT NULL;--> statement-breakpoint
+CREATE INDEX "channel_messages_status_direction_idx" ON "channel_messages" USING btree ("status","direction");

@@ -7,6 +7,7 @@ import {
   stepCountIs,
   tool,
   UIMessage,
+  Output
 } from "ai";
 import { z } from "zod";
 
@@ -126,6 +127,12 @@ export async function POST(req: Request) {
     onError(error) {
       console.error(error);
     },
+    output: Output.object({
+      schema: z.object({
+        response: z.string(),
+        is_user_happy: z.string()
+      }),
+    }),
   });
 
   return result.toUIMessageStreamResponse({

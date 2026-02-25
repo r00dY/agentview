@@ -17,22 +17,29 @@ type ChannelMessage = typeof channelMessages.$inferSelect;
 
 export type ChannelProvider = ReturnType<typeof channelProvider>;
 
+export type SendMessageParams = { channelThread: ChannelThread; channel: Channel; message: ChannelMessage };
+export type SendMessageResult = { sourceId?: string; providerData?: any } | void;
+export type SendMessageFn = (params: SendMessageParams) => Promise<SendMessageResult>;
+
 export interface ChannelApp {
   type: string;
   routes: OpenAPIHono | null;
   workers: WorkerHandle[];
+  sendMessage?: SendMessageFn;
 }
 
 export function defineChannel(config: {
   type: string;
   routes?: (provider: ChannelProvider) => OpenAPIHono;
   workers?: (provider: ChannelProvider) => WorkerHandle[];
+  sendMessage?: (provider: ChannelProvider) => SendMessageFn;
 }): ChannelApp {
   const provider = channelProvider(config.type);
   return {
     type: config.type,
     routes: config.routes ? config.routes(provider) : null,
     workers: config.workers ? config.workers(provider) : [],
+    sendMessage: config.sendMessage ? config.sendMessage(provider) : undefined,
   };
 }
 
@@ -158,7 +165,7 @@ export function channelProvider(type: string) {
      * For now, only ai-sdk agents are supported for channels
      */
     if (agentConfig.protocol !== 'ai-sdk') {
-      throw new Error(`Unsupported agent protocol: ${agentConfig.protocol}`);
+      throw new Error(`Unsupported agent protocol: ${agentConfig.protocol}. Only 'ai-sdk' is supported for channels.`);
     }
 
     console.log('[ingestMessage] config and agent exists, agent name: ', agentName);
@@ -401,6 +408,7 @@ async function getOrCreateMessage(tx: Transaction, channel: Channel, thread: Cha
       organizationId: channel.organizationId,
       channelThreadId: thread.id,
       direction: 'incoming',
+      status: 'received',
       sourceId: params.sourceId ?? null,
       text: params.text ?? null,
       providerData: params.providerData ?? null,
