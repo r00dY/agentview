@@ -469,7 +469,7 @@ export const channels = pgTable('channels', {
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
 }, (table) => [
-  unique('channels_type_address_unique').on(table.type, table.address),
+  unique('channels_type_address_org_unique').on(table.type, table.address, table.organizationId),
   index('channels_address_idx').on(table.address),
   createTenantPolicy('channels'),
 ]);

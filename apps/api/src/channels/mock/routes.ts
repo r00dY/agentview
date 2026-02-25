@@ -3,15 +3,15 @@ import { authn, authorize } from '../../authMiddleware';
 import { response_data, response_error } from '../../hono_utils';
 import type { ChannelProvider } from '../defineChannel';
 
-export function createMockEmailRoutes(mockEmail: ChannelProvider): OpenAPIHono {
+export function createMockRoutes(mock: ChannelProvider): OpenAPIHono {
   const app = new OpenAPIHono();
 
   // --- POST / ---
 
-  const createMockEmailRoute = createRoute({
+  const createChannelRoute = createRoute({
     method: 'post',
-    path: '/',
-    summary: 'Create mock-email channel',
+    path: '/create-channel',
+    summary: 'Create mock channel',
     tags: ['Channels'],
     request: {
       body: {
@@ -30,13 +30,13 @@ export function createMockEmailRoutes(mockEmail: ChannelProvider): OpenAPIHono {
     },
   });
 
-  app.openapi(createMockEmailRoute, async (c) => {
+  app.openapi(createChannelRoute, async (c) => {
     const principal = await authn(c.req.raw.headers);
     authorize(principal, { action: 'environment:write' });
 
     const body = c.req.valid('json');
 
-    const channel = await mockEmail.createChannel(
+    const channel = await mock.createChannel(
       principal.organizationId,
       body.address,
       {},
@@ -47,9 +47,9 @@ export function createMockEmailRoutes(mockEmail: ChannelProvider): OpenAPIHono {
 
   // --- POST /messages ---
 
-  const sendMockEmailRoute = createRoute({
+  const sendMessageRoute = createRoute({
     method: 'post',
-    path: '/messages',
+    path: '/send-message',
     summary: 'Send mock email message',
     tags: ['Channels'],
     request: {
@@ -59,9 +59,10 @@ export function createMockEmailRoutes(mockEmail: ChannelProvider): OpenAPIHono {
             schema: z.object({
               address: z.string(),
               contact: z.string(),
-              subject: z.string().optional(),
-              body: z.string(),
-              threadId: z.string().optional(),
+              contactKind: z.string(),
+              sourceThreadId: z.string().optional(),
+              text: z.string(),
+              providerData: z.any().optional(),
             }),
           },
         },
@@ -74,23 +75,23 @@ export function createMockEmailRoutes(mockEmail: ChannelProvider): OpenAPIHono {
     },
   });
 
-  app.openapi(sendMockEmailRoute, async (c) => {
+  app.openapi(sendMessageRoute, async (c) => {
     const principal = await authn(c.req.raw.headers);
     authorize(principal, { action: 'environment:write' });
 
     const body = c.req.valid('json');
 
-    const channel = await mockEmail.getChannel(body.address);
+    const channel = await mock.getChannel(body.address);
     if (!channel) {
-      return c.json({ message: 'Mock-email channel not found for this address' }, 404);
+      return c.json({ message: 'Mock channel not found for this address' }, 404);
     }
 
-    const result = await mockEmail.ingestMessage(body.address, {
+    const result = await mock.ingestMessage(body.address, {
       contact: body.contact,
-      contactKind: 'email',
-      sourceThreadId: body.threadId,
-      text: body.body,
-      providerData: body.subject ? { subject: body.subject } : null,
+      contactKind: body.contactKind,
+      sourceThreadId: body.sourceThreadId,
+      text: body.text,
+      providerData: body.providerData,
     });
 
     return c.json(result, 200);

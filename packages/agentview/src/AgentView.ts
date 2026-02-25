@@ -241,13 +241,14 @@ export class AgentView {
   // --- Mock-email (internal/testing) ---
 
   __internal = {
-    createMockEmailChannel: async (data: { address: string }): Promise<Channel> => {
-      return await this.request<Channel>('POST', `/api/channels/mock-email`, data)
-    },
-
-    sendMockEmail: async (data: { address: string, contact: string, subject?: string, body: string, threadId?: string }): Promise<{ message: ChannelMessage, thread: ChannelThread }> => {
-      return await this.request<{ message: ChannelMessage, thread: ChannelThread }>('POST', `/api/channels/mock-email/messages`, data)
-    },
+    mock: {
+      createChannel: async (data: { address: string }): Promise<Channel> => {
+        return await this.request<Channel>('POST', `/api/channels/mock/create-channel`, data)
+      },
+      sendMessage: async (data: { address: string, contact?: string, contactKind?: string, text: string, sourceThreadId?: string, providerData?: any }): Promise<{ message: ChannelMessage, thread: ChannelThread }> => {
+        return await this.request<{ message: ChannelMessage, thread: ChannelThread }>('POST', `/api/channels/mock/send-message`, data)
+      },
+    }
   }
 
   as(userOrToken: User | string) {

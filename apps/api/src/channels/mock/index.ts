@@ -1,9 +1,9 @@
 import { defineChannel } from '../defineChannel';
-import { createMockEmailRoutes } from './routes';
+import { createMockRoutes } from './routes';
 
-export const mockEmailChannel = defineChannel({
-  type: 'mock-email',
-  routes: (provider) => createMockEmailRoutes(provider),
+export const mockChannel = defineChannel({
+  type: 'mock',
+  routes: (provider) => createMockRoutes(provider),
   sendMessage: (_provider) => async ({ channelThread, channel, message }) => {
     console.log(`[mock-email] Sending outgoing message to ${channelThread.contact} on channel ${channel.address}: ${message.text?.substring(0, 100) ?? '(empty)'}`);
     return { sourceId: `mock-${message.id}` };

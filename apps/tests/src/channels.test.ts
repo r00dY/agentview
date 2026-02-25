@@ -8,7 +8,7 @@ configDefaults.__internal = {
   disableSummaries: true,
 }
 
-describe('Channels (mock-email)', () => {
+describe('Channels (mock)', () => {
   let av: AgentView
   let avProd: AgentView
   let environmentId: string
@@ -32,13 +32,13 @@ describe('Channels (mock-email)', () => {
     environmentId = env.id
   })
 
-  test('create mock-email channel', async () => {
-    channel = await av.__internal.createMockEmailChannel({
+  test('create mock channel', async () => {
+    channel = await av.__internal.mock.createChannel({
       address,
     })
 
     expect(channel.id).toBeDefined()
-    expect(channel.type).toBe('mock-email')
+    expect(channel.type).toBe('mock')
     expect(channel.address).toBe(address)
     expect(channel.status).toBe('active')
   })
@@ -62,11 +62,11 @@ describe('Channels (mock-email)', () => {
   })
 
   test('send incoming email → thread + message created', async () => {
-    const result = await av.__internal.sendMockEmail({
+    const result = await av.__internal.mock.sendMessage({
       address,
+      contactKind: 'email',
       contact: 'customer@example.com',
-      subject: 'Hello',
-      body: 'I need help with my order',
+      text: 'I need help with my order',
     })
 
     expect(result.message).toBeDefined()
@@ -81,18 +81,19 @@ describe('Channels (mock-email)', () => {
   })
 
   test('send another email to same contact → reuses thread', async () => {
-    const result1 = await av.__internal.sendMockEmail({
+    const result1 = await av.__internal.mock.sendMessage({
       address,
+      contactKind: 'email',
       contact: 'customer@example.com',
-      subject: 'Follow up',
-      body: 'Still waiting on that order',
+      text: 'Still waiting on that order',
     })
 
     // Should reuse the same thread (same contact, no threadId, contactKind=email)
-    const firstResult = await av.__internal.sendMockEmail({
+    const firstResult = await av.__internal.mock.sendMessage({
       address,
+      contactKind: 'email',
       contact: 'customer@example.com',
-      body: 'dummy to get thread id',
+      text: 'dummy to get thread id',
     })
 
     // All messages with no explicit threadId and same contact go to same thread
@@ -100,19 +101,20 @@ describe('Channels (mock-email)', () => {
   })
 
   test('send email with explicit threadId → creates separate thread', async () => {
-    const result = await av.__internal.sendMockEmail({
+    const result = await av.__internal.mock.sendMessage({
       address,
+      contactKind: 'email',
       contact: 'customer@example.com',
-      subject: 'Different conversation',
-      body: 'This is a different thread',
-      threadId: 'thread-abc-123',
+      text: 'This is a different thread',
+      sourceThreadId: 'thread-abc-123',
     })
 
     // Should create a new thread because of the explicit threadId
-    const noThreadResult = await av.__internal.sendMockEmail({
+    const noThreadResult = await av.__internal.mock.sendMessage({
       address,
+      contactKind: 'email',
       contact: 'customer@example.com',
-      body: 'no thread id message',
+      text: 'no thread id message',
     })
 
     expect(result.thread.id).not.toBe(noThreadResult.thread.id)
@@ -161,10 +163,11 @@ describe('Channels (mock-email)', () => {
 
   test('send to nonexistent channel address returns 404', async () => {
     await expect(
-      av.__internal.sendMockEmail({
+      av.__internal.mock.sendMessage({
         address: 'nonexistent@example.com',
+        contactKind: 'email',
         contact: 'someone@test.com',
-        body: 'hello',
+        text: 'hello',
       })
     ).rejects.toThrowError(
       expect.objectContaining({ statusCode: 404 })
@@ -273,7 +276,7 @@ describe('Channels outgoing messages', () => {
     environmentId = env.id
 
     // Create and configure channel
-    channel = await av.__internal.createMockEmailChannel({ address })
+    channel = await av.__internal.mock.createChannel({ address })
     await av.updateChannel(channel.id, {
       environmentId,
       agent: 'support-agent',
@@ -300,11 +303,11 @@ describe('Channels outgoing messages', () => {
     })
 
     // Send incoming email
-    const result = await av.__internal.sendMockEmail({
+    const result = await av.__internal.mock.sendMessage({
       address,
+      contactKind: 'email',
       contact: 'user@example.com',
-      subject: 'Help',
-      body: 'I need help',
+      text: 'I need help',
     })
 
     expect(result.message.direction).toBe('incoming')

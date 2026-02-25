@@ -1,4 +1,4 @@
 import { gmailChannel } from './gmail/index';
-import { mockEmailChannel } from './mock-email/index';
+import { mockChannel } from './mock/index';
 
-export const channelApps = [gmailChannel, mockEmailChannel];
+export const channelApps = [gmailChannel, mockChannel];
