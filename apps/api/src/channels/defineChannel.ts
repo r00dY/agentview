@@ -1,9 +1,14 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
 import type { WorkerHandle } from '../workers/utils';
-import { and, eq, isNull } from 'drizzle-orm';
-import { channels, channelThreads, channelMessages } from '../schemas/schema';
+import { and, eq, inArray, isNull, not, or } from 'drizzle-orm';
+import { channels, channelThreads, channelMessages, endUsers } from '../schemas/schema';
 import { withOrg } from '../withOrg';
 import { db__dangerous } from '../db';
+import type { Transaction } from '../types';
+import { BaseConfigSchemaToZod } from 'agentview/configUtils';
+import { applyRunPatch, createRun } from '../runs';
+import { randomBytes } from 'crypto';
+import { createSession } from '../sessions';
 
 export type Channel = typeof channels.$inferSelect;
 type ChannelThread = typeof channelThreads.$inferSelect;
@@ -30,7 +35,14 @@ export function defineChannel(config: {
   };
 }
 
-
+type IngestMessageParams = {
+  contact: string;
+  contactKind: string;
+  sourceThreadId?: string | null;
+  sourceId?: string | null;
+  text?: string | null;
+  providerData?: any;
+}
 
 export function channelProvider(type: string) {
   /**
@@ -55,17 +67,28 @@ export function channelProvider(type: string) {
   /**
    * Cross-org lookup by (type, address).
    */
-  async function getChannel(address: string): Promise<Channel | null> {
+  async function getChannel(address: string) {
     const channel = await db__dangerous.query.channels.findFirst({
       where: and(eq(channels.type, type), eq(channels.address, address)),
+      with: {
+        environment: {
+          with: {
+            user: true,
+          },
+        }
+      },
     });
+
+    if (channel?.status !== 'active') {
+      return null;
+    }
     return channel ?? null;
   }
 
   /**
    * Cross-org lookup that throws if not found.
    */
-  async function requireChannel(address: string): Promise<Channel> {
+  async function requireChannel(address: string) {
     const channel = await getChannel(address);
     if (!channel) {
       throw new Error(`Channel not found: type=${type} address=${address}`);
@@ -104,82 +127,204 @@ export function channelProvider(type: string) {
   /**
    * Find channel by address, then ingest message within the channel's org.
    */
-  async function ingestMessage(address: string, params: {
-    contact: string;
-    contactKind: string;
-    sourceThreadId?: string | null;
-    sourceId?: string | null;
-    text?: string | null;
-    providerData?: any;
-  }): Promise<{ thread: ChannelThread; message: ChannelMessage }> {
+  async function ingestMessage(address: string, params: IngestMessageParams): Promise<{ thread: ChannelThread; message: ChannelMessage }> {
     const channel = await requireChannel(address);
 
+    /**
+     * Find environment. If no environment connected, ignore.
+     */
+    const environment = channel.environment;
+    if (!environment) {
+      throw new Error(`Channel is not routed to any environment`);
+    }
+
+    const space = environment.userId ? 'playground' : 'production';
+    const createdBy = environment.userId;
+
+    console.log('[ingestMessage] environment', environment);
+
+    /**
+     * Find agent and its config
+     */
+    const agentName = channel.agent;
+    const config = BaseConfigSchemaToZod.parse(environment.config);
+    const agentConfig = config.agents?.find((a) => a.name === channel.agent);
+    if (!agentConfig) {
+      throw new Error(`Agent '${agentName}' not found in config`);
+    }
+
+    /**
+     * For now, only ai-sdk agents are supported for channels
+     */
+    if (agentConfig.protocol !== 'ai-sdk') {
+      throw new Error(`Unsupported agent protocol: ${agentConfig.protocol}`);
+    }
+
+    console.log('[ingestMessage] config and agent exists, agent name: ', agentName);
+
+
     return withOrg(channel.organizationId, async (tx) => {
-      // Find or create thread
-      const threadWhere = params.sourceThreadId
-        ? and(
-            eq(channelThreads.channelId, channel.id),
-            eq(channelThreads.sourceThreadId, params.sourceThreadId),
-            eq(channelThreads.contact, params.contact),
-            eq(channelThreads.contactKind, params.contactKind),
-          )
-        : and(
-            eq(channelThreads.channelId, channel.id),
-            isNull(channelThreads.sourceThreadId),
-            eq(channelThreads.contact, params.contact),
-            eq(channelThreads.contactKind, params.contactKind),
-          );
+      /**
+       * Create or get channel thread and channel message
+       */
+      const thread = await getOrCreateThread(tx, channel, params);
+      const message = await getOrCreateMessage(tx, channel, thread, params);
 
-      let thread = await tx.query.channelThreads.findFirst({
-        where: threadWhere,
-      });
+      console.log('[ingestMessage] thread and message created');
 
-      if (!thread) {
-        const [newThread] = await tx
-          .insert(channelThreads)
-          .values({
-            organizationId: channel.organizationId,
-            channelId: channel.id,
-            sourceThreadId: params.sourceThreadId ?? null,
-            contact: params.contact,
-            contactKind: params.contactKind,
-            status: 'dirty',
-          })
-          .returning();
-        thread = newThread;
-      } else if (thread.status !== 'processing') {
-        await tx
-          .update(channelThreads)
-          .set({ status: 'dirty', updatedAt: new Date().toISOString() })
-          .where(eq(channelThreads.id, thread.id));
-      }
 
-      // Insert message
-      const insertResult = await tx
-        .insert(channelMessages)
-        .values({
-          organizationId: channel.organizationId,
-          channelThreadId: thread.id,
-          direction: 'incoming',
-          sourceId: params.sourceId ?? null,
-          text: params.text ?? null,
-          providerData: params.providerData ?? null,
-          status: 'received',
-        })
-        .onConflictDoNothing({
-          target: [channelMessages.channelThreadId, channelMessages.sourceId],
-        })
-        .returning();
-
-      // onConflictDoNothing returns empty if duplicate — fetch existing
-      const message = insertResult[0] ?? await tx.query.channelMessages.findFirst({
+      /**
+       * Last run associated with the thread -> allows us to find sessionId too.
+       */
+      const lastRun = (await tx.query.channelMessages.findFirst({
+        columns: {
+        },
         where: and(
           eq(channelMessages.channelThreadId, thread.id),
-          eq(channelMessages.sourceId, params.sourceId!),
+          not(isNull(channelMessages.runId)),
         ),
+        orderBy: (cm, { desc }) => [desc(cm.createdAt)],
+        with: {
+          run: true,
+        }
+      }))?.run ?? null;
+
+      let sessionId = lastRun?.sessionId;
+
+      console.log('[ingestMessage] last run status: ', lastRun?.status);
+      console.log('[ingestMessage] sessionId: ', sessionId);
+
+
+      /**
+       * Cancel the last run if it is in progress
+       */
+      if (lastRun?.status === 'in_progress') {
+        console.log('[ingestMessage] cancelling last run');
+
+        applyRunPatch(tx, lastRun.id, agentConfig, { status: 'cancelled' });
+      }
+      else {
+        console.log('[ingestMessage] last run is not in progress');
+      }
+
+      /**
+   * Get all messages that are staged for next run
+   * - no run_id (fresh ones)
+   * - all messages from the last run that was not completed
+   */
+      const inputMessages = await withOrg(thread.organizationId, async (tx) => {
+        return await tx.query.channelMessages.findMany({
+          where: and(
+            eq(channelMessages.channelThreadId, thread.id),
+            or(
+              isNull(channelMessages.runId),
+              (lastRun && lastRun.status !== 'completed') ? eq(channelMessages.runId, lastRun.id) : undefined,
+            )
+          ),
+          orderBy: (cm, { asc }) => [asc(cm.createdAt)],
+        });
       });
 
-      return { thread, message: message! };
+      console.log('[ingestMessage] inputMessages: ', inputMessages.length);
+
+      if (inputMessages.length === 0) {
+        throw new Error(`No input messages found for channel thread ${thread.id}`);
+      }
+
+      let user: typeof endUsers.$inferSelect | undefined;
+
+    if (!sessionId) {
+      /**
+       * Find or create END USER
+       */
+      if (thread.contactKind === 'email') {
+        user = await tx.query.endUsers.findFirst({
+          where: and(
+            eq(endUsers.email, thread.contact),
+            eq(endUsers.space, space),
+            createdBy
+              ? eq(endUsers.createdBy, createdBy)
+              : isNull(endUsers.createdBy)
+          ),
+        });
+
+        console.log('[ingestMessage] user: ', user?.id);
+
+
+        if (!user) {
+          const [newUser] = await tx.insert(endUsers).values({
+            organizationId: thread.organizationId,
+            email: thread.contact,
+            space,
+            createdBy,
+            token: randomBytes(32).toString('hex'),
+          }).returning();
+          user = newUser;
+
+          console.log('[ingestMessage] creating new user: ', user?.id);
+
+        }
+      } else {
+        throw new Error(`Unsupported contact kind: ${thread.contactKind}`);
+      }
+
+      
+
+      /**
+       * Create SESSION
+       */
+      const newSession = await createSession(tx, {
+        organizationId: thread.organizationId,
+        agentConfig,
+        userId: user.id,
+        channelThreadId: thread.id,
+      });
+
+      console.log('[ingestMessage] new session created: ', newSession.id);
+
+      sessionId = newSession.id;
+    }
+
+    if (!user) {
+      throw new Error(`Unreachable error: user not found and not created`);
+    }
+
+    /**
+     * Create RUN
+     */
+    const newRun = await createRun(tx, thread.organizationId, environment, {
+      sessionId,
+      items: [{
+        role: 'user',
+        parts: inputMessages.map(m => ({
+          type: 'text',
+          text: m.text,
+        })),
+      }]
+    });
+
+    console.log('[ingestMessage] new run created: ', newRun.id);
+
+    /**
+     * Assign run_id to all input messages
+     */
+    await tx.update(channelMessages).set({
+      runId: newRun.id,
+      updatedAt: new Date().toISOString(),
+    }).where(inArray(channelMessages.id, inputMessages.map(m => m.id)));
+
+    /**
+     * Set thread status
+     */
+    // await tx.update(channelThreads).set({
+    //   status: 'idle',
+    //   updatedAt: new Date().toISOString(),
+    // }).where(eq(channelThreads.id, thread.id));
+
+
+    console.log('[ingestMessage] finished ');
+
+      return { thread, message };
     });
   }
 
@@ -191,4 +336,72 @@ export function channelProvider(type: string) {
     listChannels,
     ingestMessage,
   };
+}
+
+
+
+
+
+
+async function getOrCreateThread(tx: Transaction, channel: Channel, params: IngestMessageParams) {
+  const threadWhere = params.sourceThreadId
+    ? and(
+      eq(channelThreads.channelId, channel.id),
+      eq(channelThreads.sourceThreadId, params.sourceThreadId),
+      eq(channelThreads.contact, params.contact),
+      eq(channelThreads.contactKind, params.contactKind),
+    )
+    : and(
+      eq(channelThreads.channelId, channel.id),
+      isNull(channelThreads.sourceThreadId),
+      eq(channelThreads.contact, params.contact),
+      eq(channelThreads.contactKind, params.contactKind),
+    );
+
+  let thread = await tx.query.channelThreads.findFirst({
+    where: threadWhere,
+  });
+
+  if (!thread) {
+    const [newThread] = await tx
+      .insert(channelThreads)
+      .values({
+        organizationId: channel.organizationId,
+        channelId: channel.id,
+        sourceThreadId: params.sourceThreadId ?? null,
+        contact: params.contact,
+        contactKind: params.contactKind,
+      })
+      .returning();
+    thread = newThread;
+  }
+
+  return thread
+}
+
+async function getOrCreateMessage(tx: Transaction, channel: Channel, thread: ChannelThread, params: IngestMessageParams) {
+  const insertResult = await tx
+    .insert(channelMessages)
+    .values({
+      organizationId: channel.organizationId,
+      channelThreadId: thread.id,
+      direction: 'incoming',
+      sourceId: params.sourceId ?? null,
+      text: params.text ?? null,
+      providerData: params.providerData ?? null,
+    })
+    .onConflictDoNothing({
+      target: [channelMessages.channelThreadId, channelMessages.sourceId],
+    })
+    .returning();
+
+  // onConflictDoNothing returns empty if duplicate — fetch existing
+  const message = insertResult[0] ?? await tx.query.channelMessages.findFirst({
+    where: and(
+      eq(channelMessages.channelThreadId, thread.id),
+      eq(channelMessages.sourceId, params.sourceId!),
+    ),
+  });
+
+  return message;
 }

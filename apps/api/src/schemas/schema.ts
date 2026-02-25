@@ -462,7 +462,7 @@ export const channels = pgTable('channels', {
   organizationId: text('organization_id').notNull().references(() => organizations.id),
   type: varchar('type', { length: 64 }).notNull(), // 'gmail', 'mock-email', etc.
   address: varchar('address', { length: 255 }).notNull(),
-  status: varchar('status', { length: 64 }).notNull().default('active'),
+  // status: varchar('status', { length: 64 }).notNull().default('active'),
   config: jsonb('config').notNull(),
   environmentId: uuid('environment_id').references(() => environments.id, { onDelete: 'set null' }),
   agent: varchar('agent', { length: 255 }),
@@ -481,13 +481,13 @@ export const channelThreads = pgTable('channel_threads', {
   sourceThreadId: varchar('source_thread_id', { length: 255 }),
   contact: varchar('contact', { length: 255 }).notNull(),
   contactKind: varchar('contact_kind', { length: 32 }).notNull(), // 'email'
-  status: varchar('status', { length: 32 }).notNull().default('idle'), // 'idle' | 'dirty' | 'processing'
+  // status: varchar('status', { length: 32 }).notNull().default('whatever'), // 'idle' | 'dirty' | 'processing'
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
 }, (table) => [
   unique('channel_threads_channel_source_contact_unique').on(table.channelId, table.sourceThreadId, table.contact, table.contactKind),
   index('channel_threads_channel_id_idx').on(table.channelId),
-  index('channel_threads_status_idx').on(table.status),
+  // index('channel_threads_status_idx').on(table.status),
   createTenantPolicy('channel_threads'),
 ]);
 
@@ -501,7 +501,7 @@ export const channelMessages = pgTable('channel_messages', {
   attachments: jsonb('attachments'),
   providerData: jsonb('provider_data'),
   runId: uuid('run_id').references(() => runs.id, { onDelete: 'set null' }),
-  status: varchar('status', { length: 32 }).notNull(), // 'received' | 'processing' | 'processed' | 'pending' | 'sending' | 'sent' | 'failed'
+  status: varchar('status', { length: 32 }).notNull().default('whatever'), // 'received' | 'processing' | 'processed' | 'pending' | 'sending' | 'sent' | 'failed'
   failReason: jsonb('fail_reason'),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),

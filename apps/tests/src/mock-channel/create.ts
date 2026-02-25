@@ -1,5 +1,6 @@
 import { AgentView } from 'agentview';
 
+
 const address = process.argv[2];
 if (!address) {
   console.error('Usage: create <address>');
