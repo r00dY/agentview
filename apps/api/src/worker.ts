@@ -2,7 +2,6 @@ import { initDb } from './initDb';
 import { expiredRunsWorker } from './workers/expiredRuns';
 import { webhookWorker } from './workers/webhooks';
 import { agentFetchWorker } from './workers/agentFetch';
-import { channelThreadWorker } from './workers/channelMessages';
 import { outgoingChannelMessageWorker } from './workers/outgoingChannelMessages';
 import { channelApps } from './channels/registry';
 

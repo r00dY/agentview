@@ -36,6 +36,7 @@ export const agentFetchWorker = createWorker<Run>({
   },
 });
 
+
 async function processAgentFetch(run: Run) {
   console.log(`[agentFetch][${run.id}] start`);
 
@@ -150,9 +151,10 @@ async function processAgentFetch(run: Run) {
             event.data
           );
         });
-
       }
     }
+
+
 
     // Automatically fail the run if it is not in progress after stream is finished
     const finalRunStatus = await getCurrentRunStatus();
