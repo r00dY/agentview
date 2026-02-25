@@ -4,6 +4,8 @@ import type { User, Run, Session, SessionStreamEvent } from 'agentview';
 import { z } from 'zod';
 import { seedUsers } from './seedUsers';
 import { createTestAuthClient } from './authClient';
+import { createMockServer, writeSSE, writeAISDKStream } from './mockServer';
+import type { MockServer, SSEEvent } from './mockServer';
 
 // globally disable summaries for all tests
 configDefaults.__internal = {
@@ -127,6 +129,19 @@ describe('API', () => {
 
   async function createSession() {
     return await av.createSession({ agent: "test", userId: initUser1.id })
+  }
+
+  async function waitForRunStatus(sessionId: string, runId: string, statuses: string[], timeoutMs: number = 15000): Promise<Run> {
+    const startTime = Date.now();
+    while (Date.now() - startTime < timeoutMs) {
+      const session = await av.getSession({ id: sessionId });
+      const run = session.runs.find(r => r.id === runId);
+      if (run && statuses.includes(run.status)) {
+        return run;
+      }
+      await new Promise(r => setTimeout(r, 500));
+    }
+    throw new Error(`Timed out waiting for run ${runId} to reach status ${statuses.join('|')}`);
   }
 
   describe("users", () => {
@@ -2346,72 +2361,7 @@ describe('API', () => {
     const AGENT_PORT = 3457;
     const AGENT_URL = `http://localhost:${AGENT_PORT}/agent`;
 
-    type SSEEvent = { event: string; data: any };
-
-    let mockAgentServer: {
-      server: import('http').Server;
-      requests: Array<{ body: any; timestamp: number }>;
-      close: () => Promise<void>;
-      setHandler: (handler: (body: any, res: import('http').ServerResponse) => void) => void;
-    } | null = null;
-
-    async function createMockAgentServer(port: number) {
-      const http = await import('http');
-      const requests: Array<{ body: any; timestamp: number }> = [];
-      const openSockets = new Set<import('net').Socket>();
-      let handler: (body: any, res: import('http').ServerResponse) => void = (_body, res) => {
-        res.writeHead(200, { 'Content-Type': 'text/event-stream' });
-        res.end();
-      };
-
-      const server = await new Promise<import('http').Server>((resolve) => {
-        const srv = http.createServer((req, res) => {
-          let bodyStr = '';
-          req.on('data', (chunk: Buffer) => bodyStr += chunk.toString());
-          req.on('end', () => {
-            let parsedBody: any;
-            try {
-              parsedBody = JSON.parse(bodyStr);
-            } catch {
-              parsedBody = bodyStr;
-            }
-            requests.push({ body: parsedBody, timestamp: Date.now() });
-            handler(parsedBody, res);
-          });
-        });
-        srv.on('connection', (socket) => {
-          openSockets.add(socket);
-          socket.on('close', () => openSockets.delete(socket));
-        });
-        srv.listen(port, () => resolve(srv));
-      });
-
-      return {
-        server,
-        requests,
-        close: () => {
-          for (const socket of openSockets) socket.destroy();
-          return new Promise<void>(r => server.close(r as () => void));
-        },
-        setHandler: (h: (body: any, res: import('http').ServerResponse) => void) => { handler = h; },
-      };
-    }
-
-    function writeSSE(res: import('http').ServerResponse, events: SSEEvent[], opts?: { version?: string }) {
-      const headers: Record<string, string> = {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      };
-      if (opts?.version) {
-        headers['X-AgentView-Version'] = opts.version;
-      }
-      res.writeHead(200, headers);
-      for (const ev of events) {
-        res.write(`event: ${ev.event}\ndata: ${JSON.stringify(ev.data)}\n\n`);
-      }
-      res.end();
-    }
+    let mockAgentServer: MockServer | null = null;
 
     const updateConfigWithUrl = async () => {
       const inputSchema = z.looseObject({ type: z.literal("message"), role: z.literal("user"), content: z.string() });
@@ -2433,12 +2383,10 @@ describe('API', () => {
       });
     };
 
-    // Start mock server before all tests
     beforeAll(async () => {
-      mockAgentServer = await createMockAgentServer(AGENT_PORT);
+      mockAgentServer = await createMockServer(AGENT_PORT);
     });
 
-    // Close mock server after all tests
     afterAll(async () => {
       if (mockAgentServer) {
         await mockAgentServer.close();
@@ -2446,25 +2394,9 @@ describe('API', () => {
       }
     }, 30000);
 
-    // Reset state before each test
     beforeEach(() => {
-      if (mockAgentServer) {
-        mockAgentServer.requests.length = 0;
-      }
+      mockAgentServer?.resetRequests();
     });
-
-    async function waitForRunStatus(sessionId: string, runId: string, statuses: string[], timeoutMs: number = 15000): Promise<Run> {
-      const startTime = Date.now();
-      while (Date.now() - startTime < timeoutMs) {
-        const session = await av.getSession({ id: sessionId });
-        const run = session.runs.find(r => r.id === runId);
-        if (run && statuses.includes(run.status)) {
-          return run;
-        }
-        await new Promise(r => setTimeout(r, 500));
-      }
-      throw new Error(`Timed out waiting for run ${runId} to reach status ${statuses.join('|')}`);
-    }
 
     test("happy path: agent streams run.patch events with version header", async () => {
       await updateConfigWithUrl();
@@ -2751,67 +2683,7 @@ describe('API', () => {
     const AI_SDK_AGENT_PORT = 3458;
     const AI_SDK_AGENT_URL = `http://localhost:${AI_SDK_AGENT_PORT}/agent`;
 
-    let mockAISDKServer: {
-      server: import('http').Server;
-      requests: Array<{ body: any; timestamp: number }>;
-      close: () => Promise<void>;
-      setHandler: (handler: (body: any, res: import('http').ServerResponse) => void) => void;
-    } | null = null;
-
-    async function createMockServer(port: number) {
-      const http = await import('http');
-      const requests: Array<{ body: any; timestamp: number }> = [];
-      const openSockets = new Set<import('net').Socket>();
-      let handler: (body: any, res: import('http').ServerResponse) => void = (_body, res) => {
-        res.writeHead(200, { 'Content-Type': 'text/event-stream' });
-        res.end();
-      };
-
-      const server = await new Promise<import('http').Server>((resolve) => {
-        const srv = http.createServer((req, res) => {
-          let bodyStr = '';
-          req.on('data', (chunk: Buffer) => bodyStr += chunk.toString());
-          req.on('end', () => {
-            let parsedBody: any;
-            try { parsedBody = JSON.parse(bodyStr); } catch { parsedBody = bodyStr; }
-            requests.push({ body: parsedBody, timestamp: Date.now() });
-            handler(parsedBody, res);
-          });
-        });
-        srv.on('connection', (socket) => {
-          openSockets.add(socket);
-          socket.on('close', () => openSockets.delete(socket));
-        });
-        srv.listen(port, () => resolve(srv));
-      });
-
-      return {
-        server,
-        requests,
-        close: () => {
-          for (const socket of openSockets) socket.destroy();
-          return new Promise<void>(r => server.close(r as () => void));
-        },
-        setHandler: (h: (body: any, res: import('http').ServerResponse) => void) => { handler = h; },
-      };
-    }
-
-    function writeAISDKStream(res: import('http').ServerResponse, chunks: any[], opts?: { version?: string }) {
-      const headers: Record<string, string> = {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      };
-      if (opts?.version) {
-        headers['X-AgentView-Version'] = opts.version;
-      }
-      res.writeHead(200, headers);
-      for (const chunk of chunks) {
-        res.write(`data: ${JSON.stringify(chunk)}\n\n`);
-      }
-      res.write('data: [DONE]\n\n');
-      res.end();
-    }
+    let mockAISDKServer: MockServer | null = null;
 
     const updateConfigWithAiSdkUrl = async () => {
       const inputSchema = z.looseObject({ type: z.literal("message"), role: z.literal("user"), content: z.string() });
@@ -2846,23 +2718,8 @@ describe('API', () => {
     }, 30000);
 
     beforeEach(() => {
-      if (mockAISDKServer) {
-        mockAISDKServer.requests.length = 0;
-      }
+      mockAISDKServer?.resetRequests();
     });
-
-    async function waitForRunStatus(sessionId: string, runId: string, statuses: string[], timeoutMs: number = 15000): Promise<Run> {
-      const startTime = Date.now();
-      while (Date.now() - startTime < timeoutMs) {
-        const session = await av.getSession({ id: sessionId });
-        const run = session.runs.find(r => r.id === runId);
-        if (run && statuses.includes(run.status)) {
-          return run;
-        }
-        await new Promise(r => setTimeout(r, 500));
-      }
-      throw new Error(`Timed out waiting for run ${runId} to reach status ${statuses.join('|')}`);
-    }
 
     test("happy path: text response", async () => {
       await updateConfigWithAiSdkUrl();
@@ -3152,7 +3009,7 @@ describe('API', () => {
       await waitForRunStatus(session.id, run1.id, ["completed"]);
 
       // Second turn
-      mockAISDKServer!.requests.length = 0;
+      mockAISDKServer!.resetRequests();
 
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKStream(res, [
