@@ -25,7 +25,15 @@ describe('Channels (mock)', () => {
     // Set up production environment with an agent
     const env = await avProd.updateEnvironment({
       config: {
-        agents: [{ name: 'support-agent' }],
+        agents: [{
+          name: 'support-agent',
+          url: 'http://localhost:19999/agent',
+          protocol: 'ai-sdk',
+          runs: [{
+            input: { schema: z.looseObject({ role: z.literal('user'), parts: z.array(z.any()) }) },
+            output: { schema: z.looseObject({ type: z.literal('text'), text: z.string() }) },
+          }],
+        }],
         __internal: { disableSummaries: true },
       },
     })
@@ -77,7 +85,6 @@ describe('Channels (mock)', () => {
     expect(result.thread).toBeDefined()
     expect(result.thread.contact).toBe('customer@example.com')
     expect(result.thread.contactKind).toBe('email')
-    expect(result.thread.status).toBe('dirty')
   })
 
   test('send another email to same contact → reuses thread', async () => {
