@@ -37,7 +37,7 @@ export const agentFetchWorker = createWorker<Run>({
 });
 
 async function processAgentFetch(run: Run) {
-  console.log('[agentFetch] processing run: ', run.id);
+  console.log(`[agentFetch][${run.id}] start`);
 
   const abortController = new AbortController();
 
@@ -95,12 +95,13 @@ async function processAgentFetch(run: Run) {
       });
     }
 
-    console.log('[agentFetch] calling agent API');
+    console.log(`[agentFetch][${run.id}] calling agent API`);
     for await (const event of callFn(body, agentUrl, abortController.signal)) {
-      console.log('[agentFetch] event: ', event.name);
+      console.log(`[agentFetch][${run.id}] event: ${event.name}`);
       // Check for cancellation after each new event received. We immediately abort the stream if the run is not in progress.
       const runStatus = await getCurrentRunStatus();
       if (runStatus !== 'in_progress') {
+        console.log(`[agentFetch][${run.id}] aborting!!!`);
         abortController.abort();
         break;
       }
@@ -158,6 +159,9 @@ async function processAgentFetch(run: Run) {
     if (finalRunStatus === 'in_progress') {
       throw new Error('Agent stream ended without completing');
     }
+
+    console.log(`[agentFetch][${run.id}] success`);
+
 
     // // Create outgoing channel message if session has a channel
     // if (finalRunStatus === 'completed') {
@@ -228,6 +232,8 @@ async function processAgentFetch(run: Run) {
       ? error.message
       : (error instanceof Error ? error.message : String(error));
 
+    console.log(`[agentFetch][${run.id}] error: ${errorMessage}`);
+
     await withOrg(run.organizationId, async (tx) => {
       await tx.update(runs).set({
         status: 'failed',
@@ -239,6 +245,8 @@ async function processAgentFetch(run: Run) {
       }).where(eq(runs.id, run.id));
     });
   } finally {
+    console.log(`[agentFetch][${run.id}] finished`);
+
     // Always clear fetchStatus when done (if not already cleared)
     try {
       await db__dangerous
