@@ -46,6 +46,7 @@ export function defineChannel(config: {
 type IngestMessageParams = {
   sourceId: string;
   sourceThreadId?: string;
+  date: string;
 
   contact: string;
   contactKind: string;
@@ -412,6 +413,7 @@ async function getOrCreateMessage(tx: Transaction, channel: Channel, thread: Cha
       direction: 'incoming',
       status: 'received',
       sourceId: params.sourceId ?? null,
+      date: params.date,
       text: params.text ?? null,
       providerData: params.providerData ?? null,
     })

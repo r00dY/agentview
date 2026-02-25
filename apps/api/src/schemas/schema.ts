@@ -501,6 +501,7 @@ export const channelMessages = pgTable('channel_messages', {
   attachments: jsonb('attachments'),
   providerData: jsonb('provider_data'),
   runId: uuid('run_id').references(() => runs.id, { onDelete: 'set null' }),
+  date: timestamp('date', { withTimezone: true, mode: 'string' }).notNull(),
   status: varchar('status', { length: 32 }).notNull().default('received'),
   failReason: jsonb('fail_reason'),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
@@ -510,6 +511,7 @@ export const channelMessages = pgTable('channel_messages', {
   index('channel_messages_thread_id_idx').on(table.channelThreadId),
   index('channel_messages_run_id_idx').on(table.runId),
   index('channel_messages_status_direction_idx').on(table.status, table.direction),
+  index('channel_messages_date_idx').on(table.date),
   createTenantPolicy('channel_messages'),
 ]);
 

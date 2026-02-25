@@ -274,6 +274,7 @@ export const ChannelMessageSchema = z.object({
   text: z.string().nullable(),
   attachments: z.any().nullable(),
   providerData: z.any().nullable(),
+  date: z.string(),
   status: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),

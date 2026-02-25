@@ -73,6 +73,7 @@ describe('Channels (mock)', () => {
     const result = await av.__internal.mock.sendMessage({
       address,
       sourceId: 'msg-1',
+      date: new Date().toISOString(),
       contactKind: 'email',
       contact: 'customer@example.com',
       text: 'I need help with my order',
@@ -92,6 +93,7 @@ describe('Channels (mock)', () => {
     const result1 = await av.__internal.mock.sendMessage({
       address,
       sourceId: 'msg-2',
+      date: new Date().toISOString(),
       contactKind: 'email',
       contact: 'customer@example.com',
       text: 'Still waiting on that order',
@@ -101,6 +103,7 @@ describe('Channels (mock)', () => {
     const firstResult = await av.__internal.mock.sendMessage({
       address,
       sourceId: 'msg-3',
+      date: new Date().toISOString(),
       contactKind: 'email',
       contact: 'customer@example.com',
       text: 'dummy to get thread id',
@@ -114,6 +117,7 @@ describe('Channels (mock)', () => {
     const result = await av.__internal.mock.sendMessage({
       address,
       sourceId: 'msg-4',
+      date: new Date().toISOString(),
       contactKind: 'email',
       contact: 'customer@example.com',
       text: 'This is a different thread',
@@ -124,6 +128,7 @@ describe('Channels (mock)', () => {
     const noThreadResult = await av.__internal.mock.sendMessage({
       address,
       sourceId: 'msg-5',
+      date: new Date().toISOString(),
       contactKind: 'email',
       contact: 'customer@example.com',
       text: 'no thread id message',
@@ -178,6 +183,7 @@ describe('Channels (mock)', () => {
       av.__internal.mock.sendMessage({
         address: 'nonexistent@example.com',
         sourceId: 'msg-404',
+        date: new Date().toISOString(),
         contactKind: 'email',
         contact: 'someone@test.com',
         text: 'hello',
@@ -319,6 +325,7 @@ describe('Channels outgoing messages', () => {
     const result = await av.__internal.mock.sendMessage({
       address,
       sourceId: 'outgoing-msg-1',
+      date: new Date().toISOString(),
       contactKind: 'email',
       contact: 'user@example.com',
       text: 'I need help',

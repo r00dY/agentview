@@ -59,6 +59,7 @@ export function createMockRoutes(mock: ChannelProvider): OpenAPIHono {
             schema: z.object({
               address: z.string(),
               sourceId: z.string(),
+              date: z.string(),
               contact: z.string(),
               contactKind: z.string(),
               sourceThreadId: z.string().optional(),
@@ -89,6 +90,7 @@ export function createMockRoutes(mock: ChannelProvider): OpenAPIHono {
 
     const result = await mock.ingestMessage(body.address, {
       sourceId: body.sourceId,
+      date: body.date,
       contact: body.contact,
       contactKind: body.contactKind,
       sourceThreadId: body.sourceThreadId,

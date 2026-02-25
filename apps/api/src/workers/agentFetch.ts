@@ -191,6 +191,7 @@ async function processAgentFetch(run: Run) {
             channelThreadId: sessionRow.channelThreadId,
             direction: 'outgoing',
             status: 'pending',
+            date: new Date().toISOString(),
             text: outputText,
             runId: run.id,
           });

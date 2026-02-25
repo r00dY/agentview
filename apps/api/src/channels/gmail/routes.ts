@@ -177,6 +177,7 @@ export function createGmailRoutes(gmail: ChannelProvider): OpenAPIHono {
           contactKind: 'email',
           sourceThreadId: email.threadId,
           sourceId: email.id,
+          date: email.date,
           text: email.textBody,
           providerData: {
             subject: email.subject,
