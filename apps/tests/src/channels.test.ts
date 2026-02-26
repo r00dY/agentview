@@ -10,7 +10,7 @@ configDefaults.__internal = {
   disableSummaries: true,
 }
 
-describe('Channels (mock)', () => {
+describe('Channels - basic operations', () => {
   let av: AgentView
   let avProd: AgentView
   let environmentId: string
@@ -118,7 +118,7 @@ describe('Channels (mock)', () => {
   })
 })
 
-describe('Channels: outgoing message on agent success', () => {
+describe('Channels - outgoing message on agent success', () => {
   const AGENT_PORT = 3459
   const AGENT_URL = `http://localhost:${AGENT_PORT}/agent`
 
