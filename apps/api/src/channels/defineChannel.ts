@@ -165,8 +165,7 @@ export function channelProvider(type: string) {
    * Find channel by address, then ingest message within the channel's org.
    */
   async function ingestMessage(address: string, params: IngestMessageParams): Promise<IngestMessageResult> {
-    console.log('[ingestMessage] ingesting message for address: ', address);
-    console.log(params);
+    console.log(`[ingestMessage] ingesting message to '${address}', from '${params.contactKind}:${params.contact}', text: '${params.text?.slice(0, 20)}...'`);
 
     const channel = await getChannel(address);
     if (!channel) {
@@ -174,17 +173,15 @@ export function channelProvider(type: string) {
     }
 
     /**
-     * For tests only
+     * IGNORE ALL MESSAGES THAT DO NOT COME FROM MY EMAILS
      */
-    if (params.contactKind === 'email' && (params.contact === 'a.r.dabrowski@gmail.com' || params.contact === 'andrzej@commerce-ui.com')) {
-      if (!params.text || !params.text.includes('[[agentview-test]]')) {
-        return ignoreMessage(`Ignored because comes from ${params.contact} and doesn't contain [[agentview-test]]`);
-      }
-
-      // ignore all!!!
-      return ignoreMessage(`Ignored because comes from ${params.contact}.`);
-
+    if (channel.type === 'gmail') {
+      return ignoreMessage(`Ignoring all GMAIL temporarily`);
     }
+
+    // if (params.contactKind === 'email' && params.contact !== 'a.r.dabrowski@gmail.com' && params.contact !== 'andrzej@commerce-ui.com') {
+    //   return ignoreMessage(`Ignored because comes from ${params.contact}.`);
+    // }
 
     /**
      * Find environment. If no environment connected, ignore.
@@ -197,7 +194,7 @@ export function channelProvider(type: string) {
     const space = environment.userId ? 'playground' : 'production';
     const createdBy = environment.userId;
 
-    console.log('[ingestMessage] environment', environment);
+    console.log('[ingestMessage] environment: ', environment.user?.email ?? 'production');
 
     /**
      * Find agent and its config
