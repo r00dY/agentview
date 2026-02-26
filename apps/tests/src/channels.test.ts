@@ -129,133 +129,173 @@ describe('Channels', () => {
     expect(result.thread.contactKind).toBe('email')
   })
 
-  test('same contact+contactKind → same user', async () => {
-    const r1 = await av.__internal.mock.sendMessage({
+  test('do not ingest duplicate messages', async () => {
+    const result = await av.__internal.mock.sendMessage({
       address: ADDRESS,
-      sourceId: 'user-test-1',
+      sourceId: 'msg-1',
       date: new Date().toISOString(),
       contactKind: 'email',
-      contact: 'alice@example.com',
-      text: 'first message from alice',
+      contact: 'customer@example.com',
+      text: 'I need help with my order',
     })
 
-    const r2 = await av.__internal.mock.sendMessage({
+    expect(result.ingested).toBe(true)
+    expect(result.message).toBeDefined()
+
+    const result2 = await av.__internal.mock.sendMessage({
       address: ADDRESS,
-      sourceId: 'user-test-2',
+      sourceId: 'msg-1',
       date: new Date().toISOString(),
       contactKind: 'email',
-      contact: 'alice@example.com',
-      text: 'second message from alice',
+      contact: 'customer@example.com',
+      text: 'I need help with my order',
     })
 
-    const s1 = await av.getSession({ id: r1.sessionId })
-    const s2 = await av.getSession({ id: r2.sessionId })
-
-    expect(s1.userId).toBe(s2.userId)
-    expect(s1.user.email).toBe('alice@example.com')
+    expect(result2.ingested).toBe(false)
   })
 
-  test('different contact → different user', async () => {
-    const r1 = await av.__internal.mock.sendMessage({
-      address: ADDRESS,
-      sourceId: 'diff-user-1',
-      date: new Date().toISOString(),
-      contactKind: 'email',
-      contact: 'bob@example.com',
-      text: 'hello from bob',
+
+
+
+
+
+
+
+
+
+
+  describe("Session and User assignment", () => {
+
+    test('same contact+contactKind → same user', async () => {
+      const r1 = await av.__internal.mock.sendMessage({
+        address: ADDRESS,
+        sourceId: 'user-test-1',
+        date: new Date().toISOString(),
+        contactKind: 'email',
+        contact: 'alice@example.com',
+        text: 'first message from alice',
+      })
+
+      const r2 = await av.__internal.mock.sendMessage({
+        address: ADDRESS,
+        sourceId: 'user-test-2',
+        date: new Date().toISOString(),
+        contactKind: 'email',
+        contact: 'alice@example.com',
+        text: 'second message from alice',
+      })
+
+      const s1 = await av.getSession({ id: r1.sessionId })
+      const s2 = await av.getSession({ id: r2.sessionId })
+
+      expect(s1.userId).toBe(s2.userId)
+      expect(s1.user.email).toBe('alice@example.com')
     })
 
-    const r2 = await av.__internal.mock.sendMessage({
-      address: ADDRESS,
-      sourceId: 'diff-user-2',
-      date: new Date().toISOString(),
-      contactKind: 'email',
-      contact: 'carol@example.com',
-      text: 'hello from carol',
+    test('different contact → different user', async () => {
+      const r1 = await av.__internal.mock.sendMessage({
+        address: ADDRESS,
+        sourceId: 'diff-user-1',
+        date: new Date().toISOString(),
+        contactKind: 'email',
+        contact: 'bob@example.com',
+        text: 'hello from bob',
+      })
+
+      const r2 = await av.__internal.mock.sendMessage({
+        address: ADDRESS,
+        sourceId: 'diff-user-2',
+        date: new Date().toISOString(),
+        contactKind: 'email',
+        contact: 'carol@example.com',
+        text: 'hello from carol',
+      })
+
+      const s1 = await av.getSession({ id: r1.sessionId })
+      const s2 = await av.getSession({ id: r2.sessionId })
+
+      expect(s1.userId).not.toBe(s2.userId)
     })
 
-    const s1 = await av.getSession({ id: r1.sessionId })
-    const s2 = await av.getSession({ id: r2.sessionId })
+    test('same contact without sourceThreadId → same session', async () => {
+      const r1 = await av.__internal.mock.sendMessage({
+        address: ADDRESS,
+        sourceId: 'same-session-1',
+        date: new Date().toISOString(),
+        contactKind: 'email',
+        contact: 'dave@example.com',
+        text: 'message one',
+      })
 
-    expect(s1.userId).not.toBe(s2.userId)
+      const r2 = await av.__internal.mock.sendMessage({
+        address: ADDRESS,
+        sourceId: 'same-session-2',
+        date: new Date().toISOString(),
+        contactKind: 'email',
+        contact: 'dave@example.com',
+        text: 'message two',
+      })
+
+      expect(r1.sessionId).toBe(r2.sessionId)
+    })
+
+    test('different sourceThreadId → different session, same user', async () => {
+      const r1 = await av.__internal.mock.sendMessage({
+        address: ADDRESS,
+        sourceId: 'thread-a-1',
+        date: new Date().toISOString(),
+        contactKind: 'email',
+        contact: 'eve@example.com',
+        text: 'thread A message',
+        sourceThreadId: 'thread-A',
+      })
+
+      const r2 = await av.__internal.mock.sendMessage({
+        address: ADDRESS,
+        sourceId: 'thread-b-1',
+        date: new Date().toISOString(),
+        contactKind: 'email',
+        contact: 'eve@example.com',
+        text: 'thread B message',
+        sourceThreadId: 'thread-B',
+      })
+
+      // Different threads → different sessions
+      expect(r1.sessionId).not.toBe(r2.sessionId)
+
+      // But same contact → same user
+      const s1 = await av.getSession({ id: r1.sessionId })
+      const s2 = await av.getSession({ id: r2.sessionId })
+      expect(s1.userId).toBe(s2.userId)
+      expect(s1.user.email).toBe('eve@example.com')
+    })
+
+    test('same contact+contactKind+sourceThreadId → same session', async () => {
+      const r1 = await av.__internal.mock.sendMessage({
+        address: ADDRESS,
+        sourceId: 'sticky-1',
+        date: new Date().toISOString(),
+        contactKind: 'email',
+        contact: 'frank@example.com',
+        text: 'first in thread X',
+        sourceThreadId: 'thread-X',
+      })
+
+      const r2 = await av.__internal.mock.sendMessage({
+        address: ADDRESS,
+        sourceId: 'sticky-2',
+        date: new Date().toISOString(),
+        contactKind: 'email',
+        contact: 'frank@example.com',
+        text: 'second in thread X',
+        sourceThreadId: 'thread-X',
+      })
+
+      expect(r1.sessionId).toBe(r2.sessionId)
+    })
   })
 
-  test('same contact without sourceThreadId → same session', async () => {
-    const r1 = await av.__internal.mock.sendMessage({
-      address: ADDRESS,
-      sourceId: 'same-session-1',
-      date: new Date().toISOString(),
-      contactKind: 'email',
-      contact: 'dave@example.com',
-      text: 'message one',
-    })
 
-    const r2 = await av.__internal.mock.sendMessage({
-      address: ADDRESS,
-      sourceId: 'same-session-2',
-      date: new Date().toISOString(),
-      contactKind: 'email',
-      contact: 'dave@example.com',
-      text: 'message two',
-    })
-
-    expect(r1.sessionId).toBe(r2.sessionId)
-  })
-
-  test('different sourceThreadId → different session, same user', async () => {
-    const r1 = await av.__internal.mock.sendMessage({
-      address: ADDRESS,
-      sourceId: 'thread-a-1',
-      date: new Date().toISOString(),
-      contactKind: 'email',
-      contact: 'eve@example.com',
-      text: 'thread A message',
-      sourceThreadId: 'thread-A',
-    })
-
-    const r2 = await av.__internal.mock.sendMessage({
-      address: ADDRESS,
-      sourceId: 'thread-b-1',
-      date: new Date().toISOString(),
-      contactKind: 'email',
-      contact: 'eve@example.com',
-      text: 'thread B message',
-      sourceThreadId: 'thread-B',
-    })
-
-    // Different threads → different sessions
-    expect(r1.sessionId).not.toBe(r2.sessionId)
-
-    // But same contact → same user
-    const s1 = await av.getSession({ id: r1.sessionId })
-    const s2 = await av.getSession({ id: r2.sessionId })
-    expect(s1.userId).toBe(s2.userId)
-    expect(s1.user.email).toBe('eve@example.com')
-  })
-
-  test('same contact+contactKind+sourceThreadId → same session', async () => {
-    const r1 = await av.__internal.mock.sendMessage({
-      address: ADDRESS,
-      sourceId: 'sticky-1',
-      date: new Date().toISOString(),
-      contactKind: 'email',
-      contact: 'frank@example.com',
-      text: 'first in thread X',
-      sourceThreadId: 'thread-X',
-    })
-
-    const r2 = await av.__internal.mock.sendMessage({
-      address: ADDRESS,
-      sourceId: 'sticky-2',
-      date: new Date().toISOString(),
-      contactKind: 'email',
-      contact: 'frank@example.com',
-      text: 'second in thread X',
-      sourceThreadId: 'thread-X',
-    })
-
-    expect(r1.sessionId).toBe(r2.sessionId)
-  })
 
   test('incoming message triggers agent run and produces outgoing message', async () => {
     mockServer!.setHandler((_body, res) => {
