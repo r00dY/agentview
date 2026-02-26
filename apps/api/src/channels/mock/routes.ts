@@ -2,6 +2,7 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { authn, authorize } from '../../authMiddleware';
 import { response_data, response_error } from '../../hono_utils';
 import type { ChannelProvider } from '../defineChannel';
+import { mockOutbox } from './index';
 
 export function createMockRoutes(mock: ChannelProvider): OpenAPIHono {
   const app = new OpenAPIHono();
@@ -104,6 +105,37 @@ export function createMockRoutes(mock: ChannelProvider): OpenAPIHono {
     } catch (error: any) {
       return c.json({ message: error?.message ?? 'Unknown error' }, 500);
     }
+  });
+
+  // --- GET /outbox ---
+
+  const getOutboxRoute = createRoute({
+    method: 'get',
+    path: '/outbox',
+    summary: 'Get mock outbox (in-memory, for testing)',
+    tags: ['Channels'],
+    request: {
+      query: z.object({
+        address: z.string().optional(),
+      }),
+    },
+    responses: {
+      200: response_data(z.any()),
+      401: response_error(),
+    },
+  });
+
+  app.openapi(getOutboxRoute, async (c) => {
+    const principal = await authn(c.req.raw.headers);
+    authorize(principal, { action: 'environment:read' });
+
+    const { address } = c.req.valid('query');
+
+    const entries = address
+      ? mockOutbox.filter(e => e.address === address)
+      : mockOutbox;
+
+    return c.json(entries, 200);
   });
 
   return app;

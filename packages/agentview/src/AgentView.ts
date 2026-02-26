@@ -248,6 +248,10 @@ export class AgentView {
       sendMessage: async (data: { address: string, sourceId: string, date: string, contact: string, contactKind: string, text: string, sourceThreadId?: string, providerData?: any }): Promise<any> => {
         return await this.request<{ message: ChannelMessage, thread: ChannelThread }>('POST', `/api/channels/mock/send-message`, data)
       },
+      getOutbox: async (address?: string): Promise<Array<{ id: string, address: string, contact: string, contactKind: string, text: string | null, timestamp: number }>> => {
+        const params = address ? `?address=${encodeURIComponent(address)}` : ''
+        return await this.request('GET', `/api/channels/mock/outbox${params}`)
+      },
     }
   }
 
