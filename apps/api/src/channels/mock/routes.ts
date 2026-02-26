@@ -90,15 +90,15 @@ export function createMockRoutes(mock: ChannelProvider): OpenAPIHono {
     }
 
     try {
-    const result = await mock.ingestMessage(body.address, {
-      sourceId: body.sourceId,
-      date: body.date,
-      contact: body.contact,
-      contactKind: body.contactKind,
-      sourceThreadId: body.sourceThreadId,
-      text: body.text,
-      providerData: body.providerData,
-    });
+      const result = await mock.ingestMessage(body.address, {
+        sourceId: body.sourceId,
+        date: body.date,
+        contact: body.contact,
+        contactKind: body.contactKind,
+        sourceThreadId: body.sourceThreadId,
+        text: body.text,
+        providerData: body.providerData,
+      });
 
       return c.json(result, 200);
     } catch (error: any) {
