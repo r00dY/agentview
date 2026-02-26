@@ -10,6 +10,7 @@ import { applyRunPatch, createRun } from '../runs';
 import { randomBytes } from 'crypto';
 import { createSession } from '../sessions';
 import { useImperativeHandle } from 'hono/jsx';
+import type { AgentViewError } from 'agentview';
 
 export type Channel = typeof channels.$inferSelect;
 type ChannelThread = typeof channelThreads.$inferSelect;
@@ -54,6 +55,20 @@ type IngestMessageParams = {
   text?: string;
   providerData?: any;
 }
+
+type IngestMessageResultSuccess = {
+  ingested: true;
+  thread: ChannelThread;
+  message: ChannelMessage;
+  sessionId: string;
+}
+
+type IngestMessageResultError = {
+  ingested: false;
+  reason: string;
+}
+
+type IngestMessageResult = IngestMessageResultSuccess | IngestMessageResultError;
 
 export function channelProvider(type: string) {
   /**
@@ -138,7 +153,7 @@ export function channelProvider(type: string) {
   /**
    * Find channel by address, then ingest message within the channel's org.
    */
-  async function ingestMessage(address: string, params: IngestMessageParams): Promise<{ thread: ChannelThread; message: ChannelMessage }> {
+  async function ingestMessage(address: string, params: IngestMessageParams): Promise<IngestMessageResult> {
     const channel = await requireChannel(address);
 
     /**
@@ -146,7 +161,10 @@ export function channelProvider(type: string) {
      */
     const environment = channel.environment;
     if (!environment) {
-      throw new Error(`Channel is not routed to any environment`);
+      return {
+        ingested: false,
+        reason: 'Channel is not routed to any environment'
+      }
     }
 
     const space = environment.userId ? 'playground' : 'production';
@@ -161,18 +179,23 @@ export function channelProvider(type: string) {
     const config = BaseConfigSchemaToZod.parse(environment.config);
     const agentConfig = config.agents?.find((a) => a.name === channel.agent);
     if (!agentConfig) {
-      throw new Error(`Agent '${agentName}' not found in config`);
+      return {
+        ingested: false,
+        reason: `Agent '${agentName}' not found in config`
+      }
     }
 
     /**
      * For now, only ai-sdk agents are supported for channels
      */
     if (agentConfig.protocol !== 'ai-sdk') {
-      throw new Error(`Unsupported agent protocol: ${agentConfig.protocol}. Only 'ai-sdk' is supported for channels.`);
+      return {
+        ingested: false,
+        reason: `Unsupported agent protocol: ${agentConfig.protocol}. Only 'ai-sdk' is supported for channels.`
+      }
     }
 
     console.log('[ingestMessage] config and agent exists, agent name: ', agentName);
-
 
     return withOrg(channel.organizationId, async (tx) => {
       /**
@@ -236,7 +259,7 @@ export function channelProvider(type: string) {
       console.log('[ingestMessage] inputMessages: ', inputMessages.length);
 
       if (inputMessages.length === 0) {
-        throw new Error(`No input messages found for channel thread ${thread.id}`);
+        return { ingested: false, reason: `No input messages found for channel thread ${thread.id}` };
       }
 
       /**
@@ -269,7 +292,6 @@ export function channelProvider(type: string) {
           });
 
           console.log('[ingestMessage] user: ', user?.id);
-
 
           if (!user) {
             const [newUser] = await tx.insert(endUsers).values({
@@ -349,7 +371,7 @@ export function channelProvider(type: string) {
 
       console.log('[ingestMessage] finished ');
 
-      return { thread, message };
+      return { ingested: true, sessionId, thread, message };
     });
   }
 

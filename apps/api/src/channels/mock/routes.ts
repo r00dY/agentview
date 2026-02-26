@@ -74,6 +74,7 @@ export function createMockRoutes(mock: ChannelProvider): OpenAPIHono {
       200: response_data(z.any()),
       401: response_error(),
       404: response_error(),
+      500: response_error(),
     },
   });
 
@@ -88,6 +89,7 @@ export function createMockRoutes(mock: ChannelProvider): OpenAPIHono {
       return c.json({ message: 'Mock channel not found for this address' }, 404);
     }
 
+    try {
     const result = await mock.ingestMessage(body.address, {
       sourceId: body.sourceId,
       date: body.date,
@@ -98,7 +100,10 @@ export function createMockRoutes(mock: ChannelProvider): OpenAPIHono {
       providerData: body.providerData,
     });
 
-    return c.json(result, 200);
+      return c.json(result, 200);
+    } catch (error: any) {
+      return c.json({ message: error?.message ?? 'Unknown error' }, 500);
+    }
   });
 
   return app;
