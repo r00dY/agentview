@@ -198,7 +198,11 @@ export function channelProvider(type: string) {
        * Create or get channel thread and channel message
        */
       const thread = await getOrCreateThread(tx, channel, params);
-      const message = await getOrCreateMessage(tx, channel, thread, params);
+      const { message, isNew } = await getOrCreateMessage(tx, channel, thread, params);
+
+      if (!isNew) {
+        return { ingested: false, reason: 'Duplicate message (sourceId already exists)' };
+      }
 
       console.log('[ingestMessage] thread and message created');
 
@@ -440,13 +444,17 @@ async function getOrCreateMessage(tx: Transaction, channel: Channel, thread: Cha
     })
     .returning();
 
+  if (insertResult[0]) {
+    return { message: insertResult[0], isNew: true };
+  }
+
   // onConflictDoNothing returns empty if duplicate — fetch existing
-  const message = insertResult[0] ?? await tx.query.channelMessages.findFirst({
+  const existing = await tx.query.channelMessages.findFirst({
     where: and(
       eq(channelMessages.channelThreadId, thread.id),
       eq(channelMessages.sourceId, params.sourceId!),
     ),
   });
 
-  return message;
+  return { message: existing!, isNew: false };
 }

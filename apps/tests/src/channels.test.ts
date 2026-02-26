@@ -129,10 +129,10 @@ describe('Channels', () => {
     expect(result.thread.contactKind).toBe('email')
   })
 
-  test('do not ingest duplicate messages', async () => {
+  test('dedupe - do not ingest duplicate messages', async () => {
     const result = await av.__internal.mock.sendMessage({
       address: ADDRESS,
-      sourceId: 'msg-1',
+      sourceId: 'dedupe-1',
       date: new Date().toISOString(),
       contactKind: 'email',
       contact: 'customer@example.com',
@@ -144,7 +144,7 @@ describe('Channels', () => {
 
     const result2 = await av.__internal.mock.sendMessage({
       address: ADDRESS,
-      sourceId: 'msg-1',
+      sourceId: 'dedupe-1',
       date: new Date().toISOString(),
       contactKind: 'email',
       contact: 'customer@example.com',
