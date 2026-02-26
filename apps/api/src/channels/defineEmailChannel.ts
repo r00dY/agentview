@@ -1,4 +1,3 @@
-import { randomUUID } from 'crypto';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db__dangerous } from '../db';
 import { channelMessages, channelThreads } from '../schemas/schema';
@@ -185,11 +184,9 @@ export function defineEmailChannel(config: {
   const provider = channelProvider(config.type);
 
   const ingestEmail = async (address: string, params: IngestEmailParams) => {
-    // Ensure messageId exists
-    let messageId = params.email.messageId;
+    const messageId = params.email.messageId;
     if (!messageId) {
-      messageId = `<generated-${randomUUID()}@agentview.local>`;
-      console.warn('[defineEmailChannel] Missing Message-ID, generated:', messageId);
+      throw new Error('[defineEmailChannel] Email has no Message-ID — this should never happen');
     }
 
     // Look up channel to get channelId for thread resolution
