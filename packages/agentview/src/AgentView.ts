@@ -230,7 +230,7 @@ export class AgentView {
     return await this.request<Channel[]>('GET', `/api/channels`)
   }
 
-  async updateChannel(channelId: string, data: { environmentId?: string | null, agent?: string | null, status?: 'active' | 'archived' }): Promise<Channel> {
+  async updateChannel(channelId: string, data: { environmentId?: string | null, agent?: string | null }): Promise<Channel> {
     return await this.request<Channel>('PATCH', `/api/channels/${channelId}`, data)
   }
 

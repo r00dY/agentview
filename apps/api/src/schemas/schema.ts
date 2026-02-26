@@ -462,7 +462,6 @@ export const channels = pgTable('channels', {
   organizationId: text('organization_id').notNull().references(() => organizations.id),
   type: varchar('type', { length: 64 }).notNull(), // 'gmail', 'mock-email', etc.
   address: varchar('address', { length: 255 }).notNull(),
-  status: varchar('status', { length: 64 }).notNull().default('active'),
   config: jsonb('config').notNull(),
   environmentId: uuid('environment_id').references(() => environments.id, { onDelete: 'set null' }),
   agent: varchar('agent', { length: 255 }),

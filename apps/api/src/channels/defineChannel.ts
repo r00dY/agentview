@@ -82,7 +82,6 @@ export function channelProvider(type: string) {
           organizationId: orgId,
           type,
           address,
-          status: 'active',
           config,
         })
         .returning();
@@ -105,10 +104,7 @@ export function channelProvider(type: string) {
       },
     });
 
-    if (channel?.status !== 'active') {
-      return null;
-    }
-    return channel ?? null;
+    return channel;
   }
 
   /**

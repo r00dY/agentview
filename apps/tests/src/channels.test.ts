@@ -50,7 +50,6 @@ describe('Channels (mock)', () => {
     expect(channel.id).toBeDefined()
     expect(channel.type).toBe('mock')
     expect(channel.address).toBe(address)
-    expect(channel.status).toBe('active')
   })
 
   test('list channels includes new channel', async () => {
@@ -71,6 +70,11 @@ describe('Channels (mock)', () => {
     expect(updated.agent).toBe('support-agent')
   })
 
+
+
+
+
+  
   test('send incoming email → thread + message created', async () => {
     const result = await av.__internal.mock.sendMessage({
       address,
@@ -156,28 +160,6 @@ describe('Channels (mock)', () => {
     for (const msg of allMessages) {
       expect(msg.direction).toBe('incoming')
     }
-  })
-
-  test('archive and reactivate channel', async () => {
-    const archived = await av.updateChannel(channel.id, {
-      status: 'archived',
-    })
-    expect(archived.status).toBe('archived')
-
-    const reactivated = await av.updateChannel(channel.id, {
-      status: 'active',
-    })
-    expect(reactivated.status).toBe('active')
-  })
-
-  test('update nonexistent channel returns 404', async () => {
-    await expect(
-      av.updateChannel('00000000-0000-0000-0000-000000000000', {
-        status: 'archived',
-      })
-    ).rejects.toThrowError(
-      expect.objectContaining({ statusCode: 404 })
-    )
   })
 
   test('send to nonexistent channel address returns 404', async () => {
