@@ -18,7 +18,6 @@ export function createGmailWorkers(gmail: ChannelProvider): WorkerHandle[] {
       // Filter in JS: watchExpiresAt < oneDayFromNow
       const oneDayFromNow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
       const expiring = gmailChannels.filter((ch) => {
-        if (ch.status !== 'active') return false;
         const config = ch.config as GmailChannelConfig;
         return config.watchExpiresAt && config.watchExpiresAt < oneDayFromNow;
       });

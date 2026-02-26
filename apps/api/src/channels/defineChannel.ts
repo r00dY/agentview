@@ -9,8 +9,6 @@ import { BaseConfigSchemaToZod } from 'agentview/configUtils';
 import { applyRunPatch, createRun } from '../runs';
 import { randomBytes } from 'crypto';
 import { createSession } from '../sessions';
-import { useImperativeHandle } from 'hono/jsx';
-import type { AgentViewError } from 'agentview';
 
 export type Channel = typeof channels.$inferSelect;
 type ChannelThread = typeof channelThreads.$inferSelect;
@@ -93,7 +91,7 @@ export function channelProvider(type: string) {
    * Cross-org lookup by (type, address).
    */
   async function getChannel(address: string) {
-    const channel = await db__dangerous.query.channels.findFirst({
+    const channelRows = await db__dangerous.query.channels.findMany({
       where: and(eq(channels.type, type), eq(channels.address, address)),
       with: {
         environment: {
@@ -104,7 +102,15 @@ export function channelProvider(type: string) {
       },
     });
 
-    return channel;
+    if (channelRows.length === 0) {
+      return null;
+    }
+
+    if (channelRows.length > 1) {
+      throw new Error(`Multiple channels found for type=${type} address=${address}. THIS IS VERY SEVERE ERROR.`);
+    }
+
+    return channelRows[0]!;
   }
 
   /**
@@ -341,13 +347,9 @@ export function channelProvider(type: string) {
        */
       const newRun = await createRun(tx, thread.organizationId, environment, {
         sessionId,
-        items: [{
-          role: 'user',
-          parts: inputMessages.map(m => ({
-            type: 'text',
-            text: m.text,
-          })),
-        }]
+        items: [
+          channelMessagesToInputItems(inputMessages),
+        ]
       });
 
       console.log('[ingestMessage] new run created: ', newRun.id);
@@ -457,4 +459,15 @@ async function getOrCreateMessage(tx: Transaction, channel: Channel, thread: Cha
   });
 
   return { message: existing!, isNew: false };
+}
+
+
+function channelMessagesToInputItems(inputMessages: ChannelMessage[]) {
+  return {
+    role: 'user',
+    parts: inputMessages.map(m => ({
+      type: 'text',
+      text: m.text ?? "",
+    })),
+  }
 }

@@ -256,7 +256,6 @@ export const ChannelSchema = z.object({
   id: z.string(),
   type: z.string(),
   address: z.string(),
-  status: z.string(),
   environment: EnvironmentBaseSchema.nullable(),
   agent: z.string().nullable(),
   createdAt: z.string(),

@@ -56,7 +56,6 @@ const channelPATCHRoute = createRoute({
           schema: z.object({
             environmentId: z.string().nullable().optional(),
             agent: z.string().nullable().optional(),
-            status: z.enum(['active', 'archived']).optional(),
           }),
         },
       },
@@ -109,7 +108,6 @@ channelsApp.openapi(channelPATCHRoute, async (c) => {
 
     if (body.environmentId !== undefined) updates.environmentId = body.environmentId;
     if (body.agent !== undefined) updates.agent = body.agent;
-    if (body.status !== undefined) updates.status = body.status;
 
     await tx
       .update(channels)
