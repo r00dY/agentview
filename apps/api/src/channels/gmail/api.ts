@@ -98,6 +98,57 @@ export async function setupWatch(
   };
 }
 
+function encodeBase64Url(str: string): string {
+  return Buffer.from(str, 'utf-8')
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+export async function sendEmail(
+  accessToken: string,
+  refreshToken: string,
+  params: {
+    from: string;
+    to: string;
+    subject: string;
+    textBody: string;
+    threadId?: string;
+  },
+  onTokenRefresh?: OnTokenRefresh,
+): Promise<{ messageId: string; threadId: string }> {
+  const gmail = createAuthenticatedClient(accessToken, refreshToken, onTokenRefresh);
+
+  const lines = [
+    `From: ${params.from}`,
+    `To: ${params.to}`,
+    `Subject: ${params.subject}`,
+    `Content-Type: text/plain; charset="UTF-8"`,
+    '',
+    params.textBody,
+  ];
+
+  const raw = encodeBase64Url(lines.join('\r\n'));
+
+  const res = await gmail.users.messages.send({
+    userId: 'me',
+    requestBody: {
+      raw,
+      threadId: params.threadId ?? undefined,
+    },
+  });
+
+  if (!res.data.id) {
+    throw new Error('Gmail send returned no message ID');
+  }
+
+  return {
+    messageId: res.data.id,
+    threadId: res.data.threadId ?? '',
+  };
+}
+
 export async function fetchNewEmails(
   accessToken: string,
   refreshToken: string,
