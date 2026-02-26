@@ -113,6 +113,7 @@ export async function sendEmail(
   accessToken: string,
   refreshToken: string,
   params: {
+    messageId: string;
     from: string;
     to: string;
     subject: string;
@@ -122,10 +123,11 @@ export async function sendEmail(
     references?: string[];
   },
   onTokenRefresh?: OnTokenRefresh,
-): Promise<{ messageId: string; gmailId: string; threadId: string }> {
+): Promise<{ gmailId: string; threadId: string }> {
   const gmail = createAuthenticatedClient(accessToken, refreshToken, onTokenRefresh);
 
   const lines = [
+    `Message-ID: ${params.messageId}`,
     `From: ${params.from}`,
     `To: ${params.to}`,
     `Subject: ${params.subject}`,
@@ -144,6 +146,11 @@ export async function sendEmail(
 
   const raw = encodeBase64Url(lines.join('\r\n'));
 
+  console.log('')
+  console.log('------- SENDING EMAIL -------');
+  console.log(lines.join('\r\n'));
+  console.log('')
+
   const res = await gmail.users.messages.send({
     userId: 'me',
     requestBody: {
@@ -156,21 +163,7 @@ export async function sendEmail(
     throw new Error('Gmail send returned no message ID');
   }
 
-  // Fetch the sent message to get the real RFC 2822 Message-ID
-  const sentMsg = await gmail.users.messages.get({
-    userId: 'me',
-    id: res.data.id,
-    format: 'metadata',
-    metadataHeaders: ['Message-ID'],
-  });
-
-  const sentHeaders = sentMsg.data.payload?.headers ?? [];
-  const realMessageId = sentHeaders.find(
-    (h) => h.name?.toLowerCase() === 'message-id',
-  )?.value ?? `<${res.data.id}@mail.gmail.com>`;
-
   return {
-    messageId: realMessageId,
     gmailId: res.data.id,
     threadId: res.data.threadId ?? '',
   };

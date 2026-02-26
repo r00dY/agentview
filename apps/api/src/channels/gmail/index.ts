@@ -8,7 +8,7 @@ export const gmailChannel = defineEmailChannel({
   type: 'gmail',
   routes: (provider) => createGmailRoutes(provider),
   workers: (provider) => createGmailWorkers(provider),
-  sendEmail: (gmail) => async ({ channel, to, from, subject, textBody, inReplyTo, references, providerData }) => {
+  sendEmail: (gmail) => async ({ channel, messageId, to, from, subject, textBody, inReplyTo, references, providerData }) => {
     const config = channel.config as GmailChannelConfig;
 
     const onTokenRefresh = async (tokens: { access_token: string; expiry_date: number | null }) => {
@@ -27,6 +27,7 @@ export const gmailChannel = defineEmailChannel({
       config.accessToken,
       config.refreshToken,
       {
+        messageId,
         from,
         to,
         subject,
@@ -39,7 +40,7 @@ export const gmailChannel = defineEmailChannel({
     );
 
     return {
-      messageId: result.messageId,
+      messageId,
       providerData: {
         gmailId: result.gmailId,
         gmailThreadId: result.threadId,

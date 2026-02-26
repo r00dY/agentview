@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db__dangerous } from '../db';
 import { channelMessages, channelThreads } from '../schemas/schema';
@@ -31,6 +32,7 @@ export type IngestEmailParams = {
 
 export type EmailSendParams = {
   channel: Channel;
+  messageId: string;
   to: string;
   from: string;
   subject: string;
@@ -102,6 +104,16 @@ function buildSendMessageWrapper(
   emailSendFn: EmailSendFn,
 ): SendMessageFn {
   return async ({ channelThread, channel, message }) => {
+    // Pre-generate Message-ID and store it on the outgoing message BEFORE sending.
+    // This closes the race window: if the webhook picks up our sent email before
+    // emailSendFn returns, the sourceId is already in the DB and dedup catches it.
+    const generatedMessageId = `<${randomUUID()}@agentview.dev>`;
+
+    await db__dangerous
+      .update(channelMessages)
+      .set({ sourceId: generatedMessageId, updatedAt: new Date().toISOString() })
+      .where(eq(channelMessages.id, message.id));
+
     // Find the first incoming message in this thread to get subject
     const firstIncoming = await db__dangerous.query.channelMessages.findFirst({
       where: and(
@@ -149,6 +161,7 @@ function buildSendMessageWrapper(
 
     const result = await emailSendFn({
       channel,
+      messageId: generatedMessageId,
       to: channelThread.contact,
       from: channel.address,
       subject,
@@ -159,10 +172,10 @@ function buildSendMessageWrapper(
     });
 
     return {
-      sourceId: result.messageId,
+      sourceId: generatedMessageId,
       providerData: {
         email: {
-          messageId: result.messageId,
+          messageId: generatedMessageId,
           inReplyTo,
           references: references ? [...references] : undefined,
           subject,
