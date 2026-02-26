@@ -297,38 +297,123 @@ describe('Channels', () => {
 
 
 
-  test('incoming message triggers agent run and produces outgoing message', async () => {
-    mockServer!.setHandler((_body, res) => {
-      writeAISDKStream(res, [
-        { type: 'start', messageId: 'msg_1' },
-        { type: 'text-start', id: 't1' },
-        { type: 'text-delta', id: 't1', delta: 'Here is your answer' },
-        { type: 'text-end', id: 't1' },
-        { type: 'finish', finishReason: 'stop' },
-      ], { version: '1.0.0' })
-    })
+  describe('Outgoing messages', () => {
 
-    const result = await av.__internal.mock.sendMessage({
-      address: ADDRESS,
-      sourceId: 'outgoing-msg-1',
-      date: new Date().toISOString(),
-      contactKind: 'email',
-      contact: 'user@example.com',
-      text: 'I need help',
-    })
+    /** Handler that parrots all user text parts back, joined by spaces */
+    function setParrotHandler(opts?: { delayMs?: number }) {
+      mockServer!.setHandler((body, res) => {
+        const messages = body.messages ?? []
+        const userMsg = messages.findLast((m: any) => m.role === 'user')
+        const texts = (userMsg?.parts ?? [])
+          .filter((p: any) => p.type === 'text')
+          .map((p: any) => p.text)
+        const reply = texts.join(' ')
 
-    expect(result.ingested).toBe(true)
-    expect(result.message.direction).toBe('incoming')
+        const respond = () => {
+          writeAISDKStream(res, [
+            { type: 'start', messageId: 'msg_1' },
+            { type: 'text-start', id: 't1' },
+            { type: 'text-delta', id: 't1', delta: reply },
+            { type: 'text-end', id: 't1' },
+            { type: 'finish', finishReason: 'stop' },
+          ], { version: '1.0.0' })
+        }
 
-    // Wait for agent fetch + outgoing message delivery
-    await new Promise(r => setTimeout(r, SAFE_DELIVERY_TIMEOUT_MS))
+        if (opts?.delayMs) {
+          setTimeout(respond, opts.delayMs)
+        } else {
+          respond()
+        }
+      })
+    }
 
-    const outbox = await av.__internal.mock.getOutbox(ADDRESS)
-    const entry = outbox.find(e => e.contact === 'user@example.com')
+    function setFailHandler() {
+      mockServer!.setHandler((_body, res) => {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ message: 'Internal server error' }))
+      })
+    }
 
-    expect(entry).toBeDefined()
-    expect(entry!.text).toBe('Here is your answer')
-    expect(entry!.contact).toBe('user@example.com')
-    expect(entry!.address).toBe(ADDRESS)
-  }, 15000)
+    async function send(sourceId: string, contact: string, text: string) {
+      return av.__internal.mock.sendMessage({
+        address: ADDRESS,
+        sourceId,
+        date: new Date().toISOString(),
+        contactKind: 'email',
+        contact,
+        text,
+      })
+    }
+
+    async function getOutboxFor(contact: string) {
+      const outbox = await av.__internal.mock.getOutbox(ADDRESS)
+      return outbox.filter(e => e.contact === contact)
+    }
+
+    test('single message → single outgoing reply', async () => {
+      setParrotHandler()
+
+      await send('out-1', 'single@test.com', 'hello')
+
+      await new Promise(r => setTimeout(r, SAFE_DELIVERY_TIMEOUT_MS))
+
+      const entries = await getOutboxFor('single@test.com')
+      expect(entries).toHaveLength(1)
+      expect(entries[0].text).toBe('hello')
+    }, 15000)
+
+    test('two sequential messages → two outgoing replies', async () => {
+      setParrotHandler()
+
+      await send('seq-1', 'sequential@test.com', 'first')
+      await new Promise(r => setTimeout(r, SAFE_DELIVERY_TIMEOUT_MS))
+
+      await send('seq-2', 'sequential@test.com', 'second')
+      await new Promise(r => setTimeout(r, SAFE_DELIVERY_TIMEOUT_MS))
+
+      const entries = await getOutboxFor('sequential@test.com')
+      expect(entries).toHaveLength(2)
+      expect(entries[0].text).toBe('first')
+      expect(entries[1].text).toBe('second')
+    }, 30000)
+
+    test('rapid messages while agent is processing → batched into single outgoing reply', async () => {
+      // Agent takes 2s to respond, giving us time to send more messages
+      setParrotHandler({ delayMs: 2000 })
+
+      await send('rapid-1', 'rapid@test.com', 'A')
+      // Wait just enough for the worker to pick up the run, then send more
+      await new Promise(r => setTimeout(r, 500))
+      await send('rapid-2', 'rapid@test.com', 'B')
+      await send('rapid-3', 'rapid@test.com', 'C')
+
+      await new Promise(r => setTimeout(r, SAFE_DELIVERY_TIMEOUT_MS + 3000))
+
+      const entries = await getOutboxFor('rapid@test.com')
+      // First run gets cancelled, second run batches all 3 messages → single outgoing
+      expect(entries).toHaveLength(1)
+      expect(entries[0].text).toBe('A B C')
+    }, 20000)
+
+    test('agent failure → no outgoing, next message retries with batch', async () => {
+      // First message: agent fails
+      setFailHandler()
+      await send('fail-1', 'fail-retry@test.com', 'X')
+      await new Promise(r => setTimeout(r, SAFE_DELIVERY_TIMEOUT_MS))
+
+      // No outgoing message should exist
+      let entries = await getOutboxFor('fail-retry@test.com')
+      expect(entries).toHaveLength(0)
+
+      // Second message: agent succeeds, should batch both messages
+      setParrotHandler()
+      await send('fail-2', 'fail-retry@test.com', 'Y')
+      await new Promise(r => setTimeout(r, SAFE_DELIVERY_TIMEOUT_MS))
+
+      entries = await getOutboxFor('fail-retry@test.com')
+      expect(entries).toHaveLength(1)
+      expect(entries[0].text).toBe('X Y')
+    }, 20000)
+
+  })
 })
