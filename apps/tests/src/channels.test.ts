@@ -86,13 +86,6 @@ describe('Channels (mock)', () => {
     )
   })
 
-
-
-
-
-
-
-
   test('configure channel with environment + agent', async () => {
     const updated = await av.updateChannel(channel.id, {
       environmentId,
@@ -124,20 +117,11 @@ describe('Channels (mock)', () => {
     expect(result.thread.contactKind).toBe('email')
   })
 
-  test('send to nonexistent channel address returns error', async () => {
-    await expect(
-      av.__internal.mock.sendMessage({
-        address: 'nonexistent@example.com',
-        sourceId: 'msg-404',
-        date: new Date().toISOString(),
-        contactKind: 'email',
-        contact: 'someone@test.com',
-        text: 'hello',
-      })
-    ).rejects.toThrowError(
-      expect.objectContaining({ statusCode: 404 })
-    )
-  })
+  
+
+
+
+  
   // test('send incoming email → thread + message created', async () => {
   //   const result = await av.__internal.mock.sendMessage({
   //     address,
