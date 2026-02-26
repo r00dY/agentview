@@ -299,15 +299,21 @@ describe('Channels', () => {
 
   describe('Outgoing messages', () => {
 
-    /** Handler that parrots all user text parts back, joined by spaces */
+    /**
+     * Parrot handler: echoes ALL user messages in the session.
+     * Each user message's text parts are joined by " ", messages separated by " | ".
+     * e.g. session with user("A B") then user("C") → "A B | C"
+     */
     function setParrotHandler(opts?: { delayMs?: number }) {
       mockServer!.setHandler((body, res) => {
         const messages = body.messages ?? []
-        const userMsg = messages.findLast((m: any) => m.role === 'user')
-        const texts = (userMsg?.parts ?? [])
-          .filter((p: any) => p.type === 'text')
-          .map((p: any) => p.text)
-        const reply = texts.join(' ')
+        const userMessages = messages.filter((m: any) => m.role === 'user')
+        const reply = userMessages
+          .map((m: any) => (m.parts ?? [])
+            .filter((p: any) => p.type === 'text')
+            .map((p: any) => p.text)
+            .join(' '))
+          .join(' | ')
 
         const respond = () => {
           writeAISDKStream(res, [
@@ -334,11 +340,11 @@ describe('Channels', () => {
       })
     }
 
-    async function send(sourceId: string, contact: string, text: string) {
+    async function send(sourceId: string, contact: string, text: string, date?: string) {
       return av.__internal.mock.sendMessage({
         address: ADDRESS,
         sourceId,
-        date: new Date().toISOString(),
+        date: date ?? new Date().toISOString(),
         contactKind: 'email',
         contact,
         text,
@@ -362,7 +368,7 @@ describe('Channels', () => {
       expect(entries[0].text).toBe('hello')
     }, 15000)
 
-    test('two sequential messages → two outgoing replies', async () => {
+    test('two sequential messages → two outgoing replies with session history', async () => {
       setParrotHandler()
 
       await send('seq-1', 'sequential@test.com', 'first')
@@ -374,7 +380,8 @@ describe('Channels', () => {
       const entries = await getOutboxFor('sequential@test.com')
       expect(entries).toHaveLength(2)
       expect(entries[0].text).toBe('first')
-      expect(entries[1].text).toBe('second')
+      // Second reply sees full session history: first user msg + second user msg
+      expect(entries[1].text).toBe('first | second')
     }, 30000)
 
     test('rapid messages while agent is processing → batched into single outgoing reply', async () => {
@@ -413,6 +420,41 @@ describe('Channels', () => {
       entries = await getOutboxFor('fail-retry@test.com')
       expect(entries).toHaveLength(1)
       expect(entries[0].text).toBe('X Y')
+    }, 20000)
+
+    test('rapid out-of-order messages → batched in date order', async () => {
+      setParrotHandler({ delayMs: 2000 })
+
+      // Send 3 messages quickly with out-of-order dates
+      await send('ooo-1', 'out-of-order@test.com', 'C', '2025-01-01T00:00:03Z')
+      await new Promise(r => setTimeout(r, 500))
+      await send('ooo-2', 'out-of-order@test.com', 'A', '2025-01-01T00:00:01Z')
+      await send('ooo-3', 'out-of-order@test.com', 'B', '2025-01-01T00:00:02Z')
+
+      await new Promise(r => setTimeout(r, SAFE_DELIVERY_TIMEOUT_MS + 3000))
+
+      const entries = await getOutboxFor('out-of-order@test.com')
+      expect(entries).toHaveLength(1)
+      // Messages should be sorted by date, not insertion order
+      expect(entries[0].text).toBe('A B C')
+    }, 20000)
+
+    test('out-of-order messages where first is already processed → preserves order', async () => {
+      setParrotHandler()
+
+      // B arrives first (later date) and gets fully processed
+      await send('order-1', 'order-preserved@test.com', 'B', '2025-01-01T00:00:02Z')
+      await new Promise(r => setTimeout(r, SAFE_DELIVERY_TIMEOUT_MS))
+
+      // A arrives second (earlier date) and gets processed as a new run
+      await send('order-2', 'order-preserved@test.com', 'A', '2025-01-01T00:00:01Z')
+      await new Promise(r => setTimeout(r, SAFE_DELIVERY_TIMEOUT_MS))
+
+      const entries = await getOutboxFor('order-preserved@test.com')
+      expect(entries).toHaveLength(2)
+      // First outgoing is from B (processed first), second from A (arrived later)
+      expect(entries[0].text).toBe('B')
+      expect(entries[1].text).toBe('B | A')
     }, 20000)
 
   })

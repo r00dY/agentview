@@ -253,7 +253,7 @@ export function channelProvider(type: string) {
             (lastRun && lastRun.status !== 'completed') ? eq(channelMessages.runId, lastRun.id) : undefined,
           )
         ),
-        orderBy: (cm, { asc }) => [asc(cm.createdAt)],
+        orderBy: (cm, { asc }) => [asc(cm.date)],
       });
 
       console.log('[ingestMessage] inputMessages: ', inputMessages.length);
