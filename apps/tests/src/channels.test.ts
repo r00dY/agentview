@@ -10,26 +10,31 @@ configDefaults.__internal = {
   disableSummaries: true,
 }
 
-describe('Channels - basic operations', () => {
+describe('Channels', () => {
+  const AGENT_PORT = 3459
+  const AGENT_URL = `http://localhost:${AGENT_PORT}/agent`
+  const SAFE_DELIVERY_TIMEOUT_MS = 5000
+
   let av: AgentView
   let avProd: AgentView
   let environmentId: string
   let channel: Channel
+  let mockServer: MockServer | null = null
   const orgSlug = 'channels-test-' + Math.random().toString(36).slice(2)
   const ADDRESS = `inbox@${orgSlug}.com`
 
   beforeAll(async () => {
-    const result = await seedUsers(orgSlug)
+    mockServer = await createMockServer(AGENT_PORT)
 
+    const result = await seedUsers(orgSlug)
     av = new AgentView({ apiKey: result.apiKeyDev.key })
     avProd = new AgentView({ apiKey: result.apiKeyProd.key })
 
-    // Set up production environment with an agent
     const env = await avProd.updateEnvironment({
       config: {
         agents: [{
           name: 'support-agent',
-          url: 'http://localhost:19999/agent',
+          url: AGENT_URL,
           protocol: 'ai-sdk',
           runs: [{
             input: { schema: z.looseObject({ role: z.literal('user'), parts: z.array(z.any()) }) },
@@ -40,7 +45,14 @@ describe('Channels - basic operations', () => {
       },
     })
     environmentId = env.id
-  })
+  }, 30000)
+
+  afterAll(async () => {
+    if (mockServer) {
+      await mockServer.close()
+      mockServer = null
+    }
+  }, 30000)
 
   test('create mock channel', async () => {
     channel = await av.__internal.mock.createChannel({
@@ -116,62 +128,8 @@ describe('Channels - basic operations', () => {
     expect(result.thread.contact).toBe('customer@example.com')
     expect(result.thread.contactKind).toBe('email')
   })
-})
-
-describe('Channels - outgoing message on agent success', () => {
-  const AGENT_PORT = 3459
-  const AGENT_URL = `http://localhost:${AGENT_PORT}/agent`
-
-  const SAFE_DELIVERY_TIMEOUT_MS = 5000 // the time between sending and getting outgoing message in test environment.
-
-  let av: AgentView
-  let avProd: AgentView
-  let environmentId: string
-  let channel: Channel
-  const orgSlug = 'channels-outgoing-' + Math.random().toString(36).slice(2)
-  const ADDRESS = `outgoing@${orgSlug}.com`
-
-  let mockServer: MockServer | null = null
-
-  beforeAll(async () => {
-    mockServer = await createMockServer(AGENT_PORT)
-
-    const result = await seedUsers(orgSlug)
-    av = new AgentView({ apiKey: result.apiKeyDev.key })
-    avProd = new AgentView({ apiKey: result.apiKeyProd.key })
-
-    const env = await avProd.updateEnvironment({
-      config: {
-        agents: [{
-          name: 'support-agent',
-          url: AGENT_URL,
-          protocol: 'ai-sdk',
-          runs: [{
-            input: { schema: z.looseObject({ role: z.literal('user'), parts: z.array(z.any()) }) },
-            output: { schema: z.looseObject({ type: z.literal('text'), text: z.string() }) },
-          }],
-        }],
-        __internal: { disableSummaries: true },
-      },
-    })
-    environmentId = env.id
-
-    channel = await av.__internal.mock.createChannel({ address: ADDRESS })
-    await av.updateChannel(channel.id, {
-      environmentId,
-      agent: 'support-agent',
-    })
-  }, 30000)
-
-  afterAll(async () => {
-    if (mockServer) {
-      await mockServer.close()
-      mockServer = null
-    }
-  }, 30000)
 
   test('incoming message triggers agent run and produces outgoing message', async () => {
-    // Mock agent responds with a text message
     mockServer!.setHandler((_body, res) => {
       writeAISDKStream(res, [
         { type: 'start', messageId: 'msg_1' },
@@ -182,7 +140,6 @@ describe('Channels - outgoing message on agent success', () => {
       ], { version: '1.0.0' })
     })
 
-    // Send incoming message
     const result = await av.__internal.mock.sendMessage({
       address: ADDRESS,
       sourceId: 'outgoing-msg-1',
