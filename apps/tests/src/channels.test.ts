@@ -122,6 +122,8 @@ describe('Channels: outgoing message on agent success', () => {
   const AGENT_PORT = 3459
   const AGENT_URL = `http://localhost:${AGENT_PORT}/agent`
 
+  const SAFE_DELIVERY_TIMEOUT_MS = 5000 // the time between sending and getting outgoing message in test environment.
+
   let av: AgentView
   let avProd: AgentView
   let environmentId: string
@@ -194,7 +196,7 @@ describe('Channels: outgoing message on agent success', () => {
     expect(result.message.direction).toBe('incoming')
 
     // Wait for agent fetch + outgoing message delivery
-    await new Promise(r => setTimeout(r, 5000))
+    await new Promise(r => setTimeout(r, SAFE_DELIVERY_TIMEOUT_MS))
 
     const outbox = await av.__internal.mock.getOutbox(ADDRESS)
     const entry = outbox.find(e => e.contact === 'user@example.com')
