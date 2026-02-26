@@ -180,6 +180,10 @@ export function channelProvider(type: string) {
       if (!params.text || !params.text.includes('[[agentview-test]]')) {
         return ignoreMessage(`Ignored because comes from ${params.contact} and doesn't contain [[agentview-test]]`);
       }
+
+      // ignore all!!!
+      return ignoreMessage(`Ignored because comes from ${params.contact}.`);
+
     }
 
     /**

@@ -1,7 +1,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { authn, authorize, requireMemberId } from '../../authMiddleware';
 import { response_data, response_error } from '../../hono_utils';
-import type { ChannelProvider } from '../defineChannel';
+import type { EmailChannelProvider } from '../defineEmailChannel';
 import {
   createOAuth2Client,
   createOAuthState,
@@ -18,7 +18,7 @@ function extractEmailAddress(from: string): string {
   return (match ? match[1] : from).trim().toLowerCase();
 }
 
-export function createGmailRoutes(gmail: ChannelProvider): OpenAPIHono {
+export function createGmailRoutes(gmail: EmailChannelProvider): OpenAPIHono {
   const app = new OpenAPIHono();
 
   // --- GET /auth ---
@@ -172,18 +172,24 @@ export function createGmailRoutes(gmail: ChannelProvider): OpenAPIHono {
       for (const email of result.emails) {
         const fromEmail = extractEmailAddress(email.from);
 
-        await gmail.ingestMessage(emailAddress, {
+        await gmail.ingestEmail(emailAddress, {
           contact: fromEmail,
           contactKind: 'email',
-          sourceThreadId: email.threadId,
-          sourceId: email.id,
           date: email.date,
           text: email.textBody ?? undefined,
-          providerData: {
+          email: {
+            messageId: email.messageId,
+            inReplyTo: email.inReplyTo,
+            references: email.references,
             subject: email.subject,
-            htmlBody: email.htmlBody,
+            from: email.from,
+            to: email.to,
             cc: email.cc,
-            date: email.date,
+            htmlBody: email.htmlBody ?? undefined,
+          },
+          providerData: {
+            gmailId: email.id,
+            gmailThreadId: email.threadId,
             snippet: email.snippet,
           },
         });

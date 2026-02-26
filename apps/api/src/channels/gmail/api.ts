@@ -12,6 +12,9 @@ export type ParsedEmail = {
   snippet: string;
   textBody: string | null;
   htmlBody: string | null;
+  messageId: string;
+  inReplyTo?: string;
+  references?: string[];
 };
 
 function decodeBase64Url(data: string): string {
@@ -115,19 +118,29 @@ export async function sendEmail(
     subject: string;
     textBody: string;
     threadId?: string;
+    inReplyTo?: string;
+    references?: string[];
   },
   onTokenRefresh?: OnTokenRefresh,
-): Promise<{ messageId: string; threadId: string }> {
+): Promise<{ messageId: string; gmailId: string; threadId: string }> {
   const gmail = createAuthenticatedClient(accessToken, refreshToken, onTokenRefresh);
 
   const lines = [
     `From: ${params.from}`,
     `To: ${params.to}`,
     `Subject: ${params.subject}`,
-    `Content-Type: text/plain; charset="UTF-8"`,
-    '',
-    params.textBody,
   ];
+
+  if (params.inReplyTo) {
+    lines.push(`In-Reply-To: ${params.inReplyTo}`);
+  }
+  if (params.references && params.references.length > 0) {
+    lines.push(`References: ${params.references.join(' ')}`);
+  }
+
+  lines.push(`Content-Type: text/plain; charset="UTF-8"`);
+  lines.push('');
+  lines.push(params.textBody);
 
   const raw = encodeBase64Url(lines.join('\r\n'));
 
@@ -143,8 +156,22 @@ export async function sendEmail(
     throw new Error('Gmail send returned no message ID');
   }
 
+  // Fetch the sent message to get the real RFC 2822 Message-ID
+  const sentMsg = await gmail.users.messages.get({
+    userId: 'me',
+    id: res.data.id,
+    format: 'metadata',
+    metadataHeaders: ['Message-ID'],
+  });
+
+  const sentHeaders = sentMsg.data.payload?.headers ?? [];
+  const realMessageId = sentHeaders.find(
+    (h) => h.name?.toLowerCase() === 'message-id',
+  )?.value ?? `<${res.data.id}@mail.gmail.com>`;
+
   return {
-    messageId: res.data.id,
+    messageId: realMessageId,
+    gmailId: res.data.id,
     threadId: res.data.threadId ?? '',
   };
 }
@@ -191,6 +218,16 @@ export async function fetchNewEmails(
 
       const { textBody, htmlBody } = extractBody(msg.data.payload);
 
+      const rawMessageId = getHeader('Message-ID') || getHeader('Message-Id');
+      const messageId = rawMessageId || `<generated-${msgId}@mail.gmail.com>`;
+
+      const inReplyTo = getHeader('In-Reply-To') || undefined;
+
+      const rawReferences = getHeader('References');
+      const references = rawReferences
+        ? rawReferences.split(/\s+/).filter(Boolean)
+        : undefined;
+
       emails.push({
         id: msgId,
         threadId: msg.data.threadId ?? '',
@@ -202,6 +239,9 @@ export async function fetchNewEmails(
         snippet: msg.data.snippet ?? '',
         textBody,
         htmlBody,
+        messageId,
+        inReplyTo,
+        references,
       });
     }
 

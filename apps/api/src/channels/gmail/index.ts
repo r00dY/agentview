@@ -1,14 +1,14 @@
-import { defineChannel } from '../defineChannel';
+import { defineEmailChannel } from '../defineEmailChannel';
 import { sendEmail } from './api';
 import { createGmailRoutes } from './routes';
 import type { GmailChannelConfig } from './types';
 import { createGmailWorkers } from './worker';
 
-export const gmailChannel = defineChannel({
+export const gmailChannel = defineEmailChannel({
   type: 'gmail',
   routes: (provider) => createGmailRoutes(provider),
   workers: (provider) => createGmailWorkers(provider),
-  sendMessage: (gmail) => async ({ channelThread, channel, message }) => {
+  sendEmail: (gmail) => async ({ channel, to, from, subject, textBody, inReplyTo, references, providerData }) => {
     const config = channel.config as GmailChannelConfig;
 
     const onTokenRefresh = async (tokens: { access_token: string; expiry_date: number | null }) => {
@@ -23,22 +23,27 @@ export const gmailChannel = defineChannel({
       });
     };
 
-    // Use the thread's first incoming message subject, or fall back to "No subject"
-    const subject = (message.providerData as any)?.subject ?? 'No subject';
-
     const result = await sendEmail(
       config.accessToken,
       config.refreshToken,
       {
-        from: channel.address,
-        to: channelThread.contact,
+        from,
+        to,
         subject,
-        textBody: message.text ?? '',
-        threadId: channelThread.sourceThreadId ?? undefined,
+        textBody,
+        threadId: providerData?.gmailThreadId ?? undefined,
+        inReplyTo,
+        references,
       },
       onTokenRefresh,
     );
 
-    return { sourceId: result.messageId };
+    return {
+      messageId: result.messageId,
+      providerData: {
+        gmailId: result.gmailId,
+        gmailThreadId: result.threadId,
+      },
+    };
   },
 });
