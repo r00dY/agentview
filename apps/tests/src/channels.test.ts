@@ -193,26 +193,15 @@ describe('Channels: outgoing message on agent success', () => {
     expect(result.ingested).toBe(true)
     expect(result.message.direction).toBe('incoming')
 
-    // Poll channel threads until outgoing message appears with status 'sent'
-    const startTime = Date.now()
-    const timeoutMs = 30000
-    let outgoingMessage: any = null
+    // Wait for agent fetch + outgoing message delivery
+    await new Promise(r => setTimeout(r, 5000))
 
-    while (Date.now() - startTime < timeoutMs) {
-      const threads = await av.getChannelThreads(channel.id)
-      const thread = threads.find((t: any) => t.id === result.thread.id)
-      if (thread) {
-        outgoingMessage = thread.messages.find(
-          (m: any) => m.direction === 'outgoing' && m.status === 'sent'
-        )
-        if (outgoingMessage) break
-      }
-      await new Promise(r => setTimeout(r, 500))
-    }
+    const outbox = await av.__internal.mock.getOutbox(ADDRESS)
+    const entry = outbox.find(e => e.contact === 'user@example.com')
 
-    expect(outgoingMessage).toBeDefined()
-    expect(outgoingMessage.direction).toBe('outgoing')
-    expect(outgoingMessage.status).toBe('sent')
-    expect(outgoingMessage.text).toBe('Here is your answer')
-  }, 60000)
+    expect(entry).toBeDefined()
+    expect(entry!.text).toBe('Here is your answer')
+    expect(entry!.contact).toBe('user@example.com')
+    expect(entry!.address).toBe(ADDRESS)
+  }, 15000)
 })

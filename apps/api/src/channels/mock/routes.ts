@@ -107,6 +107,40 @@ export function createMockRoutes(mock: ChannelProvider): OpenAPIHono {
     }
   });
 
+  // --- POST /outbox (internal, called from worker process) ---
+
+  const postOutboxRoute = createRoute({
+    method: 'post',
+    path: '/outbox',
+    summary: 'Store outbox entry (internal)',
+    tags: ['Channels'],
+    request: {
+      body: {
+        content: {
+          'application/json': {
+            schema: z.object({
+              id: z.string(),
+              address: z.string(),
+              contact: z.string(),
+              contactKind: z.string(),
+              text: z.string().nullable(),
+              timestamp: z.number(),
+            }),
+          },
+        },
+      },
+    },
+    responses: {
+      200: response_data(z.any()),
+    },
+  });
+
+  app.openapi(postOutboxRoute, async (c) => {
+    const entry = c.req.valid('json');
+    mockOutbox.push(entry);
+    return c.json({ ok: true }, 200);
+  });
+
   // --- GET /outbox ---
 
   const getOutboxRoute = createRoute({
