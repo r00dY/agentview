@@ -152,21 +152,42 @@ export function channelProvider(type: string) {
       .where(eq(channels.type, type));
   }
 
+
+  function ignoreMessage(reason: string): IngestMessageResult {
+    console.log('[ingestMessage] ignoring message: ', reason);
+    return {
+      ingested: false,
+      reason,
+    }
+  }
+
   /**
    * Find channel by address, then ingest message within the channel's org.
    */
   async function ingestMessage(address: string, params: IngestMessageParams): Promise<IngestMessageResult> {
-    const channel = await requireChannel(address);
+    console.log('[ingestMessage] ingesting message for address: ', address);
+    console.log(params);
+
+    const channel = await getChannel(address);
+    if (!channel) {
+      return ignoreMessage('Channel not found');
+    }
+
+    /**
+     * For tests only
+     */
+    if (params.contactKind === 'email' && (params.contact === 'a.r.dabrowski@gmail.com' || params.contact === 'andrzej@commerce-ui.com')) {
+      if (!params.text || !params.text.includes('[[agentview-test]]')) {
+        return ignoreMessage(`Ignored because comes from ${params.contact} and doesn't contain [[agentview-test]]`);
+      }
+    }
 
     /**
      * Find environment. If no environment connected, ignore.
      */
     const environment = channel.environment;
     if (!environment) {
-      return {
-        ingested: false,
-        reason: 'Channel is not routed to any environment'
-      }
+      return ignoreMessage('Channel is not routed to any environment');
     }
 
     const space = environment.userId ? 'playground' : 'production';
@@ -181,20 +202,14 @@ export function channelProvider(type: string) {
     const config = BaseConfigSchemaToZod.parse(environment.config);
     const agentConfig = config.agents?.find((a) => a.name === channel.agent);
     if (!agentConfig) {
-      return {
-        ingested: false,
-        reason: `Agent '${agentName}' not found in config`
-      }
+      return ignoreMessage(`Agent '${agentName}' not found in config`);
     }
 
     /**
      * For now, only ai-sdk agents are supported for channels
      */
     if (agentConfig.protocol !== 'ai-sdk') {
-      return {
-        ingested: false,
-        reason: `Unsupported agent protocol: ${agentConfig.protocol}. Only 'ai-sdk' is supported for channels.`
-      }
+      return ignoreMessage(`Unsupported agent protocol: ${agentConfig.protocol}. Only 'ai-sdk' is supported for channels.`);
     }
 
     console.log('[ingestMessage] config and agent exists, agent name: ', agentName);
@@ -207,7 +222,7 @@ export function channelProvider(type: string) {
       const { message, isNew } = await getOrCreateMessage(tx, channel, thread, params);
 
       if (!isNew) {
-        return { ingested: false, reason: 'Duplicate message (sourceId already exists)' };
+        return ignoreMessage('Duplicate message (sourceId already exists)');
       }
 
       console.log('[ingestMessage] thread and message created');
@@ -265,7 +280,7 @@ export function channelProvider(type: string) {
       console.log('[ingestMessage] inputMessages: ', inputMessages.length);
 
       if (inputMessages.length === 0) {
-        return { ingested: false, reason: `No input messages found for channel thread ${thread.id}` };
+        return ignoreMessage(`No input messages found for channel thread ${thread.id}`);
       }
 
       /**

@@ -60,7 +60,6 @@ export default function Channels() {
               <TableRow>
                 <TableHead>Channel</TableHead>
                 <TableHead>Type</TableHead>
-                <TableHead>Status</TableHead>
                 <TableHead>Environment</TableHead>
                 <TableHead>Agent</TableHead>
                 <TableHead>Created</TableHead>
@@ -87,13 +86,6 @@ export default function Channels() {
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary">{channel.type}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      {channel.status === 'active' ? (
-                        <Badge>Active</Badge>
-                      ) : (
-                        <Badge variant="destructive">Archived</Badge>
-                      )}
                     </TableCell>
                     <TableCell>
                       {channel.environment ? (

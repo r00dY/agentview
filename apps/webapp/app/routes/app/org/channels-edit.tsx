@@ -34,14 +34,12 @@ export async function clientAction({ request, params }: Route.ActionArgs): Promi
   const formData = await request.formData();
   const agent = formData.get("agent") as string;
   const environmentId = formData.get("environmentId") as string;
-  const status = formData.get("status") as string;
 
   const { channelId, orgId } = params;
 
   const body: Record<string, any> = {
     agent: agent || null,
     environmentId: environmentId && environmentId !== "__none__" ? environmentId : null,
-    status,
   };
 
   try {
@@ -132,19 +130,6 @@ export default function ChannelsEdit() {
                 defaultValue={channel.agent ?? ""}
                 placeholder="e.g. support-agent"
               />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="status">Status</Label>
-              <Select defaultValue={channel.status} name="status">
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="archived">Archived</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
           </DialogBody>
 

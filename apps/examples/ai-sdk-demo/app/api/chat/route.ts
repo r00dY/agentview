@@ -95,7 +95,7 @@ export async function POST(req: Request) {
   const result = streamText({
     model: openai("gpt-5-mini"),
     system:
-      `You are a helpful assistant with access to a weather tool. When the user asks about weather, use the tool to get real data. The user is currently at location: ${session.metadata?.userLocation ?? "Unknown"}. Be concise!`,
+      `You are a helpful assistant with access to a weather tool. When the user asks about weather, use the tool to get real data. Be concise!` + (session.metadata?.userLocation ? ` The user is currently at location: ${session.metadata?.userLocation}.` : ''),
     messages: await convertToModelMessages(messages),
     tools: { weather: weatherTool },
     stopWhen: stepCountIs(5),
