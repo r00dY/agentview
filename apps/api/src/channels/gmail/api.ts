@@ -163,7 +163,7 @@ export async function sendEmail(
   const raw = encodeBase64Url(lines.join('\r\n'));
 
   console.log('')
-  console.log('[gmail] sending email');
+  console.log('[gmail][send] sending email');
   console.log(lines.join('\r\n'));
   console.log('')
 
@@ -179,7 +179,7 @@ export async function sendEmail(
     throw new Error('Gmail send returned no message ID');
   }
 
-  console.log('[gmail] email sent successfully')
+  console.log('[gmail][send] email sent successfully')
 
   // Fetch the sent message to get the RFC 2822 Message-ID header
   const msg = await gmail.users.messages.get({
