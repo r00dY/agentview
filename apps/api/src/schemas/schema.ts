@@ -60,21 +60,6 @@ export const endUsers = pgTable("end_users", {
 ]);
 
 
-
-
-// export const endUserAuthSessions = pgTable("end_user_auth_sessions", {
-//   id: uuid("id").primaryKey().defaultRandom(),
-//   expiresAt: timestamp("expires_at", { withTimezone: true, mode: "string" }).notNull(),
-//   token: text("token").notNull().unique(),
-//   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull(),
-//   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull(),
-//   ipAddress: text("ip_address"),
-//   userAgent: text("user_agent"),
-//   endUserId: uuid("end_user_id")
-//     .notNull()
-//     .references(() => endUsers.id, { onDelete: "cascade" })
-// });
-
 export const sessions = pgTable("sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
   organizationId: text("organization_id").notNull().references(() => organizations.id),
