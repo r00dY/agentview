@@ -69,13 +69,15 @@ export const sessions = pgTable("sessions", {
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   metadata: jsonb("metadata"),
   userId: uuid("end_user_id").notNull().references(() => endUsers.id, { onDelete: 'cascade' }),
-  channel: varchar("channel", { length: 255 }),
+  channelType: varchar("channel_type", { length: 64 }).notNull(),
+  channelAddress: varchar("channel_address", { length: 255 }).notNull(),
   summary: text("summary"),
   versions: jsonb("versions").$type<string[]>().default([]),
   channelThreadId: uuid("channel_thread_id").references(() => channelThreads.id, { onDelete: 'set null' }),
 }, (table) => [
   uniqueIndex('sessions_handle_org_unique').on(table.handleNumber, table.handleSuffix, table.organizationId),
   index('sessions_channel_thread_idx').on(table.channelThreadId),
+  check('channel_thread_consistency', sql`(channel_type = 'api' AND channel_thread_id IS NULL) OR (channel_type != 'api' AND channel_thread_id IS NOT NULL)`),
   createTenantPolicy('sessions'),
 ]);
 

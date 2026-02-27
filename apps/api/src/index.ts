@@ -40,10 +40,11 @@ import {
   type User,
   type Space,
   CommentMessageCreateSchema,
-  ScoreCreateSchema
+  ScoreCreateSchema,
+  type ChannelRef,
 } from 'agentview/apiTypes';
 import { type BaseAgentViewConfig } from 'agentview/configTypes';
-import { BaseConfigSchema, BaseConfigSchemaToZod, findApiChannelConfig, findItemConfigById, requireRunConfig } from 'agentview/configUtils';
+import { BaseConfigSchema, BaseConfigSchemaToZod, findChannelConfig, findItemConfigById, requireRunConfig } from 'agentview/configUtils';
 import { getAllSessionItems, getLastRun } from 'agentview/sessionUtils';
 import packageJson from '../package.json';
 import { equalJSON } from './equalJSON';
@@ -157,13 +158,14 @@ function requireAgentConfig(config: BaseAgentViewConfig, name: string) {
   return agentConfig
 }
 
+function channelAddressString(ch: ChannelRef): string {
+  return 'name' in ch ? ch.name : ch.address;
+}
+
 function resolveAgentFromSession(config: BaseAgentViewConfig, session: Session): string {
-  if (!session.channel) {
-    throw new HTTPException(400, { message: "Cannot resolve agent: session has no channel name." });
-  }
-  const ch = findApiChannelConfig(config, session.channel);
+  const ch = findChannelConfig(config, session.channel.type, channelAddressString(session.channel));
   if (!ch) {
-    throw new HTTPException(404, { message: `Channel '${session.channel}' not found in schema.` });
+    throw new HTTPException(404, { message: "Channel config not found." });
   }
   return ch.agent;
 }
@@ -778,7 +780,9 @@ function mapSessionRow(row: { sessions: typeof sessions.$inferSelect; end_users:
     updatedAt: row.sessions.updatedAt,
     metadata: row.sessions.metadata as Record<string, any>,
     summary: row.sessions.summary,
-    channel: row.sessions.channel,
+    channel: row.sessions.channelType === 'api'
+      ? { type: 'api' as const, name: row.sessions.channelAddress }
+      : { type: row.sessions.channelType, address: row.sessions.channelAddress },
     user: row.end_users!,
     space: row.end_users!.space,
     userId: row.end_users!.id,
@@ -1058,7 +1062,7 @@ app.openapi(sessionPATCHRoute, async (c) => {
     authorize(principal, { action: "end-user:update", user: session.user });
 
     const config = await requireConfig(tx, principal)
-    const channelConfig = session.channel ? findApiChannelConfig(config, session.channel) : null;
+    const channelConfig = findChannelConfig(config, session.channel.type, channelAddressString(session.channel));
 
     const channelMetadata = channelConfig && 'metadata' in channelConfig ? channelConfig.metadata : undefined;
     const allowUnknownMetadata = channelConfig && 'allowUnknownMetadata' in channelConfig ? (channelConfig.allowUnknownMetadata ?? true) : true;
@@ -1314,11 +1318,7 @@ app.openapi(sessionsPOSTRoute, async (c) => {
   return withOrg(principal.organizationId, async (tx) => {
     const config = await requireConfig(tx, principal)
 
-    if (!body.channel) {
-      throw new HTTPException(422, { message: "Channel name is required when creating a session via API." });
-    }
-
-    const channelConfig = findApiChannelConfig(config, body.channel)
+    const channelConfig = findChannelConfig(config, 'api', body.channel)
     if (!channelConfig) {
       throw new HTTPException(404, { message: `Channel '${body.channel}' not found in schema.` });
     }

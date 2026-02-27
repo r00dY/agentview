@@ -129,9 +129,16 @@ export type RunUpdate = z.infer<typeof RunUpdateSchema>
 
 export type Run = z.infer<typeof RunSchema>
 
+export const ChannelRefSchema = z.union([
+  z.object({ type: z.literal('api'), name: z.string() }),
+  z.object({ type: z.string(), address: z.string() }),
+]);
+
+export type ChannelRef = z.infer<typeof ChannelRefSchema>
+
 export const SessionBaseSchema = z.object({
   id: z.string(),
-  channel: z.string().nullable(),
+  channel: ChannelRefSchema,
   handle: z.string(),
   createdAt: z.iso.date(),
   updatedAt: z.iso.date(),
@@ -154,7 +161,7 @@ export type Session = z.infer<typeof SessionSchema>
 
 
 export const SessionCreateSchema = z.object({
-  channel: z.string().nullable(),
+  channel: z.string(),
   metadata: z.record(z.string(), z.any()).optional(),
   userId: z.string().optional(),
   space: SpaceSchema.optional(), // necessary if userId is not provided

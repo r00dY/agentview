@@ -1,5 +1,5 @@
 import type { SessionItem } from "./apiTypes.js";
-import type { BaseAgentViewConfig, BaseAgentConfig, BaseChannelConfig, ApiChannelConfig, ExternalChannelConfig, BaseSessionItemConfig, BaseScoreConfig, Metadata, BaseRunConfig } from "./configTypes.js";
+import type { BaseAgentViewConfig, BaseAgentConfig, BaseChannelConfig, BaseSessionItemConfig, BaseScoreConfig, Metadata, BaseRunConfig } from "./configTypes.js";
 import { z } from "zod";
 import { AgentViewError } from "./AgentViewError.js";
 import { convertJsonSchemaToZod } from '@agentview/zod-from-json-schema';
@@ -25,12 +25,11 @@ export function requireAgentConfig<T extends BaseAgentViewConfig>(config: T, age
     return agentConfig;
 }
 
-export function findApiChannelConfig<T extends BaseAgentViewConfig>(config: T, name: string): ApiChannelConfig | null {
-    return (config.channels?.find((c) => c.type === 'api' && c.name === name) as ApiChannelConfig | undefined) ?? null;
-}
-
-export function findExternalChannelConfig<T extends BaseAgentViewConfig>(config: T, type: string, address: string): ExternalChannelConfig | null {
-    return (config.channels?.find((c) => c.type !== 'api' && c.type === type && c.address === address) as ExternalChannelConfig | undefined) ?? null;
+export function findChannelConfig<T extends BaseAgentViewConfig>(config: T, type: string, address: string): BaseChannelConfig | null {
+    return config.channels?.find((c) => {
+        if (c.type !== type) return false;
+        return 'name' in c ? c.name === address : c.address === address;
+    }) ?? null;
 }
 
 

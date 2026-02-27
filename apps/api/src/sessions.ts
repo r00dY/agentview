@@ -94,7 +94,9 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     metadata: row.metadata,
-    channel: row.channel,
+    channel: row.channelType === 'api'
+      ? { type: 'api' as const, name: row.channelAddress }
+      : { type: row.channelType, address: row.channelAddress },
     user: row.user,
     userId: row.user.id,
     space: row.user.space,
@@ -141,7 +143,10 @@ export async function createSession(tx: Transaction, params: {
     handleNumber: newHandleNumber,
     handleSuffix,
     metadata,
-    channel: 'name' in params.channelConfig ? params.channelConfig.name : null,
+    channelType: params.channelConfig.type,
+    channelAddress: 'name' in params.channelConfig
+      ? params.channelConfig.name
+      : params.channelConfig.address,
     userId: params.userId,
     summary: params.summary ?? null,
     channelThreadId: params.channelThreadId ?? null,
