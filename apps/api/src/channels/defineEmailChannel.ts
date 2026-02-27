@@ -9,6 +9,7 @@ import {
   type SendMessageFn,
   type SendMessageResult,
 } from './defineChannel';
+import { withOrg } from 'src/withOrg';
 
 export type EmailMessageData = {
   messageId: string;
@@ -223,6 +224,17 @@ export function defineEmailChannel(config: {
     //     return { ingested: false, reason: 'Echo of outgoing message' };
     //   }
     // }
+
+
+    // withOrg(channel.organizationId, async (tx) => {
+    //   tx.query.channelMessages.findFirst({
+    //     where: and(
+    //       eq(channelMessages.channelThreadId, channel.id),
+    //       eq(channelMessages.sourceId, params.email.messageId),
+    //     ),
+    //   });
+    // });
+    
 
     const sourceThreadId = await resolveThreadId(channel.id, params.email);
 
