@@ -197,12 +197,15 @@ export function channelProvider(type: string) {
     console.log('[ingestMessage] environment: ', environment.user?.email ?? 'production');
 
     /**
-     * Find agent and its config 
-     * FIXME: This is WRONG!!! We should accept channel messages event if they don't have agent connected!
+     * Find agent via channel config (type + address lookup)
      */
-    const agentName = channel.agent;
     const config = BaseConfigSchemaToZod.parse(environment.config);
-    const agentConfig = config.agents?.find((a) => a.name === channel.agent);
+    const channelConfig = config.channels?.find((c: any) => c.type === channel.type && c.address === channel.address);
+    if (!channelConfig) {
+      return ignoreMessage(`No channel config for type=${channel.type} address=${channel.address}`);
+    }
+    const agentName = channelConfig.agent;
+    const agentConfig = config.agents?.find((a: any) => a.name === agentName);
     if (!agentConfig) {
       return ignoreMessage(`Agent '${agentName}' not found in config`);
     }
@@ -348,12 +351,7 @@ export function channelProvider(type: string) {
       if (!sessionId) {
         const newSession = await createSession(tx, {
           organizationId: thread.organizationId,
-          channelConfig: {
-            type: 'api',
-            name: agentConfig.name,
-            agent: agentConfig.name,
-          },
-          agentName: agentConfig.name,
+          channelConfig,
           userId,
           channelThreadId: thread.id,
         });

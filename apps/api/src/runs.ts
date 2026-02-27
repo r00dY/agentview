@@ -3,7 +3,7 @@ import { runs, sessionItems, webhookJobs } from './schemas/schema';
 import type { Transaction } from './types';
 import type { Environment, Run, RunCreate, RunUpdate, Session } from 'agentview/apiTypes';
 import type { BaseAgentConfig, BaseRunConfig } from 'agentview/configTypes';
-import { requireRunConfig, findItemConfig } from 'agentview/configUtils';
+import { requireRunConfig, findItemConfig, findChannelConfig } from 'agentview/configUtils';
 import { AgentViewError } from 'agentview/AgentViewError';
 import { parseMetadata } from './parseMetadata';
 import { resolveVersion } from './versions';
@@ -222,7 +222,11 @@ export async function createRun(
   const lastRun = getLastRun(session);
 
   const config = getConfigFromEnvironment(environment);
-  const agentConfig = config.agents?.find(a => a.name === session.agent);
+  const channelConfig = findChannelConfig(config, session.channel);
+  if (!channelConfig) {
+    throw new AgentViewError(`Channel config not found for channel '${session.channel}'.`, 404);
+  }
+  const agentConfig = config.agents?.find(a => a.name === channelConfig.agent);
 
   if (!agentConfig) {
     throw new AgentViewError("Agent not found in environment config.", 404);

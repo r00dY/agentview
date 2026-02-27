@@ -6,7 +6,7 @@ import { getEnvironment, type Env } from '../environments';
 import { fetchSession } from '../sessions';
 import { callAgentAPI, AgentAPIError } from '../agentApi';
 import { callAgentAPIAISDK } from '../ai-sdk/agentApi';
-import { BaseConfigSchemaToZod } from 'agentview/configUtils';
+import { BaseConfigSchemaToZod, findChannelConfig } from 'agentview/configUtils';
 import { applyRunPatch, getRun } from '../runs';
 import { resolveVersion } from '../versions';
 import type { RunBody } from 'agentview/apiTypes';
@@ -67,15 +67,20 @@ async function processAgentFetch(run: Run) {
     }
 
     const config = BaseConfigSchemaToZod.parse(environment.config);
-    const agentConfig = config.agents?.find((a) => a.name === session.agent);
+    const channelConfig = findChannelConfig(config, session.channel);
+    if (!channelConfig) {
+      throw new Error(`Channel config not found for channel '${session.channel}'`);
+    }
+    const agentName = channelConfig.agent;
+    const agentConfig = config.agents?.find((a) => a.name === agentName);
 
     if (!agentConfig) {
-      throw new Error(`Agent '${session.agent}' not found in config`);
+      throw new Error(`Agent '${agentName}' not found in config`);
     }
 
     const agentUrl = agentConfig.url;
     if (!agentUrl) {
-      throw new Error(`Agent '${session.agent}' has no url`);
+      throw new Error(`Agent '${agentName}' has no url`);
     }
 
     // Call the agent endpoint

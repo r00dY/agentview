@@ -31,11 +31,12 @@ export interface BaseAgentConfig<TRunConfig extends BaseRunConfig = BaseRunConfi
 }
 
 export interface BaseChannelConfig {
-    type: 'api';
-    name: string;
+    type: string;
+    name?: string;
+    agent: string;
+    address?: string;
     metadata?: Metadata | undefined;
     allowUnknownMetadata?: boolean;
-    agent: string;
 }
 
 export type InternalConfig = {

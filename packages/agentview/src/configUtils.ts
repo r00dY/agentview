@@ -25,12 +25,18 @@ export function requireAgentConfig<T extends BaseAgentViewConfig>(config: T, age
     return agentConfig;
 }
 
-export function requireChannelConfig<T extends BaseAgentViewConfig>(config: T, channelName: string): BaseChannelConfig {
-    const channelConfig = config.channels?.find((channel) => channel.name === channelName);
+export function requireChannelConfig<T extends BaseAgentViewConfig>(config: T, channelKey: string): BaseChannelConfig {
+    const channelConfig = findChannelConfig(config, channelKey);
     if (!channelConfig) {
-        throw new Error(`Channel config not found for channel '${channelName}'`);
+        throw new Error(`Channel config not found for channel '${channelKey}'`);
     }
     return channelConfig;
+}
+
+export function findChannelConfig<T extends BaseAgentViewConfig>(config: T, channelKey: string): BaseChannelConfig | null {
+    return config.channels?.find((c) =>
+        (c.name && c.name === channelKey) || (c.address && c.address === channelKey)
+    ) ?? null;
 }
 
 
@@ -288,11 +294,12 @@ function baseConfigSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
             })).optional(),
         })).optional(),
         channels: z.array(z.object({
-            type: z.literal('api'),
-            name: z.string(),
+            type: z.string(),
+            name: z.string().optional(),
+            agent: z.string(),
+            address: z.string().optional(),
             metadata: z.record(z.string(), jsonSchemaSchema).optional(),
             allowUnknownMetadata: z.boolean().optional(),
-            agent: z.string(),
         })).optional(),
         webhookUrl: z.string().optional(),
         __internal: z.object({

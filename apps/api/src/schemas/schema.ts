@@ -69,7 +69,6 @@ export const sessions = pgTable("sessions", {
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   metadata: jsonb("metadata"),
   userId: uuid("end_user_id").notNull().references(() => endUsers.id, { onDelete: 'cascade' }),
-  agent: varchar("agent", { length: 255 }).notNull(),
   channel: varchar("channel", { length: 255 }).notNull(),
   summary: text("summary"),
   versions: jsonb("versions").$type<string[]>().default([]),
@@ -451,7 +450,6 @@ export const channels = pgTable('channels', {
   address: varchar('address', { length: 255 }).notNull(),
   config: jsonb('config').notNull(),
   environmentId: uuid('environment_id').references(() => environments.id, { onDelete: 'set null' }),
-  agent: varchar('agent', { length: 255 }),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
 }, (table) => [

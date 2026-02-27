@@ -131,7 +131,6 @@ export type Run = z.infer<typeof RunSchema>
 
 export const SessionBaseSchema = z.object({
   id: z.string(),
-  agent: z.string(),
   channel: z.string(),
   handle: z.string(),
   createdAt: z.iso.date(),
@@ -258,7 +257,6 @@ export const ChannelSchema = z.object({
   type: z.string(),
   address: z.string(),
   environment: EnvironmentBaseSchema.nullable(),
-  agent: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 })

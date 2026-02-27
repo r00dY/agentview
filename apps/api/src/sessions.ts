@@ -94,7 +94,6 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     metadata: row.metadata,
-    agent: row.agent,
     channel: row.channel,
     user: row.user,
     userId: row.user.id,
@@ -112,7 +111,6 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
 export async function createSession(tx: Transaction, params: {
   organizationId: string;
   channelConfig: BaseChannelConfig;
-  agentName: string;
   userId: string;
   metadata?: Record<string, any> | null;
   summary?: string | null;
@@ -141,8 +139,7 @@ export async function createSession(tx: Transaction, params: {
     handleNumber: newHandleNumber,
     handleSuffix,
     metadata,
-    agent: params.agentName,
-    channel: params.channelConfig.name,
+    channel: params.channelConfig.name ?? params.channelConfig.address ?? params.channelConfig.type,
     userId: params.userId,
     summary: params.summary ?? null,
     channelThreadId: params.channelThreadId ?? null,

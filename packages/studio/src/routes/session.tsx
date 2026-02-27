@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { type CommentMessage, type Run, type Score, type Session, type SessionBase, type SessionItem, type SessionsStats } from "agentview/apiTypes";
-import { findItemConfigById, findMatchingRunConfigs, requireAgentConfig } from "agentview/configUtils";
+import { findItemConfigById, findMatchingRunConfigs, requireAgentConfig, requireChannelConfig } from "agentview/configUtils";
 import { enhanceSession, getActiveRuns, getAllSessionItems, getLastRun, getVersions } from "agentview/sessionUtils";
 import type { AgentConfig, ScoreConfig, SessionItemConfig, SessionItemDisplayComponentProps } from "agentview/types";
 import { AlertCircleIcon, ChevronDown, CircleGauge, InfoIcon, Loader2, MessageCirclePlus, UsersIcon } from "lucide-react";
@@ -140,7 +140,8 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
     const activeItems = getAllSessionItems(session, { activeOnly: true })
     const lastRun = getLastRun(session)
 
-    const agentConfig = requireAgentConfig(config, session.agent);
+    const channelConfig = requireChannelConfig(config, session.channel);
+    const agentConfig = requireAgentConfig(config, channelConfig.agent);
 
     const searchParams = new URLSearchParams(window.location.search);
     const selectedItemId = activeItems.find((a: any) => a.id === searchParams.get('itemId'))?.id ?? undefined;

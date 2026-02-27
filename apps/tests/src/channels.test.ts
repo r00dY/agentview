@@ -41,6 +41,11 @@ describe('Channels', () => {
             output: { schema: z.looseObject({ type: z.literal('text'), text: z.string() }) },
           }],
         }],
+        channels: [{
+          type: 'mock',
+          address: ADDRESS,
+          agent: 'support-agent',
+        }],
         __internal: { disableSummaries: true },
       },
     })
@@ -98,15 +103,13 @@ describe('Channels', () => {
     )
   })
 
-  test('configure channel with environment + agent', async () => {
+  test('configure channel with environment', async () => {
     const updated = await av.updateChannel(channel.id, {
       environmentId,
-      agent: 'support-agent',
     })
 
     expect(updated.environment).not.toBeNull()
     expect(updated.environment!.id).toBe(environmentId)
-    expect(updated.agent).toBe('support-agent')
   })
 
   test('send to existing channel address returns success', async () => {

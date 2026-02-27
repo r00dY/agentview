@@ -456,12 +456,12 @@ describe('API', () => {
       // Bob can create sessions for his channel
       const bobUser = await avBob.createUser({ externalId: "bob-test-user" });
       const bobSession = await avBob.createSession({ channel: "bob-agent", userId: bobUser.id });
-      expect(bobSession.agent).toBe("bob-agent");
+      expect(bobSession.channel).toBe("bob-agent");
 
       // Alice can create sessions for her channel
       const aliceUser = await avAlice.createUser({ externalId: "alice-test-user" });
       const aliceSession = await avAlice.createSession({ channel: "alice-agent", userId: aliceUser.id });
-      expect(aliceSession.agent).toBe("alice-agent");
+      expect(aliceSession.channel).toBe("alice-agent");
 
       // Bob cannot create sessions for Alice's channel (not in his config)
       await expect(avBob.createSession({ channel: "alice-agent", userId: bobUser.id }))
@@ -504,7 +504,6 @@ describe('API', () => {
 
       const session = await av.createSession({ channel: "test", userId: initUser1.id})
       expect(session).toMatchObject({
-        agent: "test",
         metadata: {},
         runs: [],
         user: {
@@ -554,7 +553,6 @@ describe('API', () => {
       const session = await av.createSession({ channel: "test", userId: initUser1.id})
       const fetchedSession = await av.getSession({ id: session.id })
       expect(fetchedSession).toMatchObject({
-        agent: "test",
         metadata: {},
         runs: [],
         userId: initUser1.id,
@@ -641,7 +639,6 @@ describe('API', () => {
 
       const session = await av.createSession({ channel: "test", userId: initUser1.id, metadata: { product_id: "123" } })
       expect(session).toMatchObject({
-        agent: "test",
         metadata: {
           product_id: "123",
         }
@@ -653,7 +650,6 @@ describe('API', () => {
 
       const session = await av.createSession({ channel: "test", userId: initUser1.id })
       expect(session).toMatchObject({
-        agent: "test",
         metadata: {
           x: null,
           y: null,
@@ -666,7 +662,6 @@ describe('API', () => {
 
       const session = await av.createSession({ channel: "test", userId: initUser1.id, metadata: { product_id: "123" } })
       expect(session).toMatchObject({
-        agent: "test",
         metadata: {
           product_id: "123",
         }
@@ -678,7 +673,6 @@ describe('API', () => {
 
       const session = await av.createSession({ channel: "test", userId: initUser1.id, metadata: { product_id: "123" } })
       expect(session).toMatchObject({
-        agent: "test",
         metadata: {
           product_id: "123",
         }
