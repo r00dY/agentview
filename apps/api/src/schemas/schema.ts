@@ -70,6 +70,7 @@ export const sessions = pgTable("sessions", {
   metadata: jsonb("metadata"),
   userId: uuid("end_user_id").notNull().references(() => endUsers.id, { onDelete: 'cascade' }),
   agent: varchar("agent", { length: 255 }).notNull(),
+  channel: varchar("channel", { length: 255 }).notNull(),
   summary: text("summary"),
   versions: jsonb("versions").$type<string[]>().default([]),
   channelThreadId: uuid("channel_thread_id").references(() => channelThreads.id, { onDelete: 'set null' }),
@@ -124,9 +125,10 @@ export const versions = pgTable("versions", {
   id: uuid("id").primaryKey().defaultRandom(),
   organizationId: text("organization_id").notNull().references(() => organizations.id),
   version: varchar("version", { length: 255 }).notNull(),
+  agent: varchar("agent", { length: 255 }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
-  uniqueIndex('version_org_unique').on(table.version, table.organizationId),
+  uniqueIndex('version_agent_org_unique').on(table.version, table.agent, table.organizationId),
   createTenantPolicy('versions'),
 ]);
 

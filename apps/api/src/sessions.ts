@@ -3,7 +3,7 @@ import { endUsers, events, runs, sessionItems, sessions } from "./schemas/schema
 import type { Transaction } from "./types";
 import { isUUID } from "./isUUID";
 import type { Session } from "agentview/apiTypes";
-import type { BaseAgentConfig } from "agentview/configTypes";
+import type { BaseChannelConfig } from "agentview/configTypes";
 import { updateInboxes } from "./updateInboxes";
 import { parseMetadata } from "./parseMetadata";
 
@@ -95,6 +95,7 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
     updatedAt: row.updatedAt,
     metadata: row.metadata,
     agent: row.agent,
+    channel: row.channel,
     user: row.user,
     userId: row.user.id,
     space: row.user.space,
@@ -110,14 +111,15 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
 
 export async function createSession(tx: Transaction, params: {
   organizationId: string;
-  agentConfig: BaseAgentConfig;
+  channelConfig: BaseChannelConfig;
+  agentName: string;
   userId: string;
   metadata?: Record<string, any> | null;
   summary?: string | null;
   channelThreadId?: string | null;
   authorId?: string | null;
 }): Promise<Session> {
-  const metadata = parseMetadata(params.agentConfig.metadata, params.agentConfig.allowUnknownMetadata ?? true, params.metadata ?? {}, {});
+  const metadata = parseMetadata(params.channelConfig.metadata, params.channelConfig.allowUnknownMetadata ?? true, params.metadata ?? {}, {});
 
   const user = await tx.query.endUsers.findFirst({
     where: eq(endUsers.id, params.userId),
@@ -139,7 +141,8 @@ export async function createSession(tx: Transaction, params: {
     handleNumber: newHandleNumber,
     handleSuffix,
     metadata,
-    agent: params.agentConfig.name,
+    agent: params.agentName,
+    channel: params.channelConfig.name,
     userId: params.userId,
     summary: params.summary ?? null,
     channelThreadId: params.channelThreadId ?? null,

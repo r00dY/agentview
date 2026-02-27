@@ -265,6 +265,7 @@ export async function createRun(
   if (!isAutoFetch) {
     const resolved = await resolveVersion(tx, {
       versionString: body.version!,
+      agent: agentConfig.name,
       isProduction: environment.user === null,
       isDev: environment.user !== null,
       lastRunVersion: lastRun?.version ?? null,

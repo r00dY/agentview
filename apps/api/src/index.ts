@@ -42,7 +42,7 @@ import {
   CommentMessageCreateSchema,
   ScoreCreateSchema
 } from 'agentview/apiTypes';
-import { type BaseAgentViewConfig } from 'agentview/configTypes';
+import { type BaseAgentViewConfig, type BaseChannelConfig } from 'agentview/configTypes';
 import { BaseConfigSchema, BaseConfigSchemaToZod, findItemConfigById, requireRunConfig } from 'agentview/configUtils';
 import { getAllSessionItems, getLastRun } from 'agentview/sessionUtils';
 import packageJson from '../package.json';
@@ -155,6 +155,14 @@ function requireAgentConfig(config: BaseAgentViewConfig, name: string) {
     throw new HTTPException(404, { message: `Agent '${name}' not found in schema.` });
   }
   return agentConfig
+}
+
+function requireChannelConfig(config: BaseAgentViewConfig, name: string): BaseChannelConfig {
+  const channelConfig = config.channels?.find((channel) => channel.name === name)
+  if (!channelConfig) {
+    throw new HTTPException(404, { message: `Channel '${name}' not found in schema.` });
+  }
+  return channelConfig
 }
 
 function requireItemConfig(runConfig: ReturnType<typeof requireRunConfig>, sessionItems: SessionItem[], itemId: string, itemType?: "input" | "output" | "step") {
@@ -772,6 +780,7 @@ function mapSessionRow(row: { sessions: typeof sessions.$inferSelect; end_users:
     metadata: row.sessions.metadata as Record<string, any>,
     summary: row.sessions.summary,
     agent: row.sessions.agent,
+    channel: row.sessions.channel,
     user: row.end_users!,
     space: row.end_users!.space,
     userId: row.end_users!.id,
@@ -1051,9 +1060,9 @@ app.openapi(sessionPATCHRoute, async (c) => {
     authorize(principal, { action: "end-user:update", user: session.user });
 
     const config = await requireConfig(tx, principal)
-    const agentConfig = await requireAgentConfig(config, session.agent)
+    const channelConfig = requireChannelConfig(config, session.channel)
 
-    const metadata = parseMetadata(agentConfig.metadata, agentConfig.allowUnknownMetadata ?? true, body.metadata, session.metadata);
+    const metadata = parseMetadata(channelConfig.metadata, channelConfig.allowUnknownMetadata ?? true, body.metadata, session.metadata);
 
     await tx.update(sessions).set({
       metadata,
@@ -1304,7 +1313,9 @@ app.openapi(sessionsPOSTRoute, async (c) => {
 
   return withOrg(principal.organizationId, async (tx) => {
     const config = await requireConfig(tx, principal)
-    const agentConfig = await requireAgentConfig(config, body.agent)
+    const channelConfig = requireChannelConfig(config, body.channel)
+    // Validate that the agent referenced by the channel exists
+    requireAgentConfig(config, channelConfig.agent)
 
     // find user or create new one if not found
     const user = await (async () => {
@@ -1323,7 +1334,8 @@ app.openapi(sessionsPOSTRoute, async (c) => {
 
     const newSession = await createSession(tx, {
       organizationId: principal.organizationId,
-      agentConfig,
+      channelConfig,
+      agentName: channelConfig.agent,
       userId: user.id,
       metadata: body.metadata,
       summary: body.summary,

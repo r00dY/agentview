@@ -1,5 +1,5 @@
 import type { SessionItem } from "./apiTypes.js";
-import type { BaseAgentViewConfig, BaseAgentConfig, BaseSessionItemConfig, BaseScoreConfig, Metadata, BaseRunConfig } from "./configTypes.js";
+import type { BaseAgentViewConfig, BaseAgentConfig, BaseChannelConfig, BaseSessionItemConfig, BaseScoreConfig, Metadata, BaseRunConfig } from "./configTypes.js";
 import { z } from "zod";
 import { AgentViewError } from "./AgentViewError.js";
 import { convertJsonSchemaToZod } from '@agentview/zod-from-json-schema';
@@ -23,6 +23,14 @@ export function requireAgentConfig<T extends BaseAgentViewConfig>(config: T, age
         throw new Error(`Agent config not found for agent '${agentName}'`);
     }
     return agentConfig;
+}
+
+export function requireChannelConfig<T extends BaseAgentViewConfig>(config: T, channelName: string): BaseChannelConfig {
+    const channelConfig = config.channels?.find((channel) => channel.name === channelName);
+    if (!channelConfig) {
+        throw new Error(`Channel config not found for channel '${channelName}'`);
+    }
+    return channelConfig;
 }
 
 
@@ -269,8 +277,6 @@ function baseConfigSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
             name: z.string(),
             url: z.string().optional(),
             protocol: z.enum(['default', 'ai-sdk']).optional(),
-            metadata: z.record(z.string(), jsonSchemaSchema).optional(),
-            allowUnknownMetadata: z.boolean().optional(),
             runs: z.array(z.object({
                 input: BaseSessionItemConfigSchema,
                 output: BaseSessionItemConfigSchema,
@@ -280,6 +286,13 @@ function baseConfigSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
                 allowUnknownMetadata: z.boolean().optional(),
                 idleTimeout: z.number().optional(),
             })).optional(),
+        })).optional(),
+        channels: z.array(z.object({
+            type: z.literal('api'),
+            name: z.string(),
+            metadata: z.record(z.string(), jsonSchemaSchema).optional(),
+            allowUnknownMetadata: z.boolean().optional(),
+            agent: z.string(),
         })).optional(),
         webhookUrl: z.string().optional(),
         __internal: z.object({

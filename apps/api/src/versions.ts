@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { versions, sessions } from './schemas/schema';
 import { AgentViewError } from 'agentview/AgentViewError';
 import type { Transaction } from './types';
@@ -47,6 +47,7 @@ export function compareVersions(v1: ParsedVersion, v2: ParsedVersion): number {
  */
 export async function resolveVersion(tx: Transaction, opts: {
   versionString: string;
+  agent: string;
   isProduction: boolean;
   isDev: boolean;
   lastRunVersion: string | null;
@@ -88,9 +89,10 @@ export async function resolveVersion(tx: Transaction, opts: {
   await tx.insert(versions).values({
     organizationId: opts.organizationId,
     version,
+    agent: opts.agent,
   }).onConflictDoNothing();
 
-  const [versionRow] = await tx.select().from(versions).where(eq(versions.version, version)).limit(1);
+  const [versionRow] = await tx.select().from(versions).where(and(eq(versions.version, version), eq(versions.agent, opts.agent))).limit(1);
 
   // Update session's versions array if new
   let existingVersions: string[];

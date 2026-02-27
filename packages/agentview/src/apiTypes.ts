@@ -132,6 +132,7 @@ export type Run = z.infer<typeof RunSchema>
 export const SessionBaseSchema = z.object({
   id: z.string(),
   agent: z.string(),
+  channel: z.string(),
   handle: z.string(),
   createdAt: z.iso.date(),
   updatedAt: z.iso.date(),
@@ -154,7 +155,7 @@ export type Session = z.infer<typeof SessionSchema>
 
 
 export const SessionCreateSchema = z.object({
-  agent: z.string(),
+  channel: z.string(),
   metadata: z.record(z.string(), z.any()).optional(),
   userId: z.string().optional(),
   space: SpaceSchema.optional(), // necessary if userId is not provided

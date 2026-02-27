@@ -347,7 +347,12 @@ export function channelProvider(type: string) {
       if (!sessionId) {
         const newSession = await createSession(tx, {
           organizationId: thread.organizationId,
-          agentConfig,
+          channelConfig: {
+            type: 'api',
+            name: agentConfig.name,
+            agent: agentConfig.name,
+          },
+          agentName: agentConfig.name,
           userId,
           channelThreadId: thread.id,
         });

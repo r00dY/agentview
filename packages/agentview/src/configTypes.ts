@@ -27,9 +27,15 @@ export interface BaseAgentConfig<TRunConfig extends BaseRunConfig = BaseRunConfi
     name: string;
     url?: string;
     protocol?: 'default' | 'ai-sdk';
+    runs?: TRunConfig[];
+}
+
+export interface BaseChannelConfig {
+    type: 'api';
+    name: string;
     metadata?: Metadata | undefined;
     allowUnknownMetadata?: boolean;
-    runs?: TRunConfig[];
+    agent: string;
 }
 
 export type InternalConfig = {
@@ -38,6 +44,7 @@ export type InternalConfig = {
 
 export type BaseAgentViewConfig<TAgentConfig extends BaseAgentConfig = BaseAgentConfig> = {
     agents?: TAgentConfig[],
+    channels?: BaseChannelConfig[],
     webhookUrl?: string,
     __internal?: InternalConfig,
 }

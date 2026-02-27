@@ -125,6 +125,7 @@ async function processAgentFetch(run: Run) {
         await withOrg(run.organizationId, async (tx) => {
           const { versionId } = await resolveVersion(tx, {
             versionString: event.data,
+            agent: agentConfig.name,
             isProduction: session.user.space === 'production',
             isDev: session.user.space !== 'production',
             lastRunVersion: lastPreviousRun?.version ?? null,
