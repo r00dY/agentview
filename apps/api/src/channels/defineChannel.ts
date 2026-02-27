@@ -17,7 +17,7 @@ type ChannelMessage = typeof channelMessages.$inferSelect;
 export type ChannelProvider = ReturnType<typeof channelProvider>;
 
 export type SendMessageParams = { channelThread: ChannelThread; channel: Channel; message: ChannelMessage };
-export type SendMessageResult = { sourceId?: string; providerData?: any } | void;
+export type SendMessageResult = { sourceId: string; providerData?: any };
 export type SendMessageFn = (params: SendMessageParams) => Promise<SendMessageResult>;
 
 export interface ChannelApp {
@@ -175,8 +175,8 @@ export function channelProvider(type: string) {
     /**
      * IGNORE ALL MESSAGES THAT DO NOT COME FROM MY EMAILS
      */
-    if (channel.type === 'gmail'/* && params.contact !== 'a.r.dabrowski@gmail.com' && params.contact !== 'andrzej@commerce-ui.com'*/) {
-      return ignoreMessage(`Ignoring all GMAIL temporarily`);
+    if (channel.type === 'gmail' && params.contact !== 'a.r.dabrowski@gmail.com' && params.contact !== 'andrzej@commerce-ui.com') {
+      return ignoreMessage(`Ignoring gmail email from ${params.contact}`);
     }
 
     // if (params.contactKind === 'email' && params.contact !== 'a.r.dabrowski@gmail.com' && params.contact !== 'andrzej@commerce-ui.com') {

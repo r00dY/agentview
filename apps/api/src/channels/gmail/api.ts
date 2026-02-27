@@ -140,7 +140,7 @@ export async function sendEmail(
     references?: string[];
   },
   onTokenRefresh?: OnTokenRefresh,
-): Promise<{ gmailId: string; threadId: string }> {
+): Promise<{ gmailId: string; threadId: string; messageId: string }> {
   const gmail = createAuthenticatedClient(accessToken, refreshToken, onTokenRefresh);
 
   const lines = [
@@ -181,9 +181,22 @@ export async function sendEmail(
 
   console.log('[gmail] email sent successfully')
 
+  // Fetch the sent message to get the RFC 2822 Message-ID header
+  const msg = await gmail.users.messages.get({
+    userId: 'me',
+    id: res.data.id,
+    format: 'metadata',
+    metadataHeaders: ['Message-ID'],
+  });
+
+  const messageId = msg.data.payload?.headers?.find(
+    (h) => h.name?.toLowerCase() === 'message-id',
+  )?.value ?? '';
+
   return {
     gmailId: res.data.id,
     threadId: res.data.threadId ?? '',
+    messageId,
   };
 }
 

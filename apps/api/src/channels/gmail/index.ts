@@ -27,6 +27,7 @@ export const gmailChannel = defineEmailChannel({
     );
 
     return {
+      sourceId: result.messageId,
       providerData: {
         gmailId: result.gmailId,
         gmailThreadId: result.threadId,

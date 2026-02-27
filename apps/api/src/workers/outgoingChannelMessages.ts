@@ -49,7 +49,11 @@ export const outgoingChannelMessageWorker = createWorker<ChannelMessage>({
         throw new Error(`No send function registered for channel type '${channel.type}'`);
       }
 
+      console.log(`[${NAME}] Sending outgoing message`);
+
       const result = await sendFn({ channel, channelThread, message });
+
+      console.log(`[${NAME}] sourceId: ${result.sourceId}`);
 
       // On success: mark as sent, optionally store sourceId/providerData
       await withOrg(message.organizationId, async (tx) => {
@@ -61,7 +65,7 @@ export const outgoingChannelMessageWorker = createWorker<ChannelMessage>({
         }).where(eq(channelMessages.id, message.id));
       });
 
-      console.log(`[${NAME}] Sent message ${message.id}`);
+      console.log(`[${NAME}] Outgoing message send and saved with sourceId: ${message.id}`);
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : String(e);
       console.error(`[${NAME}] Failed to send message ${message.id}:`, errorMessage);

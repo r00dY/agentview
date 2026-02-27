@@ -7,6 +7,7 @@ import {
   type ChannelProvider,
   type ChannelApp,
   type SendMessageFn,
+  type SendMessageResult,
 } from './defineChannel';
 
 export type EmailMessageData = {
@@ -40,11 +41,9 @@ export type EmailSendParams = {
   providerData?: any;
 };
 
-export type EmailSendResult = {
-  providerData?: any;
-};
+export type EmailSendResult = SendMessageResult;
 
-type EmailSendFn = (params: EmailSendParams) => Promise<EmailSendResult>;
+export type EmailSendFn = (params: EmailSendParams) => Promise<EmailSendResult>;
 
 export type EmailChannelProvider = ChannelProvider & {
   ingestEmail: (address: string, params: IngestEmailParams) => Promise<any>;
@@ -158,6 +157,7 @@ function buildSendMessageWrapper(
     });
 
     return {
+      sourceId: result.sourceId,
       providerData: {
         email: {
           inReplyTo,
