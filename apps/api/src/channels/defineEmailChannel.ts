@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, not } from 'drizzle-orm';
 import { db__dangerous } from '../db';
 import { channelMessages, channelThreads } from '../schemas/schema';
 import {
@@ -103,30 +103,22 @@ function buildSendMessageWrapper(
   emailSendFn: EmailSendFn,
 ): SendMessageFn {
   return async ({ channelThread, channel, message }) => {
-    // Find the first incoming message in this thread to get subject
-    const firstIncoming = await db__dangerous.query.channelMessages.findFirst({
-      where: and(
-        eq(channelMessages.channelThreadId, channelThread.id),
-        eq(channelMessages.direction, 'incoming'),
-      ),
-      orderBy: (cm, { asc }) => [asc(cm.date)],
-    });
-
-    const emailData = (firstIncoming?.providerData as any)?.email as EmailMessageData | undefined;
-    const originalSubject = emailData?.subject ?? '';
-    const subject = originalSubject
-      ? (originalSubject.startsWith('Re:') ? originalSubject : `Re: ${originalSubject}`)
-      : 'No subject';
-
-    // Find the last message (any direction) with a sourceId for In-Reply-To
+    // Find the last message in the same run, excluding the outgoing message itself
     const lastMessage = await db__dangerous.query.channelMessages.findFirst({
       where: and(
-        eq(channelMessages.channelThreadId, channelThread.id),
+        eq(channelMessages.runId, message.runId!),
+        not(eq(channelMessages.id, message.id)),
       ),
       orderBy: (cm, { desc }) => [desc(cm.date)],
     });
 
     const lastEmailData = (lastMessage?.providerData as any)?.email as EmailMessageData | undefined;
+
+    const originalSubject = lastEmailData?.subject ?? '';
+    const subject = originalSubject
+      ? (originalSubject.startsWith('Re:') ? originalSubject : `Re: ${originalSubject}`)
+      : 'No subject';
+
     const inReplyTo = lastMessage?.sourceId ?? undefined;
 
     // Build References chain: last message's references + last message's sourceId
@@ -138,12 +130,11 @@ function buildSendMessageWrapper(
       }
     }
 
-    // Collect thread-level provider data from the first incoming message
+    // Collect provider data from the last message
     // (e.g., Gmail threadId for keeping messages in the same Gmail thread)
-    const threadProviderData = firstIncoming?.providerData
-      ? { ...firstIncoming.providerData as any }
+    const threadProviderData = lastMessage?.providerData
+      ? { ...lastMessage.providerData as any }
       : undefined;
-    // Remove the email namespace — sendEmail gets only provider-specific data
     if (threadProviderData) {
       delete threadProviderData.email;
     }
