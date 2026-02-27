@@ -195,7 +195,10 @@ export function defineEmailChannel(config: {
       throw new Error('[defineEmailChannel] Email has no Message-ID — this should never happen');
     }
 
-    // Dedup: if this messageId already exists within the channel, skip ingestion
+    /**
+     * We should only resolveThreadId for NEW emails. If the email is already in our inbox (we sent it ourselves), then it already has a threadId.
+     * We could pass it to ingestMessage, but it's not really necessary. We can just dedupe here (even though ingestMessage has deduping logic too!).
+     */
     const duplicate = await withOrg(channel.organizationId, async (tx) => {
       return tx
         .select({ id: channelMessages.id })
@@ -215,6 +218,9 @@ export function defineEmailChannel(config: {
       return { ingested: false, reason: 'Duplicate message' };
     }
 
+    /**
+     * Heuristic for finding the thread id based on the email's headers.
+     */
     const sourceThreadId = await resolveThreadId(channel.organizationId, channel.id, params.email);
 
     const providerData = {
