@@ -197,7 +197,8 @@ export function channelProvider(type: string) {
     console.log('[ingestMessage] environment: ', environment.user?.email ?? 'production');
 
     /**
-     * Find agent and its config
+     * Find agent and its config 
+     * FIXME: This is WRONG!!! We should accept channel messages event if they don't have agent connected!
      */
     const agentName = channel.agent;
     const config = BaseConfigSchemaToZod.parse(environment.config);
