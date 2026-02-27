@@ -1,5 +1,4 @@
-import { randomUUID } from 'crypto';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { db__dangerous } from '../db';
 import { channelMessages, channelThreads } from '../schemas/schema';
 import {
@@ -32,7 +31,6 @@ export type IngestEmailParams = {
 
 export type EmailSendParams = {
   channel: Channel;
-  messageId: string;
   to: string;
   from: string;
   subject: string;
@@ -43,7 +41,6 @@ export type EmailSendParams = {
 };
 
 export type EmailSendResult = {
-  messageId: string;
   providerData?: any;
 };
 
@@ -104,16 +101,6 @@ function buildSendMessageWrapper(
   emailSendFn: EmailSendFn,
 ): SendMessageFn {
   return async ({ channelThread, channel, message }) => {
-    // Pre-generate Message-ID and store it on the outgoing message BEFORE sending.
-    // This closes the race window: if the webhook picks up our sent email before
-    // emailSendFn returns, the sourceId is already in the DB and dedup catches it.
-    const generatedMessageId = `<${randomUUID()}@agentview.dev>`;
-
-    await db__dangerous
-      .update(channelMessages)
-      .set({ sourceId: generatedMessageId, updatedAt: new Date().toISOString() })
-      .where(eq(channelMessages.id, message.id));
-
     // Find the first incoming message in this thread to get subject
     const firstIncoming = await db__dangerous.query.channelMessages.findFirst({
       where: and(
@@ -161,7 +148,6 @@ function buildSendMessageWrapper(
 
     const result = await emailSendFn({
       channel,
-      messageId: generatedMessageId,
       to: channelThread.contact,
       from: channel.address,
       subject,
@@ -172,10 +158,8 @@ function buildSendMessageWrapper(
     });
 
     return {
-      sourceId: generatedMessageId,
       providerData: {
         email: {
-          messageId: generatedMessageId,
           inReplyTo,
           references: references ? [...references] : undefined,
           subject,
@@ -197,11 +181,6 @@ export function defineEmailChannel(config: {
   const provider = channelProvider(config.type);
 
   const ingestEmail = async (address: string, params: IngestEmailParams) => {
-    const messageId = params.email.messageId;
-    if (!messageId) {
-      throw new Error('[defineEmailChannel] Email has no Message-ID — this should never happen');
-    }
-
     // Look up channel to get channelId for thread resolution
     const channel = await provider.getChannel(address);
     if (!channel) {
@@ -209,11 +188,47 @@ export function defineEmailChannel(config: {
       return { ingested: false, reason: 'Channel not found' };
     }
 
-    const sourceThreadId = await resolveThreadId(channel.id, { ...params.email, messageId });
+    // sanity check with messageId
+    if (!params.email.messageId) {
+      throw new Error('[defineEmailChannel] Email has no Message-ID — this should never happen');
+    }
+
+
+    // // Echo detection: check if this email is our own outgoing message bounced back.
+    // // We match by text content + direction=outgoing + sourceId IS NULL (not yet matched).
+    // // No race condition: the outgoing message row exists before the email is even sent.
+    // if (params.text) {
+    //   const echoMatch = await db__dangerous
+    //     .select({ id: channelMessages.id })
+    //     .from(channelMessages)
+    //     .innerJoin(channelThreads, eq(channelMessages.channelThreadId, channelThreads.id))
+    //     .where(
+    //       and(
+    //         eq(channelThreads.channelId, channel.id),
+    //         eq(channelMessages.direction, 'outgoing'),
+    //         eq(channelMessages.text, params.text),
+    //         isNull(channelMessages.sourceId),
+    //       ),
+    //     )
+    //     .orderBy(channelMessages.createdAt)
+    //     .limit(1);
+
+    //   if (echoMatch.length > 0) {
+    //     await db__dangerous
+    //       .update(channelMessages)
+    //       .set({ sourceId: messageId, updatedAt: new Date().toISOString() })
+    //       .where(eq(channelMessages.id, echoMatch[0].id));
+
+    //     console.log('[defineEmailChannel] Detected echo of outgoing message, setting sourceId and skipping ingestion');
+    //     return { ingested: false, reason: 'Echo of outgoing message' };
+    //   }
+    // }
+
+    const sourceThreadId = await resolveThreadId(channel.id, params.email);
 
     const providerData = {
       email: {
-        messageId,
+        messageId: params.email.messageId,
         inReplyTo: params.email.inReplyTo,
         references: params.email.references,
         subject: params.email.subject,
@@ -226,7 +241,7 @@ export function defineEmailChannel(config: {
     };
 
     return provider.ingestMessage(address, {
-      sourceId: messageId,
+      sourceId: params.email.messageId,
       sourceThreadId,
       date: params.date,
       contact: params.contact,

@@ -113,7 +113,6 @@ export async function sendEmail(
   accessToken: string,
   refreshToken: string,
   params: {
-    messageId: string;
     from: string;
     to: string;
     subject: string;
@@ -127,7 +126,6 @@ export async function sendEmail(
   const gmail = createAuthenticatedClient(accessToken, refreshToken, onTokenRefresh);
 
   const lines = [
-    `Message-ID: ${params.messageId}`,
     `From: ${params.from}`,
     `To: ${params.to}`,
     `Subject: ${params.subject}`,
@@ -147,7 +145,7 @@ export async function sendEmail(
   const raw = encodeBase64Url(lines.join('\r\n'));
 
   console.log('')
-  console.log('------- SENDING EMAIL -------');
+  console.log('[gmail] sending email');
   console.log(lines.join('\r\n'));
   console.log('')
 
@@ -162,6 +160,8 @@ export async function sendEmail(
   if (!res.data.id) {
     throw new Error('Gmail send returned no message ID');
   }
+
+  console.log('[gmail] email sent successfully')
 
   return {
     gmailId: res.data.id,
