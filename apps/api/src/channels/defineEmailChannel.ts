@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db__dangerous } from '../db';
 import { channelMessages, channelThreads } from '../schemas/schema';
 import {
@@ -55,6 +55,7 @@ export type EmailChannelProvider = ChannelProvider & {
  * Returns the sourceThreadId to use (existing thread's or the email's own messageId as anchor).
  */
 async function resolveThreadId(
+  organizationId: string,
   channelId: string,
   email: EmailMessageData,
 ): Promise<string> {
@@ -72,20 +73,21 @@ async function resolveThreadId(
   }
 
   if (candidates.length > 0) {
-    // Find any existing message whose sourceId matches a candidate, scoped to this channel
-    const existingMessage = await db__dangerous
-      .select({
-        sourceThreadId: channelThreads.sourceThreadId,
-      })
-      .from(channelMessages)
-      .innerJoin(channelThreads, eq(channelMessages.channelThreadId, channelThreads.id))
-      .where(
-        and(
-          eq(channelThreads.channelId, channelId),
-          inArray(channelMessages.sourceId, candidates),
-        ),
-      )
-      .limit(1);
+    const existingMessage = await withOrg(organizationId, async (tx) => {
+      return tx
+        .select({
+          sourceThreadId: channelThreads.sourceThreadId,
+        })
+        .from(channelMessages)
+        .innerJoin(channelThreads, eq(channelMessages.channelThreadId, channelThreads.id))
+        .where(
+          and(
+            eq(channelThreads.channelId, channelId),
+            inArray(channelMessages.sourceId, candidates),
+          ),
+        )
+        .limit(1);
+    });
 
     if (existingMessage.length > 0 && existingMessage[0].sourceThreadId) {
       return existingMessage[0].sourceThreadId;
@@ -189,54 +191,31 @@ export function defineEmailChannel(config: {
       return { ingested: false, reason: 'Channel not found' };
     }
 
-    // sanity check with messageId
     if (!params.email.messageId) {
       throw new Error('[defineEmailChannel] Email has no Message-ID — this should never happen');
     }
 
+    // Dedup: if this messageId already exists within the channel, skip ingestion
+    const duplicate = await withOrg(channel.organizationId, async (tx) => {
+      return tx
+        .select({ id: channelMessages.id })
+        .from(channelMessages)
+        .innerJoin(channelThreads, eq(channelMessages.channelThreadId, channelThreads.id))
+        .where(
+          and(
+            eq(channelThreads.channelId, channel.id),
+            eq(channelMessages.sourceId, params.email.messageId),
+          ),
+        )
+        .limit(1);
+    });
 
-    // // Echo detection: check if this email is our own outgoing message bounced back.
-    // // We match by text content + direction=outgoing + sourceId IS NULL (not yet matched).
-    // // No race condition: the outgoing message row exists before the email is even sent.
-    // if (params.text) {
-    //   const echoMatch = await db__dangerous
-    //     .select({ id: channelMessages.id })
-    //     .from(channelMessages)
-    //     .innerJoin(channelThreads, eq(channelMessages.channelThreadId, channelThreads.id))
-    //     .where(
-    //       and(
-    //         eq(channelThreads.channelId, channel.id),
-    //         eq(channelMessages.direction, 'outgoing'),
-    //         eq(channelMessages.text, params.text),
-    //         isNull(channelMessages.sourceId),
-    //       ),
-    //     )
-    //     .orderBy(channelMessages.createdAt)
-    //     .limit(1);
+    if (duplicate.length > 0) {
+      console.log('[defineEmailChannel] Duplicate email, skipping:', params.email.messageId);
+      return { ingested: false, reason: 'Duplicate message' };
+    }
 
-    //   if (echoMatch.length > 0) {
-    //     await db__dangerous
-    //       .update(channelMessages)
-    //       .set({ sourceId: messageId, updatedAt: new Date().toISOString() })
-    //       .where(eq(channelMessages.id, echoMatch[0].id));
-
-    //     console.log('[defineEmailChannel] Detected echo of outgoing message, setting sourceId and skipping ingestion');
-    //     return { ingested: false, reason: 'Echo of outgoing message' };
-    //   }
-    // }
-
-
-    // withOrg(channel.organizationId, async (tx) => {
-    //   tx.query.channelMessages.findFirst({
-    //     where: and(
-    //       eq(channelMessages.channelThreadId, channel.id),
-    //       eq(channelMessages.sourceId, params.email.messageId),
-    //     ),
-    //   });
-    // });
-    
-
-    const sourceThreadId = await resolveThreadId(channel.id, params.email);
+    const sourceThreadId = await resolveThreadId(channel.organizationId, channel.id, params.email);
 
     const providerData = {
       email: {
