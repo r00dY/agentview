@@ -1,5 +1,6 @@
 import { google } from 'googleapis';
 import { createOAuth2Client } from './client';
+import type { GmailChannelConfig } from './types';
 
 export type ParsedEmail = {
   id: string;
@@ -74,6 +75,23 @@ function createAuthenticatedClient(
   }
 
   return google.gmail({ version: 'v1', auth: client });
+}
+
+export function createTokenRefreshHandler(
+  provider: { requireChannel: (address: string) => Promise<{ config: unknown }>; updateChannel: (address: string, config: any) => Promise<any> },
+  address: string,
+): OnTokenRefresh {
+  return async (tokens) => {
+    const current = await provider.requireChannel(address);
+    const currentConfig = current.config as GmailChannelConfig;
+    await provider.updateChannel(address, {
+      ...currentConfig,
+      accessToken: tokens.access_token,
+      tokenExpiresAt: tokens.expiry_date
+        ? new Date(tokens.expiry_date).toISOString()
+        : null,
+    });
+  };
 }
 
 export async function getProfile(accessToken: string, refreshToken: string) {

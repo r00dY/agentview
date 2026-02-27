@@ -9,7 +9,7 @@ import {
   exchangeCodeForTokens,
   GMAIL_SCOPES,
 } from './client';
-import { getProfile, setupWatch, fetchNewEmails } from './api';
+import { getProfile, setupWatch, fetchNewEmails, createTokenRefreshHandler } from './api';
 import type { GmailChannelConfig } from './types';
 
 /** Extract bare email from "Name <email>" or just "email" */
@@ -148,18 +148,7 @@ export function createGmailRoutes(gmail: EmailChannelProvider): OpenAPIHono {
         return c.json({ status: 'ok' }, 200);
       }
 
-      // Token refresh callback: read-then-write config pattern
-      const onTokenRefresh = async (tokens: { access_token: string; expiry_date: number | null }) => {
-        const current = await gmail.requireChannel(emailAddress);
-        const currentConfig = current.config as GmailChannelConfig;
-        await gmail.updateChannel(emailAddress, {
-          ...currentConfig,
-          accessToken: tokens.access_token,
-          tokenExpiresAt: tokens.expiry_date
-            ? new Date(tokens.expiry_date).toISOString()
-            : null,
-        });
-      };
+      const onTokenRefresh = createTokenRefreshHandler(gmail, emailAddress);
 
       const result = await fetchNewEmails(
         channelConfig.accessToken,

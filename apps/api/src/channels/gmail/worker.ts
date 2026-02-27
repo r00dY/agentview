@@ -1,4 +1,4 @@
-import { setupWatch } from './api';
+import { setupWatch, createTokenRefreshHandler } from './api';
 import type { GmailChannelConfig } from './types';
 import { createPeriodicWorker, type WorkerHandle } from '../../workers/utils';
 import { type ChannelProvider } from '../defineChannel';
@@ -26,22 +26,10 @@ export function createGmailWorkers(gmail: ChannelProvider): WorkerHandle[] {
         try {
           const config = channel.config as GmailChannelConfig;
 
-          const onTokenRefresh = async (tokens: { access_token: string; expiry_date: number | null }) => {
-            const current = await gmail.requireChannel(channel.address);
-            const currentConfig = current.config as GmailChannelConfig;
-            await gmail.updateChannel(channel.address, {
-              ...currentConfig,
-              accessToken: tokens.access_token,
-              tokenExpiresAt: tokens.expiry_date
-                ? new Date(tokens.expiry_date).toISOString()
-                : null,
-            });
-          };
-
           const watch = await setupWatch(
             config.accessToken,
             config.refreshToken,
-            onTokenRefresh,
+            createTokenRefreshHandler(gmail, channel.address),
           );
 
           const current = await gmail.requireChannel(channel.address);
