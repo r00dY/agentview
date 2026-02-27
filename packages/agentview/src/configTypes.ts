@@ -30,14 +30,21 @@ export interface BaseAgentConfig<TRunConfig extends BaseRunConfig = BaseRunConfi
     runs?: TRunConfig[];
 }
 
-export interface BaseChannelConfig {
-    type: string;
-    name?: string;
+export interface ApiChannelConfig {
+    type: 'api';
+    name: string;
     agent: string;
-    address?: string;
     metadata?: Metadata | undefined;
     allowUnknownMetadata?: boolean;
 }
+
+export interface ExternalChannelConfig {
+    type: string; // 'gmail', 'mock', etc.
+    address: string;
+    agent: string;
+}
+
+export type BaseChannelConfig = ApiChannelConfig | ExternalChannelConfig;
 
 export type InternalConfig = {
     disableSummaries?: boolean;

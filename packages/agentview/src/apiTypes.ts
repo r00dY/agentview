@@ -131,7 +131,7 @@ export type Run = z.infer<typeof RunSchema>
 
 export const SessionBaseSchema = z.object({
   id: z.string(),
-  channel: z.string(),
+  channel: z.string().nullable(),
   handle: z.string(),
   createdAt: z.iso.date(),
   updatedAt: z.iso.date(),
@@ -154,7 +154,7 @@ export type Session = z.infer<typeof SessionSchema>
 
 
 export const SessionCreateSchema = z.object({
-  channel: z.string(),
+  channel: z.string().nullable(),
   metadata: z.record(z.string(), z.any()).optional(),
   userId: z.string().optional(),
   space: SpaceSchema.optional(), // necessary if userId is not provided
@@ -171,7 +171,6 @@ export const SessionUpdateSchema = z.object({
 export type SessionUpdate = z.infer<typeof SessionUpdateSchema>
 
 export const PublicSessionsGetQueryParamsSchema = z.object({
-  agent: z.string().optional(),
   page: z.union([z.number(), z.string()]).optional(),
   limit: z.union([z.number(), z.string()]).optional()
 });

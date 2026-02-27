@@ -5,7 +5,7 @@ import { channels, channelThreads, channelMessages, endUsers, sessions } from '.
 import { withOrg } from '../withOrg';
 import { db__dangerous } from '../db';
 import type { Transaction } from '../types';
-import { BaseConfigSchemaToZod } from 'agentview/configUtils';
+import { BaseConfigSchemaToZod, findExternalChannelConfig } from 'agentview/configUtils';
 import { applyRunPatch, createRun } from '../runs';
 import { randomBytes } from 'crypto';
 import { createSession } from '../sessions';
@@ -198,9 +198,11 @@ export function channelProvider(type: string) {
 
     /**
      * Find agent via channel config (type + address lookup)
+     * 
+     * TODO: WE SHOULD ALLOW MESSAGES TO BE INGESTED EVEN IF THEY DON'T HAVE AGENT CONNECTED!
      */
     const config = BaseConfigSchemaToZod.parse(environment.config);
-    const channelConfig = config.channels?.find((c: any) => c.type === channel.type && c.address === channel.address);
+    const channelConfig = findExternalChannelConfig(config, channel.type, channel.address);
     if (!channelConfig) {
       return ignoreMessage(`No channel config for type=${channel.type} address=${channel.address}`);
     }

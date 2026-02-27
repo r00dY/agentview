@@ -1,9 +1,9 @@
 import { eq } from 'drizzle-orm';
-import { runs, sessionItems, webhookJobs } from './schemas/schema';
+import { runs, sessions, sessionItems, webhookJobs } from './schemas/schema';
 import type { Transaction } from './types';
 import type { Environment, Run, RunCreate, RunUpdate, Session } from 'agentview/apiTypes';
 import type { BaseAgentConfig, BaseRunConfig } from 'agentview/configTypes';
-import { requireRunConfig, findItemConfig, findChannelConfig } from 'agentview/configUtils';
+import { requireRunConfig, findItemConfig, findApiChannelConfig, findExternalChannelConfig } from 'agentview/configUtils';
 import { AgentViewError } from 'agentview/AgentViewError';
 import { parseMetadata } from './parseMetadata';
 import { resolveVersion } from './versions';
@@ -222,11 +222,34 @@ export async function createRun(
   const lastRun = getLastRun(session);
 
   const config = getConfigFromEnvironment(environment);
-  const channelConfig = findChannelConfig(config, session.channel);
-  if (!channelConfig) {
-    throw new AgentViewError(`Channel config not found for channel '${session.channel}'.`, 404);
+
+  let agentName: string;
+
+  if (session.channel) {
+    // API channel — resolve by name
+    const channelConfig = findApiChannelConfig(config, session.channel);
+    if (!channelConfig) {
+      throw new AgentViewError(`Channel config not found for channel '${session.channel}'.`, 404);
+    }
+    agentName = channelConfig.agent;
+  } else {
+    // External channel — resolve via session's channelThreadId → channel row → type+address
+    const sessionRow = await tx.query.sessions.findFirst({
+      where: eq(sessions.id, session.id),
+      with: { channelThread: { with: { channel: true } } }
+    });
+    const ct = sessionRow?.channelThread;
+    if (!ct) {
+      throw new AgentViewError("Cannot resolve agent: session has no channel name and no channel thread.", 400);
+    }
+    const channelConfig = findExternalChannelConfig(config, ct.channel.type, ct.channel.address);
+    if (!channelConfig) {
+      throw new AgentViewError(`External channel config not found for type=${ct.channel.type} address=${ct.channel.address}.`, 404);
+    }
+    agentName = channelConfig.agent;
   }
-  const agentConfig = config.agents?.find(a => a.name === channelConfig.agent);
+
+  const agentConfig = config.agents?.find(a => a.name === agentName);
 
   if (!agentConfig) {
     throw new AgentViewError("Agent not found in environment config.", 404);

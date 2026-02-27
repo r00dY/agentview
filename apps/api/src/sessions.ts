@@ -117,7 +117,9 @@ export async function createSession(tx: Transaction, params: {
   channelThreadId?: string | null;
   authorId?: string | null;
 }): Promise<Session> {
-  const metadata = parseMetadata(params.channelConfig.metadata, params.channelConfig.allowUnknownMetadata ?? true, params.metadata ?? {}, {});
+  const channelMetadata = 'metadata' in params.channelConfig ? params.channelConfig.metadata : undefined;
+  const allowUnknownMetadata = 'allowUnknownMetadata' in params.channelConfig ? (params.channelConfig.allowUnknownMetadata ?? true) : true;
+  const metadata = parseMetadata(channelMetadata, allowUnknownMetadata, params.metadata ?? {}, {});
 
   const user = await tx.query.endUsers.findFirst({
     where: eq(endUsers.id, params.userId),
@@ -139,7 +141,7 @@ export async function createSession(tx: Transaction, params: {
     handleNumber: newHandleNumber,
     handleSuffix,
     metadata,
-    channel: params.channelConfig.name ?? params.channelConfig.address ?? params.channelConfig.type,
+    channel: 'name' in params.channelConfig ? params.channelConfig.name : null,
     userId: params.userId,
     summary: params.summary ?? null,
     channelThreadId: params.channelThreadId ?? null,

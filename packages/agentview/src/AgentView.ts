@@ -133,7 +133,6 @@ export class AgentView {
     let path = `/api/sessions`;
     const params = new URLSearchParams();
 
-    if (options?.agent) params.append('agent', options.agent);
     if (options?.page) params.append('page', options.page.toString());
     if (options?.limit) params.append('limit', options.limit.toString());
     if (options?.userId) params.append('userId', options.userId);
@@ -273,7 +272,6 @@ export class AgentView {
     let path = `/api/sessions/stats`
     const params = new URLSearchParams()
 
-    if (options?.agent) params.append('agent', options.agent)
     if (options?.space) params.append('space', options.space)
     if (options?.page) params.append('page', options.page.toString())
     if (options?.limit) params.append('limit', options.limit.toString())
@@ -424,7 +422,6 @@ export class PublicAgentView {
   async getSessions(options?: PublicSessionsGetQueryParams) {
     let path = `/api/public/sessions`;
     const params = new URLSearchParams();
-    if (options?.agent) params.append('agent', options.agent);
     if (options?.page) params.append('page', options.page.toString());
     if (options?.limit) params.append('limit', options.limit.toString());
 

@@ -42,8 +42,8 @@ import {
   CommentMessageCreateSchema,
   ScoreCreateSchema
 } from 'agentview/apiTypes';
-import { type BaseAgentViewConfig, type BaseChannelConfig } from 'agentview/configTypes';
-import { BaseConfigSchema, BaseConfigSchemaToZod, findChannelConfig, findItemConfigById, requireRunConfig } from 'agentview/configUtils';
+import { type BaseAgentViewConfig } from 'agentview/configTypes';
+import { BaseConfigSchema, BaseConfigSchemaToZod, findApiChannelConfig, findItemConfigById, requireRunConfig } from 'agentview/configUtils';
 import { getAllSessionItems, getLastRun } from 'agentview/sessionUtils';
 import packageJson from '../package.json';
 import { equalJSON } from './equalJSON';
@@ -157,20 +157,15 @@ function requireAgentConfig(config: BaseAgentViewConfig, name: string) {
   return agentConfig
 }
 
-function requireChannelConfig(config: BaseAgentViewConfig, channelKey: string): BaseChannelConfig {
-  const channelConfig = findChannelConfig(config, channelKey)
-  if (!channelConfig) {
-    throw new HTTPException(404, { message: `Channel '${channelKey}' not found in schema.` });
-  }
-  return channelConfig
-}
-
 function resolveAgentFromSession(config: BaseAgentViewConfig, session: Session): string {
-  const channelConfig = findChannelConfig(config, session.channel);
-  if (!channelConfig) {
+  if (!session.channel) {
+    throw new HTTPException(400, { message: "Cannot resolve agent: session has no channel name." });
+  }
+  const ch = findApiChannelConfig(config, session.channel);
+  if (!ch) {
     throw new HTTPException(404, { message: `Channel '${session.channel}' not found in schema.` });
   }
-  return channelConfig.agent;
+  return ch.agent;
 }
 
 function requireItemConfig(runConfig: ReturnType<typeof requireRunConfig>, sessionItems: SessionItem[], itemId: string, itemType?: "input" | "output" | "step") {
@@ -692,28 +687,10 @@ app.openapi(apiUsersPATCHRoute, async (c) => {
 const DEFAULT_LIMIT = 50
 const DEFAULT_PAGE = 1
 
-function getSessionListFilter(params: z.infer<typeof SessionsGetQueryParamsSchema>, principal: Principal, config?: BaseAgentViewConfig) {
-  const { agent, space, userId } = params;
+function getSessionListFilter(params: z.infer<typeof SessionsGetQueryParamsSchema>, principal: Principal) {
+  const { space, userId } = params;
 
   const filters: any[] = []
-
-  if (agent) {
-    if (config) {
-      // Find all channel keys (name or address) that reference this agent
-      const channelKeys = (config.channels ?? [])
-        .filter(c => c.agent === agent)
-        .map(c => c.name ?? c.address ?? c.type);
-      if (channelKeys.length > 0) {
-        filters.push(inArray(sessions.channel, channelKeys));
-      } else {
-        // No channels match this agent - push impossible filter
-        filters.push(sql`false`);
-      }
-    } else {
-      // Fallback: try direct channel match (for backwards compat)
-      filters.push(eq(sessions.channel, agent));
-    }
-  }
 
   if (principal.type === 'member' || principal.type === 'apiKey') {
 
@@ -809,7 +786,7 @@ function mapSessionRow(row: { sessions: typeof sessions.$inferSelect; end_users:
   };
 }
 
-async function getSessions(tx: Transaction, params: SessionsGetQueryParams, principal: Principal, config?: BaseAgentViewConfig) {
+async function getSessions(tx: Transaction, params: SessionsGetQueryParams, principal: Principal) {
   const limit = normalizeNumberParam(params.limit, DEFAULT_LIMIT);
   const page = normalizeNumberParam(params.page, DEFAULT_PAGE);
 
@@ -819,7 +796,7 @@ async function getSessions(tx: Transaction, params: SessionsGetQueryParams, prin
   }
 
   const offset = (page - 1) * limit;
-  const baseFilter = getSessionListFilter(params, principal, config);
+  const baseFilter = getSessionListFilter(params, principal);
 
   // // Handle starred filter - requires joining with starredSessions table
   // const isStarred = params.starred === true || params.starred === 'true';
@@ -895,8 +872,7 @@ app.openapi(sessionsGETRoute, async (c) => {
   const params = c.req.valid("query");
 
   return withOrg(principal.organizationId, async (tx) => {
-    const config = params.agent ? await requireConfig(tx, principal) : undefined;
-    const sessions = await getSessions(tx, params, principal, config)
+    const sessions = await getSessions(tx, params, principal)
     return c.json(sessions, 200);
   })
 })
@@ -921,14 +897,7 @@ app.openapi(publicSessionsGETRoute, async (c) => {
   const params = c.req.valid("query");
 
   return withOrg(principal.organizationId, async (tx) => {
-    let config: BaseAgentViewConfig | undefined;
-    if (params.agent) {
-      const environment = await getEnvironment(tx, { type: 'prod' });
-      if (environment) {
-        config = BaseConfigSchemaToZod.parse(environment.config);
-      }
-    }
-    const sessions = await getSessions(tx, params, principal, config)
+    const sessions = await getSessions(tx, params, principal)
     return c.json(sessions, 200);
   })
 })
@@ -965,7 +934,6 @@ app.openapi(sessionsGETStatsRoute, async (c) => {
   const { granular = false, ...params } = c.req.valid("query");
 
   return withOrg(principal.organizationId, async (tx) => {
-    const config = params.agent ? await requireConfig(tx, principal) : undefined;
     const result = await tx
       .select({
         unreadSessions: countDistinct(inboxItems.sessionId),
@@ -977,7 +945,7 @@ app.openapi(sessionsGETStatsRoute, async (c) => {
         and(
           eq(inboxItems.userId, memberPrincipal.session.user.id),
           sql`${inboxItems.lastNotifiableEventId} > COALESCE(${inboxItems.lastReadEventId}, 0)`,
-          getSessionListFilter(params, principal, config)
+          getSessionListFilter(params, principal)
         )
       )
 
@@ -986,7 +954,7 @@ app.openapi(sessionsGETStatsRoute, async (c) => {
     }
 
     if (granular) {
-      const sessionsResult = await getSessions(tx, params, principal, config);
+      const sessionsResult = await getSessions(tx, params, principal);
       const sessionIds = sessionsResult.sessions.map((row) => row.id);
 
       response.sessions = {}
@@ -1090,9 +1058,11 @@ app.openapi(sessionPATCHRoute, async (c) => {
     authorize(principal, { action: "end-user:update", user: session.user });
 
     const config = await requireConfig(tx, principal)
-    const channelConfig = requireChannelConfig(config, session.channel)
+    const channelConfig = session.channel ? findApiChannelConfig(config, session.channel) : null;
 
-    const metadata = parseMetadata(channelConfig.metadata, channelConfig.allowUnknownMetadata ?? true, body.metadata, session.metadata);
+    const channelMetadata = channelConfig && 'metadata' in channelConfig ? channelConfig.metadata : undefined;
+    const allowUnknownMetadata = channelConfig && 'allowUnknownMetadata' in channelConfig ? (channelConfig.allowUnknownMetadata ?? true) : true;
+    const metadata = parseMetadata(channelMetadata, allowUnknownMetadata, body.metadata, session.metadata);
 
     await tx.update(sessions).set({
       metadata,
@@ -1343,7 +1313,15 @@ app.openapi(sessionsPOSTRoute, async (c) => {
 
   return withOrg(principal.organizationId, async (tx) => {
     const config = await requireConfig(tx, principal)
-    const channelConfig = requireChannelConfig(config, body.channel)
+
+    if (!body.channel) {
+      throw new HTTPException(422, { message: "Channel name is required when creating a session via API." });
+    }
+
+    const channelConfig = findApiChannelConfig(config, body.channel)
+    if (!channelConfig) {
+      throw new HTTPException(404, { message: `Channel '${body.channel}' not found in schema.` });
+    }
     // Validate that the agent referenced by the channel exists
     requireAgentConfig(config, channelConfig.agent)
 

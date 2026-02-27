@@ -1,5 +1,5 @@
 import type { SessionItem } from "./apiTypes.js";
-import type { BaseAgentViewConfig, BaseAgentConfig, BaseChannelConfig, BaseSessionItemConfig, BaseScoreConfig, Metadata, BaseRunConfig } from "./configTypes.js";
+import type { BaseAgentViewConfig, BaseAgentConfig, BaseChannelConfig, ApiChannelConfig, ExternalChannelConfig, BaseSessionItemConfig, BaseScoreConfig, Metadata, BaseRunConfig } from "./configTypes.js";
 import { z } from "zod";
 import { AgentViewError } from "./AgentViewError.js";
 import { convertJsonSchemaToZod } from '@agentview/zod-from-json-schema';
@@ -25,18 +25,12 @@ export function requireAgentConfig<T extends BaseAgentViewConfig>(config: T, age
     return agentConfig;
 }
 
-export function requireChannelConfig<T extends BaseAgentViewConfig>(config: T, channelKey: string): BaseChannelConfig {
-    const channelConfig = findChannelConfig(config, channelKey);
-    if (!channelConfig) {
-        throw new Error(`Channel config not found for channel '${channelKey}'`);
-    }
-    return channelConfig;
+export function findApiChannelConfig<T extends BaseAgentViewConfig>(config: T, name: string): ApiChannelConfig | null {
+    return (config.channels?.find((c) => c.type === 'api' && c.name === name) as ApiChannelConfig | undefined) ?? null;
 }
 
-export function findChannelConfig<T extends BaseAgentViewConfig>(config: T, channelKey: string): BaseChannelConfig | null {
-    return config.channels?.find((c) =>
-        (c.name && c.name === channelKey) || (c.address && c.address === channelKey)
-    ) ?? null;
+export function findExternalChannelConfig<T extends BaseAgentViewConfig>(config: T, type: string, address: string): ExternalChannelConfig | null {
+    return (config.channels?.find((c) => c.type !== 'api' && c.type === type && c.address === address) as ExternalChannelConfig | undefined) ?? null;
 }
 
 
@@ -300,7 +294,10 @@ function baseConfigSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
             address: z.string().optional(),
             metadata: z.record(z.string(), jsonSchemaSchema).optional(),
             allowUnknownMetadata: z.boolean().optional(),
-        })).optional(),
+        }).refine(
+            (c) => c.type === 'api' ? !!c.name : !!c.address,
+            (c) => ({ message: c.type === 'api' ? "API channels require 'name'" : "External channels require 'address'" })
+        )).optional(),
         webhookUrl: z.string().optional(),
         __internal: z.object({
             disableSummaries: z.boolean().optional(),

@@ -784,52 +784,51 @@ describe('API', () => {
       })
 
       test("no pagination params", async () => {
-        const result = await avProd.getSessions({ agent: agentName, space: "playground" })
+        const result = await avProd.getSessions({ userId: initUser2.id })
 
         expect(result.sessions).toBeDefined()
         expect(Array.isArray(result.sessions)).toBe(true)
-        expect(result.sessions.length).toEqual(TOTAL_SESSIONS_COUNT)
+        expect(result.sessions.length).toEqual(USER_2_SESSIONS_COUNT)
 
         expect(result.pagination).toMatchObject({
           page: 1,
-          totalCount: TOTAL_SESSIONS_COUNT,
-          totalPages: 1,
+          totalCount: USER_2_SESSIONS_COUNT,
           hasNextPage: false,
           hasPreviousPage: false,
         })
       })
 
       test("5 items per page, first page", async () => {
-        const result = await avProd.getSessions({ agent: agentName, space: "playground", limit: 5, page: 1 })
+        const result = await avProd.getSessions({ userId: initUser2.id, limit: 5, page: 1 })
 
         expect(result.sessions).toBeDefined()
         expect(result.sessions.length).toBe(5)
         expect(result.pagination).toBeDefined()
-        expect(result.pagination.totalCount).toEqual(TOTAL_SESSIONS_COUNT)
+        expect(result.pagination.totalCount).toEqual(USER_2_SESSIONS_COUNT)
         expect(result.pagination.page).toBe(1)
         expect(result.pagination.limit).toBe(5)
-        expect(result.pagination.totalPages).toEqual(Math.ceil(TOTAL_SESSIONS_COUNT / 5))
+        expect(result.pagination.totalPages).toEqual(Math.ceil(USER_2_SESSIONS_COUNT / 5))
         expect(result.pagination.hasNextPage).toBe(true)
         expect(result.pagination.hasPreviousPage).toBe(false)
       })
 
       test("5 items per page, second page", async () => {
-        const result = await avProd.getSessions({ agent: agentName, space: "playground", limit: 5, page: 2 })
+        const result = await avProd.getSessions({ userId: initUser2.id, limit: 5, page: 2 })
 
         expect(result.sessions).toBeDefined()
-        expect(result.sessions.length).toBe(5)
+        expect(result.sessions.length).toBe(USER_2_SESSIONS_COUNT - 5)
         expect(result.pagination).toBeDefined()
         expect(result.pagination.page).toBe(2)
         expect(result.pagination.limit).toBe(5)
-        expect(result.pagination.hasNextPage).toBe(true)
+        expect(result.pagination.hasNextPage).toBe(false)
         expect(result.pagination.hasPreviousPage).toBe(true)
       })
 
       test("5 items per page, last page", async () => {
         const itemsPerPage = 5
-        const lastPage = Math.ceil(TOTAL_SESSIONS_COUNT / itemsPerPage)
+        const lastPage = Math.ceil(USER_2_SESSIONS_COUNT / itemsPerPage)
 
-        const result = await avProd.getSessions({ agent: agentName, space: "playground", limit: 5, page: lastPage })
+        const result = await avProd.getSessions({ userId: initUser2.id, limit: 5, page: lastPage })
 
         expect(result.sessions).toBeDefined()
         expect(result.sessions.length).toBeGreaterThan(0)
@@ -843,10 +842,7 @@ describe('API', () => {
 
 
       test("5 items per page, page well beyond last page", async () => {
-        const itemsPerPage = 5
-        const lastPage = Math.ceil(TOTAL_SESSIONS_COUNT / itemsPerPage)
-
-        const result = await avProd.getSessions({ agent: agentName, space: "playground", limit: 5, page: 100 })
+        const result = await avProd.getSessions({ userId: initUser2.id, limit: 5, page: 100 })
 
         expect(result.sessions).toBeDefined()
         expect(result.sessions.length).toEqual(0)
@@ -868,19 +864,19 @@ describe('API', () => {
       })
 
       test("page limit exceeds maximum (999999) should error", async () => {
-        await expect(avProd.getSessions({ agent: agentName, space: "playground", limit: 999999 })).rejects.toThrowError(expect.objectContaining({
+        await expect(avProd.getSessions({ space: "playground", limit: 999999 })).rejects.toThrowError(expect.objectContaining({
           statusCode: 422,
           message: expect.any(String)
         }))
       })
 
       test("user scoping works", async () => {
-        const user1FetchedSessions = await avProd.as(initUser1).getSessions({ space: "playground", agent: agentName, limit: 10 })
-        const user2FetchedSessions = await avProd.as(initUser2).getSessions({ space: "playground", agent: agentName, limit: 10 })
+        const user1FetchedSessions = await avProd.as(initUser1).getSessions({ space: "playground", limit: 10 })
+        const user2FetchedSessions = await avProd.as(initUser2).getSessions({ space: "playground", limit: 10 })
 
         expect(user1FetchedSessions.sessions.length).toBe(10)
         expect(user1FetchedSessions.sessions.every(session => session.userId === initUser1.id)).toBe(true)
-        expect(user1FetchedSessions.pagination.totalCount).toBe(USER_1_SESSIONS_COUNT)
+        expect(user1FetchedSessions.pagination.totalCount).toBeGreaterThanOrEqual(USER_1_SESSIONS_COUNT)
 
         expect(user2FetchedSessions.sessions.length).toBe(7)
         expect(user2FetchedSessions.sessions.every(session => session.userId === initUser2.id)).toBe(true)
@@ -892,18 +888,18 @@ describe('API', () => {
           userToken: initUser1.token
         })
 
-        const user1FetchedSessions = await avPublic1.getSessions({ agent: agentName, limit: 10 })
+        const user1FetchedSessions = await avPublic1.getSessions({ limit: 10 })
 
         expect(user1FetchedSessions.sessions.length).toBe(10)
         expect(user1FetchedSessions.sessions.every(session => session.userId === initUser1.id)).toBe(true)
-        expect(user1FetchedSessions.pagination.totalCount).toBe(USER_1_SESSIONS_COUNT)
+        expect(user1FetchedSessions.pagination.totalCount).toBeGreaterThanOrEqual(USER_1_SESSIONS_COUNT)
 
 
         const avPublic2 = new PublicAgentView({
           userToken: initUser2.token
         })
 
-        const user2FetchedSessions = await avPublic2.getSessions({ agent: agentName, limit: 10 })
+        const user2FetchedSessions = await avPublic2.getSessions({ limit: 10 })
 
         expect(user2FetchedSessions.sessions.length).toBe(7)
         expect(user2FetchedSessions.sessions.every(session => session.userId === initUser2.id)).toBe(true)
