@@ -9,6 +9,8 @@ import { BaseConfigSchemaToZod, findChannelConfig } from 'agentview/configUtils'
 import { applyRunPatch, createRun } from '../runs';
 import { randomBytes } from 'crypto';
 import { createSession } from '../sessions';
+import type { ChannelRef } from 'agentview';
+import { getConfigFromEnvironment } from '../environments';
 
 export type Channel = typeof channels.$inferSelect;
 type ChannelThread = typeof channelThreads.$inferSelect;
@@ -193,36 +195,9 @@ export function channelProvider(type: string) {
 
     const space = environment.userId ? 'playground' : 'production';
     const createdBy = environment.userId;
+    const channelRef : ChannelRef = { type: channel.type as 'gmail' | 'mock', address: channel.address }
 
     console.log('[ingestMessage] environment: ', environment.user?.email ?? 'production');
-
-    /**
-     * Find agent via channel config (type + address lookup)
-     * 
-     * TODO: WE SHOULD ALLOW MESSAGES TO BE INGESTED EVEN IF THEY DON'T HAVE AGENT CONNECTED!
-     */
-    // const config = BaseConfigSchemaToZod.parse(environment.config);
-
-    // @ts-ignore
-    const channelRef : ChannelRef = { type: channel.type, address: channel.address }
-
-    // const channelConfig = findChannelConfig(config, channelRef) ?? { type: channel.type, address: channel.address, agent: "__unknown__" };
-
-    
-    // const agentName = channelConfig.agent;
-    // const agentConfig = config.agents?.find((a: any) => a.name === agentName);
-    // if (!agentConfig) {
-    //   return ignoreMessage(`Agent '${agentName}' not found in config`);
-    // }
-
-    // /**
-    //  * For now, only ai-sdk agents are supported for channels
-    //  */
-    // if (agentConfig.protocol !== 'ai-sdk') {
-    //   return ignoreMessage(`Unsupported agent protocol: ${agentConfig.protocol}. Only 'ai-sdk' is supported for channels.`);
-    // }
-
-    // console.log('[ingestMessage] config and agent exists, agent name: ', agentName);
 
     return withOrg(channel.organizationId, async (tx) => {
       /**
@@ -369,6 +344,14 @@ export function channelProvider(type: string) {
       /**
        * Create RUN
        */
+
+      // TODO - here, if no agent is assigned -> we should just make sure the last run is FAILED.
+      // const config = getConfigFromEnvironment(environment);
+      // const channel = findChannelConfig(config, channelRef);
+      // const agent = config.agents?.find(a => a.name === channel?.agent);
+
+      // if no agent => automatically fail the run
+
       const newRun = await createRun(tx, thread.organizationId, environment, {
         sessionId,
         items: [
