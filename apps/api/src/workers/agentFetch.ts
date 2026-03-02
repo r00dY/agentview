@@ -1,8 +1,8 @@
 import { db__dangerous } from '../db';
 import { withOrg } from '../withOrg';
-import { runs, sessions, channelMessages } from '../schemas/schema';
-import { eq, and, inArray, sql } from 'drizzle-orm';
-import { getEnvironment, type Env } from '../environments';
+import { runs, sessions, channelMessages, environments } from '../schemas/schema';
+import { eq, and, inArray, sql, not, isNull } from 'drizzle-orm';
+import { getConfigFromEnvironment, getEnvironment, type Env } from '../environments';
 import { fetchSession } from '../sessions';
 import { callAgentAPI, AgentAPIError } from '../agentApi';
 import { callAgentAPIAISDK } from '../ai-sdk/agentApi';
@@ -52,21 +52,26 @@ async function processAgentFetch(run: Run) {
       throw new Error(`Session ${run.sessionId} not found`);
     }
 
-    // Derive environment from session's space
-    const env: Env = session.user.space === 'production'
-      ? { type: 'prod' }
-      : { type: 'dev', memberId: session.user.createdBy! };
-
     // Get config from environment
+    const environmentId = run.environmentId;
+    if (!environmentId) {
+      throw new Error('Environment ID is required for auto-fetch');
+    }
+
     const environment = await withOrg(run.organizationId, async (tx) => {
-      return getEnvironment(tx, env);
+      return tx.query.environments.findFirst({
+        where: eq(environments.id, environmentId),
+        with: {
+          user: true,
+        },
+      });
     });
 
     if (!environment) {
       throw new Error('Environment not found');
     }
 
-    const config = BaseConfigSchemaToZod.parse(environment.config);
+    const config = getConfigFromEnvironment(environment);
 
     const ch = findChannelConfig(config, session.channel);
     if (!ch) {

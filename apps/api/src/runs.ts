@@ -325,14 +325,11 @@ export async function createRun(
   let metadata: Record<string, any> | undefined = undefined;
   let versionId: string | null = null;
 
-  // for non-api channels, when there's no item, we just create a failed run
-  if (session.channel.type !== 'api' && !agentConfig) {
+  // for non-api channels, we assume input is OK and we use simplified procedure. Agent is not required, as we should save items even if agent is not assigned.
+  if (session.channel.type !== 'api') {
     parsedItems = [inputItem];
-    status = 'failed';
-    failReason = {
-      message: "No agent found.",
-    }
-    finishedAt = new Date().toISOString();
+    status = 'in_progress';
+    expiresAt = new Date(Date.now() + DEFAULT_IDLE_TIME).toISOString();
   }
   else {
     // channel config && agent config required at this point
@@ -396,6 +393,7 @@ export async function createRun(
     versionId,
     metadata,
     fetchStatus: manual ? null : 'pending',
+    environmentId: manual ? null : environment.id,
   }).returning();
 
   await tx.insert(sessionItems).values(

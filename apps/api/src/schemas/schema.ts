@@ -97,6 +97,7 @@ export const runs = pgTable("runs", {
   metadata: jsonb("metadata"),
   fetchStatus: varchar("fetch_status", { length: 24 }).$type<'pending' | 'fetching'>(),
   manual: boolean("manual").notNull().default(false),
+  environmentId: uuid("environment_id").references(() => environments.id), // required for auto-fetch
 }, (table) => [
   index('runs_expires_at_status_idx').on(table.expiresAt, table.status),
   index('runs_session_id_created_at_idx').on(table.sessionId, table.createdAt),
