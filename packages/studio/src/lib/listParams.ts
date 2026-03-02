@@ -1,24 +1,6 @@
 import { spaceAllowedValues, type Space } from "agentview/apiTypes";
 import { config } from "../config";
 
-export function getAgentParamAndCheckForRedirect(request: Request) {
-    const url = new URL(request.url);
-    let agent = url.searchParams.get('agent');
-    let needsRedirect = false;
-    if (!agent) {
-        const defaultAgent = config.agents?.[0];
-        if (!defaultAgent) {
-            throw new Error(`[session list] no agents found`);
-        }
-        agent = defaultAgent.name;
-        needsRedirect = true;
-    }
-    return { 
-        agent, 
-        needsRedirect,
-        redirectUrl: needsRedirect ? applyParamsToUrl(url, { agent }) : undefined
-    };
-}
 
 export function getListParamsAndCheckForRedirect(request: Request) {
     const url = new URL(request.url);
@@ -44,21 +26,10 @@ export function getListParamsAndCheckForRedirect(request: Request) {
         throw new Error(`[session list] invalid space: ${spaceParam}. Allowed spaces are: ${spaceAllowedValues.join(", ")}`);
     }
 
-    let agent = url.searchParams.get('agent');
-
-    if (!agent) {
-        const defaultAgent = config.agents?.[0];
-        if (!defaultAgent) {
-            throw new Error(`[session list] no agents found`);
-        }
-        agent = defaultAgent.name;
-        needsRedirect = true;
-    }
-
     const page = url.searchParams.get('page') ?? undefined
     const limit = url.searchParams.get('limit') ?? undefined
 
-    const listParams = { space, agent, page, limit };
+    const listParams = { space, page, limit };
 
     return {
         listParams,

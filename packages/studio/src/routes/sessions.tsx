@@ -24,7 +24,6 @@ async function loader({ request }: LoaderFunctionArgs) {
   try {
     const currentParams = new URLSearchParams(window.location.search);
     const isSamePage =
-      currentParams.get('agent') === (listParams.agent ?? null) &&
       currentParams.get('space') === (listParams.space ?? null) &&
       currentParams.get('page') === (listParams.page?.toString() ?? null);
     const shouldLoadImmediately = !isSamePage;
@@ -32,19 +31,16 @@ async function loader({ request }: LoaderFunctionArgs) {
     // Sessions: sync on first load, async on revalidation
     const sessionsResult = shouldLoadImmediately
       ? agentview.getSessionsSync({
-          agent: listParams.agent,
           space: listParams.space as Space,
           page: listParams.page,
         })
       : await agentview.getSessions({
-          agent: listParams.agent,
           space: listParams.space as Space,
           page: listParams.page,
         });
 
     // Stats: always sync, never blocking
     const allStats = agentview.getSessionsStatsSync({
-      agent: listParams.agent,
       space: listParams.space as Space,
       page: listParams.page,
       granular: true,

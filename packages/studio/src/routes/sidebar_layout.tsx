@@ -82,23 +82,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 
   // Fetch session stats for each session type and list combination (in parallel)
-  const listStats: { [sessionType: string]: { [list: string]: { unseenCount: number, hasMentions: boolean } } } = {};
+  const listStats: { [list: string]: { unseenCount: number, hasMentions: boolean } } = {};
 
   if (config.agents) {
     const statsPromises = config.agents.flatMap(agentConfig =>
       spaceAllowedValues.map(space =>
-        agentview.getSessionsStats({ agent: agentConfig.name, space })
-          .then(stats => ({ agent: agentConfig.name, space, data: stats }))
+        agentview.getSessionsStats({ space })
+          .then(stats => ({ space, data: stats }))
       )
     );
 
     const statsResults = await Promise.all(statsPromises);
 
     for (const result of statsResults) {
-      if (!listStats[result.agent]) {
-        listStats[result.agent] = {};
-      }
-      listStats[result.agent][result.space] = result.data;
+      listStats[result.space] = result.data;
+      // if (!listStats[result.agent]) {
+      //   listStats[result.agent] = {};
+      // }
+      // listStats[result.agent][result.space] = result.data;
     }
   }
 
@@ -121,8 +122,8 @@ function Component() {
   const location = useLocation();
 
   // Helper function to get unseen count for a specific session type and list name
-  const getUnseenCount = (sessionType: string, space: Space) => {
-    return listStats[sessionType]?.[space]?.unseenCount ?? 0
+  const getUnseenCount = (space: Space) => {
+    return listStats[space]?.unseenCount ?? 0
   }
 
   const isMenuLinkActive = (linkPath: string) => {
@@ -145,9 +146,9 @@ function Component() {
   const isSettings = isMenuLinkActive("/settings")
 
   // Get unseen counts for badges
-  const prodUnseenCount = getUnseenCount(agent, "production")
-  const playgroundUnseenCount = getUnseenCount(agent, "playground")
-  const sharedPlaygroundUnseenCount = getUnseenCount(agent, "shared-playground")
+  const prodUnseenCount = getUnseenCount("production")
+  const playgroundUnseenCount = getUnseenCount("playground")
+  const sharedPlaygroundUnseenCount = getUnseenCount("shared-playground")
 
   const agentCustomRoutes: AgentCustomRoute[] = [];
   for (const route of config.customRoutes ?? []) {
@@ -164,7 +165,7 @@ function Component() {
 
           {!isSettings && <><SidebarHeader >
             <SidebarMenu>
-              <SidebarMenuItem>
+              {/* <SidebarMenuItem>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <SidebarMenuButton className="font-medium">
@@ -185,7 +186,7 @@ function Component() {
 
                   </DropdownMenuContent>
                 </DropdownMenu>
-              </SidebarMenuItem>
+              </SidebarMenuItem> */}
 
               <SidebarMenuItem>
 

@@ -112,15 +112,14 @@ function SessionShell({
 }
 
 function SessionPageSkeleton({ sessionBase }: { sessionBase: SessionBase }) {
-    const agentConfig = requireAgentConfig(config, sessionBase.agent);
+    const channelConfig = requireChannelConfig(config, sessionBase.channel);
+    const agentConfig = requireAgentConfig(config, channelConfig.agent);
 
     return (
         <SessionShell sessionBase={sessionBase} agentConfig={agentConfig}>
-
             <div className="p-6">
                 <LoadingIndicator />
             </div>
-           
         </SessionShell>
     );
 }
@@ -388,10 +387,10 @@ function SessionDetails({ sessionBase, agentConfig }: { sessionBase: SessionBase
     return (
         <div className="w-full">
             <PropertyList>
-                <PropertyListItem>
+                {/* <PropertyListItem>
                     <PropertyListTitle>Agent</PropertyListTitle>
                     <PropertyListTextValue>{sessionBase.agent}</PropertyListTextValue>
-                </PropertyListItem>
+                </PropertyListItem> */}
                 <PropertyListItem>
                     <PropertyListTitle>Created</PropertyListTitle>
                     <PropertyListTextValue>
