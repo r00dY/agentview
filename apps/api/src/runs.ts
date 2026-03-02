@@ -131,8 +131,8 @@ export async function applyRunPatch(
   const inputItem = run.sessionItems[0].content;
 
   let parsedItems: any[] = [];
-  let metadata : Record<string, any> | undefined = undefined;
-  let idleTimeout : number | undefined;
+  let metadata: Record<string, any> | undefined = undefined;
+  let idleTimeout: number | undefined;
 
   if (body.items || body.metadata || body.state) { // operations requireing run config
     const config = getConfigFromEnvironment(environment);
@@ -144,7 +144,7 @@ export async function applyRunPatch(
 
     const agentConfig = requireAgentConfig(config, agentName);
     const runConfig = requireRunConfig(agentConfig, inputItem);
-    
+
     /** Validate items */
     const items = body.items ?? [];
 
@@ -185,7 +185,7 @@ export async function applyRunPatch(
   const isFinished = status === 'completed' || status === 'failed' || status === 'cancelled';
   const finishedAt = run.finishedAt ?? (isFinished ? new Date().toISOString() : null);
 
-  let expiresAt : string | null = null;
+  let expiresAt: string | null = null;
   if (!isFinished) {
     if (!idleTimeout) { // if not finished, then idleTimeout must be set
       throw new AgentViewError("idleTimeout must be set when run is not finished.", 422);
@@ -248,24 +248,28 @@ export async function createRun(
   }
 
   const lastRun = getLastRun(session);
-
   const config = getConfigFromEnvironment(environment);
+  const manual = body.manual ?? false;
 
   const channelConfig = findChannelConfig(config, session.channel);
   const agentConfig = config.agents?.find(a => a.name === channelConfig?.agent);
 
   // for API channels, we need to validate that the channel and agent exist
-  if (session.channel.type === 'api') {
-    if (!channelConfig) {
-      throw new AgentViewError(`Channel config not found for ${JSON.stringify(session.channel)}.`, 404);
-    }
-    if (!agentConfig) {
-      throw new AgentViewError("Agent not found in environment config.", 404);
-    }
-  }
-  // For non api channels if there's no agent, we create empty run
-  else {
-    return;
+  // if (session.channel.type === 'api') {
+  //   if (!channelConfig) {
+  //     throw new AgentViewError(`Channel config not found for ${JSON.stringify(session.channel)}.`, 404);
+  //   }
+  //   if (!agentConfig) {
+  //     throw new AgentViewError("Agent not found in environment config.", 404);
+  //   }
+  // }
+  // // For non api channels if there's no agent, we create empty run
+  // else {
+  //   return;
+  // }
+
+  if (session.channel.type !== 'api' && manual) {
+    throw new AgentViewError("For non-api channels manual mode is not supported.", 422);
   }
 
 
@@ -280,8 +284,6 @@ export async function createRun(
   //   throw new AgentViewError("Agent not found in environment config.", 404);
   // }
 
-  const isAutoFetch = !!agentConfig.url;
-
   const { items } = body;
 
   /** Only one in_progress run is allowed per session **/
@@ -290,72 +292,98 @@ export async function createRun(
   }
 
   /** Auto-fetch validation **/
-  if (isAutoFetch) {
+  if (!manual) {
     if (items.length !== 1) {
-      throw new AgentViewError("When agent has a url, run must have exactly 1 item (input).", 422);
+      throw new AgentViewError("Run must have exactly 1 item (input).", 422);
     }
     if (body.status && body.status !== 'in_progress') {
-      throw new AgentViewError("When agent has a url, status must be 'in_progress' (or omitted).", 422);
+      throw new AgentViewError("The status must be 'in_progress' (or omitted).", 422);
     }
     if (body.state !== undefined) {
-      throw new AgentViewError("When agent has a url, state cannot be set on creation.", 422);
+      throw new AgentViewError("State cannot be set on creation.", 422);
     }
     if (body.failReason !== undefined && body.failReason !== null) {
-      throw new AgentViewError("When agent has a url, failReason cannot be set on creation.", 422);
+      throw new AgentViewError("failReason cannot be set on creation.", 422);
     }
     if (body.version !== undefined) {
-      throw new AgentViewError("When agent has a url, version cannot be set on creation (the agent endpoint provides it).", 422);
+      throw new AgentViewError("Version cannot be set on creation (the agent endpoint provides it).", 422);
     }
-  }
-
-  if (!isAutoFetch && !body.version) {
-    throw new AgentViewError("Version is required.", 422);
-  }
-
-  let versionId: string | null = null;
-
-  if (!isAutoFetch) {
-    const resolved = await resolveVersion(tx, {
-      versionString: body.version!,
-      agent: agentConfig.name,
-      isProduction: environment.user === null,
-      isDev: environment.user !== null,
-      lastRunVersion: lastRun?.version ?? null,
-      organizationId,
-      sessionId: session.id,
-      existingSessionVersions: (session.versions as string[]) ?? [],
-    });
-    versionId = resolved.versionId;
   }
 
   /** Validate input item **/
   if (items.length === 0) {
     throw new AgentViewError("New run must have at least 1 item, input.", 422);
   }
+
   const [inputItem, ...nonInputItems] = items;
 
-  const runConfig = requireRunConfig(agentConfig, inputItem);
-  const parsedInput = [runConfig.input.schema.parse(inputItem)];
+  let parsedItems: any[] = [];
+  let status: string;
+  let failReason: any | null = null;
+  let expiresAt: string | null = null;
+  let finishedAt: string | null = null;
+  let metadata: Record<string, any> | undefined = undefined;
+  let versionId: string | null = null;
 
-  /** Validate rest items **/
-  const parsedNonInputItems = validateNonInputItems(runConfig, [parsedInput], nonInputItems, body.status ?? 'in_progress');
-  const parsedItems = [...parsedInput, ...parsedNonInputItems];
-
-  /** Metadata **/
-  const metadata = parseMetadata(runConfig.metadata, runConfig.allowUnknownMetadata ?? true, body.metadata ?? {}, {});
-
-  /** Status, finished at, failReason **/
-  const status = body.status ?? 'in_progress';
-  const failReason = body.failReason ?? null;
-
-  if (failReason && status !== 'failed') {
-    throw new AgentViewError("failReason can only be set when status is 'failed'.", 422);
+  // for non-api channels, when there's no item, we just create a failed run
+  if (session.channel.type !== 'api' && !agentConfig) {
+    parsedItems = [inputItem];
+    status = 'failed';
+    failReason = {
+      message: "No agent found.",
+    }
+    finishedAt = new Date().toISOString();
   }
+  else {
+    // channel config && agent config required at this point
+    if (!channelConfig) {
+      throw new AgentViewError(`Channel config not found for ${JSON.stringify(session.channel)}.`, 404);
+    }
+    if (!agentConfig) {
+      throw new AgentViewError("Agent not found in environment config.", 404);
+    }
 
-  const isFinished = status === 'completed' || status === 'cancelled' || status === 'failed';
-  const finishedAt = isFinished ? new Date().toISOString() : null;
-  const idleTimeout = runConfig.idleTimeout ?? DEFAULT_IDLE_TIME;
-  const expiresAt = isFinished ? null : new Date(Date.now() + idleTimeout).toISOString();
+    if (manual) {
+      if (!body.version) {
+        throw new AgentViewError("In manual mode, version is required.", 422);
+      }
+
+      const resolved = await resolveVersion(tx, {
+        versionString: body.version!,
+        agent: agentConfig.name,
+        isProduction: environment.user === null,
+        isDev: environment.user !== null,
+        lastRunVersion: lastRun?.version ?? null,
+        organizationId,
+        sessionId: session.id,
+        existingSessionVersions: (session.versions as string[]) ?? [],
+      });
+      versionId = resolved.versionId;
+    }
+
+    const runConfig = requireRunConfig(agentConfig, inputItem);
+    const parsedInput = [runConfig.input.schema.parse(inputItem)];
+
+    /** Validate rest items **/
+    const parsedNonInputItems = validateNonInputItems(runConfig, [parsedInput], nonInputItems, body.status ?? 'in_progress');
+    parsedItems = [...parsedInput, ...parsedNonInputItems];
+
+    /** Metadata **/
+    metadata = parseMetadata(runConfig.metadata, runConfig.allowUnknownMetadata ?? true, body.metadata ?? {}, {});
+
+    /** Status, finished at, failReason **/
+    status = body.status ?? 'in_progress';
+    failReason = body.failReason ?? null;
+
+    if (failReason && status !== 'failed') {
+      throw new AgentViewError("failReason can only be set when status is 'failed'.", 422);
+    }
+
+    const isFinished = status === 'completed' || status === 'cancelled' || status === 'failed';
+    const idleTimeout = runConfig.idleTimeout ?? DEFAULT_IDLE_TIME;
+    finishedAt = isFinished ? new Date().toISOString() : null;
+    expiresAt = isFinished ? null : new Date(Date.now() + idleTimeout).toISOString();
+  }
 
   // Create run and items
   const [insertedRun] = await tx.insert(runs).values({
@@ -367,7 +395,7 @@ export async function createRun(
     finishedAt,
     versionId,
     metadata,
-    fetchStatus: isAutoFetch ? 'pending' : null,
+    fetchStatus: manual ? null : 'pending',
   }).returning();
 
   await tx.insert(sessionItems).values(
