@@ -8,6 +8,8 @@ CREATE TABLE "channel_messages" (
 	"attachments" jsonb,
 	"provider_data" jsonb,
 	"run_id" uuid,
+	"date" timestamp with time zone NOT NULL,
+	"status" varchar(32) DEFAULT 'received' NOT NULL,
 	"fail_reason" jsonb,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
@@ -32,17 +34,22 @@ CREATE TABLE "channels" (
 	"organization_id" text NOT NULL,
 	"type" varchar(64) NOT NULL,
 	"address" varchar(255) NOT NULL,
-	"status" varchar(64) DEFAULT 'active' NOT NULL,
 	"config" jsonb NOT NULL,
 	"environment_id" uuid,
-	"agent" varchar(255),
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "channels_type_address_unique" UNIQUE("type","address")
+	CONSTRAINT "channels_type_address_org_unique" UNIQUE("type","address","organization_id")
 );
 --> statement-breakpoint
 ALTER TABLE "channels" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+DROP INDEX "version_org_unique";--> statement-breakpoint
+ALTER TABLE "end_users" ADD COLUMN "email" varchar(255);--> statement-breakpoint
+ALTER TABLE "runs" ADD COLUMN "fetch_status" varchar(24);--> statement-breakpoint
+ALTER TABLE "runs" ADD COLUMN "manual" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "sessions" ADD COLUMN "channel_type" varchar(64) NOT NULL;--> statement-breakpoint
+ALTER TABLE "sessions" ADD COLUMN "channel_address" varchar(255) NOT NULL;--> statement-breakpoint
 ALTER TABLE "sessions" ADD COLUMN "channel_thread_id" uuid;--> statement-breakpoint
+ALTER TABLE "versions" ADD COLUMN "agent" varchar(255) NOT NULL;--> statement-breakpoint
 ALTER TABLE "channel_messages" ADD CONSTRAINT "channel_messages_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "channel_messages" ADD CONSTRAINT "channel_messages_channel_thread_id_channel_threads_id_fk" FOREIGN KEY ("channel_thread_id") REFERENCES "public"."channel_threads"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "channel_messages" ADD CONSTRAINT "channel_messages_run_id_runs_id_fk" FOREIGN KEY ("run_id") REFERENCES "public"."runs"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -53,10 +60,16 @@ ALTER TABLE "channels" ADD CONSTRAINT "channels_environment_id_environments_id_f
 CREATE UNIQUE INDEX "channel_messages_thread_source_unique" ON "channel_messages" USING btree ("channel_thread_id","source_id");--> statement-breakpoint
 CREATE INDEX "channel_messages_thread_id_idx" ON "channel_messages" USING btree ("channel_thread_id");--> statement-breakpoint
 CREATE INDEX "channel_messages_run_id_idx" ON "channel_messages" USING btree ("run_id");--> statement-breakpoint
+CREATE INDEX "channel_messages_status_direction_idx" ON "channel_messages" USING btree ("status","direction");--> statement-breakpoint
+CREATE INDEX "channel_messages_date_idx" ON "channel_messages" USING btree ("date");--> statement-breakpoint
 CREATE INDEX "channel_threads_channel_id_idx" ON "channel_threads" USING btree ("channel_id");--> statement-breakpoint
 CREATE INDEX "channels_address_idx" ON "channels" USING btree ("address");--> statement-breakpoint
 ALTER TABLE "sessions" ADD CONSTRAINT "sessions_channel_thread_id_channel_threads_id_fk" FOREIGN KEY ("channel_thread_id") REFERENCES "public"."channel_threads"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "runs_fetch_status_idx" ON "runs" USING btree ("fetch_status");--> statement-breakpoint
 CREATE INDEX "sessions_channel_thread_idx" ON "sessions" USING btree ("channel_thread_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "version_agent_org_unique" ON "versions" USING btree ("version","agent","organization_id");--> statement-breakpoint
+ALTER TABLE "sessions" DROP COLUMN "agent";--> statement-breakpoint
+ALTER TABLE "sessions" ADD CONSTRAINT "channel_thread_consistency" CHECK ((channel_type = 'api' AND channel_thread_id IS NULL) OR (channel_type != 'api' AND channel_thread_id IS NOT NULL));--> statement-breakpoint
 CREATE POLICY "channel_messages_tenant_isolation" ON "channel_messages" AS PERMISSIVE FOR ALL TO public USING (organization_id = current_setting('app.organization_id', true)) WITH CHECK (organization_id = current_setting('app.organization_id', true));--> statement-breakpoint
 CREATE POLICY "channel_threads_tenant_isolation" ON "channel_threads" AS PERMISSIVE FOR ALL TO public USING (organization_id = current_setting('app.organization_id', true)) WITH CHECK (organization_id = current_setting('app.organization_id', true));--> statement-breakpoint
 CREATE POLICY "channels_tenant_isolation" ON "channels" AS PERMISSIVE FOR ALL TO public USING (organization_id = current_setting('app.organization_id', true)) WITH CHECK (organization_id = current_setting('app.organization_id', true));

@@ -1,1 +1,0 @@
-ALTER TABLE "end_users" ADD COLUMN "email" varchar(255);

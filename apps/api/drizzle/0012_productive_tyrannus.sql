@@ -1,1 +1,0 @@
-ALTER TABLE "sessions" ALTER COLUMN "channel" DROP NOT NULL;

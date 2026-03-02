@@ -1,2 +1,0 @@
-ALTER TABLE "channels" DROP CONSTRAINT "channels_type_address_unique";--> statement-breakpoint
-ALTER TABLE "channels" ADD CONSTRAINT "channels_type_address_org_unique" UNIQUE("type","address","organization_id");
