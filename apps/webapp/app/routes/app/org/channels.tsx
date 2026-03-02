@@ -1,10 +1,10 @@
-import { useLoaderData, useParams, Link, Outlet, useRouteLoaderData } from "react-router";
+import { useLoaderData, useParams, Link, Outlet, useRouteLoaderData, useSearchParams } from "react-router";
 import type { Route } from "./+types/channels";
 import type { Channel } from "agentview";
 import { Header, HeaderTitle } from "@agentview/studio/components/header";
 import { Button } from "@agentview/studio/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@agentview/studio/components/ui/alert";
-import { AlertCircleIcon } from "lucide-react";
+import { AlertCircleIcon, Plus, MailIcon, CheckCircleIcon } from "lucide-react";
 import {
   Table,
   TableHeader,
@@ -13,6 +13,12 @@ import {
   TableRow,
   TableCell,
 } from "@agentview/studio/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@agentview/studio/components/ui/dropdown-menu";
 import { Badge } from "@agentview/studio/components/ui/badge";
 import { queryClient } from "~/queryClient";
 import { queryKeys } from "~/queryKeys";
@@ -32,6 +38,7 @@ export default function Channels() {
   const layoutData = useRouteLoaderData<typeof orgLayoutLoader>("routes/app/org/layout");
   const { channels } = useLoaderData<typeof clientLoader>();
   const { orgId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const me = layoutData?.me;
 
@@ -54,6 +61,51 @@ export default function Channels() {
       </Header>
 
       <div className="p-6 max-w-6xl">
+        {searchParams.get('gmail') === 'success' && (
+          <Alert className="mb-4">
+            <CheckCircleIcon className="h-4 w-4" />
+            <AlertTitle>Gmail Connected</AlertTitle>
+            <AlertDescription>
+              Your Gmail account has been connected successfully.{' '}
+              <button className="underline" onClick={() => { const sp = new URLSearchParams(searchParams); sp.delete('gmail'); setSearchParams(sp); }}>
+                Dismiss
+              </button>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {searchParams.get('gmail') === 'error' && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircleIcon className="h-4 w-4" />
+            <AlertTitle>Gmail Connection Failed</AlertTitle>
+            <AlertDescription>
+              {searchParams.get('message') || 'Something went wrong.'}{' '}
+              <button className="underline" onClick={() => { const sp = new URLSearchParams(searchParams); sp.delete('gmail'); sp.delete('message'); setSearchParams(sp); }}>
+                Dismiss
+              </button>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <div className="flex justify-end mb-3">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm">
+                <Plus className="w-4 h-4" />
+                Add Channel
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem asChild>
+                <Link to={`/orgs/${orgId}/channels/gmail/new`}>
+                  <MailIcon className="w-4 h-4 mr-2" />
+                  Gmail
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
         <div className="border rounded-md">
           <Table>
             <TableHeader>
@@ -61,7 +113,6 @@ export default function Channels() {
                 <TableHead>Channel</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Environment</TableHead>
-                <TableHead>Agent</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
@@ -92,13 +143,6 @@ export default function Channels() {
                         <span className="text-sm">
                           {channel.environment.user ? `dev:${channel.environment.user.email}` : 'prod'}
                         </span>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">Not configured</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {channel.agent ? (
-                        <span className="text-sm">{channel.agent}</span>
                       ) : (
                         <span className="text-sm text-muted-foreground">Not configured</span>
                       )}

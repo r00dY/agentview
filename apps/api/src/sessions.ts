@@ -122,11 +122,17 @@ export async function createSession(tx: Transaction, params: {
   channelThreadId?: string | null;
   authorId?: string | null;
 }): Promise<Session> {
-  const config = getConfigFromEnvironment(params.environment);
-  const channelConfig = requireChannelConfig(config, params.channelRef);
-  const channelMetadata = 'metadata' in channelConfig ? channelConfig.metadata : undefined;
-  const allowUnknownMetadata = 'allowUnknownMetadata' in channelConfig ? (channelConfig.allowUnknownMetadata ?? true) : true;
-  const metadata = parseMetadata(channelMetadata, allowUnknownMetadata, params.metadata ?? {}, {});
+
+  let metadata : Record<string, any> = {};
+
+  // metadata only when api channel
+  if (params.channelRef.type === 'api') {
+    const config = getConfigFromEnvironment(params.environment);
+    const channelConfig = requireChannelConfig(config, params.channelRef);
+    const channelMetadata = 'metadata' in channelConfig ? channelConfig.metadata : undefined;
+    const allowUnknownMetadata = 'allowUnknownMetadata' in channelConfig ? (channelConfig.allowUnknownMetadata ?? true) : true;
+    metadata = parseMetadata(channelMetadata, allowUnknownMetadata, params.metadata ?? {}, {});
+  }
 
   const user = await tx.query.endUsers.findFirst({
     where: eq(endUsers.id, params.userId),

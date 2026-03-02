@@ -9,6 +9,7 @@ import {
   exchangeCodeForTokens,
   GMAIL_SCOPES,
 } from './client';
+import { getWebAppUrl } from '../../getWebAppUrl';
 import { getProfile, setupWatch, fetchNewEmails, createTokenRefreshHandler } from './api';
 import type { GmailChannelConfig } from './types';
 
@@ -55,62 +56,83 @@ export function createGmailRoutes(gmail: EmailChannelProvider): OpenAPIHono {
   // --- GET /callback ---
 
   app.get('/callback', async (c) => {
+    const webAppUrl = getWebAppUrl();
+
     const error = c.req.query('error');
+    const state = c.req.query('state');
+
+    // Helper to build redirect URL
+    const redirectToChannels = (orgId: string, params: Record<string, string>) => {
+      const url = new URL(`${webAppUrl}/orgs/${orgId}/channels`);
+      for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+      return c.redirect(url.toString());
+    };
+
     if (error) {
-      return c.html('<html><body><h2>Gmail connection was denied.</h2><p>You can close this window.</p></body></html>');
+      // State might still be present even on error
+      let orgId = '';
+      if (state) {
+        try { orgId = verifyOAuthState(state).organizationId; } catch {}
+      }
+      if (orgId) {
+        return redirectToChannels(orgId, { gmail: 'error', message: 'Gmail connection was denied' });
+      }
+      return c.redirect(`${webAppUrl}/dashboard`);
     }
 
     const code = c.req.query('code');
-    const state = c.req.query('state');
 
     if (!code || !state) {
-      return c.html('<html><body><h2>Missing parameters.</h2></body></html>', 400);
+      return c.redirect(`${webAppUrl}/dashboard`);
     }
 
     let statePayload: { organizationId: string; memberId: string };
     try {
       statePayload = verifyOAuthState(state);
     } catch {
-      return c.html('<html><body><h2>Invalid or expired state. Please try again.</h2></body></html>', 400);
+      return c.redirect(`${webAppUrl}/dashboard`);
     }
 
     const { organizationId, memberId } = statePayload;
 
-    // Exchange code for tokens
-    const tokens = await exchangeCodeForTokens(code);
+    try {
+      // Exchange code for tokens
+      const tokens = await exchangeCodeForTokens(code);
 
-    if (!tokens.access_token || !tokens.refresh_token) {
-      return c.html('<html><body><h2>Failed to obtain tokens. Please try again.</h2></body></html>', 400);
+      if (!tokens.access_token || !tokens.refresh_token) {
+        return redirectToChannels(organizationId, { gmail: 'error', message: 'Failed to obtain tokens' });
+      }
+
+      // Get email address
+      const profile = await getProfile(tokens.access_token, tokens.refresh_token);
+
+      // Setup push notifications
+      const watch = await setupWatch(tokens.access_token, tokens.refresh_token);
+
+      const config: GmailChannelConfig = {
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        tokenExpiresAt: tokens.expiry_date
+          ? new Date(tokens.expiry_date).toISOString()
+          : null,
+        historyId: watch.historyId,
+        watchExpiresAt: watch.expiration,
+        connectedBy: memberId,
+      };
+
+      // Upsert: create if new, update if exists
+      const existing = await gmail.getChannel(profile.emailAddress);
+      if (existing) {
+        await gmail.updateChannel(profile.emailAddress, config);
+      } else {
+        await gmail.createChannel(organizationId, profile.emailAddress, config);
+      }
+
+      return redirectToChannels(organizationId, { gmail: 'success' });
+    } catch (err) {
+      console.error('[gmail callback] Error:', err);
+      return redirectToChannels(organizationId, { gmail: 'error', message: 'Something went wrong connecting Gmail' });
     }
-
-    // Get email address
-    const profile = await getProfile(tokens.access_token, tokens.refresh_token);
-
-    // Setup push notifications
-    const watch = await setupWatch(tokens.access_token, tokens.refresh_token);
-
-    const config: GmailChannelConfig = {
-      accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token,
-      tokenExpiresAt: tokens.expiry_date
-        ? new Date(tokens.expiry_date).toISOString()
-        : null,
-      historyId: watch.historyId,
-      watchExpiresAt: watch.expiration,
-      connectedBy: memberId,
-    };
-
-    // Upsert: create if new, update if exists
-    const existing = await gmail.getChannel(profile.emailAddress);
-    if (existing) {
-      await gmail.updateChannel(profile.emailAddress, config);
-    } else {
-      await gmail.createChannel(organizationId, profile.emailAddress, config);
-    }
-
-    return c.html(
-      '<html><body><h2>Gmail Connected!</h2><p>You can close this window.</p></body></html>',
-    );
   });
 
   // --- POST /webhook ---

@@ -28,6 +28,7 @@ export default [
                 route("invitations/:invitationId/cancel", "routes/app/org/members-invite-cancel.tsx"),
             ]),
             route("channels", "routes/app/org/channels.tsx", [
+                route("gmail/new", "routes/app/org/channels-gmail-new.tsx"),
                 route(":channelId/edit", "routes/app/org/channels-edit.tsx"),
             ]),
         ]),
