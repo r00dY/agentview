@@ -2,7 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { type CommentMessage, type Run, type Score, type Session, type SessionBase, type SessionItem, type SessionsStats } from "agentview/apiTypes";
 import { findItemConfigById, findMatchingRunConfigs, requireAgentConfig, requireChannelConfig } from "agentview/configUtils";
 import { enhanceSession, getActiveRuns, getAllSessionItems, getLastRun, getVersions } from "agentview/sessionUtils";
-import type { AgentConfig, ScoreConfig, SessionItemConfig, SessionItemDisplayComponentProps } from "agentview/types";
+import type { AgentConfig, ChannelConfig, ScoreConfig, SessionItemConfig, SessionItemDisplayComponentProps } from "agentview/types";
 import { AlertCircleIcon, ChevronDown, CircleGauge, InfoIcon, Loader2, MessageCirclePlus, UsersIcon } from "lucide-react";
 import { useEffect, useLayoutEffect, useOptimistic, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -80,14 +80,14 @@ function Component() {
 
 function SessionShell({
     sessionBase,
-    agentConfig,
+    channelConfig,
     headerExtra,
     children,
     footer,
     outletContext
 }: {
     sessionBase: SessionBase,
-    agentConfig: AgentConfig,
+    channelConfig: ChannelConfig,
     headerExtra?: React.ReactNode,
     children: React.ReactNode,
     footer?: React.ReactNode,
@@ -101,7 +101,7 @@ function SessionShell({
             </Header>
             <div className="flex-1 overflow-y-auto">
                 <div className="p-6 border-b">
-                    <SessionDetails sessionBase={sessionBase} agentConfig={agentConfig} />
+                    <SessionDetails sessionBase={sessionBase} channelConfig={channelConfig} />
                 </div>
                 {children}
             </div>
@@ -116,7 +116,7 @@ function SessionPageSkeleton({ sessionBase }: { sessionBase: SessionBase }) {
     const agentConfig = requireAgentConfig(config, channelConfig.agent);
 
     return (
-        <SessionShell sessionBase={sessionBase} agentConfig={agentConfig}>
+        <SessionShell sessionBase={sessionBase} channelConfig={channelConfig}>
             <div className="p-6">
                 <LoadingIndicator />
             </div>
@@ -238,9 +238,9 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
     return (
         <SessionShell
             sessionBase={session}
-            agentConfig={agentConfig}
+            channelConfig={channelConfig}
             headerExtra={session.user.createdBy === me.id && <ShareForm session={session} />}
-            footer={session.user.createdBy === me.id && <InputForm session={session} agentConfig={agentConfig} styles={styles} onRunningStateChange={setExpectingRun} />}
+            footer={session.user.createdBy === me.id && <InputForm session={session} channelConfig={channelConfig} styles={styles} onRunningStateChange={setExpectingRun} />}
             outletContext={{ session, allStats }}
         >
             <div ref={bodyRef}>
@@ -379,7 +379,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 }
 
 
-function SessionDetails({ sessionBase, agentConfig }: { sessionBase: SessionBase, agentConfig: AgentConfig }) {
+function SessionDetails({ sessionBase, channelConfig }: { sessionBase: SessionBase, channelConfig: ChannelConfig }) {
     const { organization: { members } } = useSessionContext();
     const versions = sessionBase.versions;
     const simulatedBy = members.find((member) => member.userId === sessionBase.user.createdBy);
@@ -421,7 +421,7 @@ function SessionDetails({ sessionBase, agentConfig }: { sessionBase: SessionBase
                     </PropertyListTextValue>
                 </PropertyListItem>
 
-                {agentConfig.displayProperties && <DisplayProperties displayProperties={agentConfig.displayProperties} inputArgs={{ session: sessionBase }} />}
+                {channelConfig.displayProperties && <DisplayProperties displayProperties={channelConfig.displayProperties} inputArgs={{ session: sessionBase }} />}
             </PropertyList>
         </div>
     );
@@ -468,7 +468,7 @@ function DefaultToolComponent({ item, resultItem }: SessionItemDisplayComponentP
     </Step>
 }
 
-function InputForm({ session, agentConfig, styles, onRunningStateChange }: { session: Session, agentConfig: AgentConfig, styles: Record<string, number>, onRunningStateChange?: (isRunning: boolean) => void }) {
+function InputForm({ session, channelConfig, styles, onRunningStateChange }: { session: Session, channelConfig: ChannelConfig, styles: Record<string, number>, onRunningStateChange?: (isRunning: boolean) => void }) {
     const lastRun = getLastRun(session)
 
     const [abortController, setAbortController] = useState<AbortController | undefined>(undefined)
@@ -545,7 +545,7 @@ function InputForm({ session, agentConfig, styles, onRunningStateChange }: { ses
 
     const isRunning = lastRun?.status === 'in_progress' || !!abortController;
 
-    const InputComponent = agentConfig.inputComponent;
+    const InputComponent = channelConfig.inputComponent;
     if (InputComponent === null) {
         return null;
     }

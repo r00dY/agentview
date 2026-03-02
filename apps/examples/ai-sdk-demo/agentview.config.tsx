@@ -9,11 +9,11 @@ import { CustomPage } from "./components/CustomPage";
 
 export default defineConfig({
   organizationId: import.meta.env.VITE_AGENTVIEW_ORGANIZATION_ID,
-  agents: [
+  channels: [
     {
+      type: "api",
       name: "weather-chat",
-      url: "http://localhost:3000/api/chat",
-      protocol: "ai-sdk",
+      agent: "weather-chat",
       metadata: {
         userLocation: z.string().nullable()
       },
@@ -64,6 +64,29 @@ export default defineConfig({
           value: ({ session }) => session?.metadata?.userLocation
         }
       ],
+      inputComponent: ({ submit2, cancel, isRunning, session, token }) => <UserMessageInput
+        onSubmit={(val) => {
+          submit2([{
+            type: "message",
+            role: "user",
+            parts: [
+              {
+                type: "text",
+                text: val,
+              }
+            ]
+          }])
+        }}
+        onCancel={cancel}
+        isRunning={isRunning}
+      />
+    }
+  ],
+  agents: [
+    {
+      name: "weather-chat",
+      url: "http://localhost:3000/api/chat",
+      protocol: "ai-sdk",
       runs: [
         {
           input: {
@@ -150,22 +173,22 @@ export default defineConfig({
           // ]
         }
       ],
-      inputComponent: ({ submit2, cancel, isRunning, session, token }) => <UserMessageInput
-        onSubmit={(val) => {
-          submit2([{
-            type: "message",
-            role: "user",
-            parts: [
-              {
-                type: "text",
-                text: val,
-              }
-            ]
-          }])
-        }}
-        onCancel={cancel}
-        isRunning={isRunning}
-      />
+      // inputComponent: ({ submit2, cancel, isRunning, session, token }) => <UserMessageInput
+      //   onSubmit={(val) => {
+      //     submit2([{
+      //       type: "message",
+      //       role: "user",
+      //       parts: [
+      //         {
+      //           type: "text",
+      //           text: val,
+      //         }
+      //       ]
+      //     }])
+      //   }}
+      //   onCancel={cancel}
+      //   isRunning={isRunning}
+      // />
     }
   ],
   customRoutes: [

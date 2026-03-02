@@ -50,9 +50,9 @@ export type InternalConfig = {
     disableSummaries?: boolean;
 }
 
-export type BaseAgentViewConfig<TAgentConfig extends BaseAgentConfig = BaseAgentConfig> = {
+export type BaseAgentViewConfig<TAgentConfig extends BaseAgentConfig = BaseAgentConfig, TChannelConfig extends BaseChannelConfig = BaseChannelConfig> = {
     agents?: TAgentConfig[],
-    channels?: BaseChannelConfig[],
+    channels?: TChannelConfig[],
     webhookUrl?: string,
     __internal?: InternalConfig,
 }

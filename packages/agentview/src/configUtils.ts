@@ -25,7 +25,7 @@ export function requireAgentConfig<T extends BaseAgentViewConfig>(config: T, age
     return agentConfig;
 }
 
-export function findChannelConfig<T extends BaseAgentViewConfig>(config: T, channelRef: ChannelRef): BaseChannelConfig | null {
+export function findChannelConfig<T extends BaseAgentViewConfig>(config: T, channelRef: ChannelRef) : NonNullable<T["channels"]>[number] | null {
     return config.channels?.find((c) => {
         if (channelRef.type === 'api') {
             return c.type === 'api' && c.name === channelRef.name;
@@ -36,7 +36,7 @@ export function findChannelConfig<T extends BaseAgentViewConfig>(config: T, chan
     }) ?? null;
 }
 
-export function requireChannelConfig<T extends BaseAgentViewConfig>(config: T, channelRef: ChannelRef): BaseChannelConfig {
+export function requireChannelConfig<T extends BaseAgentViewConfig>(config: T, channelRef: ChannelRef) {
     const channelConfig = findChannelConfig(config, channelRef);
     if (!channelConfig) {
         throw new Error(`Channel config not found for channelRef=${channelRef}`);

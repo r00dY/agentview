@@ -5,22 +5,44 @@ import { agentview, AgentViewError } from "../lib/agentview";
 import { getListParams, toQueryParams } from "../lib/listParams";
 import { type ActionResponse } from "../lib/errors";
 import { config } from "../config";
-import { requireAgentConfig } from "agentview/configUtils";
+import { requireAgentConfig, requireChannelConfig } from "agentview/configUtils";
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { AlertCircleIcon } from "lucide-react";
+import type { ApiChannelConfig } from "agentview/configTypes";
+
+function getChannelNameFromRequest(request: Request): string {
+  const url = new URL(request.url);
+  const channelName = url.searchParams.get('channel');
+  if (!channelName) {
+    throw new Error('Channel name is required');
+  }
+
+  return channelName
+
+  // const channelConfig = config.channels?.find(
+  //   (c): c is ApiChannelConfig => c.type === 'api' && c.name === channelName
+  // );
+  // if (!channelConfig) {
+  //   throw new Error(`Channel '${channelName}' not found`);
+  // }
+
+  // return channelConfig;
+}
 
 async function loader({ request }: LoaderFunctionArgs) {
-  const listParams = getListParams(request);
-  const agentConfig = requireAgentConfig(config, listParams.agent);
+  const channelConfig = requireChannelConfig(config, { type: 'api', name: getChannelNameFromRequest(request) });
 
   return {
-    agentConfig
-  } 
+    channelConfig
+  }
 }
 
 async function action({ request, params }: ActionFunctionArgs): Promise<ActionResponse | Response> {
+  const channelName = getChannelNameFromRequest(request);
+
+  const channelConfig = requireChannelConfig(config, { type: 'api', name: channelName });
+  // const agentConfig = requireAgentConfig(config, channelConfig.agent);
   const listParams = getListParams(request);
-  const agentConfig = requireAgentConfig(config, listParams.agent);
 
   // This action only supports JSON payloads, other encoding methods (like form data) treat this request as if context was not provided
   let payload: any = undefined;
@@ -28,19 +50,14 @@ async function action({ request, params }: ActionFunctionArgs): Promise<ActionRe
     payload = await request.json();
   }
 
-  // // Check whether metadata is parsable
-  // const metadataSchema = z.object(agentConfig.metadata ?? {});
-  // const isMetadataParsable = metadataSchema.safeParse(payload?.metadata ?? {}).success;
-  // if (agentConfig.metadata ?? {}) {
-
-  if (!payload && agentConfig.newSessionComponent) {
-    return redirect(`/sessions/new?${toQueryParams(listParams)}`, { status: 303 });
+  if (!payload && channelConfig.newSessionComponent) {
+    return redirect(`/sessions/new?channel=${channelName}&${toQueryParams(listParams)}`, { status: 303 });
   }
 
   try {
     const user = await agentview.createUser({ space: "playground" });
     const session = await agentview.createSession({
-      agent: agentConfig.name,
+      channel: channelName,
       userId: user.id,
       metadata: payload?.metadata
     });
@@ -55,7 +72,7 @@ async function action({ request, params }: ActionFunctionArgs): Promise<ActionRe
 }
 
 function Component() {
-  const { agentConfig } = useLoaderData<typeof loader>();
+  const { channelConfig } = useLoaderData<typeof loader>();
 
   const actionData = useActionData<typeof action>();
   const fetcher = useFetcher();
@@ -85,14 +102,14 @@ function Component() {
           <AlertDescription>{error.message}</AlertDescription>
         </Alert>}
 
-        {agentConfig.newSessionComponent && <agentConfig.newSessionComponent
+        {channelConfig.newSessionComponent && <channelConfig.newSessionComponent
           submit={(values) => { 
             fetcher.submit(values ?? {}, { method: 'post', encType: 'application/json' }) 
           }}
           isRunning={fetcher.state === "submitting"}
         />}
 
-        {!agentConfig.newSessionComponent && !error && <Alert variant="default">
+        {!channelConfig.newSessionComponent && !error && <Alert variant="default">
           <AlertCircleIcon className="h-4 w-4" />
           <AlertTitle>No New Session Form</AlertTitle>
           <AlertDescription>

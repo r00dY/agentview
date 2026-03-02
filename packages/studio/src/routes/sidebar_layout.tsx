@@ -7,6 +7,7 @@ import {
   useLoaderData,
   useLocation,
   useRevalidator,
+  useSubmit,
   type LoaderFunctionArgs,
   type RouteObject
 } from "react-router";
@@ -35,6 +36,7 @@ import {
 
 // Removed Framework Mode type import
 import { spaceAllowedValues, type Space } from "agentview/apiTypes";
+import type { ApiChannelConfig } from "agentview/configTypes";
 import type { AgentCustomRoute } from "agentview/types";
 import { getWebAppUrl } from "agentview/urls";
 import { matchPath } from "react-router";
@@ -120,6 +122,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
 function Component() {
   const { me, organization, locale, listStats, agent } = useLoaderData<typeof loader>()
   const location = useLocation();
+  const submitForm = useSubmit();
+
+  const apiChannels = (config.channels ?? []).filter(
+    (c): c is ApiChannelConfig => c.type === 'api'
+  );
 
   // Helper function to get unseen count for a specific session type and list name
   const getUnseenCount = (space: Space) => {
@@ -189,13 +196,34 @@ function Component() {
               </SidebarMenuItem> */}
 
               <SidebarMenuItem>
-
-                <Form action={`/sessions/new?agent=${agent}&space=playground`} method="post" className="flex flex-col items-stretch relative mt-1 px-1">
-                  <Button variant="outline" size="sm" type="submit">
-                    <PlusIcon className="h-4 w-4" />
-                    New Session
-                  </Button>
-                </Form>
+                {apiChannels.length === 1 ? (
+                  <Form action={`/sessions/new?channel=${apiChannels[0].name}&space=playground`} method="post" className="flex flex-col items-stretch relative mt-1 px-1">
+                    <Button variant="outline" size="sm" type="submit">
+                      <PlusIcon className="h-4 w-4" />
+                      New Session
+                    </Button>
+                  </Form>
+                ) : apiChannels.length > 1 ? (
+                  <div className="flex flex-col items-stretch relative mt-1 px-1">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm">
+                          <PlusIcon className="h-4 w-4" />
+                          New Session
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-[--radix-popper-anchor-width]">
+                        {apiChannels.map(channel => (
+                          <DropdownMenuItem key={channel.name} onClick={() => {
+                            submitForm(null, { method: 'post', action: `/sessions/new?channel=${channel.name}&space=playground` });
+                          }}>
+                            {channel.name}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                ) : null}
               </SidebarMenuItem>
             </SidebarMenu>
 

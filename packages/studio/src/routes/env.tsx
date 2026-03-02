@@ -39,7 +39,7 @@ function Component() {
         <Button variant="outline" onClick={() => {
           console.log(environment.config);
         }} className="mt-4"><TerminalIcon /> Print config to console</Button>
-        <pre className="bg-background p-4 rounded overflow-x-auto text-sm mt-4">
+        <pre className="bg-muted p-4 rounded overflow-x-auto text-sm mt-4">
           {JSON.stringify(environment.config, null, 2)}
         </pre>
       </div>

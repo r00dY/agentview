@@ -1,5 +1,5 @@
 import type { RouteObject } from "react-router";
-import type { BaseScoreConfig, BaseSessionItemConfig, BaseAgentConfig, BaseAgentViewConfig, BaseRunConfig } from "./configTypes.js";
+import type { BaseScoreConfig, BaseSessionItemConfig, BaseAgentConfig, BaseAgentViewConfig, BaseRunConfig, BaseChannelConfig } from "./configTypes.js";
 import type { Run, Session, SessionBase, SessionItem } from "./apiTypes.js";
 import { enhanceSession } from "./sessionUtils.js";
 import { z } from "zod";
@@ -84,6 +84,7 @@ export type AgentInputComponentProps<TSchema extends z.ZodTypeAny = z.ZodAny> = 
 
 export type AgentInputComponent<TSchema extends z.ZodTypeAny = z.ZodAny> = React.ComponentType<AgentInputComponentProps<TSchema>>
 
+
 export type NewSessionComponentProps = {
   submit: (values?: { metadata?: any }) => void,
   isRunning: boolean
@@ -91,14 +92,20 @@ export type NewSessionComponentProps = {
 
 export type NewSessionComponent = React.ComponentType<NewSessionComponentProps>
 
-export type AgentConfig = BaseAgentConfig<RunConfig> & {
+export type ChannelConfig = BaseChannelConfig & {
   displayProperties?: DisplayProperty<{ session: SessionBase }>[];
   newSessionComponent?: NewSessionComponent;
   inputComponent?: AgentInputComponent;
+}
+
+export type AgentConfig = BaseAgentConfig<RunConfig> & {
+  // displayProperties?: DisplayProperty<{ session: SessionBase }>[];
+  // newSessionComponent?: NewSessionComponent;
+  // inputComponent?: AgentInputComponent;
   // run?: RunConfig;
 }
 
-export type AgentViewConfig = BaseAgentViewConfig<AgentConfig> & {
+export type AgentViewConfig = BaseAgentViewConfig<AgentConfig, ChannelConfig> & {
   organizationId: string;
   customRoutes?: CustomRoute[],
 }
