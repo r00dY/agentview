@@ -3,7 +3,7 @@ import { type CommentMessage, type Run, type Score, type Session, type SessionBa
 import { findItemConfigById, findMatchingRunConfigs, requireAgentConfig, requireChannelConfig } from "agentview/configUtils";
 import { enhanceSession, getActiveRuns, getAllSessionItems, getLastRun, getVersions } from "agentview/sessionUtils";
 import type { AgentConfig, ChannelConfig, ScoreConfig, SessionItemConfig, SessionItemDisplayComponentProps } from "agentview/types";
-import { AlertCircleIcon, ChevronDown, CircleGauge, InfoIcon, Loader2, MessageCirclePlus, UsersIcon } from "lucide-react";
+import { AlertCircleIcon, ChevronDown, CircleGauge, InfoIcon, Loader2, Lock, MessageCirclePlus, UsersIcon } from "lucide-react";
 import { useEffect, useLayoutEffect, useOptimistic, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import type { LoaderFunctionArgs, RouteObject } from "react-router";
@@ -404,9 +404,9 @@ function SessionDetails({ sessionBase, channelConfig }: { sessionBase: SessionBa
                     </PropertyListTextValue>
                 </PropertyListItem>
                 <PropertyListItem>
-                    <PropertyListTitle>Source</PropertyListTitle>
+                    <PropertyListTitle>Space</PropertyListTitle>
                     <PropertyListTextValue>
-                        {simulatedBy ? <>Simulated by <span className="text-cyan-700">{simulatedBy.user.name}</span></> : "Production"}
+                        {simulatedBy ? <>Playground of <span className="text-cyan-700">{simulatedBy.user.name}</span></> : "Production" }
                     </PropertyListTextValue>
                 </PropertyListItem>
                 <PropertyListItem>

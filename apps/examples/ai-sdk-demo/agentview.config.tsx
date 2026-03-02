@@ -12,6 +12,30 @@ export default defineConfig({
   channels: [
     {
       type: "api",
+      name: "test",
+      agent: "weather-chat",
+      metadata: {
+        userLocation: z.string().nullable()
+      },
+      inputComponent: ({ submit2, cancel, isRunning, session, token }) => <UserMessageInput
+        onSubmit={(val) => {
+          submit2([{
+            type: "message",
+            role: "user",
+            parts: [
+              {
+                type: "text",
+                text: val,
+              }
+            ]
+          }])
+        }}
+        onCancel={cancel}
+        isRunning={isRunning}
+      />
+    },
+    {
+      type: "api",
       name: "weather-chat",
       agent: "weather-chat",
       metadata: {
