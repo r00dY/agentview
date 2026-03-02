@@ -177,7 +177,7 @@ export function channelProvider(type: string) {
     /**
      * IGNORE ALL MESSAGES THAT DO NOT COME FROM MY EMAILS
      */
-    if (channel.type === 'gmail'/* && params.contact !== 'a.r.dabrowski@gmail.com' && params.contact !== 'andrzej@commerce-ui.com'*/) {
+    if (channel.type === 'gmail') {
       return ignoreMessage(`Ignoring gmail email from ${params.contact}`);
     }
 
