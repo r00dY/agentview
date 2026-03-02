@@ -68,10 +68,9 @@ async function processAgentFetch(run: Run) {
 
     const config = BaseConfigSchemaToZod.parse(environment.config);
 
-    const channelAddress = 'name' in session.channel ? session.channel.name : session.channel.address;
-    const ch = findChannelConfig(config, session.channel.type, channelAddress);
+    const ch = findChannelConfig(config, session.channel);
     if (!ch) {
-      throw new Error(`Channel config not found for type=${session.channel.type} address=${channelAddress}`);
+      throw new Error(`Channel config not found for ${JSON.stringify(session.channel)}.`);
     }
     const agentName = ch.agent;
 

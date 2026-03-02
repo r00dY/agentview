@@ -158,12 +158,8 @@ function requireAgentConfig(config: BaseAgentViewConfig, name: string) {
   return agentConfig
 }
 
-function channelAddressString(ch: ChannelRef): string {
-  return 'name' in ch ? ch.name : ch.address;
-}
-
 function resolveAgentFromSession(config: BaseAgentViewConfig, session: Session): string {
-  const ch = findChannelConfig(config, session.channel.type, channelAddressString(session.channel));
+  const ch = findChannelConfig(config, session.channel);
   if (!ch) {
     throw new HTTPException(404, { message: "Channel config not found." });
   }
@@ -1062,7 +1058,7 @@ app.openapi(sessionPATCHRoute, async (c) => {
     authorize(principal, { action: "end-user:update", user: session.user });
 
     const config = await requireConfig(tx, principal)
-    const channelConfig = findChannelConfig(config, session.channel.type, channelAddressString(session.channel));
+    const channelConfig = findChannelConfig(config, session.channel);
 
     const channelMetadata = channelConfig && 'metadata' in channelConfig ? channelConfig.metadata : undefined;
     const allowUnknownMetadata = channelConfig && 'allowUnknownMetadata' in channelConfig ? (channelConfig.allowUnknownMetadata ?? true) : true;
@@ -1318,7 +1314,7 @@ app.openapi(sessionsPOSTRoute, async (c) => {
   return withOrg(principal.organizationId, async (tx) => {
     const config = await requireConfig(tx, principal)
 
-    const channelConfig = findChannelConfig(config, 'api', body.channel)
+    const channelConfig = findChannelConfig(config, { type: 'api', name: body.channel })
     if (!channelConfig) {
       throw new HTTPException(404, { message: `Channel '${body.channel}' not found in schema.` });
     }

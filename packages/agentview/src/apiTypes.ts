@@ -129,9 +129,9 @@ export type RunUpdate = z.infer<typeof RunUpdateSchema>
 
 export type Run = z.infer<typeof RunSchema>
 
-export const ChannelRefSchema = z.union([
+export const ChannelRefSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('api'), name: z.string() }),
-  z.object({ type: z.string(), address: z.string() }),
+  z.object({ type: z.enum(['gmail', 'mock']), address: z.string() }),
 ]);
 
 export type ChannelRef = z.infer<typeof ChannelRefSchema>

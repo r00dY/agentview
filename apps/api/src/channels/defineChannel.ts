@@ -202,7 +202,9 @@ export function channelProvider(type: string) {
      * TODO: WE SHOULD ALLOW MESSAGES TO BE INGESTED EVEN IF THEY DON'T HAVE AGENT CONNECTED!
      */
     const config = BaseConfigSchemaToZod.parse(environment.config);
-    const channelConfig = findChannelConfig(config, channel.type, channel.address);
+
+    // @ts-ignore
+    const channelConfig = findChannelConfig(config, { type: channel.type, address: channel.address });
     if (!channelConfig) {
       return ignoreMessage(`No channel config for type=${channel.type} address=${channel.address}`);
     }

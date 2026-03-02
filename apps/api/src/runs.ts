@@ -223,10 +223,9 @@ export async function createRun(
 
   const config = getConfigFromEnvironment(environment);
 
-  const channelAddress = 'name' in session.channel ? session.channel.name : session.channel.address;
-  const channelConfig = findChannelConfig(config, session.channel.type, channelAddress);
+  const channelConfig = findChannelConfig(config, session.channel);
   if (!channelConfig) {
-    throw new AgentViewError(`Channel config not found for type=${session.channel.type} address=${channelAddress}.`, 404);
+    throw new AgentViewError(`Channel config not found for ${JSON.stringify(session.channel)}.`, 404);
   }
   const agentName = channelConfig.agent;
 

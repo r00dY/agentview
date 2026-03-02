@@ -5,7 +5,7 @@ import type { RouteObject } from "react-router";
 import { Header, HeaderTitle } from "../components/header";
 import { Button } from "../components/ui/button";
 import { requireEnvironment } from "../lib/environment";
-import { useSessionContext } from "../lib/SessionContext";
+// import { useSessionContext } from "../lib/SessionContext";
 import { PropertyList, PropertyListTextValue, PropertyListItem, PropertyListTitle } from "../components/PropertyList";
 
 async function loader() {
@@ -15,8 +15,8 @@ async function loader() {
 
 function Component() {
   const { environment } = useLoaderData<typeof loader>();
-  const { organization } = useSessionContext()
-  const configEnvOwner = organization.members.find(m => m.userId === environment.userId);
+  // const { organization } = useSessionContext()
+  // const configEnvOwner = organization.members.find(m => m.userId === environment.user.id);
 
   return <div>
     <Header>
@@ -29,8 +29,8 @@ function Component() {
           <PropertyListItem>
             <PropertyListTitle>Environment</PropertyListTitle>
             <PropertyListTextValue>
-              {environment.userId === null && "production"}
-              {environment.userId !== null && `dev (${configEnvOwner?.user.email})`}
+              {environment.user === null && "production"}
+              {environment.user !== null && `dev (${environment.user.email})`}
             </PropertyListTextValue>
           </PropertyListItem>
 

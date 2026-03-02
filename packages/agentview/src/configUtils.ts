@@ -1,4 +1,4 @@
-import type { SessionItem } from "./apiTypes.js";
+import type { SessionItem, ChannelRef } from "./apiTypes.js";
 import type { BaseAgentViewConfig, BaseAgentConfig, BaseChannelConfig, BaseSessionItemConfig, BaseScoreConfig, Metadata, BaseRunConfig } from "./configTypes.js";
 import { z } from "zod";
 import { AgentViewError } from "./AgentViewError.js";
@@ -25,13 +25,24 @@ export function requireAgentConfig<T extends BaseAgentViewConfig>(config: T, age
     return agentConfig;
 }
 
-export function findChannelConfig<T extends BaseAgentViewConfig>(config: T, type: string, address: string): BaseChannelConfig | null {
+export function findChannelConfig<T extends BaseAgentViewConfig>(config: T, channelRef: ChannelRef): BaseChannelConfig | null {
     return config.channels?.find((c) => {
-        if (c.type !== type) return false;
-        return 'name' in c ? c.name === address : c.address === address;
+        if (channelRef.type === 'api') {
+            return c.type === 'api' && c.name === channelRef.name;
+        }
+        else {
+            return c.type === channelRef.type && c.address === channelRef.address;
+        }
     }) ?? null;
 }
 
+export function requireChannelConfig<T extends BaseAgentViewConfig>(config: T, channelRef: ChannelRef): BaseChannelConfig {
+    const channelConfig = findChannelConfig(config, channelRef);
+    if (!channelConfig) {
+        throw new Error(`Channel config not found for channelRef=${channelRef}`);
+    }
+    return channelConfig;
+}
 
 export function findMatchingRunConfigs<T extends BaseAgentConfig>(agentConfig: T, inputItemContent: any) {
     let matchingRunConfigs: NonNullable<T["runs"]>[number][] = [];
@@ -271,6 +282,23 @@ function baseConfigSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
         callResult: BaseSessionItemConfigSchema.optional(),
     });
 
+
+    const apiChannelSchema = z.object({
+        type: z.literal('api'),
+        name: z.string(),
+        agent: z.string(),
+        metadata: z.record(z.string(), jsonSchemaSchema).optional(),
+        allowUnknownMetadata: z.boolean().optional(),
+    });
+
+    const externalChannelSchema = z.object({
+        type: z.union([z.literal('gmail'), z.literal('mock')]),
+        address: z.string(),
+        agent: z.string()
+    });
+
+    const channelSchema = z.discriminatedUnion('type', [apiChannelSchema, externalChannelSchema]);
+
     return z.object({
         agents: z.array(z.object({
             name: z.string(),
@@ -286,17 +314,7 @@ function baseConfigSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
                 idleTimeout: z.number().optional(),
             })).optional(),
         })).optional(),
-        channels: z.array(z.object({
-            type: z.string(),
-            name: z.string().optional(),
-            agent: z.string(),
-            address: z.string().optional(),
-            metadata: z.record(z.string(), jsonSchemaSchema).optional(),
-            allowUnknownMetadata: z.boolean().optional(),
-        }).refine(
-            (c) => c.type === 'api' ? !!c.name : !!c.address,
-            (c) => ({ message: c.type === 'api' ? "API channels require 'name'" : "External channels require 'address'" })
-        )).optional(),
+        channels: z.array(channelSchema).optional(),
         webhookUrl: z.string().optional(),
         __internal: z.object({
             disableSummaries: z.boolean().optional(),

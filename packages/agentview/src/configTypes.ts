@@ -39,7 +39,7 @@ export interface ApiChannelConfig {
 }
 
 export interface ExternalChannelConfig {
-    type: string; // 'gmail', 'mock', etc.
+    type: 'gmail' | 'mock';
     address: string;
     agent: string;
 }
