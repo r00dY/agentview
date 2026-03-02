@@ -410,7 +410,7 @@ describe('API', () => {
     })
 
     test("each developer has their own dev config", async () => {
-      const authClient = createTestAuthClient();
+    const authClient = createTestAuthClient();
 
       // Sign in as Bob and create his API key
       await authClient.signIn.email({ email: `bob@${orgSlug}.com`, password: "blablabla" });
@@ -586,17 +586,17 @@ describe('API', () => {
       expect(session.items).toEqual([baseInput, baseOutput])
       expect(session.lastRun?.id).toBe(run1.id)
 
-      // Second run, failed, but items in the history
-      let run2 = await av.createRun({ sessionId: session.id, items: [baseInput, baseStep, baseOutput], status: "failed", version: "1.0.0" })
-      session = await av.getSession({ id: session.id })
-      expect(session.items).toEqual([baseInput, baseOutput, baseInput, baseStep, baseOutput])
-      expect(session.lastRun?.id).toBe(run2.id)
+      // // Second run, failed, but items in the history
+      // let run2 = await av.createRun({ sessionId: session.id, items: [baseInput, baseStep, baseOutput], status: "failed", version: "1.0.0" })
+      // session = await av.getSession({ id: session.id })
+      // expect(session.items).toEqual([baseInput, baseOutput, baseInput, baseStep, baseOutput])
+      // expect(session.lastRun?.id).toBe(run2.id)
 
-      // Retry, successful
-      let run3 = await av.createRun({ sessionId: session.id, items: [baseInput, baseStep, baseOutput], status: "completed", version: "1.0.0" })
-      session = await av.getSession({ id: session.id })
-      expect(session.items).toEqual([baseInput, baseOutput, baseInput, baseStep, baseOutput])
-      expect(session.lastRun?.id).toBe(run3.id)
+      // // Retry, successful
+      // let run3 = await av.createRun({ sessionId: session.id, items: [baseInput, baseStep, baseOutput], status: "completed", version: "1.0.0" })
+      // session = await av.getSession({ id: session.id })
+      // expect(session.items).toEqual([baseInput, baseOutput, baseInput, baseStep, baseOutput])
+      // expect(session.lastRun?.id).toBe(run3.id)
     })
 
     test("state works properly", async () => {

@@ -39,7 +39,7 @@ export function findChannelConfig<T extends BaseAgentViewConfig>(config: T, chan
 export function requireChannelConfig<T extends BaseAgentViewConfig>(config: T, channelRef: ChannelRef) {
     const channelConfig = findChannelConfig(config, channelRef);
     if (!channelConfig) {
-        throw new Error(`Channel config not found for channelRef=${channelRef}`);
+        throw new AgentViewError(`Channel config not found for channelRef: ${JSON.stringify(channelRef)}`, 404);
     }
     return channelConfig;
 }

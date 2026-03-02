@@ -44,7 +44,7 @@ import {
   type ChannelRef,
 } from 'agentview/apiTypes';
 import { type BaseAgentViewConfig } from 'agentview/configTypes';
-import { BaseConfigSchema, BaseConfigSchemaToZod, findChannelConfig, findItemConfigById, requireRunConfig } from 'agentview/configUtils';
+import { BaseConfigSchema, BaseConfigSchemaToZod, findChannelConfig, findItemConfigById, requireChannelConfig, requireRunConfig } from 'agentview/configUtils';
 import { getAllSessionItems, getLastRun } from 'agentview/sessionUtils';
 import packageJson from '../package.json';
 import { equalJSON } from './equalJSON';
@@ -1314,11 +1314,14 @@ app.openapi(sessionsPOSTRoute, async (c) => {
   return withOrg(principal.organizationId, async (tx) => {
     const config = await requireConfig(tx, principal)
 
-    const channelConfig = findChannelConfig(config, { type: 'api', name: body.channel })
-    if (!channelConfig) {
-      throw new HTTPException(404, { message: `Channel '${body.channel}' not found in schema.` });
-    }
-    // Validate that the agent referenced by the channel exists
+    // in API channel and agent must exist
+    const channelRef : ChannelRef = { type: 'api', name: body.channel }
+
+    console.log('channelRef', channelRef);
+    const channelConfig = requireChannelConfig(config, channelRef)
+    console.log('channelConfig', channelConfig);
+
+    
     requireAgentConfig(config, channelConfig.agent)
 
     // find user or create new one if not found
@@ -1336,9 +1339,13 @@ app.openapi(sessionsPOSTRoute, async (c) => {
 
     authorize(principal, { action: "end-user:update", user });
 
+    const env = getEnv(principal);
+    const environment = await requireEnvironment(tx, env);
+
     const newSession = await createSession(tx, {
       organizationId: principal.organizationId,
-      channelConfig,
+      environment,
+      channelRef,
       userId: user.id,
       metadata: body.metadata,
       summary: body.summary,
@@ -1697,10 +1704,18 @@ app.openapi(runPATCHRoute, async (c) => {
     //   await applyRunPatch(tx, run.id, agentConfig, body);
     // }
 
-    const config = await requireConfig(tx, principal)
-    const agentConfig = requireAgentConfig(config, resolveAgentFromSession(config, session))
 
-    await applyRunPatch(tx, run.id, agentConfig, body);
+
+
+
+
+    const env = getEnv(principal);
+    const environment = await requireEnvironment(tx, env);
+
+    // const config = await requireConfig(tx, principal)
+    // const agentConfig = requireAgentConfig(config, resolveAgentFromSession(config, session))
+
+    await applyRunPatch(tx, run.id, environment, body);
 
     const updatedSession = await requireSession(tx, session.id);
     const newRun = getLastRun(updatedSession)!;

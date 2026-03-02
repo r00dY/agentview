@@ -2,10 +2,12 @@ import { and, desc, eq } from "drizzle-orm";
 import { endUsers, events, runs, sessionItems, sessions } from "./schemas/schema"
 import type { Transaction } from "./types";
 import { isUUID } from "./isUUID";
-import type { Session } from "agentview/apiTypes";
+import type { ChannelRef, Environment, Session } from "agentview/apiTypes";
 import type { BaseChannelConfig } from "agentview/configTypes";
 import { updateInboxes } from "./updateInboxes";
 import { parseMetadata } from "./parseMetadata";
+import { requireChannelConfig } from "agentview/configUtils";
+import { getConfigFromEnvironment } from "./environments";
 
 export type LastRunStatus = {
   id: string;
@@ -112,15 +114,18 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
 
 export async function createSession(tx: Transaction, params: {
   organizationId: string;
-  channelConfig: BaseChannelConfig;
+  environment: Environment;
+  channelRef: ChannelRef;
   userId: string;
   metadata?: Record<string, any> | null;
   summary?: string | null;
   channelThreadId?: string | null;
   authorId?: string | null;
 }): Promise<Session> {
-  const channelMetadata = 'metadata' in params.channelConfig ? params.channelConfig.metadata : undefined;
-  const allowUnknownMetadata = 'allowUnknownMetadata' in params.channelConfig ? (params.channelConfig.allowUnknownMetadata ?? true) : true;
+  const config = getConfigFromEnvironment(params.environment);
+  const channelConfig = requireChannelConfig(config, params.channelRef);
+  const channelMetadata = 'metadata' in channelConfig ? channelConfig.metadata : undefined;
+  const allowUnknownMetadata = 'allowUnknownMetadata' in channelConfig ? (channelConfig.allowUnknownMetadata ?? true) : true;
   const metadata = parseMetadata(channelMetadata, allowUnknownMetadata, params.metadata ?? {}, {});
 
   const user = await tx.query.endUsers.findFirst({
@@ -143,10 +148,8 @@ export async function createSession(tx: Transaction, params: {
     handleNumber: newHandleNumber,
     handleSuffix,
     metadata,
-    channelType: params.channelConfig.type,
-    channelAddress: 'name' in params.channelConfig
-      ? params.channelConfig.name
-      : params.channelConfig.address,
+    channelType: params.channelRef.type,
+    channelAddress: params.channelRef.type === 'api' ? params.channelRef.name : params.channelRef.address,
     userId: params.userId,
     summary: params.summary ?? null,
     channelThreadId: params.channelThreadId ?? null,

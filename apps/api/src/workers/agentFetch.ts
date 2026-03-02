@@ -155,7 +155,7 @@ async function processAgentFetch(run: Run) {
           await applyRunPatch(
             tx,
             run.id,
-            agentConfig,
+            environment,
             event.data
           );
         });

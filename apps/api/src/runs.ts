@@ -3,7 +3,7 @@ import { runs, sessionItems, webhookJobs } from './schemas/schema';
 import type { Transaction } from './types';
 import type { Environment, Run, RunCreate, RunUpdate, Session } from 'agentview/apiTypes';
 import type { BaseAgentConfig, BaseRunConfig } from 'agentview/configTypes';
-import { requireRunConfig, findItemConfig, findChannelConfig } from 'agentview/configUtils';
+import { requireRunConfig, findItemConfig, findChannelConfig, requireAgentConfig } from 'agentview/configUtils';
 import { AgentViewError } from 'agentview/AgentViewError';
 import { parseMetadata } from './parseMetadata';
 import { resolveVersion } from './versions';
@@ -104,6 +104,7 @@ export async function getRun(tx: Transaction, runId: string) {
         orderBy: (sessionItem, { asc }) => [asc(sessionItem.sortOrder)],
         where: (sessionItem, { eq }) => eq(sessionItem.isState, false),
       },
+      version: true,
     },
   });
 
@@ -118,10 +119,9 @@ export async function getRun(tx: Transaction, runId: string) {
 export async function applyRunPatch(
   tx: Transaction,
   runId: string,
-  agentConfig: BaseAgentConfig,
+  environment: Environment,
   body: RunUpdate
 ) {
-
   const run = await getRun(tx, runId);
   if (!run) {
     throw new AgentViewError("Run not found.", 404);
@@ -129,24 +129,41 @@ export async function applyRunPatch(
 
   /** Find matching run config **/
   const inputItem = run.sessionItems[0].content;
-  const runConfig = requireRunConfig(agentConfig, inputItem);
 
-  /** Validate items */
-  const items = body.items ?? [];
+  let parsedItems: any[] = [];
+  let metadata : Record<string, any> | undefined = undefined;
+  let idleTimeout : number | undefined;
 
-  if (items.length > 0 && run.status !== 'in_progress') {
-    throw new AgentViewError("Cannot add items to a finished run.", 422);
+  if (body.items || body.metadata || body.state) { // operations requireing run config
+    const config = getConfigFromEnvironment(environment);
+
+    const agentName = run.version?.agent;
+    if (!agentName) {
+      throw new AgentViewError("You're trying to update run items, metadata or state, but the run doesn't have an agent assigned yet.", 422);
+    }
+
+    const agentConfig = requireAgentConfig(config, agentName);
+    const runConfig = requireRunConfig(agentConfig, inputItem);
+    
+    /** Validate items */
+    const items = body.items ?? [];
+
+    if (items.length > 0 && run.status !== 'in_progress') {
+      throw new AgentViewError("Cannot add items to a finished run.", 422);
+    }
+
+    parsedItems = validateNonInputItems(runConfig, run.sessionItems.map(si => si.content), items, body.status ?? 'in_progress');
+
+    /** State */
+    if (body.state !== undefined && run.status !== 'in_progress') {
+      throw new AgentViewError("Cannot set state to a finished run.", 422);
+    }
+
+    /** Metadata **/
+    metadata = parseMetadata(runConfig.metadata, runConfig.allowUnknownMetadata ?? true, body.metadata ?? {}, run.metadata ?? {});
+
+    idleTimeout = runConfig.idleTimeout ?? DEFAULT_IDLE_TIME;
   }
-
-  const parsedItems = validateNonInputItems(runConfig, run.sessionItems.map(si => si.content), items, body.status ?? 'in_progress');
-
-  /** State */
-  if (body.state !== undefined && run.status !== 'in_progress') {
-    throw new AgentViewError("Cannot set state to a finished run.", 422);
-  }
-
-  /** Metadata **/
-  const metadata = parseMetadata(runConfig.metadata, runConfig.allowUnknownMetadata ?? true, body.metadata ?? {}, run.metadata ?? {});
 
   /** Status, finished at, failReason */
   if (run.status !== 'in_progress' && body.status && body.status !== run.status) {
@@ -168,8 +185,19 @@ export async function applyRunPatch(
   const isFinished = status === 'completed' || status === 'failed' || status === 'cancelled';
   const finishedAt = run.finishedAt ?? (isFinished ? new Date().toISOString() : null);
 
-  const idleTimeout = runConfig.idleTimeout ?? DEFAULT_IDLE_TIME;
-  const expiresAt = isFinished ? null : new Date(Date.now() + idleTimeout).toISOString();
+  let expiresAt : string | null = null;
+  if (!isFinished) {
+    if (!idleTimeout) { // if not finished, then idleTimeout must be set
+      throw new AgentViewError("idleTimeout must be set when run is not finished.", 422);
+    }
+    expiresAt = new Date(Date.now() + idleTimeout).toISOString();
+  }
+
+
+  // if (!idleTimeout)
+  // console.assert(!isFinished && idleTimeout !== undefined, "idleTimeout must be set when run is not finished");
+
+  // const expiresAt = isFinished ? null : new Date(Date.now() + idleTimeout).toISOString();
 
   if (parsedItems.length > 0) {
     await tx.insert(sessionItems).values(

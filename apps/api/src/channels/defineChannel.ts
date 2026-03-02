@@ -201,27 +201,28 @@ export function channelProvider(type: string) {
      * 
      * TODO: WE SHOULD ALLOW MESSAGES TO BE INGESTED EVEN IF THEY DON'T HAVE AGENT CONNECTED!
      */
-    const config = BaseConfigSchemaToZod.parse(environment.config);
+    // const config = BaseConfigSchemaToZod.parse(environment.config);
 
     // @ts-ignore
-    const channelConfig = findChannelConfig(config, { type: channel.type, address: channel.address });
-    if (!channelConfig) {
-      return ignoreMessage(`No channel config for type=${channel.type} address=${channel.address}`);
-    }
-    const agentName = channelConfig.agent;
-    const agentConfig = config.agents?.find((a: any) => a.name === agentName);
-    if (!agentConfig) {
-      return ignoreMessage(`Agent '${agentName}' not found in config`);
-    }
+    const channelRef : ChannelRef = { type: channel.type, address: channel.address }
 
-    /**
-     * For now, only ai-sdk agents are supported for channels
-     */
-    if (agentConfig.protocol !== 'ai-sdk') {
-      return ignoreMessage(`Unsupported agent protocol: ${agentConfig.protocol}. Only 'ai-sdk' is supported for channels.`);
-    }
+    // const channelConfig = findChannelConfig(config, channelRef) ?? { type: channel.type, address: channel.address, agent: "__unknown__" };
 
-    console.log('[ingestMessage] config and agent exists, agent name: ', agentName);
+    
+    // const agentName = channelConfig.agent;
+    // const agentConfig = config.agents?.find((a: any) => a.name === agentName);
+    // if (!agentConfig) {
+    //   return ignoreMessage(`Agent '${agentName}' not found in config`);
+    // }
+
+    // /**
+    //  * For now, only ai-sdk agents are supported for channels
+    //  */
+    // if (agentConfig.protocol !== 'ai-sdk') {
+    //   return ignoreMessage(`Unsupported agent protocol: ${agentConfig.protocol}. Only 'ai-sdk' is supported for channels.`);
+    // }
+
+    // console.log('[ingestMessage] config and agent exists, agent name: ', agentName);
 
     return withOrg(channel.organizationId, async (tx) => {
       /**
@@ -264,7 +265,7 @@ export function channelProvider(type: string) {
       if (lastRun?.status === 'in_progress') {
         console.log('[ingestMessage] cancelling last run');
 
-        applyRunPatch(tx, lastRun.id, agentConfig, { status: 'cancelled' });
+        applyRunPatch(tx, lastRun.id, environment, { status: 'cancelled' });
       }
       else {
         console.log('[ingestMessage] last run is not in progress');
@@ -355,7 +356,8 @@ export function channelProvider(type: string) {
       if (!sessionId) {
         const newSession = await createSession(tx, {
           organizationId: thread.organizationId,
-          channelConfig,
+          environment,
+          channelRef,
           userId,
           channelThreadId: thread.id,
         });
@@ -363,8 +365,6 @@ export function channelProvider(type: string) {
         console.log('[ingestMessage] new session created: ', newSession.id);
 
       }
-
-
 
       /**
        * Create RUN
