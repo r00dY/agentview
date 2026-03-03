@@ -11,6 +11,11 @@ export default defineConfig({
   organizationId: import.meta.env.VITE_AGENTVIEW_ORGANIZATION_ID,
   channels: [
     {
+      type: "gmail",
+      address: "agentviewtest@gmail.com",
+      agent: "weather-chat",
+    },
+    {
       type: "api",
       name: "test",
       agent: "weather-chat",

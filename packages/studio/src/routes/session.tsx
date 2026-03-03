@@ -275,7 +275,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                             </div>
                         }
                         else {
-                            content = <div className="pl-[10%] relative">
+                            content = <div className="pr-[10%] relative">
                                 <DefaultAssistantComponent item={item.content} sessionItem={item} run={run} session={session} />
                             </div>
                         }
