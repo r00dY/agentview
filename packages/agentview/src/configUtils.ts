@@ -17,7 +17,7 @@ z.string().register(z.globalRegistry, {
     callId: true
 });
 
-export function requireAgentConfig<T extends BaseAgentViewConfig>(config: T, agentName: string): NonNullable<T["agents"]>[number] {
+export function requireAgentConfig<T extends BaseAgentViewConfig>(config: T, agentName?: string): NonNullable<T["agents"]>[number] {
     const agentConfig = config.agents?.find((agent) => agent.name === agentName);
     if (!agentConfig) {
         throw new Error(`Agent config not found for agent '${agentName}'`);
@@ -25,15 +25,20 @@ export function requireAgentConfig<T extends BaseAgentViewConfig>(config: T, age
     return agentConfig;
 }
 
-export function findChannelConfig<T extends BaseAgentViewConfig>(config: T, channelRef: ChannelRef) : NonNullable<T["channels"]>[number] | null {
-    return config.channels?.find((c) => {
-        if (channelRef.type === 'api') {
-            return c.type === 'api' && c.name === channelRef.name;
+export function findChannelConfig<T extends BaseAgentViewConfig>(config: T, channelRef: ChannelRef) : NonNullable<T["channels"]>[number] | undefined {
+    if (channelRef.type === 'api') {
+        return config.channels?.find((c) => c.type === 'api' && c.name === channelRef.name);
+    }
+
+    const channelConfig = config.channels?.find((c) => c.type === channelRef.type && c.address === channelRef.address);
+    if (!channelConfig) {
+        return {
+            ...channelRef,
+            agent: undefined
         }
-        else {
-            return c.type === channelRef.type && c.address === channelRef.address;
-        }
-    }) ?? null;
+    }
+
+    return channelConfig;
 }
 
 export function requireChannelConfig<T extends BaseAgentViewConfig>(config: T, channelRef: ChannelRef) {

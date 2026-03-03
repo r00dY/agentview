@@ -150,20 +150,12 @@ async function requireConfig(tx: Transaction, principal: PrivatePrincipal): Prom
 }
 
 
-function requireAgentConfig(config: BaseAgentViewConfig, name: string) {
+function requireAgentConfig(config: BaseAgentViewConfig, name?: string) {
   const agentConfig = config.agents?.find((agent) => agent.name === name)
   if (!agentConfig) {
     throw new HTTPException(404, { message: `Agent '${name}' not found in schema.` });
   }
   return agentConfig
-}
-
-function resolveAgentFromSession(config: BaseAgentViewConfig, session: Session): string {
-  const ch = findChannelConfig(config, session.channel);
-  if (!ch) {
-    throw new HTTPException(404, { message: "Channel config not found." });
-  }
-  return ch.agent;
 }
 
 function requireItemConfig(runConfig: ReturnType<typeof requireRunConfig>, sessionItems: SessionItem[], itemId: string, itemType?: "input" | "output" | "step") {
@@ -1317,11 +1309,7 @@ app.openapi(sessionsPOSTRoute, async (c) => {
     // in API channel and agent must exist
     const channelRef : ChannelRef = { type: 'api', name: body.channel }
 
-    console.log('channelRef', channelRef);
     const channelConfig = requireChannelConfig(config, channelRef)
-    console.log('channelConfig', channelConfig);
-
-    
     requireAgentConfig(config, channelConfig.agent)
 
     // find user or create new one if not found
@@ -1685,35 +1673,8 @@ app.openapi(runPATCHRoute, async (c) => {
       }
     }
 
-    //   // Cancel the auto-fetch run (it bypasses the 'applyRunPatch' which is not allowed when auto fetching)
-    //   await tx.update(runs).set({
-    //     status: 'cancelled',
-    //     finishedAt: new Date().toISOString(),
-    //     expiresAt: null,
-    //     updatedAt: new Date().toISOString(),
-    //   }).where(eq(runs.id, run.id));
-
-    //   // const updatedSession = await requireSession(tx, session.id);
-    //   // const newRun = getLastRun(updatedSession)!;
-    //   // return c.json(newRun, 201);
-    // }
-    // else {
-    //   const config = await requireConfig(tx, principal)
-    //   const agentConfig = requireAgentConfig(config, resolveAgentFromSession(config, session))
-
-    //   await applyRunPatch(tx, run.id, agentConfig, body);
-    // }
-
-
-
-
-
-
     const env = getEnv(principal);
     const environment = await requireEnvironment(tx, env);
-
-    // const config = await requireConfig(tx, principal)
-    // const agentConfig = requireAgentConfig(config, resolveAgentFromSession(config, session))
 
     await applyRunPatch(tx, run.id, environment, body);
 
@@ -1749,7 +1710,8 @@ app.openapi(runKeepAliveRoute, async (c) => {
     authorize(principal, { action: "end-user:update", user: session.user });
 
     const config = await requireConfig(tx, principal);
-    const agentConfig = requireAgentConfig(config, resolveAgentFromSession(config, session));
+    const channelConfig = requireChannelConfig(config, session.channel);
+    const agentConfig = requireAgentConfig(config, channelConfig.agent);
     const inputItem = run.sessionItems[0].content;
     const runConfig = requireRunConfig(agentConfig, inputItem);
 
@@ -2136,7 +2098,8 @@ app.openapi(scoresPATCHRoute, async (c) => {
     const item = await requireSessionItem(session, itemId);
     const run = session.runs.find(r => r.id === item.runId)!
 
-    const agentConfig = requireAgentConfig(config, resolveAgentFromSession(config, session));
+    const channelConfig = requireChannelConfig(config, session.channel);
+    const agentConfig = requireAgentConfig(config, channelConfig.agent);
     const runConfig = requireRunConfig(agentConfig, run.sessionItems[0].content);
     const itemConfig = requireItemConfig(runConfig, run.sessionItems, item.id).itemConfig;
 

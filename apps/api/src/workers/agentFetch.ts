@@ -73,12 +73,11 @@ async function processAgentFetch(run: Run) {
 
     const config = getConfigFromEnvironment(environment);
 
-    const ch = findChannelConfig(config, session.channel);
-    if (!ch) {
+    const channelConfig = findChannelConfig(config, session.channel);
+    if (!channelConfig) {
       throw new Error(`Channel config not found for ${JSON.stringify(session.channel)}.`);
     }
-    const agentName = ch.agent;
-
+    const agentName = channelConfig.agent;
     const agentConfig = config.agents?.find((a) => a.name === agentName);
 
     if (!agentConfig) {

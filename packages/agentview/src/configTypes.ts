@@ -41,7 +41,7 @@ export interface ApiChannelConfig {
 export interface ExternalChannelConfig {
     type: 'gmail' | 'mock';
     address: string;
-    agent: string;
+    agent?: string;
 }
 
 export type BaseChannelConfig = ApiChannelConfig | ExternalChannelConfig;

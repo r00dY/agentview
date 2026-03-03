@@ -254,35 +254,9 @@ export async function createRun(
   const channelConfig = findChannelConfig(config, session.channel);
   const agentConfig = config.agents?.find(a => a.name === channelConfig?.agent);
 
-  // for API channels, we need to validate that the channel and agent exist
-  // if (session.channel.type === 'api') {
-  //   if (!channelConfig) {
-  //     throw new AgentViewError(`Channel config not found for ${JSON.stringify(session.channel)}.`, 404);
-  //   }
-  //   if (!agentConfig) {
-  //     throw new AgentViewError("Agent not found in environment config.", 404);
-  //   }
-  // }
-  // // For non api channels if there's no agent, we create empty run
-  // else {
-  //   return;
-  // }
-
   if (session.channel.type !== 'api' && manual) {
     throw new AgentViewError("For non-api channels manual mode is not supported.", 422);
   }
-
-
-  // if (!channelConfig) {
-  //   throw new AgentViewError(`Channel config not found for ${JSON.stringify(session.channel)}.`, 404);
-  // }
-  // const agentName = channelConfig.agent;
-
-  // const agentConfig = config.agents?.find(a => a.name === agentName);
-
-  // if (!agentConfig) {
-  //   throw new AgentViewError("Agent not found in environment config.", 404);
-  // }
 
   const { items } = body;
 

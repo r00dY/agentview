@@ -5,7 +5,6 @@ import { channels, channelThreads, channelMessages, endUsers, sessions } from '.
 import { withOrg } from '../withOrg';
 import { db__dangerous } from '../db';
 import type { Transaction } from '../types';
-import { BaseConfigSchemaToZod, findChannelConfig } from 'agentview/configUtils';
 import { applyRunPatch, createRun } from '../runs';
 import { randomBytes } from 'crypto';
 import { createSession } from '../sessions';
@@ -247,10 +246,10 @@ export function channelProvider(type: string) {
       }
 
       /**
-   * Get all messages that are staged for next run
-   * - no run_id (fresh ones)
-   * - all messages from the last run that was not completed
-   */
+       * Get all messages that are staged for next run
+       * - no run_id (fresh ones)
+       * - all messages from the last run that was not completed
+       */
       const inputMessages = await tx.query.channelMessages.findMany({
         where: and(
           eq(channelMessages.channelThreadId, thread.id),
@@ -344,13 +343,6 @@ export function channelProvider(type: string) {
       /**
        * Create RUN
        */
-
-      // TODO - here, if no agent is assigned -> we should just make sure the last run is FAILED.
-      // const config = getConfigFromEnvironment(environment);
-      // const channel = findChannelConfig(config, channelRef);
-      // const agent = config.agents?.find(a => a.name === channel?.agent);
-
-      // if no agent => automatically fail the run
 
       const newRun = await createRun(tx, thread.organizationId, environment, {
         sessionId,
