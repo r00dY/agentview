@@ -87,15 +87,17 @@ const weatherTool = tool({
 });
 
 export async function POST(req: Request) {
-  const { messages, session }: { messages: UIMessage[], session: SessionBase } = await req.json();
+  const { messages, session }: { messages: UIMessage[], session?: SessionBase } = await req.json();
 
-  console.log('[chat] messages: ', messages);
+  console.log('[chat] messages: ', JSON.stringify(messages, null, 2));
   console.log('[chat] session: ', session);
+
+  const userLocation = session?.metadata?.userLocation;
 
   const result = streamText({
     model: openai("gpt-5-mini"),
     system:
-      `You are a helpful assistant with access to a weather tool. When the user asks about weather, use the tool to get real data. Be concise!` + (session.metadata?.userLocation ? ` The user is currently at location: ${session.metadata?.userLocation}.` : ''),
+      `You are a helpful assistant with access to a weather tool. When the user asks about weather, use the tool to get real data. Be concise!` + (userLocation ? ` The user is currently at location: ${userLocation}.` : ''),
     messages: await convertToModelMessages(messages),
     tools: { weather: weatherTool },
     stopWhen: stepCountIs(5),

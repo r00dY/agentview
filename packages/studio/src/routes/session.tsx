@@ -259,14 +259,13 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                         /**
                          * TODO:
                          * - there's no 'agent' in the run. Think how to clean it up.
-                         * - "createRun" should FORCE to set 'agent' property. How the fuck does it even work without it?????  (run belongs to session which has agent connected :))
-                         * - what if run has no agent at all? but has input? (input is a trait of our built-in integrations!!!)
+                         * - "createRun" should FORCE to set 'agent' property. How the fuck does it even work without it?????  ANSWER: run belongs to session which has agent connected :)
+                         * - what if run has no agent at all? but has input? (input is a trait of our built-in integrations!!!) ANSWER: best-effort rendering. We have Streams Protocol for that matter. We could also if/else for channels :)
                          * - actually -> a lot of visual components are "built-in" in Streams Protocol :O
                          * - we must clean up config anyway (for Streams Protocol) AND think what to do with 'agent.protocol' property. So I guess it's a bit more complex here? And connected. 
                          * 
                          * Test those fucking emails!!
                          */
-
 
                         const itemConfigMatch : any = undefined;
                         if (isInputItem) {

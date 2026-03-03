@@ -37,7 +37,13 @@ export default defineConfig({
         }}
         onCancel={cancel}
         isRunning={isRunning}
-      />
+      />,
+      displayProperties: [
+        {
+          title: "User Location",
+          value: ({ session }) => session?.metadata?.userLocation
+        }
+      ]
     },
     {
       type: "api",
