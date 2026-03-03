@@ -259,7 +259,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                         /**
                          * TODO:
                          * - there's no 'agent' in the run. Think how to clean it up.
-                         * - "createRun" should FORCE to set 'agent' property. How the fuck does it even work without it????? 
+                         * - "createRun" should FORCE to set 'agent' property. How the fuck does it even work without it?????  (run belongs to session which has agent connected :))
                          * - what if run has no agent at all? but has input? (input is a trait of our built-in integrations!!!)
                          * - actually -> a lot of visual components are "built-in" in Streams Protocol :O
                          * - we must clean up config anyway (for Streams Protocol) AND think what to do with 'agent.protocol' property. So I guess it's a bit more complex here? And connected. 
