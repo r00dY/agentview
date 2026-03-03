@@ -40,8 +40,8 @@ async function loader({ request, params, context }: LoaderFunctionArgs) {
     try {
         const shouldLoadImmediately = !window.location.pathname.includes(`/sessions/${sessionId}`);
 
-        const [session, comments, scores] = shouldLoadImmediately ? 
-            [agentview.getSessionSync({ id: sessionId }), agentview.getSessionCommentsSync({ id: sessionId }), agentview.getSessionScoresSync({ id: sessionId })] : 
+        const [session, comments, scores] = shouldLoadImmediately ?
+            [agentview.getSessionSync({ id: sessionId }), agentview.getSessionCommentsSync({ id: sessionId }), agentview.getSessionScoresSync({ id: sessionId })] :
             await Promise.all([agentview.getSession({ id: sessionId }), agentview.getSessionComments({ id: sessionId }), agentview.getSessionScores({ id: sessionId })] as const);
 
         return {
@@ -267,64 +267,78 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                          * Test those fucking emails!!
                          */
 
-                        if (run.version?.agent) {
-                            const agentConfig = requireAgentConfig(config, run.version?.agent);
-                        }
 
-                        // const agentConfig = findAgentConfig(config, run.version?.agent);
-                        const runConfigMatches = findMatchingRunConfigs(agentConfig, run.sessionItems[0].content);
-                        const itemConfigMatch = runConfigMatches.length === 1 ? findItemConfigById(runConfigMatches[0], run.sessionItems, item.id) : undefined;
-
-                        if (itemConfigMatch?.itemConfig?.displayComponent === null) {
-                            return null;
-                        }
-
+                        const itemConfigMatch : any = undefined;
                         if (isInputItem) {
-                            const Component = itemConfigMatch?.itemConfig?.displayComponent ?? DefaultInputComponent;
-                            if (!Component) {
-                                return null;
-                            }
                             content = <div className="pl-[10%] relative">
-                                <Component item={item.content} sessionItem={item} run={run} session={session} />
+                                <DefaultInputComponent item={item.content} sessionItem={item} run={run} session={session} />
                             </div>
                         }
-                        else if (itemConfigMatch?.type === "output") {
-                            const Component = itemConfigMatch?.itemConfig?.displayComponent ?? DefaultAssistantComponent;
-                            content = <Component item={item.content} sessionItem={item} run={run} session={session} />
-                        }
                         else {
-                            if (itemConfigMatch?.tool) {
-                                let callContent: any = undefined;
-                                let resultContent: any = undefined;
-                                let Component: React.ComponentType<SessionItemDisplayComponentProps>;
-
-                                if (itemConfigMatch?.tool.type === "call") {
-                                    if (itemConfigMatch?.tool?.hasResult) {
-                                        return null;
-                                    }
-                                    else {
-                                        callContent = itemConfigMatch.content;
-                                        Component = itemConfigMatch?.itemConfig?.displayComponent ?? DefaultToolComponent;
-                                    }
-                                }
-                                else if (itemConfigMatch?.tool.type === "result") {
-                                    resultContent = itemConfigMatch.content;
-                                    callContent = itemConfigMatch.tool.call.content;
-                                    Component = itemConfigMatch?.tool.call.itemConfig?.displayComponent ?? DefaultToolComponent;
-                                }
-                                else {
-                                    throw new Error(`Unreachable`);
-                                }
-
-                                // const Component = itemConfigMatch?.itemConfig?.displayComponent ?? DefaultToolComponent;
-                                content = <Component item={callContent} resultItem={resultContent} sessionItem={item} run={run} session={session} />
-                            }
-                            else {
-                                const Component = itemConfigMatch?.itemConfig?.displayComponent ?? DefaultStepComponent;
-                                content = <Component item={item.content} sessionItem={item} run={run} session={session} />
-                            }
-
+                            content = <div className="pl-[10%] relative">
+                                <DefaultAssistantComponent item={item.content} sessionItem={item} run={run} session={session} />
+                            </div>
                         }
+
+
+                        // if (run.version?.agent) {
+                        //     const agentConfig = requireAgentConfig(config, run.version?.agent);
+                        // }
+
+                        // // const agentConfig = findAgentConfig(config, run.version?.agent);
+                        // const runConfigMatches = findMatchingRunConfigs(agentConfig, run.sessionItems[0].content);
+                        // const itemConfigMatch = runConfigMatches.length === 1 ? findItemConfigById(runConfigMatches[0], run.sessionItems, item.id) : undefined;
+
+                        // if (itemConfigMatch?.itemConfig?.displayComponent === null) {
+                        //     return null;
+                        // }
+
+                        // if (isInputItem) {
+                        //     const Component = itemConfigMatch?.itemConfig?.displayComponent ?? DefaultInputComponent;
+                        //     if (!Component) {
+                        //         return null;
+                        //     }
+                        //     content = <div className="pl-[10%] relative">
+                        //         <Component item={item.content} sessionItem={item} run={run} session={session} />
+                        //     </div>
+                        // }
+                        // else if (itemConfigMatch?.type === "output") {
+                        //     const Component = itemConfigMatch?.itemConfig?.displayComponent ?? DefaultAssistantComponent;
+                        //     content = <Component item={item.content} sessionItem={item} run={run} session={session} />
+                        // }
+                        // else {
+                        //     if (itemConfigMatch?.tool) {
+                        //         let callContent: any = undefined;
+                        //         let resultContent: any = undefined;
+                        //         let Component: React.ComponentType<SessionItemDisplayComponentProps>;
+
+                        //         if (itemConfigMatch?.tool.type === "call") {
+                        //             if (itemConfigMatch?.tool?.hasResult) {
+                        //                 return null;
+                        //             }
+                        //             else {
+                        //                 callContent = itemConfigMatch.content;
+                        //                 Component = itemConfigMatch?.itemConfig?.displayComponent ?? DefaultToolComponent;
+                        //             }
+                        //         }
+                        //         else if (itemConfigMatch?.tool.type === "result") {
+                        //             resultContent = itemConfigMatch.content;
+                        //             callContent = itemConfigMatch.tool.call.content;
+                        //             Component = itemConfigMatch?.tool.call.itemConfig?.displayComponent ?? DefaultToolComponent;
+                        //         }
+                        //         else {
+                        //             throw new Error(`Unreachable`);
+                        //         }
+
+                        //         // const Component = itemConfigMatch?.itemConfig?.displayComponent ?? DefaultToolComponent;
+                        //         content = <Component item={callContent} resultItem={resultContent} sessionItem={item} run={run} session={session} />
+                        //     }
+                        //     else {
+                        //         const Component = itemConfigMatch?.itemConfig?.displayComponent ?? DefaultStepComponent;
+                        //         content = <Component item={item.content} sessionItem={item} run={run} session={session} />
+                        //     }
+
+                        // }
 
                         return {
                             id: item.id,
@@ -421,7 +435,13 @@ function SessionDetails({ sessionBase, channelConfig }: { sessionBase: SessionBa
                 <PropertyListItem>
                     <PropertyListTitle>Space</PropertyListTitle>
                     <PropertyListTextValue>
-                        {simulatedBy ? <>Playground of <span className="text-cyan-700">{simulatedBy.user.name}</span></> : "Production" }
+                        {simulatedBy ? <>Playground of <span className="text-cyan-700">{simulatedBy.user.name}</span></> : "Production"}
+                    </PropertyListTextValue>
+                </PropertyListItem>
+                <PropertyListItem>
+                    <PropertyListTitle>Channel</PropertyListTitle>
+                    <PropertyListTextValue>
+                        {sessionBase.channel.type} {sessionBase.channel.type === 'api' ? `(${sessionBase.channel.name})` : `(${sessionBase.channel.address})`}
                     </PropertyListTextValue>
                 </PropertyListItem>
                 <PropertyListItem>
@@ -541,7 +561,7 @@ function InputForm({ session, channelConfig, styles, onRunningStateChange }: { s
             console.error('Error creating run:', error);
             toast.error(`Error: "${error.message}". Check console.`);
         } finally {
-           onRunningStateChange?.(false);
+            onRunningStateChange?.(false);
         }
     }
 

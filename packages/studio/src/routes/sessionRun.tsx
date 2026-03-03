@@ -8,11 +8,13 @@ import { Button } from "../components/ui/button";
 import { getListParams, toQueryParams } from "../lib/listParams";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { PropertyList, PropertyListItem, PropertyListTextValue, PropertyListTitle } from "../components/PropertyList";
-import { TerminalIcon } from "lucide-react";
-import { requireRunConfig, requireAgentConfig, requireChannelConfig } from "agentview/configUtils";
+import { AlertCircleIcon, TerminalIcon } from "lucide-react";
+import { requireRunConfig, requireAgentConfig, requireChannelConfig, findChannelConfig, findAgentConfig } from "agentview/configUtils";
 import { config } from "../config";
 import { DisplayProperties } from "../components/DisplayProperties";
 import type { ActionResponse } from "../lib/errors";
+import type { AgentViewError, RunConfig } from "agentview";
+import { Alert, AlertDescription } from "../components/ui/alert";
 
 function loader({ request, params }: LoaderFunctionArgs) {
     const listParams = getListParams(request);
@@ -33,16 +35,27 @@ function Component() {
         throw data({ message: "Run not found" }, { status: 404 });
     }
 
-    const channelConfig = requireChannelConfig(config, session.channel);
-    const agentConfig = requireAgentConfig(config, channelConfig.agent);
+    const channelConfig = findChannelConfig(config, session.channel);
+    const agentConfig = findAgentConfig(config, channelConfig?.agent);
 
-    const runConfig = requireRunConfig(agentConfig, run.sessionItems[0].content);
-    // const result = findItemAndRunConfig(agentConfig, session, run.items[0].id, "input");
-    // if (!result) {
-    //     throw data({ message: "Run config not found" }, { status: 404 });
-    // }
+    let runConfig: RunConfig | undefined = undefined;
+    let error: string | undefined = undefined;
 
-    // const { runConfig } = result;
+    if (agentConfig) {
+        try {
+            runConfig = requireRunConfig(agentConfig, run.sessionItems[0].content);
+        } catch (err) {
+            error = (err as AgentViewError).message;
+        }
+    }
+
+    if (!runConfig && !error) {
+        error = "Agent config not found";
+    }
+
+    console.log({ runConfig, error });
+
+    // const runConfig = requireRunConfig(agentConfig, run.sessionItems[0].content);
 
 
     const close = () => {
@@ -109,9 +122,13 @@ function Component() {
                                 : "-"}
                         </PropertyListTextValue>
                     </PropertyListItem>
-                    {runConfig.displayProperties && <DisplayProperties displayProperties={runConfig.displayProperties} inputArgs={{ session, run }} />}
 
+                    {runConfig && runConfig.displayProperties && <DisplayProperties displayProperties={runConfig.displayProperties} inputArgs={{ session, run }} />}
 
+                    {!runConfig && error && <Alert variant="destructive">
+                        <AlertCircleIcon className="h-4 w-4" />
+                        <AlertDescription>{error}</AlertDescription>
+                    </Alert>}
                 </PropertyList>
 
                 {/* <div className="mt-8 border p-4 rounded-lg flex flex-row gap-4 items-center">

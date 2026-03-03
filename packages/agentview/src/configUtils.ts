@@ -17,8 +17,12 @@ z.string().register(z.globalRegistry, {
     callId: true
 });
 
+export function findAgentConfig<T extends BaseAgentViewConfig>(config: T, agentName?: string): NonNullable<T["agents"]>[number] | undefined {
+    return config.agents?.find((agent) => agent.name === agentName);
+}
+
 export function requireAgentConfig<T extends BaseAgentViewConfig>(config: T, agentName?: string): NonNullable<T["agents"]>[number] {
-    const agentConfig = config.agents?.find((agent) => agent.name === agentName);
+    const agentConfig = findAgentConfig(config, agentName);
     if (!agentConfig) {
         throw new Error(`Agent config not found for agent '${agentName}'`);
     }
