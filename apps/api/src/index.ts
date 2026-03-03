@@ -59,7 +59,7 @@ import type { Transaction } from './types';
 import { updateInboxes } from './updateInboxes';
 import { findUser } from './users';
 import { randomBytes } from 'crypto';
-import { applyRunPatch, getRun, createRun, DEFAULT_IDLE_TIME } from './runs';
+import { applyRunPatch, getRun, createRun, DEFAULT_IDLE_TIME, getRunInputContent } from './runs';
 import { parseMetadata } from './parseMetadata';
 import { authn, authnUser, authorize, requireMemberPrincipal, getMemberId, requireMemberId, getEnv, type PrivatePrincipal, type Principal, type MemberPrincipal, type ApiKeyPrincipal, type UserPrincipal } from './authMiddleware';
 
@@ -1712,7 +1712,7 @@ app.openapi(runKeepAliveRoute, async (c) => {
     const config = await requireConfig(tx, principal);
     const channelConfig = requireChannelConfig(config, session.channel);
     const agentConfig = requireAgentConfig(config, channelConfig.agent);
-    const inputItem = run.sessionItems[0].content;
+    const inputItem = getRunInputContent(run.sessionItems);
     const runConfig = requireRunConfig(agentConfig, inputItem);
 
     const status = run.status;
@@ -2100,7 +2100,7 @@ app.openapi(scoresPATCHRoute, async (c) => {
 
     const channelConfig = requireChannelConfig(config, session.channel);
     const agentConfig = requireAgentConfig(config, channelConfig.agent);
-    const runConfig = requireRunConfig(agentConfig, run.sessionItems[0].content);
+    const runConfig = requireRunConfig(agentConfig, getRunInputContent(run.sessionItems));
     const itemConfig = requireItemConfig(runConfig, run.sessionItems, item.id).itemConfig;
 
     for (const score of inputScores) {

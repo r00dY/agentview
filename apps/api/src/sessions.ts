@@ -105,6 +105,10 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
     runs: row.runs.filter((run, index) => run.status === "in_progress" || run.status === "completed" || index === row.runs.length - 1).map(run => ({
       ...run,
       version: run.version?.version,
+      sessionItems: run.sessionItems.map((item, index) => ({
+        ...item,
+        type: item.type ?? (index === 0 ? 'input' : 'output'),
+      })),
     })),
     summary: row.summary,
     state,

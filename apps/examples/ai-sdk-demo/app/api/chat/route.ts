@@ -92,6 +92,8 @@ export async function POST(req: Request) {
   console.log('[chat] messages: ', JSON.stringify(messages, null, 2));
   console.log('[chat] session: ', session);
 
+  await new Promise(resolve => setTimeout(resolve, 5000));
+
   const userLocation = session?.metadata?.userLocation;
 
   const result = streamText({

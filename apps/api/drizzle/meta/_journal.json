@@ -43,6 +43,13 @@
       "when": 1772477397255,
       "tag": "0005_simple_korg",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1772566109337,
+      "tag": "0006_deep_leopardon",
+      "breakpoints": true
     }
   ]
 }

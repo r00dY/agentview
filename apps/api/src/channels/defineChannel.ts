@@ -346,9 +346,10 @@ export function channelProvider(type: string) {
 
       const newRun = await createRun(tx, thread.organizationId, environment, {
         sessionId,
-        items: [
-          channelMessagesToInputItems(inputMessages),
-        ]
+        input: inputMessages.map(m => ({
+          role: 'user',
+          parts: [{ type: 'text', text: m.text ?? "" }],
+        })),
       });
 
       console.log('[ingestMessage] new run created: ', newRun.id);
@@ -461,12 +462,3 @@ async function getOrCreateMessage(tx: Transaction, channel: Channel, thread: Cha
 }
 
 
-function channelMessagesToInputItems(inputMessages: ChannelMessage[]) {
-  return {
-    role: 'user',
-    parts: inputMessages.map(m => ({
-      type: 'text',
-      text: m.text ?? "",
-    })),
-  }
-}

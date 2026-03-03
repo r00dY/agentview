@@ -234,6 +234,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         };
     }, [])
 
+
     return (
         <SessionShell
             sessionBase={session}
@@ -246,7 +247,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                 <ItemsWithCommentsLayout items={getActiveRuns(session).map((run) => {
                     return run.sessionItems.map((item, index) => {
                         const isLastRunItem = index === run.sessionItems.length - 1;
-                        const isInputItem = index === 0;
+                        const isInputItem = item.type === "input";
 
                         const comments = props.comments.filter((c) => c.sessionItemId === item.id).filter((c) => !c.deletedAt);
                         const scores = props.scores.filter((s) => s.sessionItemId === item.id).filter((s) => !s.deletedAt);

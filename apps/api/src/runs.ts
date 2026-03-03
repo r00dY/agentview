@@ -13,6 +13,15 @@ import { getConfigFromEnvironment } from './environments';
 
 export const DEFAULT_IDLE_TIME = 1000 * 60; // 60 seconds
 
+/**
+ * Returns the input content for a run's session items.
+ * Uses the `type` field if any item has one, otherwise falls back to positional (first item).
+ */
+export function getRunInputContent(sessionItems: { content: any; type?: string | null }[]) {
+  const inputItem = sessionItems.find(si => si.type === 'input') ?? sessionItems[0];
+  return inputItem?.content;
+}
+
 export function validateNonInputItems(runConfig: BaseRunConfig, previousRunItems: any[], items: any[], status: 'in_progress' | 'completed' | 'cancelled' | 'failed') {
   const validateSteps = runConfig.validateSteps ?? false;
 
@@ -128,7 +137,7 @@ export async function applyRunPatch(
   }
 
   /** Find matching run config **/
-  const inputItem = run.sessionItems[0].content;
+  const inputItem = getRunInputContent(run.sessionItems);
 
   let parsedItems: any[] = [];
   let metadata: Record<string, any> | undefined = undefined;
@@ -205,7 +214,8 @@ export async function applyRunPatch(
         organizationId: run.organizationId,
         sessionId: run.sessionId,
         content: item,
-        runId: run.id
+        runId: run.id,
+        type: 'output' as const,
       }))
     );
   }
@@ -258,7 +268,13 @@ export async function createRun(
     throw new AgentViewError("For non-api channels manual mode is not supported.", 422);
   }
 
-  const { items } = body;
+  // Normalize: body.input (channel path) vs body.items (API path)
+  const inputItems = body.input ?? (body.items ? [body.items[0]] : []);
+  const nonInputItems = body.input ? [] : (body.items ? body.items.slice(1) : []);
+
+  if (inputItems.length === 0) {
+    throw new AgentViewError("New run must have at least 1 input item.", 422);
+  }
 
   /** Only one in_progress run is allowed per session **/
   if (lastRun?.status === 'in_progress') {
@@ -267,7 +283,7 @@ export async function createRun(
 
   /** Auto-fetch validation **/
   if (!manual) {
-    if (items.length !== 1) {
+    if (body.items && body.items.length !== 1) {
       throw new AgentViewError("Run must have exactly 1 item (input).", 422);
     }
     if (body.status && body.status !== 'in_progress') {
@@ -284,14 +300,8 @@ export async function createRun(
     }
   }
 
-  /** Validate input item **/
-  if (items.length === 0) {
-    throw new AgentViewError("New run must have at least 1 item, input.", 422);
-  }
-
-  const [inputItem, ...nonInputItems] = items;
-
-  let parsedItems: any[] = [];
+  let parsedInputItems: any[] = [];
+  let parsedNonInputItems: any[] = [];
   let status: string;
   let failReason: any | null = null;
   let expiresAt: string | null = null;
@@ -301,7 +311,7 @@ export async function createRun(
 
   // for non-api channels, we assume input is OK and we use simplified procedure. Agent is not required, as we should save items even if agent is not assigned.
   if (session.channel.type !== 'api') {
-    parsedItems = [inputItem];
+    parsedInputItems = inputItems;
     status = 'in_progress';
     expiresAt = new Date(Date.now() + DEFAULT_IDLE_TIME).toISOString();
   }
@@ -332,12 +342,12 @@ export async function createRun(
       versionId = resolved.versionId;
     }
 
-    const runConfig = requireRunConfig(agentConfig, inputItem);
-    const parsedInput = [runConfig.input.schema.parse(inputItem)];
+    const firstInputItem = inputItems[0];
+    const runConfig = requireRunConfig(agentConfig, firstInputItem);
+    parsedInputItems = [runConfig.input.schema.parse(firstInputItem)];
 
     /** Validate rest items **/
-    const parsedNonInputItems = validateNonInputItems(runConfig, [parsedInput], nonInputItems, body.status ?? 'in_progress');
-    parsedItems = [...parsedInput, ...parsedNonInputItems];
+    parsedNonInputItems = validateNonInputItems(runConfig, [parsedInputItems], nonInputItems, body.status ?? 'in_progress');
 
     /** Metadata **/
     metadata = parseMetadata(runConfig.metadata, runConfig.allowUnknownMetadata ?? true, body.metadata ?? {}, {});
@@ -370,14 +380,29 @@ export async function createRun(
     environmentId: manual ? null : environment.id,
   }).returning();
 
+  // Insert input items with type: 'input'
   await tx.insert(sessionItems).values(
-    parsedItems.map(item => ({
+    parsedInputItems.map(item => ({
       organizationId,
       sessionId: session.id,
       content: item,
       runId: insertedRun.id,
+      type: 'input' as const,
     }))
   );
+
+  // Insert non-input items with type: 'output'
+  if (parsedNonInputItems.length > 0) {
+    await tx.insert(sessionItems).values(
+      parsedNonInputItems.map(item => ({
+        organizationId,
+        sessionId: session.id,
+        content: item,
+        runId: insertedRun.id,
+        type: 'output' as const,
+      }))
+    );
+  }
 
   // insert state item
   if (body.state !== undefined) {

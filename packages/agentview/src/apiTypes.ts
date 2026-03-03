@@ -79,8 +79,7 @@ export const SessionItemSchema = z.object({
   id: z.string(),
   createdAt: z.iso.date(),
   updatedAt: z.iso.date(),
-  // type: z.string(),
-  // role: z.string().nullable(),
+  type: z.enum(['input', 'output']),
   content: z.any(),
 
   runId: z.string(), // potential bloat
@@ -107,7 +106,8 @@ export const RunSchema = z.object({
 
 export const RunCreateSchema = z.object({
   sessionId: z.string(),
-  items: z.array(z.record(z.string(), z.any())),
+  items: z.array(z.record(z.string(), z.any())).optional(),
+  input: z.array(z.record(z.string(), z.any())).optional(),
   manual: z.boolean().optional(),
   version: z.string().optional(),
   metadata: z.record(z.string(), z.any()).optional(),
