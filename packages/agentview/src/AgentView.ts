@@ -150,18 +150,6 @@ export class AgentView {
     return enhanceSession(await this.request<Session>('PATCH', `/api/sessions/${options.id}`, options))
   }
 
-  async starSession(sessionId: string): Promise<{ starred: boolean }> {
-    return await this.request<{ starred: boolean }>('PUT', `/api/sessions/${sessionId}/star`, undefined)
-  }
-
-  async unstarSession(sessionId: string): Promise<{ starred: boolean }> {
-    return await this.request<{ starred: boolean }>('DELETE', `/api/sessions/${sessionId}/star`, undefined)
-  }
-
-  async isSessionStarred(sessionId: string): Promise<{ starred: boolean }> {
-    return await this.request<{ starred: boolean }>('GET', `/api/sessions/${sessionId}/star`, undefined)
-  }
-
   async createRun(options: RunCreate): Promise<Run> {
     return await this.request<Run>('POST', `/api/runs`, options)
   }
