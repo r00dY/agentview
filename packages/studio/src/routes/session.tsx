@@ -218,6 +218,8 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         };
     }
 
+    console.log(session);
+
     const rerender = useRerender();
 
     useLayoutEffect(() => {
