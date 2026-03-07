@@ -107,7 +107,7 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
       version: run.version?.version,
       sessionItems: run.sessionItems.map((item, index) => ({
         ...item,
-        type: item.type ?? (index === 0 ? 'input' : 'output'),
+        type: item.type ?? (index === 0 ? 'input' : 'step') // this condition is totally unimportant, just backward compat with nothing lol
       })),
     })),
     summary: row.summary,

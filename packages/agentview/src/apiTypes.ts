@@ -79,7 +79,7 @@ export const SessionItemSchema = z.object({
   id: z.string(),
   createdAt: z.iso.date(),
   updatedAt: z.iso.date(),
-  type: z.enum(['input', 'output']),
+  type: z.enum(['input', 'output', 'step']),
   content: z.any(),
 
   runId: z.string(), // potential bloat
@@ -124,7 +124,9 @@ export const RunUpdateSchema = RunCreateSchema.pick({
   status: true,
   state: true,
   failReason: true
-}).partial()
+}).partial().extend({
+  outputItemCount: z.number().int().min(0).optional(),
+})
 
 export type RunUpdate = z.infer<typeof RunUpdateSchema>
 

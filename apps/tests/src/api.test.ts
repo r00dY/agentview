@@ -996,7 +996,7 @@ describe('API', () => {
           ],
           lastRunStatus: [undefined],
           validateSteps: true,
-          error: 422,
+          error: null, // items matching output schema are also accepted during streaming (step/output distinction happens on completion)
         },
         {
           title: "input, 2 steps, no output",
@@ -1530,6 +1530,103 @@ describe('API', () => {
         })
       })
 
+    })
+
+    describe("step/output item types", () => {
+      test("items during in_progress have type: 'step'", async () => {
+        await updateConfig()
+        const session = await createSession()
+
+        const run = await av.createRun({ sessionId: session.id, items: [baseInput], version: "1.0.0", manual: true })
+        const updated = await av.updateRun({ id: run.id, items: [baseStep] })
+
+        // Non-input items should be 'step' while run is in progress
+        const stepItem = updated.sessionItems.find(si => si.content.type === 'reasoning')
+        expect(stepItem).toBeDefined()
+        expect(stepItem!.type).toBe('step')
+      })
+
+      test("last item converts to type: 'output' on completion", async () => {
+        await updateConfig()
+        const session = await createSession()
+
+        const run = await av.createRun({ sessionId: session.id, items: [baseInput], version: "1.0.0", manual: true })
+        await av.updateRun({ id: run.id, items: [baseStep] })
+        const completed = await av.updateRun({ id: run.id, items: [baseOutput], status: "completed" })
+
+        // Input should be 'input'
+        expect(completed.sessionItems[0].type).toBe('input')
+        // Step should stay 'step'
+        expect(completed.sessionItems[1].type).toBe('step')
+        // Last item (output) should be 'output'
+        expect(completed.sessionItems[2].type).toBe('output')
+      })
+
+      test("outputItemCount controls how many items become output", async () => {
+        await updateConfig()
+        const session = await createSession()
+
+        const run = await av.createRun({ sessionId: session.id, items: [baseInput], version: "1.0.0", manual: true })
+        await av.updateRun({ id: run.id, items: [baseStep, baseOutput, baseOutput] })
+        const completed = await av.updateRun({ id: run.id, status: "completed", outputItemCount: 2 })
+
+        // Input should be 'input'
+        expect(completed.sessionItems[0].type).toBe('input')
+        // Step should stay 'step'
+        expect(completed.sessionItems[1].type).toBe('step')
+        // Last 2 items should be 'output'
+        expect(completed.sessionItems[2].type).toBe('output')
+        expect(completed.sessionItems[3].type).toBe('output')
+      })
+
+      test("failed runs have all items as type: 'step'", async () => {
+        await updateConfig()
+        const session = await createSession()
+
+        const run = await av.createRun({ sessionId: session.id, items: [baseInput], version: "1.0.0", manual: true })
+        await av.updateRun({ id: run.id, items: [baseStep] })
+        const failed = await av.updateRun({ id: run.id, status: "failed", failReason: { message: "error" } })
+
+        // Input should be 'input'
+        expect(failed.sessionItems[0].type).toBe('input')
+        // Step should stay 'step' (no output marking for failed)
+        expect(failed.sessionItems[1].type).toBe('step')
+      })
+
+      test("cancelled runs have all items as type: 'step'", async () => {
+        await updateConfig()
+        const session = await createSession()
+
+        const run = await av.createRun({ sessionId: session.id, items: [baseInput], version: "1.0.0", manual: true })
+        await av.updateRun({ id: run.id, items: [baseStep] })
+        const cancelled = await av.updateRun({ id: run.id, status: "cancelled" })
+
+        expect(cancelled.sessionItems[0].type).toBe('input')
+        expect(cancelled.sessionItems[1].type).toBe('step')
+      })
+
+      test("outputItemCount rejected when status is not 'completed'", async () => {
+        await updateConfig()
+        const session = await createSession()
+
+        const run = await av.createRun({ sessionId: session.id, items: [baseInput], version: "1.0.0", manual: true })
+        await av.updateRun({ id: run.id, items: [baseStep] })
+
+        await expectToFail(av.updateRun({ id: run.id, items: [baseOutput], outputItemCount: 1 }), 422)
+        await expectToFail(av.updateRun({ id: run.id, status: "failed", failReason: { message: "error" }, outputItemCount: 1 }), 422)
+      })
+
+      test("run created with status: 'completed' has output items marked", async () => {
+        await updateConfig()
+        const session = await createSession()
+
+        const run = await av.createRun({ sessionId: session.id, items: [baseInput, baseOutput], version: "1.0.0", manual: true, status: "completed" })
+        const fetchedSession = await av.getSession({ id: session.id })
+        const fetchedRun = fetchedSession.runs[0]
+
+        expect(fetchedRun.sessionItems[0].type).toBe('input')
+        expect(fetchedRun.sessionItems[1].type).toBe('output')
+      })
     })
 
     describe("keep-alive and expiration", () => {

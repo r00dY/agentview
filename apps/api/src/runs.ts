@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, and, desc, not, inArray } from 'drizzle-orm';
 import { runs, sessionItems, webhookJobs } from './schemas/schema';
 import type { Transaction } from './types';
 import type { Environment, Run, RunCreate, RunUpdate, Session } from 'agentview/apiTypes';
@@ -22,87 +22,100 @@ export function getRunInputContent(sessionItems: { content: any; type?: string |
   return inputItem?.content;
 }
 
-export function validateNonInputItems(runConfig: BaseRunConfig, previousRunItems: any[], items: any[], status: 'in_progress' | 'completed' | 'cancelled' | 'failed') {
+/**
+ * Validates non-input items. All items are validated against step schemas and output schema.
+ * Items are always inserted as type: 'step' at this stage. Output marking happens later on completion.
+ */
+export function validateItems(runConfig: BaseRunConfig, previousRunItems: any[], items: any[]) {
   const validateSteps = runConfig.validateSteps ?? false;
 
   const parsedItems: any[] = [];
 
-  const validateStepItems = (stepItems: any[]) => {
-    for (const stepItem of stepItems) {
-      const stepItemConfig = findItemConfig(runConfig, [...previousRunItems, ...parsedItems], stepItem, [], "step");
-      if (stepItemConfig) {
-        parsedItems.push(stepItemConfig.content);
-      }
-      else if (!validateSteps) {
-        parsedItems.push(stepItem);
-      }
-      else {
-        throw new AgentViewError("Couldn't find a matching step item.", 422, { item: stepItem });
-      }
+  for (const item of items) {
+    // Try to match against any schema (step or output)
+    const stepConfig = findItemConfig(runConfig, [...previousRunItems, ...parsedItems], item, [], "step");
+    const outputConfig = findItemConfig(runConfig, [...previousRunItems, ...parsedItems], item, [], "output");
+
+    if (stepConfig) {
+      parsedItems.push(stepConfig.content);
     }
-  }
-
-  if (status === "completed") { // last item must exist and must be output
-    if (items.length === 0) {
-      if (previousRunItems.length <= 1) {
-        throw new AgentViewError("Run set as 'completed' must have at least 2 items, input and output.", 422);
-      }
-
-      // when completing run without items, we only validate the last item against output schema
-      const lastItemOutputConfig = findItemConfig(runConfig, previousRunItems.slice(0, -1), previousRunItems[previousRunItems.length - 1], [], "output");
-
-      if (!lastItemOutputConfig) {
-        throw new AgentViewError("Last item must be an output.", 422, { item: previousRunItems[previousRunItems.length - 1] });
-      }
+    else if (outputConfig) {
+      parsedItems.push(outputConfig.content);
+    }
+    else if (!validateSteps) {
+      parsedItems.push(item);
     }
     else {
-
-      const outputItem = items[items.length - 1];
-
-      validateStepItems(items.slice(0, -1));
-
-      const outputItemConfig = findItemConfig(runConfig, [...previousRunItems, ...parsedItems], outputItem, [], "output");
-      if (!outputItemConfig) {
-        throw new AgentViewError("Couldn't find a matching output item.", 422, { item: outputItem });
-      }
-      else {
-        parsedItems.push(outputItemConfig.content);
-      }
+      throw new AgentViewError("Couldn't find a matching item schema.", 422, { item });
     }
-
-  }
-  else if (status === "failed" || status === "cancelled") { // last item, if exists, should be either step or output
-    if (items.length === 0) {
-      validateStepItems(items);
-    }
-    else {
-      const lastItem = items[items.length - 1];
-      validateStepItems(items.slice(0, -1));
-
-      // last item must be either step or output. We first try to match step, if not successful then output
-      const lastItemStepConfig = findItemConfig(runConfig, [...previousRunItems, ...parsedItems], lastItem, [], "step");
-      const lastItemOutputConfig = findItemConfig(runConfig, [...previousRunItems, ...parsedItems], lastItem, [], "output");
-
-      if (lastItemStepConfig) {
-        parsedItems.push(lastItemStepConfig.content);
-      }
-      else if (lastItemOutputConfig) {
-        parsedItems.push(lastItemOutputConfig.content);
-      }
-      else if (!validateSteps) {
-        // we don't validate steps, so if no match, then we assume it's unknown step
-        parsedItems.push(lastItem);
-      }
-      else {
-        throw new AgentViewError("Last item must be either step or output.", 422, { item: lastItem });
-      }
-    }
-  }
-  else if (status === "in_progress") {
-    validateStepItems(items);
   }
 
   return parsedItems;
+}
+
+/**
+ * Marks the last N non-input, non-state items as 'output' on run completion.
+ * Validates each item against the output schema before marking.
+ */
+export async function markOutputItems(
+  tx: Transaction,
+  runId: string,
+  outputItemCount: number,
+  runConfig: BaseRunConfig,
+) {
+  if (outputItemCount === 0) return;
+
+  // Get all non-input, non-state items for this run, ordered by sortOrder DESC
+  const outputItems = await tx.query.sessionItems.findMany({
+    where: and(
+      eq(sessionItems.runId, runId),
+      eq(sessionItems.isState, false),
+      not(eq(sessionItems.type, 'input')),
+    ),
+    orderBy: (si, { desc }) => [desc(si.sortOrder)],
+    limit: outputItemCount,
+  });
+
+  if (outputItems.length === 0) {
+    throw new AgentViewError("Run set as 'completed' must have at least one output item, but no non-input items found.", 422);
+  }
+
+  // // Get the full run items for validation context
+  // const runItems = await tx.query.sessionItems.findMany({
+  //   where: and(
+  //     eq(sessionItems.runId, runId),
+  //     eq(sessionItems.isState, false),
+  //   ),
+  //   orderBy: (si, { asc }) => [asc(si.sortOrder)],
+  // });
+
+  // const allContents = runItems.map(i => i.content);
+
+  for (const outputItem of outputItems) {
+    const outputConfig = findItemConfig(runConfig, [], outputItem.content as Record<string, any>, [], "output");
+    if (!outputConfig) {
+      throw new AgentViewError("Item does not match output schema.", 422, { item: outputItem.content });
+    }
+  }
+
+  // // Validate each candidate output item against the output schema
+  // for (const item of allItems) {
+  //   const itemIndex = runItems.findIndex(i => i.id === item.id);
+  //   const itemsBefore = allContents.slice(0, itemIndex);
+  //   const itemsAfter = allContents.slice(itemIndex + 1);
+
+  //   const outputConfig = findItemConfig(runConfig, itemsBefore, item.content as Record<string, any>, itemsAfter, "output");
+  //   if (!outputConfig) {
+  //     throw new AgentViewError("Item does not match output schema.", 422, { item: item.content });
+  //   }
+  // }
+
+  // Update their type to 'output'
+  const itemIds = outputItems.map(i => i.id);
+  await tx.update(sessionItems).set({
+    type: 'output',
+    updatedAt: new Date().toISOString(),
+  }).where(inArray(sessionItems.id, itemIds));
 }
 
 export async function getRun(tx: Transaction, runId: string) {
@@ -143,7 +156,14 @@ export async function applyRunPatch(
   let metadata: Record<string, any> | undefined = undefined;
   let idleTimeout: number | undefined;
 
-  if (body.items || body.metadata || body.state) { // operations requireing run config
+  /** Reject outputItemCount if status is not being set to 'completed' */
+  if (body.outputItemCount !== undefined && body.status !== 'completed') {
+    throw new AgentViewError("outputItemCount can only be set when status is 'completed'.", 422);
+  }
+
+  let runConfig: BaseRunConfig | undefined;
+
+  if (body.items || body.metadata || body.state || body.status === 'completed') { // operations requiring run config
     const config = getConfigFromEnvironment(environment);
 
     const agentName = run.version?.agent;
@@ -152,7 +172,7 @@ export async function applyRunPatch(
     }
 
     const agentConfig = requireAgentConfig(config, agentName);
-    const runConfig = requireRunConfig(agentConfig, inputItem);
+    runConfig = requireRunConfig(agentConfig, inputItem);
 
     /** Validate items */
     const items = body.items ?? [];
@@ -161,7 +181,7 @@ export async function applyRunPatch(
       throw new AgentViewError("Cannot add items to a finished run.", 422);
     }
 
-    parsedItems = validateNonInputItems(runConfig, run.sessionItems.map(si => si.content), items, body.status ?? 'in_progress');
+    parsedItems = validateItems(runConfig, run.sessionItems.map(si => si.content), items);
 
     /** State */
     if (body.state !== undefined && run.status !== 'in_progress') {
@@ -215,7 +235,7 @@ export async function applyRunPatch(
         sessionId: run.sessionId,
         content: item,
         runId: run.id,
-        type: 'output' as const,
+        type: 'step' as const,
       }))
     );
   }
@@ -237,6 +257,12 @@ export async function applyRunPatch(
       runId: run.id,
       isState: true,
     });
+  }
+
+  /** Mark output items on completion */
+  if (status === 'completed' && runConfig) {
+    const outputItemCount = body.outputItemCount ?? 1;
+    await markOutputItems(tx, run.id, outputItemCount, runConfig);
   }
 
   return (await getRun(tx, runId))!;
@@ -308,6 +334,7 @@ export async function createRun(
   let finishedAt: string | null = null;
   let metadata: Record<string, any> | undefined = undefined;
   let versionId: string | null = null;
+  let runConfig: BaseRunConfig | undefined;
 
   // for non-api channels, we assume input is OK and we use simplified procedure. Agent is not required, as we should save items even if agent is not assigned.
   if (session.channel.type !== 'api') {
@@ -343,11 +370,11 @@ export async function createRun(
     }
 
     const firstInputItem = inputItems[0];
-    const runConfig = requireRunConfig(agentConfig, firstInputItem);
+    runConfig = requireRunConfig(agentConfig, firstInputItem);
     parsedInputItems = [runConfig.input.schema.parse(firstInputItem)];
 
     /** Validate rest items **/
-    parsedNonInputItems = validateNonInputItems(runConfig, [parsedInputItems], nonInputItems, body.status ?? 'in_progress');
+    parsedNonInputItems = validateItems(runConfig, [parsedInputItems], nonInputItems);
 
     /** Metadata **/
     metadata = parseMetadata(runConfig.metadata, runConfig.allowUnknownMetadata ?? true, body.metadata ?? {}, {});
@@ -391,7 +418,7 @@ export async function createRun(
     }))
   );
 
-  // Insert non-input items with type: 'output'
+  // Insert non-input items with type: 'step'
   if (parsedNonInputItems.length > 0) {
     await tx.insert(sessionItems).values(
       parsedNonInputItems.map(item => ({
@@ -399,7 +426,7 @@ export async function createRun(
         sessionId: session.id,
         content: item,
         runId: insertedRun.id,
-        type: 'output' as const,
+        type: 'step' as const,
       }))
     );
   }
@@ -413,6 +440,11 @@ export async function createRun(
       runId: insertedRun.id,
       isState: true,
     });
+  }
+
+  // Mark output items if run is completed at creation
+  if (status === 'completed' && runConfig) {
+    await markOutputItems(tx, insertedRun.id, 1, runConfig);
   }
 
   // Queue webhook job on first run (for summary generation and/or webhook delivery)

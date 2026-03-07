@@ -64,6 +64,22 @@ function parseDataLine(line: string): AISDKChunk | null {
   }
 }
 
+/**
+ * Counts consecutive 'text' items from the end of the emitted item types array.
+ * This determines how many items should be marked as output on completion.
+ */
+function computeOutputItemCount(emittedItemTypes: string[]): number {
+  let count = 0;
+  for (let i = emittedItemTypes.length - 1; i >= 0; i--) {
+    if (emittedItemTypes[i] === 'text') {
+      count++;
+    } else {
+      break;
+    }
+  }
+  return Math.max(count, 1); // at least 1
+}
+
 export async function* callAgentAPIAISDK(
   body: RunBody,
   url: string,
@@ -128,6 +144,7 @@ export async function* callAgentAPIAISDK(
     const reasoningBuffers = new Map<string, string>();
     const toolStates = new Map<string, { toolName: string; inputText: string; input?: any }>();
     let messageMetadata: any = undefined;
+    const emittedItemTypes: string[] = [];
 
     for await (const chunk of parseAISDKStream(response.body)) {
       switch (chunk.type) {
@@ -152,6 +169,7 @@ export async function* callAgentAPIAISDK(
         case 'text-end': {
           const text = textBuffers.get(chunk.id) ?? '';
           textBuffers.delete(chunk.id);
+          emittedItemTypes.push('text');
           yield {
             name: 'run.patch',
             data: { items: [{ type: 'text', text }] },
@@ -173,6 +191,7 @@ export async function* callAgentAPIAISDK(
         case 'reasoning-end': {
           const text = reasoningBuffers.get(chunk.id) ?? '';
           reasoningBuffers.delete(chunk.id);
+          emittedItemTypes.push('reasoning');
           yield {
             name: 'run.patch',
             data: { items: [{ type: 'reasoning', text }] },
@@ -207,6 +226,7 @@ export async function* callAgentAPIAISDK(
         case 'tool-output-available': {
           const state = toolStates.get(chunk.toolCallId);
           if (state) {
+            emittedItemTypes.push('tool-call');
             yield {
               name: 'run.patch',
               data: {
@@ -228,6 +248,7 @@ export async function* callAgentAPIAISDK(
         case 'tool-output-error': {
           const state = toolStates.get(chunk.toolCallId);
           if (state) {
+            emittedItemTypes.push('tool-call');
             yield {
               name: 'run.patch',
               data: {
@@ -250,10 +271,12 @@ export async function* callAgentAPIAISDK(
           if (chunk.messageMetadata !== undefined) {
             messageMetadata = chunk.messageMetadata;
           }
+          const outputCount = computeOutputItemCount(emittedItemTypes);
           yield {
             name: 'run.patch',
             data: {
               status: 'completed',
+              outputItemCount: outputCount,
               ...(messageMetadata !== undefined ? { metadata: messageMetadata } : {}),
             },
           };

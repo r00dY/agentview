@@ -115,7 +115,7 @@ export const sessionItems = pgTable("session_items", {
   sessionId: uuid("session_id").notNull().references(() => sessions.id, { onDelete: 'cascade' }),
   runId: uuid("run_id").notNull().references(() => runs.id, { onDelete: 'set null' }),
   isState: boolean("is_state").notNull().default(false),
-  type: varchar("type", { length: 24 }).$type<'input' | 'output'>(),
+  type: varchar("type", { length: 24 }).$type<'input' | 'output' | 'step'>(),
   metadata: jsonb("metadata")
 }, () => [createTenantPolicy('session_items')]);
 

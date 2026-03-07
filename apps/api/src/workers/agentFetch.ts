@@ -187,15 +187,23 @@ async function processAgentFetch(run: Run) {
           });
           if (!sessionRow?.channelThreadId) return;
 
+          if (agentConfig.protocol !== 'ai-sdk') {
+            throw new Error('Agent protocol must be ai-sdk to create outgoing channel message');
+          }
+
           console.log(`[agentFetch][${run.id}] creating outgoing channel message`);
 
           // Get the completed run with its items
           const completedRun = (await getRun(tx, run.id))!;
 
-          // Take the last session item as the output (assumes { type: 'text', text: string })
-          const lastItem = completedRun.sessionItems[completedRun.sessionItems.length - 1];
-          const content = lastItem?.content as any;
-          const outputText = content?.text ?? "";
+          // Filter for output items and use the last one for channel message
+          const outputItems = completedRun.sessionItems.filter(si => si.type === 'output');
+
+          const outputText = outputItems.map(si => (si.content as any)?.text).filter(Boolean).join('\n\n');
+
+          // const lastOutputItem = outputItems[outputItems.length - 1];
+          // const content = lastOutputItem?.content as any;
+          // const outputText = content?.text ?? "";
 
           // Insert outgoing channel message
           await tx.insert(channelMessages).values({
