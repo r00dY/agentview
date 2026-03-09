@@ -253,7 +253,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                         type: 'channel-message',
                         channelMessage: ChannelMessage,
                     }
-                    
+
                     type SessionItemWallItem = {
                         id: string,
                         type: 'session-item',
@@ -280,7 +280,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                 channelMessage: message,
                             });
                         });
-                        
+
                         const outgoingChannelMessages = run.channelMessages.filter((message) => message.direction === 'outgoing');
 
                         if (outgoingChannelMessages.length > 0) {
@@ -306,7 +306,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                     sessionItem: item,
                                 });
                             });
-                        }                        
+                        }
                     }
 
 
@@ -339,12 +339,13 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                         else {
                             if (wallItem.sessionItem.type === 'input') {
                                 content = <div className="pl-[10%] relative">
-                                         <DefaultInputComponent item={wallItem.sessionItem.content} sessionItem={wallItem.sessionItem} run={run} session={session} />
-                                     </div>                            }
+                                    <DefaultInputComponent item={wallItem.sessionItem.content} sessionItem={wallItem.sessionItem} run={run} session={session} />
+                                </div>
+                            }
                             else {
                                 content = <div className="pr-[10%] relative">
-                                         <DefaultAssistantComponent item={wallItem.sessionItem.content} sessionItem={wallItem.sessionItem} run={run} session={session} />
-                                     </div>
+                                    <DefaultAssistantComponent item={wallItem.sessionItem.content} sessionItem={wallItem.sessionItem} run={run} session={session} />
+                                </div>
                             }
                         }
 
@@ -483,16 +484,16 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                 </div>
                             </div>,
                             commentsComponent: !styles.isSmallSize && (hasComments || (isSelected)) ? <div>comments</div> : undefined
-                                // <CommentsThread
-                                //     item={item}
-                                //     itemConfig={itemConfigMatch?.itemConfig}
-                                //     session={session}
-                                //     selected={isSelected}
-                                //     onSelect={(a) => { setselectedItemId(a?.id) }}
-                                //     allStats={allStats}
-                                //     comments={comments}
-                                //     scores={scores}
-                                // /> : undefined
+                            // <CommentsThread
+                            //     item={item}
+                            //     itemConfig={itemConfigMatch?.itemConfig}
+                            //     session={session}
+                            //     selected={isSelected}
+                            //     onSelect={(a) => { setselectedItemId(a?.id) }}
+                            //     allStats={allStats}
+                            //     comments={comments}
+                            //     scores={scores}
+                            // /> : undefined
                         }
                     })
                 }).flat().filter((item) => item !== undefined && item !== null)} selectedItemId={selectedItemId}
