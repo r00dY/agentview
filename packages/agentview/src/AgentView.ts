@@ -26,6 +26,7 @@ import {
   type ChannelThread,
   type ChannelMessage,
   type Pagination,
+  type InputTarget,
 } from './apiTypes.js'
 
 import { type AgentViewErrorBody, AgentViewError } from './AgentViewError.js'
@@ -252,7 +253,7 @@ export class AgentView {
     })
   }
 
-  async markSeen(options: { sessionId?: string, runId?: string, sessionItemId?: string, channelMessageId?: string }): Promise<void> {
+  async markSeen(options: InputTarget): Promise<void> {
     return await this.request<void>('POST', `/api/seen`, options)
   }
 
@@ -274,7 +275,7 @@ export class AgentView {
     return await this.request<SessionsStats>('GET', path, undefined)
   }
 
-  async createComment(options: { sessionItemId?: string, runId?: string, channelMessageId?: string, content: string }): Promise<void> {
+  async createComment(options: InputTarget & { content: string }): Promise<void> {
     return await this.request<void>('POST', `/api/comments`, options)
   }
 
@@ -286,7 +287,7 @@ export class AgentView {
     return await this.request<void>('DELETE', `/api/comments/${commentId}`, undefined)
   }
 
-  async updateScores(options: { sessionItemId?: string, runId?: string, scores: ScoreCreate[] }): Promise<void> {
+  async updateScores(options: InputTarget & { scores: ScoreCreate[] }): Promise<void> {
     return await this.request<void>('PATCH', `/api/scores`, options)
   }
 

@@ -2,18 +2,19 @@ import { agentview, withErrorHandling } from "../lib/agentview";
 import { type ActionResponse } from "../lib/errors";
 import type { ActionFunctionArgs, RouteObject } from "react-router";
 
-async function action({ request, params }: ActionFunctionArgs): Promise<ActionResponse> {
+async function action({ request }: ActionFunctionArgs): Promise<ActionResponse> {
     if (request.method !== 'PATCH') {
         throw new Error('Method not allowed');
     }
 
-    const scores = await request.json();
+    const body = await request.json();
+    const { scores, ...target } = body;
 
     return await withErrorHandling(() =>
-        agentview.updateItemScores(params.id!, params.itemId!, scores)
+        agentview.updateScores({ ...target, scores })
     );
 }
 
-export const sessionItemScoresRoute: RouteObject = {
+export const scoresRoute: RouteObject = {
     action,
 }

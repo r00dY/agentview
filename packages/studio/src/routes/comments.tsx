@@ -3,14 +3,13 @@ import { type ActionResponse } from "../lib/errors";
 import type { ActionFunctionArgs, RouteObject } from "react-router";
 import { actionContext } from "../actionContext";
 
-
-async function action({ request, params, context}: ActionFunctionArgs): Promise<ActionResponse> {
-    console.log('[action] set action context')
+async function action({ request, context }: ActionFunctionArgs): Promise<ActionResponse> {
     context.set(actionContext, { isAction: true });
 
-    const { comment } = await request.json();
+    const body = await request.json();
+    const { content, ...target } = body;
 
-    if (!comment) {
+    if (!content) {
         return {
             ok: false,
             error: {
@@ -20,10 +19,10 @@ async function action({ request, params, context}: ActionFunctionArgs): Promise<
     }
 
     return await withErrorHandling(() =>
-        agentview.createItemComment(params.id!, params.itemId!, { content: comment })
+        agentview.createComment({ ...target, content })
     );
 }
 
-export const sessionItemCommentsRoute: RouteObject = {
-  action,
+export const commentsRoute: RouteObject = {
+    action,
 }

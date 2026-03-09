@@ -7,8 +7,9 @@ import { sessionsIndexRoute } from "./routes/sessionsIndex";
 import { sessionNewRoute } from "./routes/sessionNew";
 import { sessionRoute } from "./routes/session";
 import { sessionItemRoute } from "./routes/sessionItem";
-import { sessionItemCommentsRoute } from "./routes/sessionItemComments";
-import { sessionItemCommentRoute } from "./routes/sessionItemComment";
+import { commentsRoute } from "./routes/comments";
+import { commentRoute } from "./routes/comment";
+import { scoresRoute } from "./routes/scores";
 import { envRoute } from "./routes/env";
 import { logoutRoute } from "./routes/logout";
 import { loginRoute } from "./routes/login";
@@ -16,7 +17,6 @@ import { rootRoute } from "./root";
 import { sessionRunRoute } from "./routes/sessionRun";
 import { settingsRoute } from "./routes/settings";
 import type { AgentViewConfig } from "agentview/types";
-import { sessionItemScoresRoute } from "./routes/sessionItemScores";
 import { uiRoute } from "./routes/ui";
 
 export function routes(customRoutes: AgentViewConfig["customRoutes"]): RouteObject[] {
@@ -40,58 +40,6 @@ export function routes(customRoutes: AgentViewConfig["customRoutes"]): RouteObje
               path: "env",
               ...envRoute,
             },
-            // {
-            //   path: "settings",
-            //   ...settingsRoute,
-            //   children: [
-            //     // {
-            //     //   path: "profile",
-            //     //   ...settingsProfileRoute,
-            //     // },
-            //     // {
-            //     //   path: "api-keys",
-            //     //   ...settingsApiKeysRoute,
-            //     // },
-            //     // {
-            //     //   path: "password",
-            //     //   ...settingsPasswordRoute,
-            //     // },
-            //     // {
-            //     //   path: "members",
-            //     //   ...membersRoute,
-            //     //   children: [
-            //     //     {
-            //     //       path: "invitations/new",
-            //     //       ...membersInviteRoute,
-            //     //     },
-            //     //     {
-            //     //       path: "invitations/:invitationId/cancel",
-            //     //       ...membersInviteCancelRoute,
-            //     //     },
-            //     //     {
-            //     //       path: ":memberId/edit",
-            //     //       ...membersEditRoute,
-            //     //     },
-            //     //     {
-            //     //       path: ":memberId/delete",
-            //     //       ...membersDeleteRoute,
-            //     //     },
-            //     //   ],
-            //     // },
-            //     {
-            //       path: "config",
-            //       ...configsRoute,
-            //     },
-            //     // {
-            //     //   path: "emails",
-            //     //   ...emailsRoute,
-            //     // },
-            //     // {
-            //     //   path: "emails/:id",
-            //     //   ...emailDetailRoute,
-            //     // },
-            //   ]
-            // },
             {
               path: "users/:userId/update",
               ...userUpdateRoute,
@@ -120,21 +68,21 @@ export function routes(customRoutes: AgentViewConfig["customRoutes"]): RouteObje
                       path: "runs/:runId",
                       ...sessionRunRoute,
                     },
-                    {
-                      path: "items/:itemId/comments",
-                      ...sessionItemCommentsRoute,
-                    },
-                    {
-                      path: "items/:itemId/comments/:commentId",
-                      ...sessionItemCommentRoute,
-                    },
-                    {
-                      path: "items/:itemId/scores",
-                      ...sessionItemScoresRoute,
-                    }
                   ],
                 },
               ],
+            },
+            {
+              path: "comments",
+              ...commentsRoute,
+            },
+            {
+              path: "comments/:commentId",
+              ...commentRoute,
+            },
+            {
+              path: "scores",
+              ...scoresRoute,
             },
             {
               path: "logout",
@@ -147,14 +95,6 @@ export function routes(customRoutes: AgentViewConfig["customRoutes"]): RouteObje
           path: "login",
           ...loginRoute
         },
-        // {
-        //   path: "signup",
-        //   ...signupRoute
-        // },
-        // {
-        //   path: "accept-invitation",
-        //   ...acceptInvitationRoute
-        // },
         {
           path: "ui",
           ...uiRoute

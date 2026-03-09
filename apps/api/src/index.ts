@@ -41,6 +41,7 @@ import {
   type Space,
   CommentMessageCreateSchema,
   ScoreCreateSchema,
+  InputTargetSchema,
   type ChannelRef,
 } from 'agentview/apiTypes';
 import { type BaseAgentViewConfig } from 'agentview/configTypes';
@@ -63,7 +64,7 @@ import { applyRunPatch, getRun, createRun, DEFAULT_IDLE_TIME, getRunInputContent
 import { parseMetadata } from './parseMetadata';
 import { authn, authnUser, authorize, requireMemberPrincipal, getMemberId, requireMemberId, getEnv, type PrivatePrincipal, type Principal, type MemberPrincipal, type ApiKeyPrincipal, type UserPrincipal } from './authMiddleware';
 
-import { resolveTarget, resolveTargetWithObjects, targetFilter, type InputTarget, type RunTarget, type SessionItemTarget, type Target, type TargetWithObjects } from './target';
+import { resolveTarget, resolveTargetWithObjects, targetFilter, type RunTarget, type SessionItemTarget, type Target, type TargetWithObjects } from './target';
 
 
 export { authn, authorize, requireMemberPrincipal, requireMemberId } from './authMiddleware';
@@ -1568,12 +1569,7 @@ const seenRoute = createRoute({
   summary: 'Mark inbox item as seen',
   tags: ['Inbox'],
   request: {
-    body: body(z.object({
-      sessionId: z.string().optional(),
-      runId: z.string().optional(),
-      sessionItemId: z.string().optional(),
-      channelMessageId: z.string().optional(),
-    }))
+    body: body(InputTargetSchema)
   },
   responses: {
     200: response_data(z.object({})),
@@ -1923,10 +1919,7 @@ app.openapi(runKeepAliveRoute, async (c) => {
 
 /* --------- FLAT COMMENTS API --------- */
 
-const CommentCreateBodySchema = z.object({
-  sessionItemId: z.string().optional(),
-  runId: z.string().optional(),
-  channelMessageId: z.string().optional(),
+const CommentCreateBodySchema = InputTargetSchema.extend({
   content: z.string(),
 })
 
@@ -2058,9 +2051,7 @@ app.openapi(commentsDELETERoute, async (c) => {
 
 /* --------- FLAT SCORES API --------- */
 
-const ScoresPatchBodySchema = z.object({
-  sessionItemId: z.string().optional(),
-  runId: z.string().optional(),
+const ScoresPatchBodySchema = InputTargetSchema.extend({
   scores: z.array(ScoreCreateSchema),
 })
 

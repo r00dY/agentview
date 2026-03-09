@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { type ChannelMessage, type CommentMessage, type Run, type Score, type Session, type SessionBase, type SessionItem, type SessionsStats } from "agentview/apiTypes";
+import { type ChannelMessage, type CommentMessage, type InputTarget, type Run, type Score, type Session, type SessionBase, type SessionItem, type SessionsStats } from "agentview/apiTypes";
 import { findAgentConfig, findItemConfigById, findRunConfig, requireAgentConfig, requireChannelConfig } from "agentview/configUtils";
 import { enhanceSession, getActiveRuns, getAllSessionItems, getLastRun, getVersions } from "agentview/sessionUtils";
 import type { AgentConfig, ChannelConfig, ScoreConfig, SessionItemConfig, SessionItemDisplayComponentProps } from "agentview/types";
@@ -309,15 +309,15 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                         }
                     }
 
-                    type CommentsThreadData = { comments: CommentMessage[], scores: Score[], scoreConfigs: ScoreConfig[] };
+                    type CommentsThreadData = { comments: CommentMessage[], scoreConfigs: ScoreConfig[], target: InputTarget };
 
                     const agentConfig = findAgentConfig(config, run.agent);
                     const runConfig = agentConfig ? findRunConfig(agentConfig, run.sessionItems[0].content) : undefined;
                     const runScoreConfigs = (runConfig?.scores ?? []) as ScoreConfig[]; // fixme: types should be automatic without cast
-                    const runScores: Score[] = props.scores.filter((s) => s.runId === run.id);
                     const runComments: CommentMessage[] = props.comments.filter((c) => c.runId === run.id && !c.channelMessageId && !c.sessionItemId);
 
-                    const runCommentsAndScores: CommentsThreadData = { comments: runComments, scores: runScores, scoreConfigs: runScoreConfigs };
+                    const runTarget: InputTarget = { sessionId: session.id, runId: run.id };
+                    const runCommentsAndScores: CommentsThreadData = { comments: runComments, scoreConfigs: runScoreConfigs, target: runTarget };
 
                     return wallItems.map((wallItem, index) => {
 
@@ -345,8 +345,8 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                 // no scores for input channel messages for now
                                 commentsAndScores = {
                                     comments: props.comments.filter((c) => c.channelMessageId === wallItem.channelMessage.id),
-                                    scores: [],
                                     scoreConfigs: [],
+                                    target: { sessionId: session.id, runId: run.id, channelMessageId: wallItem.channelMessage.id },
                                 };
                             }
                             else {
@@ -366,8 +366,8 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                 // no scores for input session items for now
                                 commentsAndScores = {
                                     comments: props.comments.filter((c) => c.sessionItemId === wallItem.sessionItem.id),
-                                    scores: [],
                                     scoreConfigs: [],
+                                    target: { sessionId: session.id, runId: run.id, sessionItemId: wallItem.sessionItem.id },
                                 };
                             }
                             else {
@@ -378,8 +378,8 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                 if (wallItem.sessionItem.type === 'step') {
                                     commentsAndScores = {
                                         comments: props.comments.filter((c) => c.sessionItemId === wallItem.sessionItem.id),
-                                        scores: [],
                                         scoreConfigs: [],
+                                        target: { sessionId: session.id, runId: run.id, sessionItemId: wallItem.sessionItem.id },
                                     };
                                 }
                                 else {
@@ -392,7 +392,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                         }
 
                         const isSelected = selectedItemId === wallItem.id;
-                        const hasComments = false;
+                        const hasComments = commentsAndScores ? commentsAndScores.comments.length > 0 : false;
                         const isLastRunItem = index === wallItems.length - 1;
 
 
@@ -525,17 +525,22 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 
                                 </div>
                             </div>,
-                            commentsComponent: !styles.isSmallSize && (hasComments || (isSelected)) ? <div>comments</div> : undefined
-                            // <CommentsThread
-                            //     item={item}
-                            //     itemConfig={itemConfigMatch?.itemConfig}
-                            //     session={session}
-                            //     selected={isSelected}
-                            //     onSelect={(a) => { setselectedItemId(a?.id) }}
-                            //     allStats={allStats}
-                            //     comments={comments}
-                            //     scores={scores}
-                            // /> : undefined
+                            commentsComponent: !styles.isSmallSize && (hasComments || (isSelected)) && commentsAndScores ?
+                            <CommentsThread
+                                target={commentsAndScores.target}
+                                selected={isSelected}
+                                onSelect={(a) => { 
+                                    if (a) {
+                                        setselectedItemId(wallItem.id);
+                                    }
+                                    else {
+                                        setselectedItemId(undefined);
+                                    }
+                                 }}
+                                allStats={allStats}
+                                comments={commentsAndScores.comments}
+                                scoreConfigs={commentsAndScores.scoreConfigs}
+                            /> : undefined
                         }
                     })
                 }).flat().filter((item) => item !== undefined && item !== null)} selectedItemId={selectedItemId}
@@ -757,12 +762,12 @@ export const sessionRoute: RouteObject = {
 
 type MessageFooterProps = {
     session: Session,
+    target: InputTarget,
     comments: CommentMessage[],
     scores: Score[],
     run: Run,
     listParams: ReturnType<typeof getListParams>,
-    item: SessionItem,
-    itemConfig?: SessionItemConfig,
+    scoreConfigs: ScoreConfig[],
     onSelect: () => void,
     isSelected: boolean,
     isSmallSize: boolean,
@@ -786,13 +791,11 @@ type MessageFooterProps = {
 
 
 function MessageFooter(props: MessageFooterProps) {
-    const { session, run, listParams, item, comments, scores, itemConfig, onSelect, isSelected, isSmallSize, isLastRunItem, isOutput, allStats } = props;
+    const { session, target, run, listParams, comments, scores, scoreConfigs, onSelect, isSelected, isSmallSize, isLastRunItem, isOutput, allStats } = props;
     const [scoreDialogOpen, setScoreDialogOpen] = useState(false);
 
-    const allScoreConfigs = itemConfig?.scores ?? [];
-
-    const actionBarScores = allScoreConfigs.filter(scoreConfig => scoreConfig.actionBarComponent);
-    const remainingScores = allScoreConfigs.filter(scoreConfig => !scoreConfig.actionBarComponent);
+    const actionBarScores = scoreConfigs.filter(scoreConfig => scoreConfig.actionBarComponent);
+    const remainingScores = scoreConfigs.filter(scoreConfig => !scoreConfig.actionBarComponent);
 
     if (actionBarScores.length === 0 && remainingScores.length === 0 && !isSmallSize && !isLastRunItem) {
         return null;
@@ -820,8 +823,7 @@ function MessageFooter(props: MessageFooterProps) {
             <ActionBarScoreForm
                 scores={scores}
                 key={scoreConfig.name}
-                session={session}
-                item={item}
+                target={target}
                 scoreConfig={scoreConfig}
             />
         )));
@@ -830,8 +832,7 @@ function MessageFooter(props: MessageFooterProps) {
     if (remainingScores.length > 0) {
         toolbarBlocks.push(<ScoreDialog
             scores={scores}
-            session={session}
-            item={item}
+            target={target}
             open={scoreDialogOpen}
             onOpenChange={setScoreDialogOpen}
             scoreConfigs={remainingScores}
@@ -859,13 +860,12 @@ function MessageFooter(props: MessageFooterProps) {
         blocks.push(<div className={`relative mt-4 mb-2`}>
             <CommentsThread
                 comments={comments}
-                scores={scores}
-                item={item}
-                session={session}
+                target={target}
+                scoreConfigs={scoreConfigs}
                 selected={isSelected}
                 small={true}
                 singleLineMessageHeader={true}
-                onSelect={onSelect}
+                onSelect={(selected) => { if (selected) onSelect(); }}
                 allStats={allStats}
             />
         </div>)
@@ -881,7 +881,7 @@ function MessageFooter(props: MessageFooterProps) {
 }
 
 
-function ScoreDialog({ session, item, open, onOpenChange, scoreConfigs, scores }: { session: Session, item: SessionItem, open: boolean, onOpenChange: (open: boolean) => void, scoreConfigs: ScoreConfig[], scores: Score[] }) {
+function ScoreDialog({ target, open, onOpenChange, scoreConfigs, scores }: { target: InputTarget, open: boolean, onOpenChange: (open: boolean) => void, scoreConfigs: ScoreConfig[], scores: Score[] }) {
     const { me } = useSessionContext();
     const fetcher = useFetcher();
 
@@ -908,12 +908,11 @@ function ScoreDialog({ session, item, open, onOpenChange, scoreConfigs, scores }
     });
 
     const submit = (data: z.infer<typeof schema>) => {
-        const payload = Object.entries(data).map(([name, value]) => ({ name, value }));
+        const scores = Object.entries(data).map(([name, value]) => ({ name, value }));
 
-        // @ts-ignore i don't know why but payload as array is not correct body but it's correct JSON.
-        fetcher.submit(payload, {
+        fetcher.submit({ ...target, scores } as any, {
             method: 'patch',
-            action: `/sessions/${session.id}/items/${item.id}/scores`,
+            action: `/scores`,
             encType: 'application/json'
         });
     }
@@ -986,7 +985,7 @@ function ScoreDialog({ session, item, open, onOpenChange, scoreConfigs, scores }
 }
 
 
-function ActionBarScoreForm({ session, item, scoreConfig, scores }: { session: Session, item: SessionItem, scoreConfig: ScoreConfig, scores: Score[] }) {
+function ActionBarScoreForm({ target, scoreConfig, scores }: { target: InputTarget, scoreConfig: ScoreConfig, scores: Score[] }) {
     const { me } = useSessionContext();
     const fetcher = useFetcher();
     const revalidator = useRevalidator();
@@ -1011,15 +1010,12 @@ function ActionBarScoreForm({ session, item, scoreConfig, scores }: { session: S
         return null;
     }
 
-    // const isRunning = fetcher.state !== 'idle';
-
     const submit = async (value: any) => {
-        const payload = [{ name: scoreConfig.name, value }];
+        const scores = [{ name: scoreConfig.name, value }];
 
-        // @ts-ignore - fetcher.submit accepts JSON payload
-        fetcher.submit(payload, {
+        fetcher.submit({ ...target, scores } as any, {
             method: 'patch',
-            action: `/sessions/${session.id}/items/${item.id}/scores`,
+            action: `/scores`,
             encType: 'application/json'
         });
     };

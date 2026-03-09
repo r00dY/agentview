@@ -1,4 +1,4 @@
-import { AgentView, type Session } from 'agentview'
+import { AgentView, type Session, type InputTarget } from 'agentview'
 import { getAuthHeaders } from './agentview'
 import { invalidateByPrefix, invalidateCache, swr, getCachedValue, revalidate, swrSync } from './swr-cache'
 
@@ -99,39 +99,40 @@ export class CachedAgentView extends AgentView {
     return swrSync(cacheKeys.sessionScores(args[0].id), () => super.getSessionScores(...args))
   }
 
-  override async updateItemScores(...args: Parameters<AgentView['updateItemScores']>) {
-    const result = await super.updateItemScores(...args)
-
-    invalidateCache(cacheKeys.sessionScores(args[0]))
-    invalidateCache(cacheKeys.sessionComments(args[0]))
-
+  override async createComment(options: InputTarget & { content: string }) {
+    const result = await super.createComment(options)
+    if (options.sessionId) {
+      invalidateCache(cacheKeys.sessionScores(options.sessionId))
+      invalidateCache(cacheKeys.sessionComments(options.sessionId))
+    }
     return result
   }
 
-  override async createItemComment(...args: Parameters<AgentView['createItemComment']>) {
-    const result = await super.createItemComment(...args)
-    
-    invalidateCache(cacheKeys.sessionScores(args[0]))
-    invalidateCache(cacheKeys.sessionComments(args[0]))
-
+  override async updateComment(commentId: string, options: { content: string } & { sessionId?: string }) {
+    const { sessionId, ...rest } = options
+    const result = await super.updateComment(commentId, rest)
+    if (sessionId) {
+      invalidateCache(cacheKeys.sessionScores(sessionId))
+      invalidateCache(cacheKeys.sessionComments(sessionId))
+    }
     return result
   }
 
-  override async updateItemComment(...args: Parameters<AgentView['updateItemComment']>) {
-    const result = await super.updateItemComment(...args)
-    
-    invalidateCache(cacheKeys.sessionScores(args[0]))
-    invalidateCache(cacheKeys.sessionComments(args[0]))
-
+  override async deleteComment(commentId: string, options?: { sessionId?: string }) {
+    const result = await super.deleteComment(commentId)
+    if (options?.sessionId) {
+      invalidateCache(cacheKeys.sessionScores(options.sessionId))
+      invalidateCache(cacheKeys.sessionComments(options.sessionId))
+    }
     return result
   }
 
-  override async deleteItemComment(...args: Parameters<AgentView['deleteItemComment']>) {
-    const result = await super.deleteItemComment(...args)
-    
-    invalidateCache(cacheKeys.sessionScores(args[0]))
-    invalidateCache(cacheKeys.sessionComments(args[0]))
-
+  override async updateScores(options: InputTarget & { scores: any[] }) {
+    const result = await super.updateScores(options)
+    if (options.sessionId) {
+      invalidateCache(cacheKeys.sessionScores(options.sessionId))
+      invalidateCache(cacheKeys.sessionComments(options.sessionId))
+    }
     return result
   }
 
@@ -150,7 +151,7 @@ export class CachedAgentView extends AgentView {
     invalidateByPrefix('sessions-stats')
     return result
   }
-  
+
   override async markSeen(...args: Parameters<AgentView['markSeen']>) {
     const result = await super.markSeen(...args)
     invalidateByPrefix('sessions-stats')

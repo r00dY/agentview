@@ -1,15 +1,8 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { channelMessages, runs, sessionItems } from "./schemas/schema";
 import type { Transaction } from "./types";
-import { AgentViewError, type ChannelMessage, type SessionItem, type Run, type Session } from "agentview";
+import { AgentViewError, type ChannelMessage, type SessionItem, type Run, type Session, type InputTarget } from "agentview";
 import { fetchSession } from "./sessions";
-
-export type InputTarget = {
-    sessionId?: string | null;
-    runId?: string | null;
-    channelMessageId?: string | null;
-    sessionItemId?: string | null;
-}
 
 export type SessionTarget = {
     type: 'session',
@@ -136,7 +129,7 @@ export async function resolveTarget(tx: Transaction, target: InputTarget): Promi
             throw new AgentViewError("Session item does not belong to the run", 400);
         }
 
-        const { ids: { sessionId } } = await resolveTarget(tx, { runId: channelMessage.runId });
+        const { ids: { sessionId } } = await resolveTarget(tx, { runId: channelMessage.runId ?? undefined });
 
         return {
             type: 'channelMessage',

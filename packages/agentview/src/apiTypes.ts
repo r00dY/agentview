@@ -1,5 +1,13 @@
 import { z } from 'zod'
 
+export const InputTargetSchema = z.object({
+  sessionId: z.string().optional(),
+  runId: z.string().optional(),
+  channelMessageId: z.string().optional(),
+  sessionItemId: z.string().optional(),
+})
+export type InputTarget = z.infer<typeof InputTargetSchema>
+
 export const spaceAllowedValues = ['production', 'playground', 'shared-playground'] as const;
 
 

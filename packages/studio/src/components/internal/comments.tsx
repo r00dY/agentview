@@ -1,7 +1,7 @@
 import { AlertCircleIcon } from "lucide-react";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useFetcher, useRevalidator } from "react-router";
-import type { SessionItem, CommentMessage, Session, Score, SessionsStats } from "agentview/apiTypes";
+import type { CommentMessage, Score, SessionsStats, InputTarget } from "agentview/apiTypes";
 import { Button } from "../ui/button";
 import { useFetcherSuccess } from "../../hooks/useFetcherSuccess";
 import { timeAgoShort } from "../../lib/timeAgo";
@@ -15,16 +15,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form } from "../ui/form";
 import React from "react";
-import { type AgentViewConfig, type SessionItemConfig } from "agentview/types";
+import type { ScoreConfig } from "agentview/types";
 import { UserAvatar } from "./UserAvatar";
 import { type Member } from "../../lib/auth-client";
 
 export type CommentsThreadRawProps = {
-    session: Session,
-    item: SessionItem,
+    target: InputTarget,
     comments: CommentMessage[],
-    scores: Score[],
-    itemConfig?: SessionItemConfig,
+    scoreConfigs?: ScoreConfig[],
     collapsed?: boolean,
     singleLineMessageHeader?: boolean,
     small?: boolean,
@@ -32,14 +30,8 @@ export type CommentsThreadRawProps = {
 
 export type CommentsThreadProps = CommentsThreadRawProps & {
     selected: boolean,
-    onSelect: (item: any) => void,
+    onSelect: (selected: boolean) => void,
     allStats?: SessionsStats,
-}
-
-export type CommentSessionFloatingButtonProps = CommentsThreadProps & {
-    session: Session,
-    item: SessionItem,
-    onSelect: (item: any) => void,
 }
 
 type StackedCommentMessage = CommentMessage & {
@@ -93,11 +85,9 @@ function getStackedCommentMessages(messages: CommentMessage[]): StackedCommentMe
     return result;
 }
 
-export const CommentsThreadRaw = forwardRef<any, CommentsThreadRawProps>(({ session, item, itemConfig, collapsed = false, singleLineMessageHeader = false, small = false, comments, scores }, ref) => {
+export const CommentsThreadRaw = forwardRef<any, CommentsThreadRawProps>(({ target, scoreConfigs, collapsed = false, singleLineMessageHeader = false, small = false, comments }, ref) => {
     const { organization: { members }, me } = useSessionContext();
     const fetcher = useFetcher();
-
-    // const visibleMessages = item.commentMessages.filter((m: any) => !m.deletedAt) ?? []
 
     const stackedMessages = getStackedCommentMessages(comments);
     const hasZeroVisisbleComments = stackedMessages.length === 0
@@ -105,7 +95,7 @@ export const CommentsThreadRaw = forwardRef<any, CommentsThreadRawProps>(({ sess
     const [comment, setComment] = useState("");
 
     const submit = () => {
-        fetcher.submit({ comment }, { method: 'post', action: `/sessions/${session.id}/items/${item.id}/comments`, encType: 'application/json' })
+        fetcher.submit({ ...target, content: comment }, { method: 'post', action: `/comments`, encType: 'application/json' })
     }
 
     useFetcherSuccess(fetcher, () => {
@@ -159,9 +149,8 @@ export const CommentsThreadRaw = forwardRef<any, CommentsThreadRawProps>(({ sess
                     key={message.id}
                     message={message}
                     fetcher={fetcher}
-                    item={item}
-                    itemConfig={itemConfig}
-                    session={session}
+                    target={target}
+                    scoreConfigs={scoreConfigs}
                     compressionLevel={compressionLevel}
                     singleLineMessageHeader={singleLineMessageHeader}
                 />
@@ -230,7 +219,7 @@ export const CommentsThreadRaw = forwardRef<any, CommentsThreadRawProps>(({ sess
     );
 });
 
-export function CommentsThread({ session, item, itemConfig, selected = false, onSelect, allStats, comments, scores }: CommentsThreadProps) {
+export function CommentsThread({ target, scoreConfigs, selected = false, onSelect, allStats, comments }: CommentsThreadProps) {
     const commentThreadRef = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const revalidator = useRevalidator();
@@ -245,14 +234,17 @@ export function CommentsThread({ session, item, itemConfig, selected = false, on
         const element = containerRef.current;
         if (!element) return;
 
-        const itemStats = allStats?.sessions?.[session.id]?.items?.[item.id];
-        
+        const sessionId = target.sessionId;
+        const sessionItemId = target.sessionItemId;
+
+        const itemStats = sessionId && sessionItemId ? allStats?.sessions?.[sessionId]?.items?.[sessionItemId] : undefined;
+
         if (itemStats && itemStats.unseenEvents.length > 0) {
             const observer = new IntersectionObserver(
                 (entries) => {
                     entries.forEach((entry) => {
                         if (entry.isIntersecting) {
-                            agentview.markSeen({ sessionItemId: item.id })
+                            agentview.markSeen(target)
                                 .then(() => revalidator.revalidate())
                                 .catch((error) => console.error(error))
                             observer.disconnect();
@@ -261,9 +253,9 @@ export function CommentsThread({ session, item, itemConfig, selected = false, on
                 },
                 { threshold: 0.1 }
             );
-    
+
             observer.observe(element);
-    
+
             return () => observer.disconnect();
         }
 
@@ -281,7 +273,7 @@ export function CommentsThread({ session, item, itemConfig, selected = false, on
 
             // Deselect if clicking outside both item and comment areas
             if (!isClickingItem && !isClickingComment && !isClickingPortal) {
-                onSelect(null);
+                onSelect(false);
             }
         };
 
@@ -292,15 +284,13 @@ export function CommentsThread({ session, item, itemConfig, selected = false, on
     return (
         <div ref={containerRef} className={`rounded-lg ${selected ? "bg-white border" : "bg-neutral-50"}`} data-comment={true} onClick={(e) => {
             if (!selected) {
-                onSelect(item)
+                onSelect(true)
             }
         }}>
             <CommentsThreadRaw
                 comments={comments}
-                scores={scores}
-                session={session}
-                item={item}
-                itemConfig={itemConfig}
+                target={target}
+                scoreConfigs={scoreConfigs}
                 collapsed={!selected}
                 ref={commentThreadRef}
                 small={true}
@@ -354,7 +344,7 @@ export function CommentMessageHeader({ title, subtitle, actions, singleLineMessa
 type MessageCompressionLevel = "none" | "medium" | "high";
 
 // New subcomponent for comment message item with edit logic
-export function CommentMessageItem({ message, item, itemConfig, session, compressionLevel = "none", singleLineMessageHeader = false }: { message: StackedCommentMessage, fetcher: any, item: SessionItem, itemConfig?: SessionItemConfig, session: Session, compressionLevel?: MessageCompressionLevel, singleLineMessageHeader?: boolean }) {
+export function CommentMessageItem({ message, target, scoreConfigs, compressionLevel = "none", singleLineMessageHeader = false }: { message: StackedCommentMessage, fetcher: any, target: InputTarget, scoreConfigs?: ScoreConfig[], compressionLevel?: MessageCompressionLevel, singleLineMessageHeader?: boolean }) {
     if (message.deletedAt) {
         throw new Error("Deleted messages don't have rendering code.")
     }
@@ -366,7 +356,6 @@ export function CommentMessageItem({ message, item, itemConfig, session, compres
     }
 
     const fetcher = useFetcher();
-    // const isOwn = author.id === me.id;
 
     const createdAt = timeAgoShort(message.createdAt);
     const subtitle = createdAt + (message.updatedAt && message.updatedAt !== message.createdAt ? " · edited" : "")
@@ -381,12 +370,11 @@ export function CommentMessageItem({ message, item, itemConfig, session, compres
         resolver: zodResolver(schema),
         defaultValues: {
             comment: message.content ?? undefined,
-            // scores: scores
         }
     });
 
     const submit = (data: z.infer<typeof schema>) => {
-        fetcher.submit(data as any, { method: 'put', action: `/sessions/${session.id}/items/${item.id}/comments/${message.id}`, encType: 'application/json' })
+        fetcher.submit({ ...data, sessionId: target.sessionId } as any, { method: 'put', action: `/comments/${message.id}`, encType: 'application/json' })
     }
 
     useFetcherSuccess(fetcher, () => {
@@ -395,7 +383,7 @@ export function CommentMessageItem({ message, item, itemConfig, session, compres
 
     // score configs
     const getScoreConfig = (score: Score) => {
-        return itemConfig?.scores?.find((scoreConfig) => scoreConfig.name === score.name);
+        return scoreConfigs?.find((sc) => sc.name === score.name);
     }
 
     return (

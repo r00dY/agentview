@@ -55,7 +55,12 @@ export async function updateInboxes(
             throw new Error("[Internal Error] Comment not found");
         }
 
-        target = await resolveTarget(tx, comment);
+        target = await resolveTarget(tx, {
+            sessionId: comment.sessionId ?? undefined,
+            runId: comment.runId ?? undefined,
+            sessionItemId: comment.sessionItemId ?? undefined,
+            channelMessageId: comment.channelMessageId ?? undefined,
+        });
     }
     else {
         throw new Error(`Incorrect event type: "${newEvent.type}"`);
