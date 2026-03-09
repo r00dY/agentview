@@ -73,16 +73,12 @@ export async function updateInboxes(
             });
         }
         else if (newEvent.type === 'comment_created') {
-            if (!item) {
-                throw new Error("Session item is required for comment_created event");
-            }
-
             if (!inboxItem) {
                 newInboxItemValues.push({
                     organizationId: newEvent.organizationId,
                     userId: user.id,
-                    sessionItemId: item.id,
-                    sessionId: item.sessionId,
+                    sessionItemId: item?.id ?? null,
+                    sessionId: item?.sessionId ?? session.id,
                     lastNotifiableEventId: newEvent.id,
                     render: {
                         events: [newEvent]

@@ -50,6 +50,13 @@
       "when": 1772566109337,
       "tag": "0006_deep_leopardon",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1773051721048,
+      "tag": "0007_fuzzy_apocalypse",
+      "breakpoints": true
     }
   ]
 }

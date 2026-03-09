@@ -138,7 +138,9 @@ export const versions = pgTable("versions", {
 export const commentMessages = pgTable('comment_messages', {
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: text("organization_id").notNull().references(() => organizations.id),
-  sessionItemId: uuid('session_item_id').notNull().references(() => sessionItems.id, { onDelete: 'cascade' }),
+  sessionItemId: uuid('session_item_id').references(() => sessionItems.id, { onDelete: 'cascade' }),
+  runId: uuid('run_id').references(() => runs.id, { onDelete: 'cascade' }),
+  channelMessageId: uuid('channel_message_id').references(() => channelMessages.id, { onDelete: 'cascade' }),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   content: text('content'),
   createdAt: timestamp('created_at', { withTimezone: true, mode: "string" }).notNull().defaultNow(),
@@ -147,10 +149,14 @@ export const commentMessages = pgTable('comment_messages', {
   // Soft delete fields
   deletedAt: timestamp('deleted_at', { withTimezone: true, mode: "string" }),
   deletedBy: text('deleted_by').references(() => users.id, { onDelete: 'set null' }),
-
-  // scoreId: uuid('score_id').notNull().references(() => scores.id, { onDelete: 'cascade' }),
-  // scoreId: uuid('score_id').references(() => scores.id, { onDelete: 'set null' }),
-}, () => [createTenantPolicy('comment_messages')]);
+}, () => [
+  check('comment_messages_target_check', sql`(
+    (session_item_id IS NOT NULL AND run_id IS NULL AND channel_message_id IS NULL) OR
+    (session_item_id IS NULL AND run_id IS NOT NULL AND channel_message_id IS NULL) OR
+    (session_item_id IS NULL AND run_id IS NULL AND channel_message_id IS NOT NULL)
+  )`),
+  createTenantPolicy('comment_messages'),
+]);
 
 // User mentions within comment messages
 export const commentMentions = pgTable('comment_mentions', {
@@ -173,7 +179,8 @@ export const commentMessageEdits = pgTable('comment_message_edits', {
 export const scores = pgTable('scores', {
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: text("organization_id").notNull().references(() => organizations.id),
-  sessionItemId: uuid('session_item_id').notNull().references(() => sessionItems.id, { onDelete: 'cascade' }),
+  sessionItemId: uuid('session_item_id').references(() => sessionItems.id, { onDelete: 'cascade' }),
+  runId: uuid('run_id').references(() => runs.id, { onDelete: 'cascade' }),
 
   name: varchar('name', { length: 255 }).notNull(),
   value: jsonb('value').notNull(),
@@ -187,7 +194,12 @@ export const scores = pgTable('scores', {
   deletedAt: timestamp('deleted_at', { withTimezone: true, mode: "string" }),
   deletedBy: text('deleted_by').references(() => users.id, { onDelete: 'set null' }),
 }, (table) => [
-  unique().on(table.sessionItemId, table.name, table.createdBy),
+  check('scores_target_check', sql`(
+    (session_item_id IS NOT NULL AND run_id IS NULL) OR
+    (session_item_id IS NULL AND run_id IS NOT NULL)
+  )`),
+  uniqueIndex('scores_session_item_unique').on(table.sessionItemId, table.name, table.createdBy).where(sql`session_item_id IS NOT NULL`),
+  uniqueIndex('scores_run_unique').on(table.runId, table.name, table.createdBy).where(sql`run_id IS NOT NULL`),
   createTenantPolicy('scores'),
 ]);
 
@@ -322,6 +334,8 @@ export const runRelations = relations(runs, ({ one, many }) => ({
   }),
   sessionItems: many(sessionItems),
   channelMessages: many(channelMessages),
+  commentMessages: many(commentMessages),
+  scores: many(scores),
 }));
 
 export const sessionItemsRelations = relations(sessionItems, ({ one, many }) => ({
@@ -346,13 +360,20 @@ export const commentMessagesRelations = relations(commentMessages, ({ one, many 
     fields: [commentMessages.sessionItemId],
     references: [sessionItems.id],
   }),
+  run: one(runs, {
+    fields: [commentMessages.runId],
+    references: [runs.id],
+  }),
+  channelMessage: one(channelMessages, {
+    fields: [commentMessages.channelMessageId],
+    references: [channelMessages.id],
+  }),
   user: one(users, {
     fields: [commentMessages.userId],
     references: [users.id],
   }),
   mentions: many(commentMentions),
   edits: many(commentMessageEdits),
-  // scoreId: uuid('score_id').references(() => scores.id, { onDelete: 'set null' }),
 
   score: one(scores, {
     fields: [commentMessages.id],
@@ -382,6 +403,10 @@ export const scoresRelations = relations(scores, ({ one }) => ({
   sessionItem: one(sessionItems, {
     fields: [scores.sessionItemId],
     references: [sessionItems.id],
+  }),
+  run: one(runs, {
+    fields: [scores.runId],
+    references: [runs.id],
   }),
   comment: one(commentMessages, {
     fields: [scores.commentId],
@@ -520,7 +545,7 @@ export const channelThreadsRelations = relations(channelThreads, ({ one, many })
   sessions: many(sessions),
 }));
 
-export const channelMessagesRelations = relations(channelMessages, ({ one }) => ({
+export const channelMessagesRelations = relations(channelMessages, ({ one, many }) => ({
   channelThread: one(channelThreads, {
     fields: [channelMessages.channelThreadId],
     references: [channelThreads.id],
@@ -529,6 +554,7 @@ export const channelMessagesRelations = relations(channelMessages, ({ one }) => 
     fields: [channelMessages.runId],
     references: [runs.id],
   }),
+  commentMessages: many(commentMessages),
 }));
 
 export const environmentsRelations = relations(environments, ({ one }) => ({

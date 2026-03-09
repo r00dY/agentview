@@ -13,10 +13,11 @@ export interface BaseSessionItemConfig<TScoreConfig extends BaseScoreConfig = Ba
     callResult?: BaseSessionItemConfig<TScoreConfig>;
 }
 
-export interface BaseRunConfig<TSessionItemConfig extends BaseSessionItemConfig = BaseSessionItemConfig, TSessionInputItemConfig extends BaseSessionItemConfig = BaseSessionItemConfig> {
+export interface BaseRunConfig<TSessionItemConfig extends BaseSessionItemConfig = BaseSessionItemConfig, TSessionInputItemConfig extends BaseSessionItemConfig = BaseSessionItemConfig, TScoreConfig extends BaseScoreConfig = BaseScoreConfig> {
     input: TSessionInputItemConfig;
     output: TSessionItemConfig;
     steps?: TSessionItemConfig[];
+    scores?: TScoreConfig[];
     metadata?: Metadata | undefined;
     allowUnknownMetadata?: boolean;
     validateSteps?: boolean;

@@ -68,7 +68,7 @@ describe('API', () => {
     }))
   }
 
-  const updateConfig = async (options: { strictMatching?: boolean, runMetadata?: Record<string, z.ZodType>, allowUnknownMetadata?: boolean, validateSteps?: boolean, prod?: boolean } = {}) => {
+  const updateConfig = async (options: { strictMatching?: boolean, runMetadata?: Record<string, z.ZodType>, allowUnknownMetadata?: boolean, validateSteps?: boolean, prod?: boolean, itemScores?: { name: string, schema: z.ZodType }[], runScores?: { name: string, schema: z.ZodType }[] } = {}) => {
 
     let inputSchema = z.looseObject({ type: z.literal("message"), role: z.literal("user"), content: z.string() })
     let stepSchema = z.looseObject({ type: z.literal("reasoning"), content: z.string() })
@@ -91,7 +91,8 @@ describe('API', () => {
             {
               input: { schema: inputSchema },
               steps: [{ schema: stepSchema }, { schema: functionCallSchema, callResult: { schema: functionResultSchema } }],
-              output: { schema: outputSchema },
+              output: { schema: outputSchema, scores: options.itemScores },
+              scores: options.runScores,
               metadata: options.runMetadata,
               validateSteps: options.validateSteps,
               allowUnknownMetadata: options.allowUnknownMetadata,
@@ -3012,6 +3013,208 @@ describe('API', () => {
       expect(reqBody.messages[2].role).toBe("user");
       expect(reqBody.messages[2].parts[0].text).toBe("How are you?");
     }, 30000);
+  });
+
+  describe("comments and scores (flat API)", () => {
+
+    test("create, edit, delete comment on session item", async () => {
+      await updateConfig({
+        itemScores: [{ name: "quality", schema: z.enum(["good", "bad"]) }],
+      });
+
+      const session = await createSession();
+      const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true, version: "1.0" });
+      await av.updateRun({ id: run.id, items: [baseOutput], status: "completed" });
+
+      const updatedSession = await av.getSession({ id: session.id });
+      const outputItem = updatedSession.runs[0].sessionItems.find(i => i.type === "output")!;
+
+      // Create comment on session item
+      await av.createComment({ sessionItemId: outputItem.id, content: "Great output!" });
+
+      // Verify comment appears in session comments
+      let comments = await av.getSessionComments({ id: session.id });
+      expect(comments.length).toBe(1);
+      expect(comments[0].content).toBe("Great output!");
+      expect(comments[0].sessionItemId).toBe(outputItem.id);
+      expect(comments[0].runId).toBeNull();
+      expect(comments[0].channelMessageId).toBeNull();
+
+      const commentId = comments[0].id;
+
+      // Edit comment
+      await av.updateComment(commentId, { content: "Updated comment!" });
+
+      comments = await av.getSessionComments({ id: session.id });
+      expect(comments.length).toBe(1);
+      expect(comments[0].content).toBe("Updated comment!");
+
+      // Delete comment
+      await av.deleteComment(commentId);
+
+      comments = await av.getSessionComments({ id: session.id });
+      // Soft delete - comment should still be returned but with deletedAt set
+      const deletedComment = comments.find(c => c.id === commentId);
+      expect(deletedComment?.deletedAt).toBeTruthy();
+    });
+
+    test("create comment on run", async () => {
+      await updateConfig();
+
+      const session = await createSession();
+      const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true, version: "1.0" });
+
+      // Create comment on run
+      await av.createComment({ runId: run.id, content: "Run comment" });
+
+      // Verify comment appears in session comments
+      const comments = await av.getSessionComments({ id: session.id });
+      const runComment = comments.find(c => c.runId === run.id);
+      expect(runComment).toBeDefined();
+      expect(runComment!.content).toBe("Run comment");
+      expect(runComment!.sessionItemId).toBeNull();
+    });
+
+    test("must provide exactly one target for comment", async () => {
+      await updateConfig();
+
+      const session = await createSession();
+      const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true, version: "1.0" });
+
+      // No target
+      await expectToFail(
+        av.createComment({ content: "no target" } as any),
+        422
+      );
+
+      // Two targets
+      const updatedSession = await av.getSession({ id: session.id });
+      const inputItem = updatedSession.runs[0].sessionItems.find(i => i.type === "input")!;
+
+      await expectToFail(
+        av.createComment({ sessionItemId: inputItem.id, runId: run.id, content: "two targets" }),
+        422
+      );
+    });
+
+    test("scores on session item", async () => {
+      await updateConfig({
+        itemScores: [{ name: "quality", schema: z.enum(["good", "bad"]) }],
+      });
+
+      const session = await createSession();
+      const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true, version: "1.0" });
+      await av.updateRun({ id: run.id, items: [baseOutput], status: "completed" });
+
+      const updatedSession = await av.getSession({ id: session.id });
+      const outputItem = updatedSession.runs[0].sessionItems.find(i => i.type === "output")!;
+
+      // Create score
+      await av.updateScores({ sessionItemId: outputItem.id, scores: [{ name: "quality", value: "good" }] });
+
+      // Verify score appears in session scores
+      let sessionScores = await av.getSessionScores({ id: session.id });
+      expect(sessionScores.length).toBe(1);
+      expect(sessionScores[0].name).toBe("quality");
+      expect(sessionScores[0].value).toBe("good");
+      expect(sessionScores[0].sessionItemId).toBe(outputItem.id);
+      expect(sessionScores[0].runId).toBeNull();
+
+      // Update score
+      await av.updateScores({ sessionItemId: outputItem.id, scores: [{ name: "quality", value: "bad" }] });
+
+      sessionScores = await av.getSessionScores({ id: session.id });
+      expect(sessionScores.length).toBe(1);
+      expect(sessionScores[0].value).toBe("bad");
+
+      // Delete score (set to null)
+      await av.updateScores({ sessionItemId: outputItem.id, scores: [{ name: "quality", value: null }] });
+
+      sessionScores = await av.getSessionScores({ id: session.id });
+      expect(sessionScores.length).toBe(0);
+    });
+
+    test("scores on run", async () => {
+      await updateConfig({
+        runScores: [{ name: "accuracy", schema: z.number().min(0).max(1) }],
+      });
+
+      const session = await createSession();
+      const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true, version: "1.0" });
+
+      // Create run-level score
+      await av.updateScores({ runId: run.id, scores: [{ name: "accuracy", value: 0.95 }] });
+
+      // Verify score appears in session scores
+      let sessionScores = await av.getSessionScores({ id: session.id });
+      expect(sessionScores.length).toBe(1);
+      expect(sessionScores[0].name).toBe("accuracy");
+      expect(sessionScores[0].value).toBe(0.95);
+      expect(sessionScores[0].runId).toBe(run.id);
+      expect(sessionScores[0].sessionItemId).toBeNull();
+
+      // Update run-level score
+      await av.updateScores({ runId: run.id, scores: [{ name: "accuracy", value: 0.5 }] });
+
+      sessionScores = await av.getSessionScores({ id: session.id });
+      expect(sessionScores.length).toBe(1);
+      expect(sessionScores[0].value).toBe(0.5);
+    });
+
+    test("must provide exactly one target for scores", async () => {
+      await updateConfig({
+        itemScores: [{ name: "quality", schema: z.enum(["good", "bad"]) }],
+        runScores: [{ name: "accuracy", schema: z.number() }],
+      });
+
+      const session = await createSession();
+      const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true, version: "1.0" });
+
+      // No target
+      await expectToFail(
+        av.updateScores({ scores: [{ name: "quality", value: "good" }] } as any),
+        422
+      );
+    });
+
+    test("invalid score name is rejected", async () => {
+      await updateConfig({
+        itemScores: [{ name: "quality", schema: z.enum(["good", "bad"]) }],
+      });
+
+      const session = await createSession();
+      const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true, version: "1.0" });
+      await av.updateRun({ id: run.id, items: [baseOutput], status: "completed" });
+
+      const updatedSession = await av.getSession({ id: session.id });
+      const outputItem = updatedSession.runs[0].sessionItems.find(i => i.type === "output")!;
+
+      // Unknown score name
+      await expectToFail(
+        av.updateScores({ sessionItemId: outputItem.id, scores: [{ name: "unknown", value: "good" }] }),
+        400
+      );
+    });
+
+    test("invalid score value is rejected", async () => {
+      await updateConfig({
+        itemScores: [{ name: "quality", schema: z.enum(["good", "bad"]) }],
+      });
+
+      const session = await createSession();
+      const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true, version: "1.0" });
+      await av.updateRun({ id: run.id, items: [baseOutput], status: "completed" });
+
+      const updatedSession = await av.getSession({ id: session.id });
+      const outputItem = updatedSession.runs[0].sessionItems.find(i => i.type === "output")!;
+
+      // Invalid value for enum
+      await expectToFail(
+        av.updateScores({ sessionItemId: outputItem.id, scores: [{ name: "quality", value: "invalid" }] }),
+        400
+      );
+    });
+
   });
 
 

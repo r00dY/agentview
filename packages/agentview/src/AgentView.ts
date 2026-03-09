@@ -274,20 +274,20 @@ export class AgentView {
     return await this.request<SessionsStats>('GET', path, undefined)
   }
 
-  async updateItemScores(sessionId: string, itemId: string, scores: ScoreCreate[]): Promise<void> {
-    return await this.request<void>('PATCH', `/api/sessions/${sessionId}/items/${itemId}/scores`, scores)
+  async createComment(options: { sessionItemId?: string, runId?: string, channelMessageId?: string, content: string }): Promise<void> {
+    return await this.request<void>('POST', `/api/comments`, options)
   }
 
-  async createItemComment(sessionId: string, itemId: string, options: CommentMessageCreate): Promise<CommentMessage> {
-    return await this.request<CommentMessage>('POST', `/api/sessions/${sessionId}/items/${itemId}/comments`, options)
+  async updateComment(commentId: string, options: { content: string }): Promise<void> {
+    return await this.request<void>('PUT', `/api/comments/${commentId}`, options)
   }
 
-  async updateItemComment(sessionId: string, itemId: string, commentId: string, options: CommentMessageCreate): Promise<void> {
-    return await this.request<void>('PUT', `/api/sessions/${sessionId}/items/${itemId}/comments/${commentId}`, options)
+  async deleteComment(commentId: string): Promise<void> {
+    return await this.request<void>('DELETE', `/api/comments/${commentId}`, undefined)
   }
 
-  async deleteItemComment(sessionId: string, itemId: string, commentId: string): Promise<void> {
-    return await this.request<void>('DELETE', `/api/sessions/${sessionId}/items/${itemId}/comments/${commentId}`, undefined)
+  async updateScores(options: { sessionItemId?: string, runId?: string, scores: ScoreCreate[] }): Promise<void> {
+    return await this.request<void>('PATCH', `/api/scores`, options)
   }
 
   async markItemSeen(sessionId: string, itemId: string): Promise<void> {
