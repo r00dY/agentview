@@ -1954,10 +1954,6 @@ app.openapi(commentsPOSTRoute, async (c) => {
 
   return withOrg(principal.organizationId, async (tx) => {
     const target = await resolveTarget(tx, body);
-    if (target.type !== 'sessionItem' && target.type !== 'run' && target.type !== 'channelMessage') {
-      throw new AgentViewError(`Invalid target: "${target.type}"`, 400);
-    }
-    
     await createComment(tx, target, actingUser, body.content ?? null, principal.organizationId);
     return c.json({}, 201);
   })

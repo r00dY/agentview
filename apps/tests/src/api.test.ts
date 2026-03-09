@@ -3015,7 +3015,7 @@ describe('API', () => {
     }, 30000);
   });
 
-  describe.only("comments and scores (flat API)", () => {
+  describe("comments and scores (flat API)", () => {
 
     test("create, edit, delete comment on session item", async () => {
       await updateConfig({
