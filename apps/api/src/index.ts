@@ -63,7 +63,7 @@ import { applyRunPatch, getRun, createRun, DEFAULT_IDLE_TIME, getRunInputContent
 import { parseMetadata } from './parseMetadata';
 import { authn, authnUser, authorize, requireMemberPrincipal, getMemberId, requireMemberId, getEnv, type PrivatePrincipal, type Principal, type MemberPrincipal, type ApiKeyPrincipal, type UserPrincipal } from './authMiddleware';
 
-import { resolveTarget, resolveTargetWithObjects, type InputTarget, type RunTarget, type SessionItemTarget, type Target, type TargetWithObjects } from './target';
+import { resolveTarget, resolveTargetWithObjects, targetFilter, type InputTarget, type RunTarget, type SessionItemTarget, type Target, type TargetWithObjects } from './target';
 
 
 export { authn, authorize, requireMemberPrincipal, requireMemberId } from './authMiddleware';
@@ -1590,51 +1590,15 @@ app.openapi(seenRoute, async (c) => {
   const body = await c.req.valid('json');
 
   return withOrg(principal.organizationId, async tx => {
-    // Resolve the inbox target: exactly one of the identifiers determines the scope
-    let inboxFilter;
-
     const target = await resolveTarget(tx, body);
-
-    if (target.type === 'sessionItem') {
-      inboxFilter = and(
-        eq(inboxItems.userId, userPrincipal.session.user.id),
-        eq(inboxItems.sessionId, target.ids.sessionId),
-        eq(inboxItems.runId, target.ids.runId),
-        eq(inboxItems.sessionItemId, target.ids.sessionItemId),
-        isNull(inboxItems.channelMessageId),
-      );
-    } else if (target.type === 'channelMessage') {
-      inboxFilter = and(
-        eq(inboxItems.userId, userPrincipal.session.user.id),
-        eq(inboxItems.sessionId, target.ids.sessionId),
-        eq(inboxItems.runId, target.ids.runId),
-        eq(inboxItems.channelMessageId, target.ids.channelMessageId),
-        isNull(inboxItems.sessionItemId),
-      );
-    } else if (target.type === 'run') {
-      inboxFilter = and(
-        eq(inboxItems.userId, userPrincipal.session.user.id),
-        eq(inboxItems.sessionId, target.ids.sessionId),
-        eq(inboxItems.runId, target.ids.runId),
-        isNull(inboxItems.sessionItemId),
-        isNull(inboxItems.channelMessageId),
-      );
-    } else if (target.type === 'session') {
-      inboxFilter = and(
-        eq(inboxItems.userId, userPrincipal.session.user.id),
-        eq(inboxItems.sessionId, target.ids.sessionId),
-        isNull(inboxItems.sessionItemId),
-        isNull(inboxItems.runId),
-        isNull(inboxItems.channelMessageId),
-      );
-    } else {
-      throw new AgentViewError("At least one of sessionId, runId, sessionItemId, or channelMessageId must be provided", 422);
-    }
 
     await tx.update(inboxItems).set({
       lastReadEventId: sql`${inboxItems.lastNotifiableEventId}`,
       updatedAt: new Date().toISOString(),
-    }).where(inboxFilter);
+    }).where(and(
+      eq(inboxItems.userId, userPrincipal.session.user.id),
+      targetFilter(inboxItems, target),
+    ));
 
     return c.json({}, 200);
   })
@@ -2159,15 +2123,10 @@ app.openapi(scoresPATCHRoute, async (c) => {
 
       const scoreConfig = requireScoreConfig(scoreConfigs, name);
 
-      // Build the filter for existing score based on target type
-      const targetFilter = target.type === 'sessionItem'
-        ? eq(scores.sessionItemId, target.sessionItem.id)
-        : eq(scores.runId, run.id);
-
       // Check if score already exists for this user
       const existingScore = await tx.query.scores.findFirst({
         where: and(
-          targetFilter,
+          targetFilter(scores, target),
           eq(scores.name, name),
           eq(scores.createdBy, actingUser.id),
           isNull(scores.deletedAt)

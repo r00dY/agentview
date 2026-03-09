@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { channelMessages, runs, sessionItems } from "./schemas/schema";
 import type { Transaction } from "./types";
 import { AgentViewError, type ChannelMessage, type SessionItem, type Run, type Session } from "agentview";
@@ -46,7 +46,42 @@ export type SessionItemTarget = {
 
 export type Target = SessionTarget | RunTarget | ChannelMessageTarget | SessionItemTarget;
 
-
+/** Build a drizzle where filter matching target columns on any table with the standard target columns */
+export function targetFilter(
+    table: { sessionId: any; runId: any; sessionItemId: any; channelMessageId: any },
+    target: Target,
+) {
+    switch (target.type) {
+        case 'session':
+            return and(
+                eq(table.sessionId, target.ids.sessionId),
+                isNull(table.runId),
+                isNull(table.sessionItemId),
+                isNull(table.channelMessageId),
+            );
+        case 'run':
+            return and(
+                eq(table.sessionId, target.ids.sessionId),
+                eq(table.runId, target.ids.runId),
+                isNull(table.sessionItemId),
+                isNull(table.channelMessageId),
+            );
+        case 'sessionItem':
+            return and(
+                eq(table.sessionId, target.ids.sessionId),
+                eq(table.runId, target.ids.runId),
+                eq(table.sessionItemId, target.ids.sessionItemId),
+                isNull(table.channelMessageId),
+            );
+        case 'channelMessage':
+            return and(
+                eq(table.sessionId, target.ids.sessionId),
+                eq(table.runId, target.ids.runId),
+                isNull(table.sessionItemId),
+                eq(table.channelMessageId, target.ids.channelMessageId),
+            );
+    }
+}
 
 /** Derive the session + item + runId + channelMessageId from a comment target for inbox updates */
 export async function resolveTarget(tx: Transaction, target: InputTarget): Promise<Target> {

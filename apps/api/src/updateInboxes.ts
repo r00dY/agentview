@@ -4,6 +4,7 @@ import type { SessionItem, Session } from "agentview/apiTypes";
 import { inboxItems } from "./schemas/schema";
 import type { Transaction } from "./types";
 import { isInboxItemUnread } from "./inboxItems";
+import { resolveTarget, targetFilter, type Target } from "./target";
 
 /**
  * This function is "MVP" and is far from perfect.
@@ -36,13 +37,10 @@ export async function updateInboxes(
     tx: Transaction,
     newEvent: EventType,
 ) {
-    let sessionId: string | null = null;
-    let sessionItemId: string | null = null;
-    let runId: string | null = null;
-    let channelMessageId: string | null = null;
+    let target : Target;
 
     if (newEvent.type === 'session_created') {
-        sessionId = newEvent.payload.session_id;
+        target = await resolveTarget(tx, { sessionId: newEvent.payload.session_id });
     }
     else if (newEvent.type === 'comment_created' || newEvent.type === 'comment_edited' || newEvent.type === 'comment_deleted') {
         const commentId = newEvent.payload.comment_id;
@@ -57,29 +55,21 @@ export async function updateInboxes(
             throw new Error("[Internal Error] Comment not found");
         }
 
-        sessionItemId = comment.sessionItemId;
-        runId = comment.runId;
-        channelMessageId = comment.channelMessageId;
-        sessionId = comment.run?.sessionId ?? null;
+        target = await resolveTarget(tx, { 
+            sessionId: comment.sessionId,
+            runId: comment.runId,
+            sessionItemId: comment.sessionItemId,
+            channelMessageId: comment.channelMessageId
+        });
     }
     else {
         throw new Error(`Incorrect event type: "${newEvent.type}"`);
     }
 
-    if (!sessionId) {
-        throw new Error("[Internal Error] Comment has no session id");
-    }
-
     const allUsers = await tx.query.users.findMany({
         with: {
             inboxItems: {
-                where: ((inboxItems, { eq, and, isNull }) => {
-                    if (channelMessageId) return eq(inboxItems.channelMessageId, channelMessageId);
-                    if (sessionItemId) return eq(inboxItems.sessionItemId, sessionItemId);
-                    if (runId) return and(eq(inboxItems.runId, runId), isNull(inboxItems.sessionItemId), isNull(inboxItems.channelMessageId));
-
-                    return and(eq(inboxItems.sessionId, sessionId), isNull(inboxItems.sessionItemId), isNull(inboxItems.runId), isNull(inboxItems.channelMessageId));
-                }),
+                where: targetFilter(inboxItems, target),
             }
         }
     });
@@ -117,10 +107,7 @@ export async function updateInboxes(
                 newInboxItemValues.push({
                     organizationId: newEvent.organizationId,
                     userId: user.id,
-                    sessionItemId,
-                    runId,
-                    channelMessageId,
-                    sessionId,
+                    ...target.ids,
                     lastNotifiableEventId: newEvent.id,
                     render: {
                         events: [newEvent]
