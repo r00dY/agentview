@@ -51,14 +51,6 @@ export type Target = SessionTarget | RunTarget | ChannelMessageTarget | SessionI
 /** Derive the session + item + runId + channelMessageId from a comment target for inbox updates */
 export async function resolveTarget(tx: Transaction, target: InputTarget): Promise<Target> {
 
-    // Check that exactly one of sessionId, runId, channelMessageId, sessionItemId is set (not null or undefined)
-    const keys = ['sessionId', 'runId', 'channelMessageId', 'sessionItemId'] as const;
-    const setKeys = keys.filter(k => typeof target[k] === 'string');
-    if (setKeys.length !== 1) {
-        throw new AgentViewError("[resolveTarget] Exactly one of sessionId, runId, channelMessageId or sessionItemId must be provided", 400);
-    }
-
-
     if (typeof target.sessionItemId === 'string') {
         const sessionItem = await tx.query.sessionItems.findFirst({
             where: eq(sessionItems.id, target.sessionItemId),
@@ -66,6 +58,14 @@ export async function resolveTarget(tx: Transaction, target: InputTarget): Promi
 
         if (!sessionItem) {
             throw new AgentViewError("Session item not found", 404);
+        }
+
+        if (target.sessionId && sessionItem.sessionId !== target.sessionId) {
+            throw new AgentViewError("Session item does not belong to the session", 400);
+        }
+
+        if (target.runId && sessionItem.runId !== target.runId) {
+            throw new AgentViewError("Session item does not belong to the run", 400);
         }
 
         return {
@@ -80,14 +80,25 @@ export async function resolveTarget(tx: Transaction, target: InputTarget): Promi
     else if (typeof target.channelMessageId === 'string') {
         const channelMessage = await tx.query.channelMessages.findFirst({
             where: eq(channelMessages.id, target.channelMessageId),
+            with: {
+                run: true,
+            },
         });
 
         if (!channelMessage) {
             throw new AgentViewError("Channel message not found", 404);
         }
 
-        if (!channelMessage.runId) {
+        if (!channelMessage.run) {
             throw new AgentViewError("Channel message has no run id", 400);
+        }
+
+        if (target.sessionId && channelMessage.run.sessionId !== target.sessionId) {
+            throw new AgentViewError("Session item does not belong to the session", 400);
+        }
+
+        if (target.runId && channelMessage.run.id !== target.runId) {
+            throw new AgentViewError("Session item does not belong to the run", 400);
         }
 
         const { ids: { sessionId } } = await resolveTarget(tx, { runId: channelMessage.runId });
@@ -96,7 +107,7 @@ export async function resolveTarget(tx: Transaction, target: InputTarget): Promi
             type: 'channelMessage',
             ids: {
                 sessionId,
-                runId: channelMessage.runId,
+                runId: channelMessage.run.id,
                 channelMessageId: channelMessage.id,
             }
         };
@@ -108,6 +119,11 @@ export async function resolveTarget(tx: Transaction, target: InputTarget): Promi
         if (!run) {
             throw new AgentViewError("Run not found", 404);
         }
+
+        if (target.sessionId && run.sessionId !== target.sessionId) {
+            throw new AgentViewError("Run does not belong to the session", 400);
+        }
+
         return {
             type: 'run',
             ids: {

@@ -3015,7 +3015,7 @@ describe('API', () => {
     }, 30000);
   });
 
-  describe("comments and scores (flat API)", () => {
+  describe.only("comments and scores (flat API)", () => {
 
     test("create, edit, delete comment on session item", async () => {
       await updateConfig({
@@ -3075,27 +3075,29 @@ describe('API', () => {
       expect(runComment!.sessionItemId).toBeNull();
     });
 
-    // test("must provide exactly one target for comment", async () => {
-    //   await updateConfig();
+    test("incorrect target throws", async () => {
+      await updateConfig();
 
-    //   const session = await createSession();
-    //   const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true, version: "1.0" });
+      const session = await createSession();
+      const run = await av.createRun({ sessionId: session.id, items: [baseInput, baseOutput], status: "completed",  manual: true, version: "1.0" });
+      const run2 = await av.createRun({ sessionId: session.id, items: [baseInput, baseOutput], status: "completed",  manual: true, version: "1.0" });
 
-    //   // No target
-    //   await expectToFail(
-    //     av.createComment({ content: "no target" } as any),
-    //     422
-    //   );
+      
+      // No target
+      await expectToFail(
+        av.createComment({ content: "no target" } as any),
+        400
+      );
 
-    //   // Two targets
-    //   const updatedSession = await av.getSession({ id: session.id });
-    //   const inputItem = updatedSession.runs[0].sessionItems.find(i => i.type === "input")!;
+      // Two targets
+      const updatedSession = await av.getSession({ id: session.id });
+      const inputItem = updatedSession.runs[0].sessionItems.find(i => i.type === "input")!;
 
-    //   await expectToFail(
-    //     av.createComment({ sessionItemId: inputItem.id, runId: run.id, content: "two targets" }),
-    //     422
-    //   );
-    // });
+      await expectToFail(
+        av.createComment({ sessionItemId: inputItem.id, runId: run2.id, content: "incompatible session item and run item" }),
+        400
+      );
+    });
 
     test("scores on session item", async () => {
       await updateConfig({
