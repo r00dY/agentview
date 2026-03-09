@@ -46,11 +46,9 @@ export async function updateInboxes(
         const commentId = newEvent.payload.comment_id;
 
         const comment = await tx.query.commentMessages.findFirst({
-            where: eq(commentMessages.id, commentId),
-            with: {
-                run: true,
-            },
+            where: eq(commentMessages.id, commentId)
         });
+        
         if (!comment) {
             throw new Error("[Internal Error] Comment not found");
         }
