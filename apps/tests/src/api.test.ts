@@ -3053,9 +3053,8 @@ describe('API', () => {
       await av.deleteComment(commentId);
 
       comments = await av.getSessionComments({ id: session.id });
-      // Soft delete - comment should still be returned but with deletedAt set
-      const deletedComment = comments.find(c => c.id === commentId);
-      expect(deletedComment?.deletedAt).toBeTruthy();
+      // Deleted comments should not appear in listing
+      expect(comments.length).toBe(0);
     });
 
     test("create comment on run", async () => {

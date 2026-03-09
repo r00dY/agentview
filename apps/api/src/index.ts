@@ -272,8 +272,9 @@ function commentTargetColumns(target: CommentTarget) {
   return { sessionItemId: null, runId: null, channelMessageId: target.channelMessageId };
 }
 
-/** Derive the session + item from a comment target for inbox updates */
-async function resolveTargetContext(tx: Transaction, target: CommentTarget): Promise<{ session: Session; item: SessionItem | null }> {
+/** Derive the session + item + runId from a comment target for inbox updates */
+async function resolveTargetContext(tx: Transaction, target: CommentTarget): Promise<{ session: Session; item: SessionItem | null; runId: string | null }> {
+
   if ('sessionItemId' in target) {
     const sessionItem = await tx.query.sessionItems.findFirst({
       where: eq(sessionItems.id, target.sessionItemId),
@@ -282,14 +283,14 @@ async function resolveTargetContext(tx: Transaction, target: CommentTarget): Pro
     const session = await fetchSession(tx, sessionItem.sessionId);
     if (!session) throw new HTTPException(404, { message: "Session not found" });
     const item = getAllSessionItems(session).find(i => i.id === target.sessionItemId) as SessionItem;
-    return { session, item };
+    return { session, item, runId: null };
   }
   if ('runId' in target) {
     const run = await getRun(tx, target.runId);
     if (!run) throw new HTTPException(404, { message: "Run not found" });
     const session = await fetchSession(tx, run.sessionId);
     if (!session) throw new HTTPException(404, { message: "Session not found" });
-    return { session, item: null };
+    return { session, item: null, runId: target.runId };
   }
   // channelMessageId
   const channelMsg = await tx.query.channelMessages.findFirst({
@@ -301,7 +302,7 @@ async function resolveTargetContext(tx: Transaction, target: CommentTarget): Pro
   if (!threadSessions?.length) throw new HTTPException(404, { message: "No session found for channel message" });
   const session = await fetchSession(tx, threadSessions[0].id);
   if (!session) throw new HTTPException(404, { message: "Session not found" });
-  return { session, item: null };
+  return { session, item: null, runId: null };
 }
 
 async function createComment(
@@ -351,8 +352,8 @@ async function createComment(
     }
   }).returning();
 
-  const { session, item } = await resolveTargetContext(tx, target);
-  await updateInboxes(tx, event, session, item);
+  const { session, item, runId } = await resolveTargetContext(tx, target);
+  await updateInboxes(tx, event, session, item, runId);
 
   return newMessage;
 }
@@ -438,8 +439,8 @@ async function updateComment(
     }
   }).returning();
 
-  const { session, item } = await resolveTargetContext(tx, target);
-  await updateInboxes(tx, event, session, item);
+  const { session, item, runId } = await resolveTargetContext(tx, target);
+  await updateInboxes(tx, event, session, item, runId);
 
   return commentMessage;
 }
@@ -468,8 +469,8 @@ async function deleteComment(
     }
   }).returning();
 
-  const { session, item } = await resolveTargetContext(tx, target);
-  await updateInboxes(tx, event, session, item);
+  const { session, item, runId } = await resolveTargetContext(tx, target);
+  await updateInboxes(tx, event, session, item, runId);
 }
 
 
@@ -1150,10 +1151,13 @@ app.openapi(sessionCommentsGETRoute, async (c) => {
     await authorize(principal, { action: "end-user:read", user: session.user });
 
     const comments = await tx.query.commentMessages.findMany({
-      where: or(
-        eq(commentMessages.sessionItemId, sql`ANY(SELECT id FROM session_items WHERE session_id = ${session.id})`),
-        eq(commentMessages.runId, sql`ANY(SELECT id FROM runs WHERE session_id = ${session.id})`),
-        eq(commentMessages.channelMessageId, sql`ANY(SELECT cm.id FROM channel_messages cm JOIN channel_threads ct ON cm.channel_thread_id = ct.id JOIN sessions s ON s.channel_thread_id = ct.id WHERE s.id = ${session.id})`),
+      where: and(
+        isNull(commentMessages.deletedAt),
+        or(
+          eq(commentMessages.sessionItemId, sql`ANY(SELECT id FROM session_items WHERE session_id = ${session.id})`),
+          eq(commentMessages.runId, sql`ANY(SELECT id FROM runs WHERE session_id = ${session.id})`),
+          eq(commentMessages.channelMessageId, sql`ANY(SELECT cm.id FROM channel_messages cm JOIN channel_threads ct ON cm.channel_thread_id = ct.id JOIN sessions s ON s.channel_thread_id = ct.id WHERE s.id = ${session.id})`),
+        ),
       ),
       orderBy: (comment, { asc }) => [asc(comment.createdAt)],
       with: {
@@ -1640,6 +1644,7 @@ app.openapi(sessionSeenRoute, async (c) => {
       eq(inboxItems.userId, userPrincipal.session.user.id),
       eq(inboxItems.sessionId, sessionId),
       isNull(inboxItems.sessionItemId),
+      isNull(inboxItems.runId),
     ))
   })
 
@@ -1964,6 +1969,42 @@ app.openapi(itemSeenRoute, async (c) => {
   })
 })
 
+const runSeenRoute = createRoute({
+  method: 'post',
+  path: '/api/runs/{runId}/seen',
+  summary: 'Mark run as seen',
+  tags: ['Runs'],
+  request: {
+    params: z.object({
+      runId: z.string(),
+    }),
+  },
+  responses: {
+    200: response_data(z.object({})),
+    400: response_error(),
+    401: response_error(),
+    404: response_error(),
+  },
+})
+
+app.openapi(runSeenRoute, async (c) => {
+  const principal = await authn(c.req.raw.headers)
+  const userPrincipal = requireMemberPrincipal(principal);
+
+  const { runId } = c.req.param()
+
+  return withOrg(principal.organizationId, async (tx) => {
+    await tx.update(inboxItems).set({
+      lastReadEventId: sql`${inboxItems.lastNotifiableEventId}`,
+      updatedAt: new Date().toISOString(),
+    }).where(and(
+      eq(inboxItems.userId, userPrincipal.session.user.id),
+      eq(inboxItems.runId, runId),
+    ))
+
+    return c.json({}, 200);
+  })
+})
 
 
 /* --------- FEED --------- */

@@ -256,6 +256,10 @@ export class AgentView {
     return await this.request<void>('POST', `/api/sessions/${sessionId}/seen`, undefined)
   }
 
+  async markRunSeen(runId: string): Promise<void> {
+    return await this.request<void>('POST', `/api/runs/${runId}/seen`, undefined)
+  }
+
   async getSessionsStats(options?: SessionsStatsQueryParams): Promise<SessionsStats> {
     let path = `/api/sessions/stats`
     const params = new URLSearchParams()

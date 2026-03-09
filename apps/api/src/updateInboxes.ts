@@ -30,6 +30,7 @@ export async function updateInboxes(
     newEvent: EventType,
     session: Session,
     item: SessionItem | null,
+    runId: string | null = null,
 ) {
     // Get organizationId from event if not provided
     if (!['comment_created', 'comment_edited', 'comment_deleted', 'session_created'].includes(newEvent.type)) {
@@ -39,7 +40,11 @@ export async function updateInboxes(
     const allUsers = await tx.query.users.findMany({
         with: {
             inboxItems: {
-                where: ((inboxItems, { eq, and, isNull }) => item ? eq(inboxItems.sessionItemId, item.id) : and(eq(inboxItems.sessionId, session.id), isNull(inboxItems.sessionItemId))),
+                where: ((inboxItems, { eq, and, isNull }) => {
+                    if (item) return eq(inboxItems.sessionItemId, item.id);
+                    if (runId) return eq(inboxItems.runId, runId);
+                    return and(eq(inboxItems.sessionId, session.id), isNull(inboxItems.sessionItemId), isNull(inboxItems.runId));
+                }),
             }
         }
     });
@@ -78,6 +83,7 @@ export async function updateInboxes(
                     organizationId: newEvent.organizationId,
                     userId: user.id,
                     sessionItemId: item?.id ?? null,
+                    runId: runId ?? null,
                     sessionId: item?.sessionId ?? session.id,
                     lastNotifiableEventId: newEvent.id,
                     render: {
@@ -158,7 +164,7 @@ export async function updateInboxes(
 
     if (newInboxItemValues.length > 0) {
         await tx.insert(inboxItems).values(newInboxItemValues).onConflictDoUpdate({
-            target: [inboxItems.userId, inboxItems.sessionId, inboxItems.sessionItemId],
+            target: [inboxItems.userId, inboxItems.sessionId, inboxItems.sessionItemId, inboxItems.runId],
             set: {
                 updatedAt: new Date().toISOString(),
                 lastNotifiableEventId: sql.raw(`excluded.${inboxItems.lastNotifiableEventId.name}`),
