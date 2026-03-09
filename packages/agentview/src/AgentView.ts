@@ -279,12 +279,13 @@ export class AgentView {
     return await this.request<void>('POST', `/api/comments`, options)
   }
 
-  async updateComment(commentId: string, options: { content: string }): Promise<void> {
-    return await this.request<void>('PUT', `/api/comments/${commentId}`, options)
+  async updateComment(options: { id: string, content: string }): Promise<void> {
+    const { id, ...rest } = options
+    return await this.request<void>('PUT', `/api/comments/${id}`, rest)
   }
 
-  async deleteComment(commentId: string): Promise<void> {
-    return await this.request<void>('DELETE', `/api/comments/${commentId}`, undefined)
+  async deleteComment(options: { id: string }): Promise<void> {
+    return await this.request<void>('DELETE', `/api/comments/${options.id}`, undefined)
   }
 
   async updateScores(options: InputTarget & { scores: ScoreCreate[] }): Promise<void> {

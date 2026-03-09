@@ -3044,14 +3044,14 @@ describe('API', () => {
       const commentId = comments[0].id;
 
       // Edit comment
-      await av.updateComment(commentId, { content: "Updated comment!" });
+      await av.updateComment({ id: commentId, content: "Updated comment!" });
 
       comments = await av.getSessionComments({ id: session.id });
       expect(comments.length).toBe(1);
       expect(comments[0].content).toBe("Updated comment!");
 
       // Delete comment
-      await av.deleteComment(commentId);
+      await av.deleteComment({ id: commentId });
 
       comments = await av.getSessionComments({ id: session.id });
       // Deleted comments should not appear in listing

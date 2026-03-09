@@ -99,35 +99,32 @@ export class CachedAgentView extends AgentView {
     return swrSync(cacheKeys.sessionScores(args[0].id), () => super.getSessionScores(...args))
   }
 
-  override async createComment(options: InputTarget & { content: string }) {
+  override async createComment(options_: WithRequired<Parameters<AgentView['createComment']>[0], 'sessionId'>) { // we make sessionId mandatory in Target to simplify cache invalidation
+    const { sessionId, ...options } = options_
     const result = await super.createComment(options)
-    if (options.sessionId) {
-      invalidateCache(cacheKeys.sessionScores(options.sessionId))
-      invalidateCache(cacheKeys.sessionComments(options.sessionId))
-    }
+    invalidateCache(cacheKeys.sessionScores(sessionId))
+    invalidateCache(cacheKeys.sessionComments(sessionId))
     return result
   }
 
-  override async updateComment(commentId: string, options: { content: string } & { sessionId?: string }) {
-    const { sessionId, ...rest } = options
-    const result = await super.updateComment(commentId, rest)
-    if (sessionId) {
-      invalidateCache(cacheKeys.sessionScores(sessionId))
-      invalidateCache(cacheKeys.sessionComments(sessionId))
-    }
+  override async updateComment(options_: Parameters<AgentView['updateComment']>[0] & { sessionId: string }) {
+    const { sessionId, ...options } = options_
+    const result = await super.updateComment(options)
+
+    invalidateCache(cacheKeys.sessionScores(sessionId))
+    invalidateCache(cacheKeys.sessionComments(sessionId))
     return result
   }
 
-  override async deleteComment(commentId: string, options?: { sessionId?: string }) {
-    const result = await super.deleteComment(commentId)
-    if (options?.sessionId) {
-      invalidateCache(cacheKeys.sessionScores(options.sessionId))
-      invalidateCache(cacheKeys.sessionComments(options.sessionId))
-    }
+  override async deleteComment(options_: Parameters<AgentView['deleteComment']>[0] & { sessionId: string }) {
+    const { sessionId, ...options } = options_
+    const result = await super.deleteComment(options)
+    invalidateCache(cacheKeys.sessionScores(sessionId))
+    invalidateCache(cacheKeys.sessionComments(sessionId))
     return result
   }
 
-  override async updateScores(options: InputTarget & { scores: any[] }) {
+  override async updateScores(options: WithRequired<InputTarget, 'sessionId'> & { scores: any[] }) {
     const result = await super.updateScores(options)
     if (options.sessionId) {
       invalidateCache(cacheKeys.sessionScores(options.sessionId))
@@ -158,3 +155,5 @@ export class CachedAgentView extends AgentView {
     return result
   }
 }
+
+type WithRequired<T, K extends keyof T> = T & Required<Pick<T, K>>;
