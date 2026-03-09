@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { type CommentMessage, type Run, type Score, type Session, type SessionBase, type SessionItem, type SessionsStats } from "agentview/apiTypes";
+import { type ChannelMessage, type CommentMessage, type Run, type Score, type Session, type SessionBase, type SessionItem, type SessionsStats } from "agentview/apiTypes";
 import { findItemConfigById, findMatchingRunConfigs, requireAgentConfig, requireChannelConfig } from "agentview/configUtils";
 import { enhanceSession, getActiveRuns, getAllSessionItems, getLastRun, getVersions } from "agentview/sessionUtils";
 import type { AgentConfig, ChannelConfig, ScoreConfig, SessionItemConfig, SessionItemDisplayComponentProps } from "agentview/types";
@@ -247,17 +247,72 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         >
             <div ref={bodyRef}>
                 <ItemsWithCommentsLayout items={getActiveRuns(session).map((run) => {
-                    return run.sessionItems.map((item, index) => {
-                        const isLastRunItem = index === run.sessionItems.length - 1;
-                        const isInputItem = item.type === "input";
 
-                        const comments = props.comments.filter((c) => c.sessionItemId === item.id).filter((c) => !c.deletedAt);
-                        const scores = props.scores.filter((s) => s.sessionItemId === item.id).filter((s) => !s.deletedAt);
+                    type ChannelMessageWallItem = {
+                        id: string,
+                        type: 'channel-message',
+                        channelMessage: ChannelMessage,
+                    }
+                    
+                    type SessionItemWallItem = {
+                        id: string,
+                        type: 'session-item',
+                        sessionItem: SessionItem,
+                    }
 
-                        const hasComments = comments.length > 0
-                        const isSelected = selectedItemId === item.id;
+                    type WallItem = ChannelMessageWallItem | SessionItemWallItem;
 
-                        let content: React.ReactNode = null;
+                    let wallItems: WallItem[] = [];
+
+                    if (session.channel.type === 'api') {
+                        wallItems = run.sessionItems.map((item) => ({
+                            id: item.id,
+                            type: 'session-item',
+                            sessionItem: item,
+                        }));
+                    }
+                    else {
+                        const incomingChannelMessages = run.channelMessages.filter((message) => message.direction === 'incoming');
+                        incomingChannelMessages.forEach((message) => {
+                            wallItems.push({
+                                id: message.id,
+                                type: 'channel-message',
+                                channelMessage: message,
+                            });
+                        });
+                        
+                        const outgoingChannelMessages = run.channelMessages.filter((message) => message.direction === 'outgoing');
+
+                        if (outgoingChannelMessages.length > 0) {
+                            run.sessionItems.filter((item) => item.type === 'step').forEach((item) => {
+                                wallItems.push({
+                                    id: item.id,
+                                    type: 'session-item',
+                                    sessionItem: item,
+                                });
+                            });
+
+                            wallItems.push({
+                                id: outgoingChannelMessages[0].id,
+                                type: 'channel-message',
+                                channelMessage: outgoingChannelMessages[0],
+                            });
+                        }
+                        else {
+                            run.sessionItems.filter((item) => item.type === 'step' || item.type === 'output').forEach((item) => {
+                                wallItems.push({
+                                    id: item.id,
+                                    type: 'session-item',
+                                    sessionItem: item,
+                                });
+                            });
+                        }                        
+                    }
+
+
+
+
+                    return wallItems.map((wallItem, index) => {
 
                         /**
                          * TODO:
@@ -270,17 +325,60 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                          * Test those fucking emails!!
                          */
 
-                        const itemConfigMatch : any = undefined;
-                        if (isInputItem) {
-                            content = <div className="pl-[10%] relative">
-                                <DefaultInputComponent item={item.content} sessionItem={item} run={run} session={session} />
-                            </div>
+
+                        let content: React.ReactNode = null;
+
+                        if (wallItem.type === 'channel-message') {
+                            if (wallItem.channelMessage.direction === 'incoming') {
+                                content = <div className="text-red-500">{wallItem.channelMessage.text}</div>
+                            }
+                            else {
+                                content = <div className="text-blue-500">{wallItem.channelMessage.text}</div>;
+                            }
                         }
                         else {
-                            content = <div className="pr-[10%] relative">
-                                <DefaultAssistantComponent item={item.content} sessionItem={item} run={run} session={session} />
-                            </div>
+                            if (wallItem.sessionItem.type === 'input') {
+                                content = <div className="pl-[10%] relative">
+                                         <DefaultInputComponent item={wallItem.sessionItem.content} sessionItem={wallItem.sessionItem} run={run} session={session} />
+                                     </div>                            }
+                            else {
+                                content = <div className="pr-[10%] relative">
+                                         <DefaultAssistantComponent item={wallItem.sessionItem.content} sessionItem={wallItem.sessionItem} run={run} session={session} />
+                                     </div>
+                            }
                         }
+
+                        const isSelected = selectedItemId === wallItem.id;
+                        const hasComments = false;
+                        const isLastRunItem = index === wallItems.length - 1;
+
+
+
+                        // const isLastRunItem = index === run.sessionItems.length - 1;
+                        // const isInputItem = item.type === "input";
+
+                        // const comments = props.comments.filter((c) => c.sessionItemId === item.id).filter((c) => !c.deletedAt);
+                        // const scores = props.scores.filter((s) => s.sessionItemId === item.id).filter((s) => !s.deletedAt);
+
+                        // const hasComments = comments.length > 0
+                        // const isSelected = selectedItemId === item.id;
+
+                        // let content: React.ReactNode = null;
+
+                        // const itemConfigMatch : any = undefined;
+                        // if (isInputItem) {
+                        //     content = <div className="pl-[10%] relative">
+                        //         <DefaultInputComponent item={item.content} sessionItem={item} run={run} session={session} />
+                        //     </div>
+                        // }
+                        // else {
+                        //     content = <div className="pr-[10%] relative">
+                        //         <DefaultAssistantComponent item={item.content} sessionItem={item} run={run} session={session} />
+                        //     </div>
+                        // }
+
+
+
 
 
                         // if (run.version?.agent) {
@@ -343,12 +441,12 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                         // }
 
                         return {
-                            id: item.id,
+                            id: wallItem.id,
                             itemComponent: <div
                                 className={`relative group`}
                             >
                                 {!styles.isSmallSize && <div className={`absolute text-muted-foreground text-xs font-medium flex flex-row gap-1 z-10`} style={{ left: `${styles.padding + styles.textWidth + styles.commentButtonPadding}px` }}>
-                                    {!isSelected && <Button className="group-hover:visible invisible" variant="outline" size="icon_xs" onClick={() => { setselectedItemId(item.id) }}>
+                                    {!isSelected && <Button className="group-hover:visible invisible" variant="outline" size="icon_xs" onClick={() => { setselectedItemId(wallItem.id) }}>
                                         <MessageCirclePlus className="size-3" />
                                     </Button>}
                                 </div>}
@@ -361,7 +459,8 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                         </ErrorBoundary>
                                     </div>
 
-                                    <MessageFooter
+                                    <div>Footer</div>
+                                    {/* <MessageFooter
                                         comments={comments}
                                         scores={scores}
                                         session={session}
@@ -375,7 +474,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                         isLastRunItem={isLastRunItem}
                                         isOutput={itemConfigMatch?.type === "output"}
                                         allStats={allStats}
-                                    />
+                                    /> */}
 
                                     {isLastRunItem && run.status === "in_progress" && <div className="text-muted-foreground mt-6">
                                         <Loader />
@@ -383,17 +482,17 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 
                                 </div>
                             </div>,
-                            commentsComponent: !styles.isSmallSize && (hasComments || (isSelected)) ?
-                                <CommentsThread
-                                    item={item}
-                                    itemConfig={itemConfigMatch?.itemConfig}
-                                    session={session}
-                                    selected={isSelected}
-                                    onSelect={(a) => { setselectedItemId(a?.id) }}
-                                    allStats={allStats}
-                                    comments={comments}
-                                    scores={scores}
-                                /> : undefined
+                            commentsComponent: !styles.isSmallSize && (hasComments || (isSelected)) ? <div>comments</div> : undefined
+                                // <CommentsThread
+                                //     item={item}
+                                //     itemConfig={itemConfigMatch?.itemConfig}
+                                //     session={session}
+                                //     selected={isSelected}
+                                //     onSelect={(a) => { setselectedItemId(a?.id) }}
+                                //     allStats={allStats}
+                                //     comments={comments}
+                                //     scores={scores}
+                                // /> : undefined
                         }
                     })
                 }).flat().filter((item) => item !== undefined && item !== null)} selectedItemId={selectedItemId}
