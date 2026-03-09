@@ -23,7 +23,6 @@ import {
   type ScoreCreate,
   type SessionStreamEvent,
   type Channel,
-  type ChannelThread,
   type ChannelMessage,
   type Pagination,
   type InputTarget,
@@ -222,10 +221,6 @@ export class AgentView {
     return await this.request<Channel>('PATCH', `/api/channels/${channelId}`, data)
   }
 
-  async getChannelThreads(channelId: string): Promise<ChannelThread[]> {
-    return await this.request<ChannelThread[]>('GET', `/api/channels/${channelId}/threads`)
-  }
-
   // --- Mock-email (internal/testing) ---
 
   __internal = {
@@ -234,7 +229,7 @@ export class AgentView {
         return await this.request<Channel>('POST', `/api/channels/mock/create-channel`, data)
       },
       sendMessage: async (data: { address: string, sourceId: string, date: string, contact: string, contactKind: string, text: string, sourceThreadId?: string, providerData?: any }): Promise<any> => {
-        return await this.request<{ message: ChannelMessage, thread: ChannelThread }>('POST', `/api/channels/mock/send-message`, data)
+        return await this.request<any>('POST', `/api/channels/mock/send-message`, data)
       },
       getOutbox: async (address?: string): Promise<Array<{ id: string, address: string, contact: string, contactKind: string, text: string | null, timestamp: number }>> => {
         const params = address ? `?address=${encodeURIComponent(address)}` : ''

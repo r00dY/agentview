@@ -388,7 +388,6 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                     commentsAndScores = runCommentsAndScores;
                                 }
                             }
-
                         }
 
                         const isSelected = selectedItemId === wallItem.id;
