@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { type ChannelMessage, type CommentMessage, type Run, type Score, type Session, type SessionBase, type SessionItem, type SessionsStats } from "agentview/apiTypes";
-import { findItemConfigById, findMatchingRunConfigs, requireAgentConfig, requireChannelConfig } from "agentview/configUtils";
+import { findAgentConfig, findItemConfigById, findRunConfig, requireAgentConfig, requireChannelConfig } from "agentview/configUtils";
 import { enhanceSession, getActiveRuns, getAllSessionItems, getLastRun, getVersions } from "agentview/sessionUtils";
 import type { AgentConfig, ChannelConfig, ScoreConfig, SessionItemConfig, SessionItemDisplayComponentProps } from "agentview/types";
 import { AlertCircleIcon, ChevronDown, CircleGauge, InfoIcon, Loader2, Lock, MessageCirclePlus, UsersIcon } from "lucide-react";
@@ -309,10 +309,15 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                         }
                     }
 
+                    type CommentsThreadData = { comments: CommentMessage[], scores: Score[], scoreConfigs: ScoreConfig[] };
+
+                    const agentConfig = findAgentConfig(config, run.agent);
+                    const runConfig = agentConfig ? findRunConfig(agentConfig, run.sessionItems[0].content) : undefined;
+                    const runScoreConfigs = (runConfig?.scores ?? []) as ScoreConfig[]; // fixme: types should be automatic without cast
                     const runScores: Score[] = props.scores.filter((s) => s.runId === run.id);
                     const runComments: CommentMessage[] = props.comments.filter((c) => c.runId === run.id && !c.channelMessageId && !c.sessionItemId);
-                    // const runScoreConfigs: ScoreConfig[] = run.version?.agent ? requireAgentConfig(config, run.version?.agent).scores : [];
 
+                    const runCommentsAndScores: CommentsThreadData = { comments: runComments, scores: runScores, scoreConfigs: runScoreConfigs };
 
                     return wallItems.map((wallItem, index) => {
 
@@ -329,31 +334,61 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 
 
                         let content: React.ReactNode = null;
-                        let comments: CommentMessage[] = [];
+                        let commentsAndScores: CommentsThreadData | null = null; // null when no comments are displayed at all
 
                         if (wallItem.type === 'channel-message') {
+                            // comments = props.comments.filter((c) => c.channelMessageId === wallItem.channelMessage.id);
+
                             if (wallItem.channelMessage.direction === 'incoming') {
                                 content = <div className="text-red-500">{wallItem.channelMessage.text}</div>
+
+                                // no scores for input channel messages for now
+                                commentsAndScores = {
+                                    comments: props.comments.filter((c) => c.channelMessageId === wallItem.channelMessage.id),
+                                    scores: [],
+                                    scoreConfigs: [],
+                                };
                             }
                             else {
                                 content = <div className="text-blue-500">{wallItem.channelMessage.text}</div>;
+
+                                // outgoing channel message is really run scores & comments
+                                commentsAndScores = runCommentsAndScores;
                             }
 
-                            comments = props.comments.filter((c) => c.channelMessageId === wallItem.channelMessage.id);
                         }
                         else {
                             if (wallItem.sessionItem.type === 'input') {
                                 content = <div className="pl-[10%] relative">
                                     <DefaultInputComponent item={wallItem.sessionItem.content} sessionItem={wallItem.sessionItem} run={run} session={session} />
                                 </div>
+
+                                // no scores for input session items for now
+                                commentsAndScores = {
+                                    comments: props.comments.filter((c) => c.sessionItemId === wallItem.sessionItem.id),
+                                    scores: [],
+                                    scoreConfigs: [],
+                                };
                             }
                             else {
                                 content = <div className="pr-[10%] relative">
                                     <DefaultAssistantComponent item={wallItem.sessionItem.content} sessionItem={wallItem.sessionItem} run={run} session={session} />
                                 </div>
+
+                                if (wallItem.sessionItem.type === 'step') {
+                                    commentsAndScores = {
+                                        comments: props.comments.filter((c) => c.sessionItemId === wallItem.sessionItem.id),
+                                        scores: [],
+                                        scoreConfigs: [],
+                                    };
+                                }
+                                else {
+
+                                    // TODO: only for FIRST output!!!
+                                    commentsAndScores = runCommentsAndScores;
+                                }
                             }
 
-                            comments = props.comments.filter((c) => c.sessionItemId === wallItem.sessionItem.id);
                         }
 
                         const isSelected = selectedItemId === wallItem.id;

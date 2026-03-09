@@ -153,6 +153,7 @@ export const SessionItemSchema = z.object({
 export type SessionItem = z.infer<typeof SessionItemSchema>
 
 
+
 export const RunSchema = z.object({
   id: z.string(),
   createdAt: z.iso.date(),
@@ -161,11 +162,12 @@ export const RunSchema = z.object({
   status: z.string(),
   failReason: z.any().nullable(),
   version: z.string().nullable(),
+  agent: z.string().nullable(),
   metadata: z.record(z.string(), z.any()).nullable(),
   sessionItems: z.array(SessionItemSchema),
   channelMessages: z.array(ChannelMessageSchema),
   sessionId: z.string(), // potential bloat
-  versionId: z.string().nullable(), // potential bloat
+  // versionId: z.string().nullable(), // potential bloat
 })
 
 export const RunCreateSchema = z.object({

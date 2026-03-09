@@ -54,7 +54,7 @@ export async function resolveVersion(tx: Transaction, opts: {
   organizationId: string;
   sessionId: string;
   existingSessionVersions?: string[];
-}): Promise<{ versionId: string; version: string }> {
+}): Promise<{ versionId: string; version: string, agent: string }> {
   const parsedVersion = parseVersion(opts.versionString);
   if (!parsedVersion) {
     throw new AgentViewError("Invalid version number format. Should be like '1.2.3-xxx'", 422);
@@ -112,5 +112,5 @@ export async function resolveVersion(tx: Transaction, opts: {
     }).where(eq(sessions.id, opts.sessionId));
   }
 
-  return { versionId: versionRow.id, version };
+  return { versionId: versionRow.id, version, agent: opts.agent };
 }

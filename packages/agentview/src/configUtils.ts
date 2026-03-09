@@ -17,11 +17,11 @@ z.string().register(z.globalRegistry, {
     callId: true
 });
 
-export function findAgentConfig<T extends BaseAgentViewConfig>(config: T, agentName?: string): NonNullable<T["agents"]>[number] | undefined {
+export function findAgentConfig<T extends BaseAgentViewConfig>(config: T, agentName?: string | null): NonNullable<T["agents"]>[number] | undefined {
     return config.agents?.find((agent) => agent.name === agentName);
 }
 
-export function requireAgentConfig<T extends BaseAgentViewConfig>(config: T, agentName?: string): NonNullable<T["agents"]>[number] {
+export function requireAgentConfig<T extends BaseAgentViewConfig>(config: T, agentName?: string | null): NonNullable<T["agents"]>[number] {
     const agentConfig = findAgentConfig(config, agentName);
     if (!agentConfig) {
         throw new Error(`Agent config not found for agent '${agentName}'`);
@@ -63,6 +63,17 @@ export function findMatchingRunConfigs<T extends BaseAgentConfig>(agentConfig: T
     }
 
     return matchingRunConfigs;
+}
+
+export function findRunConfig<T extends BaseAgentConfig>(agentConfig: T, inputItemContent: any): NonNullable<T["runs"]>[number] | undefined {
+    const matchingRunConfigs = findMatchingRunConfigs(agentConfig, inputItemContent);
+    if (matchingRunConfigs.length === 0) {
+        return;
+    }
+    else if (matchingRunConfigs.length > 1) {
+        return;
+    }
+    return matchingRunConfigs[0];
 }
 
 export function requireRunConfig<T extends BaseAgentConfig>(agentConfig: T, inputItemContent: any) {

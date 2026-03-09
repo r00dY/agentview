@@ -32,7 +32,7 @@ export function sessionToUIMessages(session: Session): UIMessage[] {
       ? items.filter(item => item.type === 'output' || item.type === 'step')
       : items.slice(1);
 
-    // Squash all input items into one user message by collecting all their parts
+    // Squash all input items into one user message  by collecting all their parts
     const userParts: any[] = [];
     for (const inputItem of inputItems) {
       const inputContent = inputItem.content;
