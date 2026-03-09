@@ -309,7 +309,9 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                         }
                     }
 
-
+                    const runScores: Score[] = props.scores.filter((s) => s.runId === run.id);
+                    const runComments: CommentMessage[] = props.comments.filter((c) => c.runId === run.id && !c.channelMessageId && !c.sessionItemId);
+                    // const runScoreConfigs: ScoreConfig[] = run.version?.agent ? requireAgentConfig(config, run.version?.agent).scores : [];
 
 
                     return wallItems.map((wallItem, index) => {
@@ -327,6 +329,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 
 
                         let content: React.ReactNode = null;
+                        let comments: CommentMessage[] = [];
 
                         if (wallItem.type === 'channel-message') {
                             if (wallItem.channelMessage.direction === 'incoming') {
@@ -335,6 +338,8 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                             else {
                                 content = <div className="text-blue-500">{wallItem.channelMessage.text}</div>;
                             }
+
+                            comments = props.comments.filter((c) => c.channelMessageId === wallItem.channelMessage.id);
                         }
                         else {
                             if (wallItem.sessionItem.type === 'input') {
@@ -347,6 +352,8 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                     <DefaultAssistantComponent item={wallItem.sessionItem.content} sessionItem={wallItem.sessionItem} run={run} session={session} />
                                 </div>
                             }
+
+                            comments = props.comments.filter((c) => c.sessionItemId === wallItem.sessionItem.id);
                         }
 
                         const isSelected = selectedItemId === wallItem.id;
@@ -460,7 +467,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                         </ErrorBoundary>
                                     </div>
 
-                                    <div>Footer</div>
+                                    {/* <div>Footer</div> */}
                                     {/* <MessageFooter
                                         comments={comments}
                                         scores={scores}
