@@ -174,7 +174,8 @@ export default defineConfig({
               text: z.string(),
             }),
             displayComponent: ({ item }) => <AssistantMessage>{item.text}</AssistantMessage>,
-            scores: [
+          },
+          scores: [
               select({
                 name: "forecast_accuracy",
                 title: "Forecast Accuracy",
@@ -195,7 +196,6 @@ export default defineConfig({
                 ]
               })
             ]
-          }
           // displayProperties: [
           //   {
           //     title: "Input tokens",
@@ -206,7 +206,7 @@ export default defineConfig({
           //     value: ({ run }) => run?.metadata?.usage?.outputTokens
           //   }
           // ]
-        }
+        },
       ],
       // inputComponent: ({ submit2, cancel, isRunning, session, token }) => <UserMessageInput
       //   onSubmit={(val) => {

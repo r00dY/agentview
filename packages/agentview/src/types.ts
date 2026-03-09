@@ -64,13 +64,14 @@ export type SessionItemDisplayComponentProps<TItemSchema extends z.ZodTypeAny = 
 
 export type SessionItemConfig = BaseSessionItemConfig<ScoreConfig> & {
   displayComponent?: React.ComponentType<SessionItemDisplayComponentProps> | null;
-  disableLike?: boolean;
+  // disableLike?: boolean;
   // callResult?: SessionItemConfig;
 };
 
 export type RunConfig = BaseRunConfig<SessionItemConfig, SessionItemConfig> & {
   title?: string;
   displayProperties?: DisplayProperty<{ session: Session, run: Run }>[];
+  disableLike?: boolean;
 };
 
 export type AgentInputComponentProps<TSchema extends z.ZodTypeAny = z.ZodAny> = {

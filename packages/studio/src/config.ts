@@ -13,11 +13,11 @@ export function loadConfig(): AgentViewConfig {
             return {
                 ...agent,
                 runs: agent.runs?.map((run) => {
-                    const outputScores = [...(run.output.scores ?? [])];
-                    if (!run.output.disableLike) {
-                        outputScores.unshift(like());
+                    const runScores = [...(run.scores ?? [])];
+                    if (!run.disableLike) {
+                        runScores.unshift(like());
                     }
-                    return { ...run, output: { ...run.output, scores: outputScores } }
+                    return { ...run, scores: runScores }
                 })
             }
         })

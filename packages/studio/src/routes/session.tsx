@@ -315,6 +315,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                     const runConfig = agentConfig ? findRunConfig(agentConfig, run.sessionItems[0].content) : undefined;
                     const runScoreConfigs = (runConfig?.scores ?? []) as ScoreConfig[]; // fixme: types should be automatic without cast
                     const runComments: CommentMessage[] = props.comments.filter((c) => c.runId === run.id && !c.channelMessageId && !c.sessionItemId);
+                    const runScores: Score[] = props.scores.filter((s) => s.runId === run.id && !s.channelMessageId && !s.sessionItemId);
 
                     const runTarget: InputTarget = { sessionId: session.id, runId: run.id };
                     const runCommentsAndScores: CommentsThreadData = { comments: runComments, scoreConfigs: runScoreConfigs, target: runTarget };
@@ -501,22 +502,20 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                         </ErrorBoundary>
                                     </div>
 
-                                    {/* <div>Footer</div> */}
-                                    {/* <MessageFooter
-                                        comments={comments}
-                                        scores={scores}
+                                    { isLastRunItem && run.status !== "in_progress" && <MessageFooter
+                                        comments={runComments}
+                                        scores={runScores}
+                                        scoreConfigs={runScoreConfigs}
+                                        target={runTarget}
                                         session={session}
                                         run={run}
                                         listParams={listParams}
-                                        item={item}
-                                        itemConfig={itemConfigMatch?.itemConfig}
-                                        onSelect={() => { setselectedItemId(item.id) }}
+                                        onSelect={() => { setselectedItemId(wallItem.id) }}
                                         isSelected={isSelected}
                                         isSmallSize={styles.isSmallSize}
                                         isLastRunItem={isLastRunItem}
-                                        isOutput={itemConfigMatch?.type === "output"}
                                         allStats={allStats}
-                                    /> */}
+                                    /> }
 
                                     {isLastRunItem && run.status === "in_progress" && <div className="text-muted-foreground mt-6">
                                         <Loader />
@@ -771,7 +770,6 @@ type MessageFooterProps = {
     isSelected: boolean,
     isSmallSize: boolean,
     isLastRunItem: boolean,
-    isOutput: boolean,
     allStats?: SessionsStats,
 }
 
@@ -790,7 +788,7 @@ type MessageFooterProps = {
 
 
 function MessageFooter(props: MessageFooterProps) {
-    const { session, target, run, listParams, comments, scores, scoreConfigs, onSelect, isSelected, isSmallSize, isLastRunItem, isOutput, allStats } = props;
+    const { session, target, run, listParams, comments, scores, scoreConfigs, onSelect, isSelected, isSmallSize, isLastRunItem, allStats } = props;
     const [scoreDialogOpen, setScoreDialogOpen] = useState(false);
 
     const actionBarScores = scoreConfigs.filter(scoreConfig => scoreConfig.actionBarComponent);
