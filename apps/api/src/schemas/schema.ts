@@ -321,6 +321,7 @@ export const runRelations = relations(runs, ({ one, many }) => ({
     references: [versions.id],
   }),
   sessionItems: many(sessionItems),
+  channelMessages: many(channelMessages),
 }));
 
 export const sessionItemsRelations = relations(sessionItems, ({ one, many }) => ({

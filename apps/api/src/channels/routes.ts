@@ -4,7 +4,7 @@ import { authn, authorize } from '../authMiddleware';
 import { withOrg } from '../withOrg';
 import { channels, channelThreads, environments } from '../schemas/schema';
 import { response_data, response_error } from '../hono_utils';
-import { ChannelSchema, ChannelThreadSchema } from 'agentview/apiTypes';
+import { ChannelSchema } from 'agentview/apiTypes';
 
 export const channelsApp = new OpenAPIHono();
 
@@ -128,47 +128,47 @@ channelsApp.openapi(channelPATCHRoute, async (c) => {
 });
 
 
-const channelThreadsGETRoute = createRoute({
-  method: 'get',
-  path: '/api/channels/{channelId}/threads',
-  summary: 'List channel threads with messages',
-  tags: ['Channels'],
-  request: {
-    params: z.object({
-      channelId: z.string(),
-    }),
-  },
-  responses: {
-    200: response_data(z.array(ChannelThreadSchema)),
-    401: response_error(),
-    404: response_error(),
-  },
-});
+// const channelThreadsGETRoute = createRoute({
+//   method: 'get',
+//   path: '/api/channels/{channelId}/threads',
+//   summary: 'List channel threads with messages',
+//   tags: ['Channels'],
+//   request: {
+//     params: z.object({
+//       channelId: z.string(),
+//     }),
+//   },
+//   responses: {
+//     200: response_data(z.array(ChannelThreadSchema)),
+//     401: response_error(),
+//     404: response_error(),
+//   },
+// });
 
-channelsApp.openapi(channelThreadsGETRoute, async (c) => {
-  const principal = await authn(c.req.raw.headers);
-  authorize(principal, { action: 'environment:read' });
+// channelsApp.openapi(channelThreadsGETRoute, async (c) => {
+//   const principal = await authn(c.req.raw.headers);
+//   authorize(principal, { action: 'environment:read' });
 
-  const { channelId } = c.req.param();
+//   const { channelId } = c.req.param();
 
-  return withOrg(principal.organizationId, async (tx) => {
-    const channel = await tx.query.channels.findFirst({
-      where: eq(channels.id, channelId),
-    });
+//   return withOrg(principal.organizationId, async (tx) => {
+//     const channel = await tx.query.channels.findFirst({
+//       where: eq(channels.id, channelId),
+//     });
 
-    if (!channel) {
-      return c.json({ message: 'Channel not found' }, 404);
-    }
+//     if (!channel) {
+//       return c.json({ message: 'Channel not found' }, 404);
+//     }
 
-    const threads = await tx.query.channelThreads.findMany({
-      where: eq(channelThreads.channelId, channelId),
-      with: {
-        messages: {
-          orderBy: (msg, { desc }) => [desc(msg.createdAt)],
-        },
-      },
-    });
+//     const threads = await tx.query.channelThreads.findMany({
+//       where: eq(channelThreads.channelId, channelId),
+//       with: {
+//         messages: {
+//           orderBy: (msg, { desc }) => [desc(msg.createdAt)],
+//         },
+//       },
+//     });
 
-    return c.json(threads, 200);
-  });
-});
+//     return c.json(threads, 200);
+//   });
+// });

@@ -290,28 +290,33 @@ export async function createRun(
   const channelConfig = findChannelConfig(config, session.channel);
   const agentConfig = config.agents?.find(a => a.name === channelConfig?.agent);
 
-  if (session.channel.type !== 'api' && manual) {
-    throw new AgentViewError("For non-api channels manual mode is not supported.", 422);
-  }
-
-  // Normalize: body.input (channel path) vs body.items (API path)
-  const inputItems = body.input ?? (body.items ? [body.items[0]] : []);
-  const nonInputItems = body.input ? [] : (body.items ? body.items.slice(1) : []);
-
-  if (inputItems.length === 0) {
-    throw new AgentViewError("New run must have at least 1 input item.", 422);
-  }
-
   /** Only one in_progress run is allowed per session **/
   if (lastRun?.status === 'in_progress') {
     throw new AgentViewError(`Can't create a run because session has already a run in progress.`, 422);
   }
 
+  // if (session.channel.type !== 'api' && manual) {
+  //   throw new AgentViewError("For non-api channels manual mode is not supported.", 422);
+  // }
+
+  // // // Normalize: body.input (channel path) vs body.items (API path)
+  // // const inputItems = body.input ?? (body.items ? [body.items[0]] : []);
+  // // const nonInputItems = body.input ? [] : (body.items ? body.items.slice(1) : []);
+
+  // // if (inputItems.length === 0) {
+  // //   throw new AgentViewError("New run must have at least 1 input item.", 422);
+  // // }
+
   /** Auto-fetch validation **/
   if (!manual) {
-    if (body.items && body.items.length !== 1) {
+    if (session.channel.type !== 'api' && body.items) {
+      throw new AgentViewError("Items cannot be set for non-api channels.", 422);
+    }
+
+    if (session.channel.type === 'api' && body.items && body.items.length !== 1) {
       throw new AgentViewError("Run must have exactly 1 item (input).", 422);
     }
+
     if (body.status && body.status !== 'in_progress') {
       throw new AgentViewError("The status must be 'in_progress' (or omitted).", 422);
     }
@@ -323,6 +328,11 @@ export async function createRun(
     }
     if (body.version !== undefined) {
       throw new AgentViewError("Version cannot be set on creation (the agent endpoint provides it).", 422);
+    }
+  }
+  else {
+    if (session.channel.type !== 'api') {
+      throw new AgentViewError("For non-api channels manual mode is not supported.", 422);
     }
   }
 
@@ -338,7 +348,6 @@ export async function createRun(
 
   // for non-api channels, we assume input is OK and we use simplified procedure. Agent is not required, as we should save items even if agent is not assigned.
   if (session.channel.type !== 'api') {
-    parsedInputItems = inputItems;
     status = 'in_progress';
     expiresAt = new Date(Date.now() + DEFAULT_IDLE_TIME).toISOString();
   }
@@ -369,9 +378,11 @@ export async function createRun(
       versionId = resolved.versionId;
     }
 
-    const firstInputItem = inputItems[0];
-    runConfig = requireRunConfig(agentConfig, firstInputItem);
-    parsedInputItems = [runConfig.input.schema.parse(firstInputItem)];
+    const inputItems = body.items![0];
+    const nonInputItems = body.items!.slice(1);
+
+    runConfig = requireRunConfig(agentConfig, inputItems);
+    parsedInputItems = [runConfig.input.schema.parse(inputItems)];
 
     /** Validate rest items **/
     parsedNonInputItems = validateItems(runConfig, [parsedInputItems], nonInputItems);
@@ -408,15 +419,17 @@ export async function createRun(
   }).returning();
 
   // Insert input items with type: 'input'
-  await tx.insert(sessionItems).values(
-    parsedInputItems.map(item => ({
-      organizationId,
-      sessionId: session.id,
-      content: item,
-      runId: insertedRun.id,
-      type: 'input' as const,
-    }))
-  );
+  if (parsedInputItems.length > 0) {
+    await tx.insert(sessionItems).values(
+      parsedInputItems.map(item => ({
+        organizationId,
+        sessionId: session.id,
+        content: item,
+        runId: insertedRun.id,
+        type: 'input' as const,
+      }))
+    );
+  }
 
   // Insert non-input items with type: 'step'
   if (parsedNonInputItems.length > 0) {

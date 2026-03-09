@@ -75,6 +75,61 @@ export type CommentMessageCreate = z.infer<typeof CommentMessageCreateSchema>
 
 
 
+// Environments
+
+export const EnvironmentBaseSchema = z.object({
+  id: z.string(),
+  createdAt: z.iso.date(),
+  user: z.any()
+})
+
+export type EnvironmentBase = z.infer<typeof EnvironmentBaseSchema>
+
+export const EnvironmentSchema = EnvironmentBaseSchema.extend({
+  config: z.any(),
+})
+
+export type Environment = z.infer<typeof EnvironmentSchema>
+
+export const EnvironmentCreateSchema = z.object({
+  config: z.any(),
+})
+
+export type EnvironmentCreate = z.infer<typeof EnvironmentCreateSchema>
+
+
+
+// Channels
+
+export const ChannelSchema = z.object({
+  id: z.string(),
+  type: z.string(),
+  address: z.string(),
+  environment: EnvironmentBaseSchema.nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+export type Channel = z.infer<typeof ChannelSchema>
+
+export const ChannelMessageSchema = z.object({
+  id: z.string(),
+  direction: z.enum(['incoming', 'outgoing']),
+  sourceId: z.string().nullable(),
+  text: z.string().nullable(),
+  attachments: z.any().nullable(),
+  providerData: z.any().nullable(),
+  date: z.string(),
+  status: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+export type ChannelMessage = z.infer<typeof ChannelMessageSchema>
+
+
+// Session
+
 export const SessionItemSchema = z.object({
   id: z.string(),
   createdAt: z.iso.date(),
@@ -99,7 +154,7 @@ export const RunSchema = z.object({
   version: z.string().nullable(),
   metadata: z.record(z.string(), z.any()).nullable(),
   sessionItems: z.array(SessionItemSchema),
-
+  channelMessages: z.array(ChannelMessageSchema),
   sessionId: z.string(), // potential bloat
   versionId: z.string().nullable(), // potential bloat
 })
@@ -107,7 +162,7 @@ export const RunSchema = z.object({
 export const RunCreateSchema = z.object({
   sessionId: z.string(),
   items: z.array(z.record(z.string(), z.any())).optional(),
-  input: z.array(z.record(z.string(), z.any())).optional(),
+  // input: z.array(z.record(z.string(), z.any())).optional(),
   manual: z.boolean().optional(),
   version: z.string().optional(),
   metadata: z.record(z.string(), z.any()).optional(),
@@ -188,33 +243,13 @@ export const PublicSessionsGetQueryParamsSchema = z.object({
 export const SessionsGetQueryParamsSchema = PublicSessionsGetQueryParamsSchema.extend({
   userId: z.string().optional(),
   space: SpaceSchema.optional(), // necessary if userId is not provided
-  // starred: z.union([z.boolean(), z.literal('true'), z.literal('false')]).optional(),
 })
 
 export type PublicSessionsGetQueryParams = z.infer<typeof PublicSessionsGetQueryParamsSchema>
 export type SessionsGetQueryParams = z.infer<typeof SessionsGetQueryParamsSchema>
 
-export const EnvironmentBaseSchema = z.object({
-  id: z.string(),
-  // userId: z.string().nullable(), // null = production config, string = user's dev config
-  // name: z.string(),
-  createdAt: z.iso.date(),
-  user: z.any()
-})
 
-export type EnvironmentBase = z.infer<typeof EnvironmentBaseSchema>
 
-export const EnvironmentSchema = EnvironmentBaseSchema.extend({
-  config: z.any(),
-})
-
-export type Environment = z.infer<typeof EnvironmentSchema>
-
-export const EnvironmentCreateSchema = z.object({
-  config: z.any(),
-})
-
-export type EnvironmentCreate = z.infer<typeof EnvironmentCreateSchema>
 
 // // member - user of organization, works in agentview panel, not end user
 // export const MemberSchema = z.object({
@@ -259,49 +294,6 @@ export const SessionsPaginatedResponseSchema = z.object({
 export type SessionsPaginatedResponse = z.infer<typeof SessionsPaginatedResponseSchema>
 
 
-// Channels
-
-export const ChannelSchema = z.object({
-  id: z.string(),
-  type: z.string(),
-  address: z.string(),
-  environment: EnvironmentBaseSchema.nullable(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-})
-
-export type Channel = z.infer<typeof ChannelSchema>
-
-export const ChannelMessageSchema = z.object({
-  id: z.string(),
-  organizationId: z.string(),
-  channelThreadId: z.string(),
-  direction: z.string(),
-  sourceId: z.string().nullable(),
-  text: z.string().nullable(),
-  attachments: z.any().nullable(),
-  providerData: z.any().nullable(),
-  date: z.string(),
-  status: z.string(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-})
-
-export type ChannelMessage = z.infer<typeof ChannelMessageSchema>
-
-export const ChannelThreadSchema = z.object({
-  id: z.string(),
-  organizationId: z.string(),
-  channelId: z.string(),
-  sourceThreadId: z.string().nullable(),
-  contact: z.string(),
-  contactKind: z.string(),
-  messages: z.array(ChannelMessageSchema),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-})
-
-export type ChannelThread = z.infer<typeof ChannelThreadSchema>
 
 // run webhook / agent endpoint body
 export const RunBodySchema = z.object({

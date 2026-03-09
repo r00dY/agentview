@@ -78,7 +78,10 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
           sessionItems: {
             orderBy: (sessionItem, { asc }) => [asc(sessionItem.sortOrder)],
             where: (sessionItem, { eq }) => eq(sessionItem.isState, false),
-          }
+          },
+          channelMessages: {
+            orderBy: (channelMessage, { asc }) => [asc(channelMessage.date)],
+          },
         }
       }
     }

@@ -1,6 +1,6 @@
 import { db__dangerous } from '../db';
 import { withOrg } from '../withOrg';
-import { runs, sessions, channelMessages, environments } from '../schemas/schema';
+import { runs, sessions, channelMessages, environments, sessionItems } from '../schemas/schema';
 import { eq, and, inArray, sql, not, isNull } from 'drizzle-orm';
 import { getConfigFromEnvironment, getEnvironment, type Env } from '../environments';
 import { fetchSession } from '../sessions';
@@ -44,7 +44,7 @@ async function processAgentFetch(run: Run) {
 
   try {
     // Fetch session within org context
-    const session = await withOrg(run.organizationId, async (tx) => {
+    let session = await withOrg(run.organizationId, async (tx) => {
       return fetchSession(tx, run.sessionId);
     });
 
@@ -87,6 +87,56 @@ async function processAgentFetch(run: Run) {
     const agentUrl = agentConfig.url;
     if (!agentUrl) {
       throw new Error(`Agent '${agentName}' has no url`);
+    }
+
+    /**
+     * CHANNEL MESSAGES -> SESSION ITEM
+     */
+
+
+    if (session.channel.type !== 'api') {
+      if (agentConfig.protocol !== 'ai-sdk') {
+        throw new Error('Agent protocol must be ai-sdk to create session items from channel messages');
+      }
+      
+      const fullRun = session.runs.find(r => r.id === run.id);
+      if (!fullRun) {
+        throw new Error(`Run ${run.id} not found`);
+      }
+
+      if (fullRun.sessionItems.length > 0) {
+        throw new Error(`Run ${run.id} already has session items`);
+      }
+
+      const inputChannelMessages = fullRun.channelMessages.filter(cm => cm.direction === 'incoming');
+
+      if (inputChannelMessages.length === 0) {
+        throw new Error('No input channel messages found');
+      }
+
+      const inputSessionItemContent = {
+        role: 'user',
+        parts: inputChannelMessages.map(cm => ({ type: 'text', text: cm.text ?? "" })),
+      }
+
+      await withOrg(run.organizationId, async (tx) => {
+        await tx.insert(sessionItems).values({
+          organizationId: run.organizationId,
+          sessionId: run.sessionId,        
+          runId: run.id,
+          type: 'input',
+          content: inputSessionItemContent,
+        });
+      });
+
+      // Refetch session
+      session = await withOrg(run.organizationId, async (tx) => {
+        return fetchSession(tx, run.sessionId);
+      });
+
+      if (!session) {
+        throw new Error(`Session ${run.sessionId} not found`);
+      }
     }
 
     // Call the agent endpoint
@@ -166,8 +216,6 @@ async function processAgentFetch(run: Run) {
       }
     }
 
-
-
     // Automatically fail the run if it is not in progress after stream is finished
     const finalRunStatus = await getCurrentRunStatus();
     if (finalRunStatus === 'in_progress') {
@@ -177,7 +225,7 @@ async function processAgentFetch(run: Run) {
     console.log(`[agentFetch][${run.id}] success`);
 
     // Create outgoing channel message if session has a channel thread
-    if (finalRunStatus === 'completed') {
+    if (finalRunStatus === 'completed' && session.channel.type !== 'api') {
       try {
         await withOrg(run.organizationId, async (tx) => {
           // Check if session is connected to a channel thread
