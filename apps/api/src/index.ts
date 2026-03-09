@@ -63,6 +63,9 @@ import { applyRunPatch, getRun, createRun, DEFAULT_IDLE_TIME, getRunInputContent
 import { parseMetadata } from './parseMetadata';
 import { authn, authnUser, authorize, requireMemberPrincipal, getMemberId, requireMemberId, getEnv, type PrivatePrincipal, type Principal, type MemberPrincipal, type ApiKeyPrincipal, type UserPrincipal } from './authMiddleware';
 
+import { resolveTarget, resolveTargetWithObjects, type InputTarget, type RunTarget, type SessionItemTarget, type Target, type TargetWithObjects } from './target';
+
+
 export { authn, authorize, requireMemberPrincipal, requireMemberId } from './authMiddleware';
 
 
@@ -176,12 +179,12 @@ function requireScoreConfig(scores: { name: string; schema: any }[] | undefined,
   return scoreConfig
 }
 
-function commentTargetFromRecord(comment: { sessionItemId: string | null; runId: string | null; channelMessageId: string | null }): CommentTarget {
-  if (comment.sessionItemId) return { sessionItemId: comment.sessionItemId };
-  if (comment.runId) return { runId: comment.runId };
-  if (comment.channelMessageId) return { channelMessageId: comment.channelMessageId };
-  throw new Error("Comment has no target");
-}
+// function commentTargetFromRecord(comment: { sessionItemId: string | null; runId: string | null; channelMessageId: string | null }): CommentTarget {
+//   if (comment.sessionItemId) return { sessionItemId: comment.sessionItemId };
+//   if (comment.runId) return { runId: comment.runId };
+//   if (comment.channelMessageId) return { channelMessageId: comment.channelMessageId };
+//   throw new Error("Comment has no target");
+// }
 
 /** Get the acting user object (id) from any private principal (member or dev API key) */
 function requireActingUser(principal: PrivatePrincipal): BetterAuthUser {
@@ -261,69 +264,18 @@ function requireCommentOwnership(comment: { userId: string }, user: BetterAuthUs
 
 /* --------- COMMENT OPERATIONS --------- */
 
-type CommentTarget =
-  | { sessionItemId: string }
-  | { runId: string }
-  | { channelMessageId: string }
-
-function commentTargetColumns(target: CommentTarget) {
-  if ('sessionItemId' in target) return { sessionItemId: target.sessionItemId, runId: null, channelMessageId: null };
-  if ('runId' in target) return { sessionItemId: null, runId: target.runId, channelMessageId: null };
-  return { sessionItemId: null, runId: null, channelMessageId: target.channelMessageId };
-}
-
-interface InboxTarget {
-  session: Session;
-  item: SessionItem | null;
-  runId: string | null;
-  channelMessageId: string | null;
-}
-
-/** Derive the session + item + runId + channelMessageId from a comment target for inbox updates */
-async function resolveTargetContext(tx: Transaction, target: CommentTarget): Promise<InboxTarget> {
-
-  if ('sessionItemId' in target) {
-    const sessionItem = await tx.query.sessionItems.findFirst({
-      where: eq(sessionItems.id, target.sessionItemId),
-    });
-    if (!sessionItem) throw new HTTPException(404, { message: "Session item not found" });
-    const session = await fetchSession(tx, sessionItem.sessionId);
-    if (!session) throw new HTTPException(404, { message: "Session not found" });
-    const item = getAllSessionItems(session).find(i => i.id === target.sessionItemId) as SessionItem;
-    return { session, item, runId: sessionItem.runId, channelMessageId: null };
-  }
-  if ('runId' in target) {
-    const run = await getRun(tx, target.runId);
-    if (!run) throw new HTTPException(404, { message: "Run not found" });
-    const session = await fetchSession(tx, run.sessionId);
-    if (!session) throw new HTTPException(404, { message: "Session not found" });
-    return { session, item: null, runId: target.runId, channelMessageId: null };
-  }
-  // channelMessageId
-  const channelMsg = await tx.query.channelMessages.findFirst({
-    where: eq(channelMessages.id, target.channelMessageId),
-    with: { channelThread: { with: { sessions: true } } }
-  });
-  if (!channelMsg) throw new HTTPException(404, { message: "Channel message not found" });
-  const threadSessions = (channelMsg as any).channelThread?.sessions;
-  if (!threadSessions?.length) throw new HTTPException(404, { message: "No session found for channel message" });
-  const session = await fetchSession(tx, threadSessions[0].id);
-  if (!session) throw new HTTPException(404, { message: "Session not found" });
-  return { session, item: null, runId: channelMsg.runId, channelMessageId: target.channelMessageId };
-}
-
 async function createComment(
   tx: Transaction,
-  target: CommentTarget,
+  target: Target,
   user: BetterAuthUser,
   content: string | null,
   organizationId: string,
 ) {
-
   // Add comment
   const [newMessage] = await tx.insert(commentMessages).values({
     organizationId,
-    ...commentTargetColumns(target),
+    ...target.ids,
+    // ...commentTargetColumns(target),
     userId: user.id,
     content,
   }).returning();
@@ -359,15 +311,13 @@ async function createComment(
     }
   }).returning();
 
-  const ctx = await resolveTargetContext(tx, target);
-  await updateInboxes(tx, event, ctx);
+  await updateInboxes(tx, event);
 
   return newMessage;
 }
 
 async function updateComment(
   tx: Transaction,
-  target: CommentTarget,
   commentMessage: any,
   newContent: string | null,
   organizationId: string,
@@ -446,15 +396,13 @@ async function updateComment(
     }
   }).returning();
 
-  const ctx = await resolveTargetContext(tx, target);
-  await updateInboxes(tx, event, ctx);
+  await updateInboxes(tx, event);
 
   return commentMessage;
 }
 
 async function deleteComment(
   tx: Transaction,
-  target: CommentTarget,
   commentId: any,
   user: BetterAuthUser,
   organizationId: string,
@@ -476,8 +424,7 @@ async function deleteComment(
     }
   }).returning();
 
-  const ctx = await resolveTargetContext(tx, target);
-  await updateInboxes(tx, event, ctx);
+  await updateInboxes(tx, event);
 }
 
 
@@ -1160,11 +1107,7 @@ app.openapi(sessionCommentsGETRoute, async (c) => {
     const comments = await tx.query.commentMessages.findMany({
       where: and(
         isNull(commentMessages.deletedAt),
-        or(
-          eq(commentMessages.sessionItemId, sql`ANY(SELECT id FROM session_items WHERE session_id = ${session.id})`),
-          eq(commentMessages.runId, sql`ANY(SELECT id FROM runs WHERE session_id = ${session.id})`),
-          eq(commentMessages.channelMessageId, sql`ANY(SELECT cm.id FROM channel_messages cm JOIN channel_threads ct ON cm.channel_thread_id = ct.id JOIN sessions s ON s.channel_thread_id = ct.id WHERE s.id = ${session.id})`),
-        ),
+        eq(commentMessages.sessionId, session.id)
       ),
       orderBy: (comment, { asc }) => [asc(comment.createdAt)],
       with: {
@@ -1650,33 +1593,36 @@ app.openapi(seenRoute, async (c) => {
     // Resolve the inbox target: exactly one of the identifiers determines the scope
     let inboxFilter;
 
-    if (body.sessionItemId) {
-      const ctx = await resolveTargetContext(tx, { sessionItemId: body.sessionItemId });
+    const target = await resolveTarget(tx, body);
+
+    if (target.type === 'sessionItem') {
       inboxFilter = and(
         eq(inboxItems.userId, userPrincipal.session.user.id),
-        eq(inboxItems.sessionId, ctx.session.id),
-        eq(inboxItems.sessionItemId, body.sessionItemId),
+        eq(inboxItems.sessionId, target.ids.sessionId),
+        eq(inboxItems.runId, target.ids.runId),
+        eq(inboxItems.sessionItemId, target.ids.sessionItemId),
+        isNull(inboxItems.channelMessageId),
       );
-    } else if (body.channelMessageId) {
-      const ctx = await resolveTargetContext(tx, { channelMessageId: body.channelMessageId });
+    } else if (target.type === 'channelMessage') {
       inboxFilter = and(
         eq(inboxItems.userId, userPrincipal.session.user.id),
-        eq(inboxItems.sessionId, ctx.session.id),
-        eq(inboxItems.channelMessageId, body.channelMessageId),
+        eq(inboxItems.sessionId, target.ids.sessionId),
+        eq(inboxItems.runId, target.ids.runId),
+        eq(inboxItems.channelMessageId, target.ids.channelMessageId),
+        isNull(inboxItems.sessionItemId),
       );
-    } else if (body.runId) {
-      const ctx = await resolveTargetContext(tx, { runId: body.runId });
+    } else if (target.type === 'run') {
       inboxFilter = and(
         eq(inboxItems.userId, userPrincipal.session.user.id),
-        eq(inboxItems.sessionId, ctx.session.id),
-        eq(inboxItems.runId, body.runId),
+        eq(inboxItems.sessionId, target.ids.sessionId),
+        eq(inboxItems.runId, target.ids.runId),
         isNull(inboxItems.sessionItemId),
         isNull(inboxItems.channelMessageId),
       );
-    } else if (body.sessionId) {
+    } else if (target.type === 'session') {
       inboxFilter = and(
         eq(inboxItems.userId, userPrincipal.session.user.id),
-        eq(inboxItems.sessionId, body.sessionId),
+        eq(inboxItems.sessionId, target.ids.sessionId),
         isNull(inboxItems.sessionItemId),
         isNull(inboxItems.runId),
         isNull(inboxItems.channelMessageId),
@@ -2040,12 +1986,14 @@ const commentsPOSTRoute = createRoute({
 app.openapi(commentsPOSTRoute, async (c) => {
   const principal = await authn(c.req.raw.headers)
   const actingUser = requireActingUser(principal);
-
   const body = await c.req.valid('json')
 
-  const target = parseCommentTarget(body);
-
   return withOrg(principal.organizationId, async (tx) => {
+    const target = await resolveTarget(tx, body);
+    if (target.type !== 'sessionItem' && target.type !== 'run' && target.type !== 'channelMessage') {
+      throw new AgentViewError(`Invalid target: "${target.type}"`, 400);
+    }
+    
     await createComment(tx, target, actingUser, body.content ?? null, principal.organizationId);
     return c.json({}, 201);
   })
@@ -2083,10 +2031,8 @@ app.openapi(commentsPUTRoute, async (c) => {
     const commentMessage = await requireCommentMessage(tx, commentId);
     requireCommentOwnership(commentMessage, actingUser);
 
-    const target = commentTargetFromRecord(commentMessage);
-
     try {
-      await updateComment(tx, target, commentMessage, body.content, principal.organizationId);
+      await updateComment(tx, commentMessage, body.content, principal.organizationId);
     } catch (error) {
       return c.json({ message: `Invalid mention format: ${(error as Error).message}` }, 422);
     }
@@ -2124,32 +2070,30 @@ app.openapi(commentsDELETERoute, async (c) => {
     const commentMessage = await requireCommentMessage(tx, commentId);
     requireCommentOwnership(commentMessage, actingUser);
 
-    const target = commentTargetFromRecord(commentMessage);
-
-    await deleteComment(tx, target, commentMessage.id, actingUser, principal.organizationId);
+    await deleteComment(tx, commentMessage.id, actingUser, principal.organizationId);
     return c.json({}, 200);
   })
 })
 
 
-function parseCommentTarget(body: { sessionItemId?: string; runId?: string; channelMessageId?: string }): CommentTarget {
-  const targets = [body.sessionItemId, body.runId, body.channelMessageId].filter(Boolean);
-  if (targets.length !== 1) {
-    throw new AgentViewError("Exactly one of sessionItemId, runId, or channelMessageId must be provided", 422);
-  }
-  if (body.sessionItemId) return { sessionItemId: body.sessionItemId };
-  if (body.runId) return { runId: body.runId };
-  return { channelMessageId: body.channelMessageId! };
-}
+// function parseCommentTarget(body: { sessionItemId?: string; runId?: string; channelMessageId?: string }): CommentTarget {
+//   const targets = [body.sessionItemId, body.runId, body.channelMessageId].filter(Boolean);
+//   if (targets.length !== 1) {
+//     throw new AgentViewError("Exactly one of sessionItemId, runId, or channelMessageId must be provided", 422);
+//   }
+//   if (body.sessionItemId) return { sessionItemId: body.sessionItemId };
+//   if (body.runId) return { runId: body.runId };
+//   return { channelMessageId: body.channelMessageId! };
+// }
 
-function parseScoreTarget(body: { sessionItemId?: string; runId?: string }): CommentTarget {
-  const targets = [body.sessionItemId, body.runId].filter(Boolean);
-  if (targets.length !== 1) {
-    throw new AgentViewError("Exactly one of sessionItemId or runId must be provided", 422);
-  }
-  if (body.sessionItemId) return { sessionItemId: body.sessionItemId };
-  return { runId: body.runId! };
-}
+// function parseScoreTarget(body: { sessionItemId?: string; runId?: string }): CommentTarget {
+//   const targets = [body.sessionItemId, body.runId].filter(Boolean);
+//   if (targets.length !== 1) {
+//     throw new AgentViewError("Exactly one of sessionItemId or runId must be provided", 422);
+//   }
+//   if (body.sessionItemId) return { sessionItemId: body.sessionItemId };
+//   return { runId: body.runId! };
+// }
 
 
 /* --------- FLAT SCORES API --------- */
@@ -2181,24 +2125,32 @@ app.openapi(scoresPATCHRoute, async (c) => {
   const actingUser = requireActingUser(principal);
 
   const body = await c.req.valid('json');
-  const target = parseScoreTarget(body);
+  // const target = parseScoreTarget(body);
   const inputScores = body.scores;
 
   return withOrg(principal.organizationId, async (tx) => {
     const config = await requireConfig(tx, principal)
-    const { session, item, runId } = await resolveTargetContext(tx, target);
+
+    const target = await resolveTargetWithObjects(tx, body);
+    if (target.type !== 'sessionItem' && target.type !== 'run') {
+      throw new AgentViewError(`Invalid target: "${target.type}"`, 400);
+    }
+    
+    const session = target.session;
+    const run = target.run;
 
     // Resolve score configs based on target type
-    const run = runId ? session.runs.find(r => r.id === runId)! : null;
     const channelConfig = requireChannelConfig(config, session.channel);
     const agentConfig = requireAgentConfig(config, channelConfig.agent);
-    const runConfig = requireRunConfig(agentConfig, getRunInputContent((run ?? session.runs[0]).sessionItems));
+    const runConfig = requireRunConfig(agentConfig, getRunInputContent(run.sessionItems));
 
     let scoreConfigs: { name: string; schema: any }[] | undefined;
-    if (item) {
-      const itemConfig = requireItemConfig(runConfig, (run ?? session.runs[0]).sessionItems, item.id).itemConfig;
+
+    if (target.type === 'sessionItem') {
+      const itemConfig = requireItemConfig(runConfig, run.sessionItems, target.sessionItem.id).itemConfig;
       scoreConfigs = itemConfig.scores;
-    } else {
+    }
+    else if (target.type === 'run') {
       scoreConfigs = runConfig.scores;
     }
 
@@ -2208,9 +2160,9 @@ app.openapi(scoresPATCHRoute, async (c) => {
       const scoreConfig = requireScoreConfig(scoreConfigs, name);
 
       // Build the filter for existing score based on target type
-      const targetFilter = item
-        ? eq(scores.sessionItemId, item.id)
-        : eq(scores.runId, runId!);
+      const targetFilter = target.type === 'sessionItem'
+        ? eq(scores.sessionItemId, target.sessionItem.id)
+        : eq(scores.runId, run.id);
 
       // Check if score already exists for this user
       const existingScore = await tx.query.scores.findFirst({
@@ -2225,7 +2177,7 @@ app.openapi(scoresPATCHRoute, async (c) => {
       // delete
       if (value === null || value === undefined) {
         if (existingScore) {
-          await deleteComment(tx, target, existingScore.commentId, actingUser, principal.organizationId);
+          await deleteComment(tx, existingScore.commentId, actingUser, principal.organizationId);
           await tx.delete(scores)
             .where(eq(scores.id, existingScore.id));
         }
@@ -2253,13 +2205,9 @@ app.openapi(scoresPATCHRoute, async (c) => {
         else {
           const commentMessage = await createComment(tx, target, actingUser, null, principal.organizationId);
 
-          const scoreColumns = item
-            ? { sessionItemId: item.id, runId: null }
-            : { sessionItemId: null, runId: runId };
-
           await tx.insert(scores).values({
             organizationId: principal.organizationId,
-            ...scoreColumns,
+            ...target.ids,
             name,
             value,
             commentId: commentMessage.id,
@@ -2477,6 +2425,7 @@ for (const channel of channelApps) {
 
 // Generic channel routes stay separate, mounted after channel-specific apps
 import { channelsApp } from './channels/routes';
+
 app.route('', channelsApp);
 
 

@@ -64,6 +64,20 @@
       "when": 1773054547922,
       "tag": "0008_rainy_senator_kelly",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1773063809222,
+      "tag": "0009_sticky_kinsey_walden",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1773064244851,
+      "tag": "0010_free_mister_fear",
+      "breakpoints": true
     }
   ]
 }

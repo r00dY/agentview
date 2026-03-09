@@ -138,10 +138,14 @@ export const versions = pgTable("versions", {
 export const commentMessages = pgTable('comment_messages', {
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: text("organization_id").notNull().references(() => organizations.id),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+
+  // target fields
+  sessionId: uuid('session_id').notNull().references(() => sessions.id, { onDelete: 'cascade' }),
   sessionItemId: uuid('session_item_id').references(() => sessionItems.id, { onDelete: 'cascade' }),
   runId: uuid('run_id').references(() => runs.id, { onDelete: 'cascade' }),
   channelMessageId: uuid('channel_message_id').references(() => channelMessages.id, { onDelete: 'cascade' }),
-  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+
   content: text('content'),
   createdAt: timestamp('created_at', { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: "string" }).notNull().defaultNow(),
@@ -151,9 +155,10 @@ export const commentMessages = pgTable('comment_messages', {
   deletedBy: text('deleted_by').references(() => users.id, { onDelete: 'set null' }),
 }, () => [
   check('comment_messages_target_check', sql`(
-    (session_item_id IS NOT NULL AND run_id IS NULL AND channel_message_id IS NULL) OR
-    (session_item_id IS NULL AND run_id IS NOT NULL AND channel_message_id IS NULL) OR
-    (session_item_id IS NULL AND run_id IS NULL AND channel_message_id IS NOT NULL)
+    (session_id IS NOT NULL AND run_id IS NULL AND session_item_id IS NULL AND channel_message_id IS NULL) OR
+    (session_id IS NOT NULL AND run_id IS NOT NULL AND session_item_id IS NULL AND channel_message_id IS NULL) OR
+    (session_id IS NOT NULL AND run_id IS NOT NULL AND session_item_id IS NOT NULL AND channel_message_id IS NULL) OR
+    (session_id IS NOT NULL AND run_id IS NOT NULL AND session_item_id IS NULL AND channel_message_id IS NOT NULL)
   )`),
   createTenantPolicy('comment_messages'),
 ]);
@@ -179,8 +184,12 @@ export const commentMessageEdits = pgTable('comment_message_edits', {
 export const scores = pgTable('scores', {
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: text("organization_id").notNull().references(() => organizations.id),
-  sessionItemId: uuid('session_item_id').references(() => sessionItems.id, { onDelete: 'cascade' }),
+
+  // target fields
+  sessionId: uuid('session_id').notNull().references(() => sessions.id, { onDelete: 'cascade' }),
   runId: uuid('run_id').references(() => runs.id, { onDelete: 'cascade' }),
+  sessionItemId: uuid('session_item_id').references(() => sessionItems.id, { onDelete: 'cascade' }),
+  channelMessageId: uuid('channel_message_id').references(() => channelMessages.id, { onDelete: 'cascade' }),
 
   name: varchar('name', { length: 255 }).notNull(),
   value: jsonb('value').notNull(),
@@ -195,11 +204,16 @@ export const scores = pgTable('scores', {
   deletedBy: text('deleted_by').references(() => users.id, { onDelete: 'set null' }),
 }, (table) => [
   check('scores_target_check', sql`(
-    (session_item_id IS NOT NULL AND run_id IS NULL) OR
-    (session_item_id IS NULL AND run_id IS NOT NULL)
+    (session_id IS NOT NULL AND run_id IS NULL AND session_item_id IS NULL AND channel_message_id IS NULL) OR
+    (session_id IS NOT NULL AND run_id IS NOT NULL AND session_item_id IS NULL AND channel_message_id IS NULL) OR
+    (session_id IS NOT NULL AND run_id IS NOT NULL AND session_item_id IS NOT NULL AND channel_message_id IS NULL) OR
+    (session_id IS NOT NULL AND run_id IS NOT NULL AND session_item_id IS NULL AND channel_message_id IS NOT NULL)
   )`),
-  uniqueIndex('scores_session_item_unique').on(table.sessionItemId, table.name, table.createdBy).where(sql`session_item_id IS NOT NULL`),
-  uniqueIndex('scores_run_unique').on(table.runId, table.name, table.createdBy).where(sql`run_id IS NOT NULL`),
+
+  unique().on(table.createdBy, table.sessionId, table.runId, table.sessionItemId, table.channelMessageId, table.name).nullsNotDistinct(),
+
+  // uniqueIndex('scores_session_item_unique').on(table.sessionItemId, table.name, table.createdBy).where(sql`session_item_id IS NOT NULL`),
+  // uniqueIndex('scores_run_unique').on(table.runId, table.name, table.createdBy).where(sql`run_id IS NOT NULL`),
   createTenantPolicy('scores'),
 ]);
 
@@ -225,10 +239,12 @@ export const inboxItems = pgTable('inbox_items', {
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 
   userId: text('user_id').notNull().references(() => users.id),
-  sessionItemId: uuid('session_item_id').references(() => sessionItems.id),
+
+  // target fields
+  sessionId: uuid('session_id').notNull().references(() => sessions.id, { onDelete: 'cascade' }),
   runId: uuid('run_id').references(() => runs.id, { onDelete: 'cascade' }),
+  sessionItemId: uuid('session_item_id').references(() => sessionItems.id, { onDelete: 'cascade' }),
   channelMessageId: uuid('channel_message_id').references(() => channelMessages.id, { onDelete: 'cascade' }),
-  sessionId: uuid('session_id').notNull().references(() => sessions.id),
 
   lastReadEventId: bigint('last_read_event_id', { mode: 'number' }).references(() => events.id),
   lastNotifiableEventId: bigint('last_notifiable_event_id', { mode: 'number' }).references(() => events.id),
@@ -237,6 +253,12 @@ export const inboxItems = pgTable('inbox_items', {
 
 }, (table) => [
   unique().on(table.userId, table.sessionId, table.runId, table.sessionItemId, table.channelMessageId).nullsNotDistinct(),
+  check('inbox_items_target_check', sql`(
+    (session_id IS NOT NULL AND run_id IS NULL AND session_item_id IS NULL AND channel_message_id IS NULL) OR
+    (session_id IS NOT NULL AND run_id IS NOT NULL AND session_item_id IS NULL AND channel_message_id IS NULL) OR
+    (session_id IS NOT NULL AND run_id IS NOT NULL AND session_item_id IS NOT NULL AND channel_message_id IS NULL) OR
+    (session_id IS NOT NULL AND run_id IS NOT NULL AND session_item_id IS NULL AND channel_message_id IS NOT NULL)
+  )`),
   createTenantPolicy('inbox_items'),
 ]);
 

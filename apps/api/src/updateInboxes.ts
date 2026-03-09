@@ -1,5 +1,5 @@
-import { events } from "./schemas/schema";
-import { type InferSelectModel, sql } from "drizzle-orm";
+import { commentMessages, events } from "./schemas/schema";
+import { eq, type InferSelectModel, sql } from "drizzle-orm";
 import type { SessionItem, Session } from "agentview/apiTypes";
 import { inboxItems } from "./schemas/schema";
 import type { Transaction } from "./types";
@@ -35,12 +35,39 @@ export interface InboxContext {
 export async function updateInboxes(
     tx: Transaction,
     newEvent: EventType,
-    ctx: InboxContext,
 ) {
-    const { session, item, runId, channelMessageId } = ctx;
+    let sessionId: string | null = null;
+    let sessionItemId: string | null = null;
+    let runId: string | null = null;
+    let channelMessageId: string | null = null;
 
-    if (!['comment_created', 'comment_edited', 'comment_deleted', 'session_created'].includes(newEvent.type)) {
+    if (newEvent.type === 'session_created') {
+        sessionId = newEvent.payload.session_id;
+    }
+    else if (newEvent.type === 'comment_created' || newEvent.type === 'comment_edited' || newEvent.type === 'comment_deleted') {
+        const commentId = newEvent.payload.comment_id;
+
+        const comment = await tx.query.commentMessages.findFirst({
+            where: eq(commentMessages.id, commentId),
+            with: {
+                run: true,
+            },
+        });
+        if (!comment) {
+            throw new Error("[Internal Error] Comment not found");
+        }
+
+        sessionItemId = comment.sessionItemId;
+        runId = comment.runId;
+        channelMessageId = comment.channelMessageId;
+        sessionId = comment.run?.sessionId ?? null;
+    }
+    else {
         throw new Error(`Incorrect event type: "${newEvent.type}"`);
+    }
+
+    if (!sessionId) {
+        throw new Error("[Internal Error] Comment has no session id");
     }
 
     const allUsers = await tx.query.users.findMany({
@@ -48,9 +75,10 @@ export async function updateInboxes(
             inboxItems: {
                 where: ((inboxItems, { eq, and, isNull }) => {
                     if (channelMessageId) return eq(inboxItems.channelMessageId, channelMessageId);
-                    if (item) return eq(inboxItems.sessionItemId, item.id);
+                    if (sessionItemId) return eq(inboxItems.sessionItemId, sessionItemId);
                     if (runId) return and(eq(inboxItems.runId, runId), isNull(inboxItems.sessionItemId), isNull(inboxItems.channelMessageId));
-                    return and(eq(inboxItems.sessionId, session.id), isNull(inboxItems.sessionItemId), isNull(inboxItems.runId), isNull(inboxItems.channelMessageId));
+
+                    return and(eq(inboxItems.sessionId, sessionId), isNull(inboxItems.sessionItemId), isNull(inboxItems.runId), isNull(inboxItems.channelMessageId));
                 }),
             }
         }
@@ -89,10 +117,10 @@ export async function updateInboxes(
                 newInboxItemValues.push({
                     organizationId: newEvent.organizationId,
                     userId: user.id,
-                    sessionItemId: item?.id ?? null,
-                    runId: runId ?? null,
-                    channelMessageId: channelMessageId ?? null,
-                    sessionId: item?.sessionId ?? session.id,
+                    sessionItemId,
+                    runId,
+                    channelMessageId,
+                    sessionId,
                     lastNotifiableEventId: newEvent.id,
                     render: {
                         events: [newEvent]

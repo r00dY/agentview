@@ -29,7 +29,10 @@ export type UserCreate = z.infer<typeof UserCreateSchema>
 
 export const ScoreSchema = z.object({
   id: z.string(),
+
+  sessionId: z.string(),
   sessionItemId: z.string().nullable(),
+  channelMessageId: z.string().nullable(),
   runId: z.string().nullable(),
 
   name: z.string(),
@@ -56,9 +59,12 @@ export type ScoreCreate = z.infer<typeof ScoreCreateSchema>
 
 export const CommentMessageSchema = z.object({
   id: z.string(),
+
+  sessionId: z.string(),
   sessionItemId: z.string().nullable(),
   runId: z.string().nullable(),
   channelMessageId: z.string().nullable(),
+
   userId: z.string(),
   content: z.string().nullable(),
   createdAt: z.iso.date(),

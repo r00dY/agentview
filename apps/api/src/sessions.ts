@@ -181,7 +181,7 @@ export async function createSession(tx: Transaction, params: {
     throw new Error("[Internal Error] Session not found");
   }
 
-  await updateInboxes(tx, event, { session: newSession, item: null, runId: null, channelMessageId: null });
+  await updateInboxes(tx, event);
 
   return newSession;
 }

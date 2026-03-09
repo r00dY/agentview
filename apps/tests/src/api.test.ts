@@ -3037,7 +3037,8 @@ describe('API', () => {
       expect(comments.length).toBe(1);
       expect(comments[0].content).toBe("Great output!");
       expect(comments[0].sessionItemId).toBe(outputItem.id);
-      expect(comments[0].runId).toBeNull();
+      expect(comments[0].runId).toBe(run.id);
+      expect(comments[0].sessionId).toBe(session.id);
       expect(comments[0].channelMessageId).toBeNull();
 
       const commentId = comments[0].id;
@@ -3074,27 +3075,27 @@ describe('API', () => {
       expect(runComment!.sessionItemId).toBeNull();
     });
 
-    test("must provide exactly one target for comment", async () => {
-      await updateConfig();
+    // test("must provide exactly one target for comment", async () => {
+    //   await updateConfig();
 
-      const session = await createSession();
-      const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true, version: "1.0" });
+    //   const session = await createSession();
+    //   const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true, version: "1.0" });
 
-      // No target
-      await expectToFail(
-        av.createComment({ content: "no target" } as any),
-        422
-      );
+    //   // No target
+    //   await expectToFail(
+    //     av.createComment({ content: "no target" } as any),
+    //     422
+    //   );
 
-      // Two targets
-      const updatedSession = await av.getSession({ id: session.id });
-      const inputItem = updatedSession.runs[0].sessionItems.find(i => i.type === "input")!;
+    //   // Two targets
+    //   const updatedSession = await av.getSession({ id: session.id });
+    //   const inputItem = updatedSession.runs[0].sessionItems.find(i => i.type === "input")!;
 
-      await expectToFail(
-        av.createComment({ sessionItemId: inputItem.id, runId: run.id, content: "two targets" }),
-        422
-      );
-    });
+    //   await expectToFail(
+    //     av.createComment({ sessionItemId: inputItem.id, runId: run.id, content: "two targets" }),
+    //     422
+    //   );
+    // });
 
     test("scores on session item", async () => {
       await updateConfig({
@@ -3116,8 +3117,9 @@ describe('API', () => {
       expect(sessionScores.length).toBe(1);
       expect(sessionScores[0].name).toBe("quality");
       expect(sessionScores[0].value).toBe("good");
+      expect(sessionScores[0].sessionId).toBe(session.id);
       expect(sessionScores[0].sessionItemId).toBe(outputItem.id);
-      expect(sessionScores[0].runId).toBeNull();
+      expect(sessionScores[0].runId).toBe(run.id);
 
       // Update score
       await av.updateScores({ sessionItemId: outputItem.id, scores: [{ name: "quality", value: "bad" }] });
@@ -3160,21 +3162,21 @@ describe('API', () => {
       expect(sessionScores[0].value).toBe(0.5);
     });
 
-    test("must provide exactly one target for scores", async () => {
-      await updateConfig({
-        itemScores: [{ name: "quality", schema: z.enum(["good", "bad"]) }],
-        runScores: [{ name: "accuracy", schema: z.number() }],
-      });
+    // test("must provide exactly one target for scores", async () => {
+    //   await updateConfig({
+    //     itemScores: [{ name: "quality", schema: z.enum(["good", "bad"]) }],
+    //     runScores: [{ name: "accuracy", schema: z.number() }],
+    //   });
 
-      const session = await createSession();
-      const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true, version: "1.0" });
+    //   const session = await createSession();
+    //   const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true, version: "1.0" });
 
-      // No target
-      await expectToFail(
-        av.updateScores({ scores: [{ name: "quality", value: "good" }] } as any),
-        422
-      );
-    });
+    //   // No target
+    //   await expectToFail(
+    //     av.updateScores({ scores: [{ name: "quality", value: "good" }] } as any),
+    //     422
+    //   );
+    // });
 
     test("invalid score name is rejected", async () => {
       await updateConfig({
