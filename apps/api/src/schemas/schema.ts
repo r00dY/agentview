@@ -227,6 +227,7 @@ export const inboxItems = pgTable('inbox_items', {
   userId: text('user_id').notNull().references(() => users.id),
   sessionItemId: uuid('session_item_id').references(() => sessionItems.id),
   runId: uuid('run_id').references(() => runs.id, { onDelete: 'cascade' }),
+  channelMessageId: uuid('channel_message_id').references(() => channelMessages.id, { onDelete: 'cascade' }),
   sessionId: uuid('session_id').notNull().references(() => sessions.id),
 
   lastReadEventId: bigint('last_read_event_id', { mode: 'number' }).references(() => events.id),
@@ -235,7 +236,7 @@ export const inboxItems = pgTable('inbox_items', {
   render: jsonb('render').notNull(),
 
 }, (table) => [
-  unique().on(table.userId, table.sessionId, table.sessionItemId, table.runId).nullsNotDistinct(),
+  unique().on(table.userId, table.sessionId, table.runId, table.sessionItemId, table.channelMessageId).nullsNotDistinct(),
   createTenantPolicy('inbox_items'),
 ]);
 
@@ -431,6 +432,10 @@ export const inboxItemsRelations = relations(inboxItems, ({ one, many }) => ({
   run: one(runs, {
     fields: [inboxItems.runId],
     references: [runs.id],
+  }),
+  channelMessage: one(channelMessages, {
+    fields: [inboxItems.channelMessageId],
+    references: [channelMessages.id],
   }),
   session: one(sessions, {
     fields: [inboxItems.sessionId],

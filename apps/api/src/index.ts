@@ -272,8 +272,15 @@ function commentTargetColumns(target: CommentTarget) {
   return { sessionItemId: null, runId: null, channelMessageId: target.channelMessageId };
 }
 
-/** Derive the session + item + runId from a comment target for inbox updates */
-async function resolveTargetContext(tx: Transaction, target: CommentTarget): Promise<{ session: Session; item: SessionItem | null; runId: string | null }> {
+interface InboxTarget {
+  session: Session;
+  item: SessionItem | null;
+  runId: string | null;
+  channelMessageId: string | null;
+}
+
+/** Derive the session + item + runId + channelMessageId from a comment target for inbox updates */
+async function resolveTargetContext(tx: Transaction, target: CommentTarget): Promise<InboxTarget> {
 
   if ('sessionItemId' in target) {
     const sessionItem = await tx.query.sessionItems.findFirst({
@@ -283,14 +290,14 @@ async function resolveTargetContext(tx: Transaction, target: CommentTarget): Pro
     const session = await fetchSession(tx, sessionItem.sessionId);
     if (!session) throw new HTTPException(404, { message: "Session not found" });
     const item = getAllSessionItems(session).find(i => i.id === target.sessionItemId) as SessionItem;
-    return { session, item, runId: null };
+    return { session, item, runId: sessionItem.runId, channelMessageId: null };
   }
   if ('runId' in target) {
     const run = await getRun(tx, target.runId);
     if (!run) throw new HTTPException(404, { message: "Run not found" });
     const session = await fetchSession(tx, run.sessionId);
     if (!session) throw new HTTPException(404, { message: "Session not found" });
-    return { session, item: null, runId: target.runId };
+    return { session, item: null, runId: target.runId, channelMessageId: null };
   }
   // channelMessageId
   const channelMsg = await tx.query.channelMessages.findFirst({
@@ -302,7 +309,7 @@ async function resolveTargetContext(tx: Transaction, target: CommentTarget): Pro
   if (!threadSessions?.length) throw new HTTPException(404, { message: "No session found for channel message" });
   const session = await fetchSession(tx, threadSessions[0].id);
   if (!session) throw new HTTPException(404, { message: "Session not found" });
-  return { session, item: null, runId: null };
+  return { session, item: null, runId: channelMsg.runId, channelMessageId: target.channelMessageId };
 }
 
 async function createComment(
@@ -352,8 +359,8 @@ async function createComment(
     }
   }).returning();
 
-  const { session, item, runId } = await resolveTargetContext(tx, target);
-  await updateInboxes(tx, event, session, item, runId);
+  const ctx = await resolveTargetContext(tx, target);
+  await updateInboxes(tx, event, ctx);
 
   return newMessage;
 }
@@ -439,8 +446,8 @@ async function updateComment(
     }
   }).returning();
 
-  const { session, item, runId } = await resolveTargetContext(tx, target);
-  await updateInboxes(tx, event, session, item, runId);
+  const ctx = await resolveTargetContext(tx, target);
+  await updateInboxes(tx, event, ctx);
 
   return commentMessage;
 }
@@ -469,8 +476,8 @@ async function deleteComment(
     }
   }).returning();
 
-  const { session, item, runId } = await resolveTargetContext(tx, target);
-  await updateInboxes(tx, event, session, item, runId);
+  const ctx = await resolveTargetContext(tx, target);
+  await updateInboxes(tx, event, ctx);
 }
 
 
@@ -1645,6 +1652,7 @@ app.openapi(sessionSeenRoute, async (c) => {
       eq(inboxItems.sessionId, sessionId),
       isNull(inboxItems.sessionItemId),
       isNull(inboxItems.runId),
+      isNull(inboxItems.channelMessageId),
     ))
   })
 

@@ -1,5 +1,5 @@
 {
-  "id": "640a9dc0-8bbe-4dfc-9b21-9a8da1594532",
+  "id": "d999b16b-a085-408e-9fde-d84c51e6c1f8",
   "prevId": "8e1685ed-43f8-4c4c-afb8-d847437e0efb",
   "version": "7",
   "dialect": "postgresql",
@@ -1361,6 +1361,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "channel_message_id": {
+          "name": "channel_message_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "session_id": {
           "name": "session_id",
           "type": "uuid",
@@ -1440,6 +1446,19 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
+        "inbox_items_channel_message_id_channel_messages_id_fk": {
+          "name": "inbox_items_channel_message_id_channel_messages_id_fk",
+          "tableFrom": "inbox_items",
+          "tableTo": "channel_messages",
+          "columnsFrom": [
+            "channel_message_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
         "inbox_items_session_id_sessions_id_fk": {
           "name": "inbox_items_session_id_sessions_id_fk",
           "tableFrom": "inbox_items",
@@ -1482,14 +1501,15 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "inbox_items_user_id_session_id_session_item_id_run_id_unique": {
-          "name": "inbox_items_user_id_session_id_session_item_id_run_id_unique",
+        "inbox_items_user_id_session_id_run_id_session_item_id_channel_message_id_unique": {
+          "name": "inbox_items_user_id_session_id_run_id_session_item_id_channel_message_id_unique",
           "nullsNotDistinct": true,
           "columns": [
             "user_id",
             "session_id",
+            "run_id",
             "session_item_id",
-            "run_id"
+            "channel_message_id"
           ]
         }
       },

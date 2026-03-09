@@ -7,32 +7,38 @@ import { isInboxItemUnread } from "./inboxItems";
 
 /**
  * This function is "MVP" and is far from perfect.
- * 
+ *
 //  * Problems:
  * 1. It takes transaction as parameter which should not be required. It should be indempotent and retriable.
  * 2. It takes `event` as a parameter, but actually it should just find the inboxes to be updated (based on last_event_id) and update them.
- * 
+ *
  * However, for now the project is small, number of users will be small too. So we can just do it a bit differently:
  * 1. We use the same transaction as the operation + event add. This provides confidence, the state of the system must be correct. If there's error, comment and event are not added too.
  * 2. Thanks to the 1., we can always just call this function with new event. There's no chance previous events fucked sth up.
- * 
+ *
  * How this should work:
- * - operation & adding event are done in the same transaction, but then transaction is closed. If successful, event goes to the queue. 
+ * - operation & adding event are done in the same transaction, but then transaction is closed. If successful, event goes to the queue.
  * - events are processed in order one by one.
  * - next event is processed only after the previous one is successful.
- * 
+ *
  */
 
 type EventType = InferSelectModel<typeof events> & { payload: any }
 
+export interface InboxContext {
+    session: Session;
+    item: SessionItem | null;
+    runId: string | null;
+    channelMessageId: string | null;
+}
+
 export async function updateInboxes(
     tx: Transaction,
     newEvent: EventType,
-    session: Session,
-    item: SessionItem | null,
-    runId: string | null = null,
+    ctx: InboxContext,
 ) {
-    // Get organizationId from event if not provided
+    const { session, item, runId, channelMessageId } = ctx;
+
     if (!['comment_created', 'comment_edited', 'comment_deleted', 'session_created'].includes(newEvent.type)) {
         throw new Error(`Incorrect event type: "${newEvent.type}"`);
     }
@@ -41,9 +47,10 @@ export async function updateInboxes(
         with: {
             inboxItems: {
                 where: ((inboxItems, { eq, and, isNull }) => {
+                    if (channelMessageId) return eq(inboxItems.channelMessageId, channelMessageId);
                     if (item) return eq(inboxItems.sessionItemId, item.id);
-                    if (runId) return eq(inboxItems.runId, runId);
-                    return and(eq(inboxItems.sessionId, session.id), isNull(inboxItems.sessionItemId), isNull(inboxItems.runId));
+                    if (runId) return and(eq(inboxItems.runId, runId), isNull(inboxItems.sessionItemId), isNull(inboxItems.channelMessageId));
+                    return and(eq(inboxItems.sessionId, session.id), isNull(inboxItems.sessionItemId), isNull(inboxItems.runId), isNull(inboxItems.channelMessageId));
                 }),
             }
         }
@@ -84,6 +91,7 @@ export async function updateInboxes(
                     userId: user.id,
                     sessionItemId: item?.id ?? null,
                     runId: runId ?? null,
+                    channelMessageId: channelMessageId ?? null,
                     sessionId: item?.sessionId ?? session.id,
                     lastNotifiableEventId: newEvent.id,
                     render: {
@@ -99,7 +107,7 @@ export async function updateInboxes(
                     lastNotifiableEventId: newEvent.id,
                     render: {
                         ...prevRender,
-                        events: isUnread ? [...prevRender.events, newEvent] : [newEvent] 
+                        events: isUnread ? [...prevRender.events, newEvent] : [newEvent]
                     }
                 });
             }
@@ -118,7 +126,7 @@ export async function updateInboxes(
             }
 
             events[index] = newEvent;
-            
+
             newInboxItemValues.push({
                 ...inboxItem,
                 // We don't have to set lastNotifiableEventId. Edits are not notifiable events. They'll just silently update the state of the inbox item.
@@ -128,7 +136,7 @@ export async function updateInboxes(
                 }
             });
         }
-        else if (newEvent.type === 'comment_deleted') {   
+        else if (newEvent.type === 'comment_deleted') {
             if (!inboxItem) {
                 continue; // error state: ignore. Inbox item should exist.
             }
@@ -164,7 +172,7 @@ export async function updateInboxes(
 
     if (newInboxItemValues.length > 0) {
         await tx.insert(inboxItems).values(newInboxItemValues).onConflictDoUpdate({
-            target: [inboxItems.userId, inboxItems.sessionId, inboxItems.sessionItemId, inboxItems.runId],
+            target: [inboxItems.userId, inboxItems.sessionId, inboxItems.runId, inboxItems.sessionItemId, inboxItems.channelMessageId],
             set: {
                 updatedAt: new Date().toISOString(),
                 lastNotifiableEventId: sql.raw(`excluded.${inboxItems.lastNotifiableEventId.name}`),
