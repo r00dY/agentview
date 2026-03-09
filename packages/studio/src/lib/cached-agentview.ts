@@ -151,14 +151,8 @@ export class CachedAgentView extends AgentView {
     return result
   }
   
-  override async markSessionSeen(...args: Parameters<AgentView['markSessionSeen']>) {
-    const result = await super.markSessionSeen(...args)
-    invalidateByPrefix('sessions-stats')
-    return result
-  }
-
-  override async markItemSeen(...args: Parameters<AgentView['markItemSeen']>) {
-    const result = await super.markItemSeen(...args)
+  override async markSeen(...args: Parameters<AgentView['markSeen']>) {
+    const result = await super.markSeen(...args)
     invalidateByPrefix('sessions-stats')
     return result
   }

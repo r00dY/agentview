@@ -252,12 +252,8 @@ export class AgentView {
     })
   }
 
-  async markSessionSeen(sessionId: string): Promise<void> {
-    return await this.request<void>('POST', `/api/sessions/${sessionId}/seen`, undefined)
-  }
-
-  async markRunSeen(runId: string): Promise<void> {
-    return await this.request<void>('POST', `/api/runs/${runId}/seen`, undefined)
+  async markSeen(options: { sessionId?: string, runId?: string, sessionItemId?: string, channelMessageId?: string }): Promise<void> {
+    return await this.request<void>('POST', `/api/seen`, options)
   }
 
   async getSessionsStats(options?: SessionsStatsQueryParams): Promise<SessionsStats> {
@@ -294,9 +290,6 @@ export class AgentView {
     return await this.request<void>('PATCH', `/api/scores`, options)
   }
 
-  async markItemSeen(sessionId: string, itemId: string): Promise<void> {
-    return await this.request<void>('POST', `/api/sessions/${sessionId}/items/${itemId}/seen`, undefined)
-  }
 
   async getSessionStream(options: { id: string, signal?: AbortSignal, wait?: boolean }): Promise<AsyncGenerator<{
     event: SessionStreamEvent;

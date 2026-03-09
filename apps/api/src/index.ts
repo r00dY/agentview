@@ -1619,15 +1619,18 @@ app.openapi(sessionStreamRoute, async (c) => {
 });
 
 
-const sessionSeenRoute = createRoute({
+const seenRoute = createRoute({
   method: 'post',
-  path: '/api/sessions/{sessionId}/seen',
-  summary: 'Mark session as seen',
-  tags: ['Sessions'],
+  path: '/api/seen',
+  summary: 'Mark inbox item as seen',
+  tags: ['Inbox'],
   request: {
-    params: z.object({
-      sessionId: z.string(),
-    }),
+    body: body(z.object({
+      sessionId: z.string().optional(),
+      runId: z.string().optional(),
+      sessionItemId: z.string().optional(),
+      channelMessageId: z.string().optional(),
+    }))
   },
   responses: {
     200: response_data(z.object({})),
@@ -1637,26 +1640,58 @@ const sessionSeenRoute = createRoute({
   },
 })
 
-app.openapi(sessionSeenRoute, async (c) => {
+app.openapi(seenRoute, async (c) => {
   const principal = await authn(c.req.raw.headers)
   const userPrincipal = requireMemberPrincipal(principal);
 
-  const { sessionId } = c.req.param()
+  const body = await c.req.valid('json');
 
-  await withOrg(principal.organizationId, async tx => {
+  return withOrg(principal.organizationId, async tx => {
+    // Resolve the inbox target: exactly one of the identifiers determines the scope
+    let inboxFilter;
+
+    if (body.sessionItemId) {
+      const ctx = await resolveTargetContext(tx, { sessionItemId: body.sessionItemId });
+      inboxFilter = and(
+        eq(inboxItems.userId, userPrincipal.session.user.id),
+        eq(inboxItems.sessionId, ctx.session.id),
+        eq(inboxItems.sessionItemId, body.sessionItemId),
+      );
+    } else if (body.channelMessageId) {
+      const ctx = await resolveTargetContext(tx, { channelMessageId: body.channelMessageId });
+      inboxFilter = and(
+        eq(inboxItems.userId, userPrincipal.session.user.id),
+        eq(inboxItems.sessionId, ctx.session.id),
+        eq(inboxItems.channelMessageId, body.channelMessageId),
+      );
+    } else if (body.runId) {
+      const ctx = await resolveTargetContext(tx, { runId: body.runId });
+      inboxFilter = and(
+        eq(inboxItems.userId, userPrincipal.session.user.id),
+        eq(inboxItems.sessionId, ctx.session.id),
+        eq(inboxItems.runId, body.runId),
+        isNull(inboxItems.sessionItemId),
+        isNull(inboxItems.channelMessageId),
+      );
+    } else if (body.sessionId) {
+      inboxFilter = and(
+        eq(inboxItems.userId, userPrincipal.session.user.id),
+        eq(inboxItems.sessionId, body.sessionId),
+        isNull(inboxItems.sessionItemId),
+        isNull(inboxItems.runId),
+        isNull(inboxItems.channelMessageId),
+      );
+    } else {
+      throw new AgentViewError("At least one of sessionId, runId, sessionItemId, or channelMessageId must be provided", 422);
+    }
+
     await tx.update(inboxItems).set({
       lastReadEventId: sql`${inboxItems.lastNotifiableEventId}`,
       updatedAt: new Date().toISOString(),
-    }).where(and(
-      eq(inboxItems.userId, userPrincipal.session.user.id),
-      eq(inboxItems.sessionId, sessionId),
-      isNull(inboxItems.sessionItemId),
-      isNull(inboxItems.runId),
-      isNull(inboxItems.channelMessageId),
-    ))
-  })
+    }).where(inboxFilter);
 
-  return c.json({}, 200);
+    return c.json({}, 200);
+  })
 })
 
 
@@ -1938,81 +1973,6 @@ app.openapi(runKeepAliveRoute, async (c) => {
 
 /* --------- ITEMS --------- */
 
-const itemSeenRoute = createRoute({
-  method: 'post',
-  path: '/api/sessions/{sessionId}/items/{itemId}/seen',
-  summary: 'Mark item as seen',
-  tags: ['Sessions'],
-  request: {
-    params: z.object({
-      sessionId: z.string(),
-      itemId: z.string(),
-    }),
-  },
-  responses: {
-    200: response_data(z.object({})),
-    400: response_error(),
-    401: response_error(),
-    404: response_error(),
-  },
-})
-
-app.openapi(itemSeenRoute, async (c) => {
-  const principal = await authn(c.req.raw.headers)
-  const userPrincipal = requireMemberPrincipal(principal);
-
-  const { sessionId, itemId } = c.req.param()
-
-  return withOrg(principal.organizationId, async (tx) => {
-    await tx.update(inboxItems).set({
-      lastReadEventId: sql`${inboxItems.lastNotifiableEventId}`,
-      updatedAt: new Date().toISOString(),
-    }).where(and(
-      eq(inboxItems.userId, userPrincipal.session.user.id),
-      eq(inboxItems.sessionId, sessionId),
-      eq(inboxItems.sessionItemId, itemId),
-    ))
-
-    return c.json({}, 200);
-  })
-})
-
-const runSeenRoute = createRoute({
-  method: 'post',
-  path: '/api/runs/{runId}/seen',
-  summary: 'Mark run as seen',
-  tags: ['Runs'],
-  request: {
-    params: z.object({
-      runId: z.string(),
-    }),
-  },
-  responses: {
-    200: response_data(z.object({})),
-    400: response_error(),
-    401: response_error(),
-    404: response_error(),
-  },
-})
-
-app.openapi(runSeenRoute, async (c) => {
-  const principal = await authn(c.req.raw.headers)
-  const userPrincipal = requireMemberPrincipal(principal);
-
-  const { runId } = c.req.param()
-
-  return withOrg(principal.organizationId, async (tx) => {
-    await tx.update(inboxItems).set({
-      lastReadEventId: sql`${inboxItems.lastNotifiableEventId}`,
-      updatedAt: new Date().toISOString(),
-    }).where(and(
-      eq(inboxItems.userId, userPrincipal.session.user.id),
-      eq(inboxItems.runId, runId),
-    ))
-
-    return c.json({}, 200);
-  })
-})
 
 
 /* --------- FEED --------- */
@@ -2226,32 +2186,19 @@ app.openapi(scoresPATCHRoute, async (c) => {
 
   return withOrg(principal.organizationId, async (tx) => {
     const config = await requireConfig(tx, principal)
+    const { session, item, runId } = await resolveTargetContext(tx, target);
 
     // Resolve score configs based on target type
+    const run = runId ? session.runs.find(r => r.id === runId)! : null;
+    const channelConfig = requireChannelConfig(config, session.channel);
+    const agentConfig = requireAgentConfig(config, channelConfig.agent);
+    const runConfig = requireRunConfig(agentConfig, getRunInputContent((run ?? session.runs[0]).sessionItems));
+
     let scoreConfigs: { name: string; schema: any }[] | undefined;
-
-    if ('sessionItemId' in target) {
-      const sessionItem = await tx.query.sessionItems.findFirst({
-        where: eq(sessionItems.id, target.sessionItemId),
-      });
-      if (!sessionItem) throw new HTTPException(404, { message: "Session item not found" });
-      const session = await requireSession(tx, sessionItem.sessionId);
-      const item = getAllSessionItems(session).find(i => i.id === target.sessionItemId) as SessionItem;
-      const run = session.runs.find(r => r.id === item.runId)!;
-
-      const channelConfig = requireChannelConfig(config, session.channel);
-      const agentConfig = requireAgentConfig(config, channelConfig.agent);
-      const runConfig = requireRunConfig(agentConfig, getRunInputContent(run.sessionItems));
-      const itemConfig = requireItemConfig(runConfig, run.sessionItems, item.id).itemConfig;
+    if (item) {
+      const itemConfig = requireItemConfig(runConfig, (run ?? session.runs[0]).sessionItems, item.id).itemConfig;
       scoreConfigs = itemConfig.scores;
     } else {
-      // runId target
-      const run = await requireRun(tx, target.runId);
-      const session = await requireSession(tx, run.sessionId);
-
-      const channelConfig = requireChannelConfig(config, session.channel);
-      const agentConfig = requireAgentConfig(config, channelConfig.agent);
-      const runConfig = requireRunConfig(agentConfig, getRunInputContent(run.sessionItems));
       scoreConfigs = runConfig.scores;
     }
 
@@ -2261,9 +2208,9 @@ app.openapi(scoresPATCHRoute, async (c) => {
       const scoreConfig = requireScoreConfig(scoreConfigs, name);
 
       // Build the filter for existing score based on target type
-      const targetFilter = 'sessionItemId' in target
-        ? eq(scores.sessionItemId, target.sessionItemId)
-        : eq(scores.runId, target.runId);
+      const targetFilter = item
+        ? eq(scores.sessionItemId, item.id)
+        : eq(scores.runId, runId!);
 
       // Check if score already exists for this user
       const existingScore = await tx.query.scores.findFirst({
@@ -2306,9 +2253,9 @@ app.openapi(scoresPATCHRoute, async (c) => {
         else {
           const commentMessage = await createComment(tx, target, actingUser, null, principal.organizationId);
 
-          const scoreColumns = 'sessionItemId' in target
-            ? { sessionItemId: target.sessionItemId, runId: null }
-            : { sessionItemId: null, runId: target.runId };
+          const scoreColumns = item
+            ? { sessionItemId: item.id, runId: null }
+            : { sessionItemId: null, runId: runId };
 
           await tx.insert(scores).values({
             organizationId: principal.organizationId,

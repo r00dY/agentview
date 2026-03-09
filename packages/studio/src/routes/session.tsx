@@ -174,7 +174,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
     useEffect(() => {
         const sessionStats = allStats?.sessions?.[session.id];
         if (sessionStats && sessionStats.unseenEvents.length > 0) {
-            agentview.markSessionSeen(session.id) // only mark as seen if there are unseen events (do not overload backend and clean cache unnecessarily)
+            agentview.markSeen({ sessionId: session.id }) // only mark as seen if there are unseen events (do not overload backend and clean cache unnecessarily)
                 .then(() => revalidator.revalidate())
                 .catch((error) => console.error(error))
         };

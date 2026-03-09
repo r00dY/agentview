@@ -252,7 +252,7 @@ export function CommentsThread({ session, item, itemConfig, selected = false, on
                 (entries) => {
                     entries.forEach((entry) => {
                         if (entry.isIntersecting) {
-                            agentview.markItemSeen(session.id, item.id)
+                            agentview.markSeen({ sessionItemId: item.id })
                                 .then(() => revalidator.revalidate())
                                 .catch((error) => console.error(error))
                             observer.disconnect();
