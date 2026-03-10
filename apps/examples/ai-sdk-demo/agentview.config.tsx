@@ -153,6 +153,34 @@ export default defineConfig({
                 </Step>
               }
             },
+            {
+              schema: z.looseObject({
+                type: z.literal("data-weather"),
+                data: z.any(),
+              }),
+              displayComponent: ({ item }) => {
+                return <Step>
+                  <StepTitle><Brain /> Weather</StepTitle>
+                  <StepContent>
+                    {item.data.location} {item.data.temperature}°C
+                  </StepContent>
+                </Step>
+              }
+            },
+            {
+              schema: z.looseObject({
+                type: z.literal("data-status"),
+                data: z.any(),
+              }),
+              displayComponent: ({ item }) => {
+                return <Step collapsible>
+                  <StepTitle><Brain /> Status</StepTitle>
+                  <StepContent>
+                    {item.data}
+                  </StepContent>
+                </Step>
+              }
+            },
             // { 
             //   schema: z.looseObject({
             //     type: z.literal("function_call"),

@@ -354,7 +354,9 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                             // comments = props.comments.filter((c) => c.channelMessageId === wallItem.channelMessage.id);
 
                             if (wallItem.channelMessage.direction === 'incoming') {
-                                content = <div className="text-red-500">{wallItem.channelMessage.text}</div>
+                                content = <div className="pl-[10%] relative">
+                                    <UserMessage>{wallItem.channelMessage.text}</UserMessage>
+                                </div>
 
                                 // no scores for input channel messages for now
                                 commentsAndScores = {
@@ -364,16 +366,22 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                 };
                             }
                             else {
-                                content = <div className="text-blue-500">{wallItem.channelMessage.text}</div>;
+                                content = <AssistantMessage>{wallItem.channelMessage.text}</AssistantMessage>
 
                                 // outgoing channel message is really run scores & comments
                                 commentsAndScores = runCommentsAndScores;
                             }
                         }
                         else {
+                            const itemConfigMatch = runConfig ? findItemConfigById(runConfig, run.sessionItems, wallItem.sessionItem.id) : undefined;
+                            if (itemConfigMatch?.itemConfig?.displayComponent === null) {
+                                return null;
+                            }
+
                             if (wallItem.sessionItem.type === 'input') {
+                                const Component = itemConfigMatch?.itemConfig?.displayComponent ?? DefaultInputComponent;
                                 content = <div className="pl-[10%] relative">
-                                    <DefaultInputComponent item={wallItem.sessionItem.content} sessionItem={wallItem.sessionItem} run={run} session={session} />
+                                    <Component item={wallItem.sessionItem.content} sessionItem={wallItem.sessionItem} run={run} session={session} />
                                 </div>
 
                                 // no scores for input session items for now
@@ -383,23 +391,53 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                     target: { sessionId: session.id, runId: run.id, sessionItemId: wallItem.sessionItem.id },
                                 };
                             }
-                            else {
-                                content = <div className="pr-[10%] relative">
-                                    <DefaultAssistantComponent item={wallItem.sessionItem.content} sessionItem={wallItem.sessionItem} run={run} session={session} />
-                                </div>
+                            else if (wallItem.sessionItem.type === 'step') {
 
-                                if (wallItem.sessionItem.type === 'step') {
-                                    commentsAndScores = {
-                                        comments: props.comments.filter((c) => c.sessionItemId === wallItem.sessionItem.id),
-                                        scoreConfigs: [],
-                                        target: { sessionId: session.id, runId: run.id, sessionItemId: wallItem.sessionItem.id },
-                                    };
+                                // This is not used today but might be in the future.
+                                if (itemConfigMatch?.tool) {
+                                    let callContent: any = undefined;
+                                    let resultContent: any = undefined;
+                                    let Component: React.ComponentType<SessionItemDisplayComponentProps>;
+
+                                    if (itemConfigMatch?.tool.type === "call") {
+                                        if (itemConfigMatch?.tool?.hasResult) {
+                                            return null;
+                                        }
+                                        else {
+                                            callContent = itemConfigMatch.content;
+                                            Component = itemConfigMatch?.itemConfig?.displayComponent ?? DefaultToolComponent;
+                                        }
+                                    }
+                                    else if (itemConfigMatch?.tool.type === "result") {
+                                        resultContent = itemConfigMatch.content;
+                                        callContent = itemConfigMatch.tool.call.content;
+                                        Component = itemConfigMatch?.tool.call.itemConfig?.displayComponent ?? DefaultToolComponent;
+                                    }
+                                    else {
+                                        throw new Error(`Unreachable`);
+                                    }
+
+                                    // const Component = itemConfigMatch?.itemConfig?.displayComponent ?? DefaultToolComponent;
+                                    content = <Component item={callContent} resultItem={resultContent} sessionItem={wallItem.sessionItem} run={run} session={session} />
                                 }
                                 else {
+                                    const Component = itemConfigMatch?.itemConfig?.displayComponent ?? DefaultStepComponent;
+                                    content = <Component item={wallItem.sessionItem.content} sessionItem={wallItem.sessionItem} run={run} session={session} />
+                                }
 
-                                    if (firstOutputWallItem?.id === wallItem.id) { // only first output shows run comments and scores
-                                        commentsAndScores = runCommentsAndScores;
-                                    }
+                                // no scores for step session items for now
+                                commentsAndScores = {
+                                    comments: props.comments.filter((c) => c.sessionItemId === wallItem.sessionItem.id),
+                                    scoreConfigs: [],
+                                    target: { sessionId: session.id, runId: run.id, sessionItemId: wallItem.sessionItem.id },
+                                };
+                            }
+                            else {
+                                const Component = itemConfigMatch?.itemConfig?.displayComponent ?? DefaultAssistantComponent;
+                                content = <Component item={wallItem.sessionItem.content} sessionItem={wallItem.sessionItem} run={run} session={session} />
+
+                                if (firstOutputWallItem?.id === wallItem.id) { // only first output shows run comments and scores
+                                    commentsAndScores = runCommentsAndScores;
                                 }
                             }
                         }
@@ -407,92 +445,6 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                         const isSelected = selectedItemId === wallItem.id;
                         const hasComments = commentsAndScores ? commentsAndScores.comments.length > 0 : false;
                         const isLastRunItem = index === wallItems.length - 1;
-
-                        // const isLastRunItem = index === run.sessionItems.length - 1;
-                        // const isInputItem = item.type === "input";
-
-                        // const comments = props.comments.filter((c) => c.sessionItemId === item.id).filter((c) => !c.deletedAt);
-                        // const scores = props.scores.filter((s) => s.sessionItemId === item.id).filter((s) => !s.deletedAt);
-
-                        // const hasComments = comments.length > 0
-                        // const isSelected = selectedItemId === item.id;
-
-                        // let content: React.ReactNode = null;
-
-                        // const itemConfigMatch : any = undefined;
-                        // if (isInputItem) {
-                        //     content = <div className="pl-[10%] relative">
-                        //         <DefaultInputComponent item={item.content} sessionItem={item} run={run} session={session} />
-                        //     </div>
-                        // }
-                        // else {
-                        //     content = <div className="pr-[10%] relative">
-                        //         <DefaultAssistantComponent item={item.content} sessionItem={item} run={run} session={session} />
-                        //     </div>
-                        // }
-
-
-
-
-
-                        // if (run.version?.agent) {
-                        //     const agentConfig = requireAgentConfig(config, run.version?.agent);
-                        // }
-
-                        // // const agentConfig = findAgentConfig(config, run.version?.agent);
-                        // const runConfigMatches = findMatchingRunConfigs(agentConfig, run.sessionItems[0].content);
-                        // const itemConfigMatch = runConfigMatches.length === 1 ? findItemConfigById(runConfigMatches[0], run.sessionItems, item.id) : undefined;
-
-                        // if (itemConfigMatch?.itemConfig?.displayComponent === null) {
-                        //     return null;
-                        // }
-
-                        // if (isInputItem) {
-                        //     const Component = itemConfigMatch?.itemConfig?.displayComponent ?? DefaultInputComponent;
-                        //     if (!Component) {
-                        //         return null;
-                        //     }
-                        //     content = <div className="pl-[10%] relative">
-                        //         <Component item={item.content} sessionItem={item} run={run} session={session} />
-                        //     </div>
-                        // }
-                        // else if (itemConfigMatch?.type === "output") {
-                        //     const Component = itemConfigMatch?.itemConfig?.displayComponent ?? DefaultAssistantComponent;
-                        //     content = <Component item={item.content} sessionItem={item} run={run} session={session} />
-                        // }
-                        // else {
-                        //     if (itemConfigMatch?.tool) {
-                        //         let callContent: any = undefined;
-                        //         let resultContent: any = undefined;
-                        //         let Component: React.ComponentType<SessionItemDisplayComponentProps>;
-
-                        //         if (itemConfigMatch?.tool.type === "call") {
-                        //             if (itemConfigMatch?.tool?.hasResult) {
-                        //                 return null;
-                        //             }
-                        //             else {
-                        //                 callContent = itemConfigMatch.content;
-                        //                 Component = itemConfigMatch?.itemConfig?.displayComponent ?? DefaultToolComponent;
-                        //             }
-                        //         }
-                        //         else if (itemConfigMatch?.tool.type === "result") {
-                        //             resultContent = itemConfigMatch.content;
-                        //             callContent = itemConfigMatch.tool.call.content;
-                        //             Component = itemConfigMatch?.tool.call.itemConfig?.displayComponent ?? DefaultToolComponent;
-                        //         }
-                        //         else {
-                        //             throw new Error(`Unreachable`);
-                        //         }
-
-                        //         // const Component = itemConfigMatch?.itemConfig?.displayComponent ?? DefaultToolComponent;
-                        //         content = <Component item={callContent} resultItem={resultContent} sessionItem={item} run={run} session={session} />
-                        //     }
-                        //     else {
-                        //         const Component = itemConfigMatch?.itemConfig?.displayComponent ?? DefaultStepComponent;
-                        //         content = <Component item={item.content} sessionItem={item} run={run} session={session} />
-                        //     }
-
-                        // }
 
                         return {
                             id: wallItem.id,
@@ -513,7 +465,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                         </ErrorBoundary>
                                     </div>
 
-                                    { isLastRunItem && run.status !== "in_progress" && <MessageFooter
+                                    {isLastRunItem && run.status !== "in_progress" && <MessageFooter
                                         comments={runComments}
                                         scores={runScores}
                                         scoreConfigs={runScoreConfigs}
@@ -526,7 +478,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                         isSmallSize={styles.isSmallSize}
                                         isLastRunItem={isLastRunItem}
                                         unseenEvents={getUnseenEvents(runTarget)}
-                                    /> }
+                                    />}
 
                                     {isLastRunItem && run.status === "in_progress" && <div className="text-muted-foreground mt-6">
                                         <Loader />
@@ -535,21 +487,21 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                 </div>
                             </div>,
                             commentsComponent: !styles.isSmallSize && (hasComments || (isSelected)) && commentsAndScores ?
-                            <CommentsThread
-                                target={commentsAndScores.target}
-                                selected={isSelected}
-                                onSelect={(a) => {
-                                    if (a) {
-                                        setselectedItemId(wallItem.id);
-                                    }
-                                    else {
-                                        setselectedItemId(undefined);
-                                    }
-                                 }}
-                                unseenEvents={getUnseenEvents(commentsAndScores.target)}
-                                comments={commentsAndScores.comments}
-                                scoreConfigs={commentsAndScores.scoreConfigs}
-                            /> : undefined
+                                <CommentsThread
+                                    target={commentsAndScores.target}
+                                    selected={isSelected}
+                                    onSelect={(a) => {
+                                        if (a) {
+                                            setselectedItemId(wallItem.id);
+                                        }
+                                        else {
+                                            setselectedItemId(undefined);
+                                        }
+                                    }}
+                                    unseenEvents={getUnseenEvents(commentsAndScores.target)}
+                                    comments={commentsAndScores.comments}
+                                    scoreConfigs={commentsAndScores.scoreConfigs}
+                                /> : undefined
                         }
                     })
                 }).flat().filter((item) => item !== undefined && item !== null)} selectedItemId={selectedItemId}
