@@ -151,7 +151,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
     // const agentConfig = requireAgentConfig(config, channelConfig.agent);
 
     const searchParams = new URLSearchParams(window.location.search);
-    const selectedItemId = activeItems.find((a: any) => a.id === searchParams.get('itemId'))?.id ?? undefined;
+    const selectedItemId = searchParams.get('itemId') ?? undefined;
 
     const setselectedItemId = (id: string | undefined) => {
         /**
@@ -334,6 +334,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 
                     return wallItems.map((wallItem, index) => {
 
+
                         /**
                          * TODO:
                          * - there's no 'agent' in the run. Think how to clean it up.
@@ -368,7 +369,6 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                 // outgoing channel message is really run scores & comments
                                 commentsAndScores = runCommentsAndScores;
                             }
-
                         }
                         else {
                             if (wallItem.sessionItem.type === 'input') {
@@ -400,9 +400,6 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                     if (firstOutputWallItem?.id === wallItem.id) { // only first output shows run comments and scores
                                         commentsAndScores = runCommentsAndScores;
                                     }
-
-                                    // TODO: only for FIRST output!!!
-                                    // commentsAndScores = runCommentsAndScores;
                                 }
                             }
                         }
@@ -410,8 +407,6 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                         const isSelected = selectedItemId === wallItem.id;
                         const hasComments = commentsAndScores ? commentsAndScores.comments.length > 0 : false;
                         const isLastRunItem = index === wallItems.length - 1;
-
-
 
                         // const isLastRunItem = index === run.sessionItems.length - 1;
                         // const isInputItem = item.type === "input";
@@ -505,7 +500,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                 className={`relative group`}
                             >
                                 {!styles.isSmallSize && <div className={`absolute text-muted-foreground text-xs font-medium flex flex-row gap-1 z-10`} style={{ left: `${styles.padding + styles.textWidth + styles.commentButtonPadding}px` }}>
-                                    {!isSelected && <Button className="group-hover:visible invisible" variant="outline" size="icon_xs" onClick={() => { setselectedItemId(wallItem.id) }}>
+                                    {!isSelected && commentsAndScores && <Button className="group-hover:visible invisible" variant="outline" size="icon_xs" onClick={() => { setselectedItemId(wallItem.id) }}>
                                         <MessageCirclePlus className="size-3" />
                                     </Button>}
                                 </div>}
