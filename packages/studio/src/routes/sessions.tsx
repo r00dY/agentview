@@ -7,7 +7,7 @@ import { ChevronLeftIcon, ChevronRightIcon, Loader2, MessageCircle, PlusIcon, Us
 import { Header, HeaderTitle } from "../components/header";
 import { getListParams, getListParamsAndCheckForRedirect, toQueryParams } from "../lib/listParams";
 import { agentview, AgentViewError } from "../lib/agentview";
-import type { Pagination, SessionBase, SessionsPaginatedResponse, Space } from "agentview/apiTypes";
+import type { Pagination, SessionBase, SessionsPaginatedResponse, SessionStats, Space } from "agentview/apiTypes";
 import { timeAgoShort } from "../lib/timeAgo";
 import { useSessionContext } from "../lib/SessionContext";
 import { NotificationBadge, NotificationDot } from "../components/internal/NotificationBadge";
@@ -134,18 +134,19 @@ function PaginationControls({ pagination, listParams }: { pagination: Pagination
 
 
 
-export function SessionCard({ session, listParams, sessionStats }: { session: SessionBase, listParams: ReturnType<typeof getListParams>, sessionStats: any | undefined }) {
+export function SessionCard({ session, listParams, sessionStats }: { session: SessionBase, listParams: ReturnType<typeof getListParams>, sessionStats: SessionStats | undefined }) {
   const { organization: { members }, me } = useSessionContext();
   const date = session.createdAt;
 
-  const unseenEvents = sessionStats?.unseenEvents ?? [];
-  const hasSessionUnreads = unseenEvents.length > 0;
+  const inboxItems = sessionStats?.inboxItems ?? [];
 
-  const allItemEvents: any[] = [];
+  // Session-level unreads: no runId, sessionItemId, or channelMessageId
+  const sessionLevelItems = inboxItems.filter(i => !i.runId && !i.sessionItemId && !i.channelMessageId);
+  const hasSessionUnreads = sessionLevelItems.some(i => i.unseenEvents.length > 0);
 
-  for (const itemStats of Object.values(sessionStats?.items ?? {}) as any[]) {
-    allItemEvents.push(...itemStats.unseenEvents);
-  }
+  // Item-level unreads: everything else
+  const itemLevelItems = inboxItems.filter(i => i.runId || i.sessionItemId || i.channelMessageId);
+  const allItemEvents: any[] = itemLevelItems.flatMap(i => i.unseenEvents);
 
   const hasUnreadItems = allItemEvents.length > 0;
 

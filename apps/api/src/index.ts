@@ -907,12 +907,19 @@ app.openapi(publicSessionsGETRoute, async (c) => {
   })
 })
 
+type InboxItemStatsResponse = {
+  sessionId: string,
+  runId: string | null,
+  sessionItemId: string | null,
+  channelMessageId: string | null,
+  unseenEvents: any[],
+}
+
 type StatsResponse = {
   unseenCount: number,
   sessions?: {
     [sessionId: string]: {
-      unseenEvents: any[],
-      items: { [itemId: string]: { unseenEvents: any[] } }
+      inboxItems: InboxItemStatsResponse[]
     }
   }
 }
@@ -975,29 +982,31 @@ app.openapi(sessionsGETStatsRoute, async (c) => {
         orderBy: (session, { desc }: any) => [desc(session.updatedAt)],
       })
 
+      function getUnseenEvents(inboxItem: InferSelectModel<typeof inboxItems>): any[] {
+        if (isInboxItemUnread(inboxItem)) {
+          const render: any = inboxItem.render;
+          return render?.events ?? [];
+        }
+        return [];
+      }
+
       sessionRows.map((session) => {
-        const sessionInboxItem = session.inboxItems.find((inboxItem) => inboxItem.sessionItemId === null);
-        const itemInboxItems = session.inboxItems.filter((inboxItem) => inboxItem.sessionItemId !== null);
+        const items: InboxItemStatsResponse[] = [];
 
-        function getUnseenEvents(inboxItem: InferSelectModel<typeof inboxItems> | null | undefined) {
-          if (isInboxItemUnread(inboxItem)) {
-            const render: any = inboxItem?.render;
-            return render?.events ?? [];
-          }
-          return [];
+        for (const inboxItem of session.inboxItems) {
+          const unseenEvents = getUnseenEvents(inboxItem);
+          if (unseenEvents.length === 0) continue;
+
+          items.push({
+            sessionId: session.id,
+            runId: inboxItem.runId,
+            sessionItemId: inboxItem.sessionItemId,
+            channelMessageId: inboxItem.channelMessageId,
+            unseenEvents,
+          });
         }
 
-        response.sessions![session.id] = {
-          unseenEvents: getUnseenEvents(sessionInboxItem),
-          items: {}
-        }
-
-        itemInboxItems.forEach((inboxItem) => {
-          response.sessions![session.id].items[inboxItem.sessionItemId!] = {
-            unseenEvents: getUnseenEvents(inboxItem),
-          }
-        });
-
+        response.sessions![session.id] = { inboxItems: items };
       })
     }
 

@@ -84,7 +84,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 
   // Fetch session stats for each session type and list combination (in parallel)
-  const listStats: { [list: string]: { unseenCount: number, hasMentions: boolean } } = {};
+  const listStats: { [list: string]: { unseenCount: number } } = {};
 
   if (config.agents) {
     const statsPromises = config.agents.flatMap(agentConfig =>

@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { type ChannelMessage, type CommentMessage, type InputTarget, type Run, type Score, type Session, type SessionBase, type SessionItem, type SessionsStats } from "agentview/apiTypes";
+import { type ChannelMessage, type CommentMessage, type InputTarget, type Run, type Score, type Session, type SessionBase, type SessionItem, type SessionsStats, type SessionStats } from "agentview/apiTypes";
 import { findAgentConfig, findItemConfigById, findRunConfig, requireAgentConfig, requireChannelConfig } from "agentview/configUtils";
 import { enhanceSession, getActiveRuns, getAllSessionItems, getLastRun, getVersions } from "agentview/sessionUtils";
 import type { AgentConfig, ChannelConfig, ScoreConfig, SessionItemConfig, SessionItemDisplayComponentProps } from "agentview/types";
@@ -61,8 +61,9 @@ async function loader({ request, params, context }: LoaderFunctionArgs) {
 
 function Component() {
     const { session, comments, scores, sessionId } = useLoaderData<typeof loader>();
-    const { sessions } = useOutletContext<{ sessions?: SessionBase[] }>() ?? {};
+    const { sessions, allStats } = useOutletContext<{ sessions?: SessionBase[], allStats?: SessionsStats }>() ?? {};
     const sessionBase = sessions?.find((s) => s.id === sessionId);
+    const sessionStats = allStats?.sessions?.[sessionId];
 
     // Stage 1: No data at all - show loader
     if (!sessionBase && !session) {
@@ -75,7 +76,7 @@ function Component() {
     }
 
     // Stage 3: Full data available
-    return <SessionPage session={session} comments={comments} scores={scores} />;
+    return <SessionPage session={session} comments={comments} scores={scores} sessionStats={sessionStats} />;
 }
 
 function SessionShell({
@@ -123,13 +124,21 @@ function SessionPageSkeleton({ sessionBase }: { sessionBase: SessionBase }) {
     );
 }
 
-function SessionPage(props: { session: Session, comments: CommentMessage[], scores: Score[] }) {
+function SessionPage(props: { session: Session, comments: CommentMessage[], scores: Score[], sessionStats?: SessionStats }) {
     // console.log('[SessionPage]');
     const loaderData = useLoaderData<typeof loader>();
     const revalidator = useRevalidator();
     const navigate = useNavigate();
     const { me } = useSessionContext();
-    const { allStats } = useOutletContext<{ allStats?: SessionsStats, sessions?: SessionBase[] }>() ?? {};
+    const { sessionStats } = props;
+
+    const getUnseenEvents = (target: InputTarget): any[] | undefined => {
+        return sessionStats?.inboxItems?.find(i =>
+            i.sessionItemId === (target.sessionItemId ?? null) &&
+            i.runId === (target.runId ?? null) &&
+            i.channelMessageId === (target.channelMessageId ?? null)
+        )?.unseenEvents;
+    };
 
     const [expectingRun, setExpectingRun] = useState(false);
     const session = useSession(props.session, { wait: expectingRun });
@@ -172,8 +181,9 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
     }
 
     useEffect(() => {
-        const sessionStats = allStats?.sessions?.[session.id];
-        if (sessionStats && sessionStats.unseenEvents.length > 0) {
+        // Session-level inbox items: no runId, sessionItemId, or channelMessageId
+        const sessionLevelUnreads = sessionStats?.inboxItems?.some(i => !i.runId && !i.sessionItemId && !i.channelMessageId && i.unseenEvents.length > 0);
+        if (sessionLevelUnreads) {
             agentview.markSeen({ sessionId: session.id }) // only mark as seen if there are unseen events (do not overload backend and clean cache unnecessarily)
                 .then(() => revalidator.revalidate())
                 .catch((error) => console.error(error))
@@ -243,7 +253,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
             channelConfig={channelConfig}
             headerExtra={session.user.createdBy === me.id && <ShareForm session={session} />}
             footer={session.user.createdBy === me.id && <InputForm session={session} channelConfig={channelConfig} styles={styles} onRunningStateChange={setExpectingRun} />}
-            outletContext={{ session, allStats }}
+            outletContext={{ session }}
         >
             <div ref={bodyRef}>
                 <ItemsWithCommentsLayout items={getActiveRuns(session).map((run) => {
@@ -514,7 +524,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                         isSelected={isSelected}
                                         isSmallSize={styles.isSmallSize}
                                         isLastRunItem={isLastRunItem}
-                                        allStats={allStats}
+                                        unseenEvents={getUnseenEvents(runTarget)}
                                     /> }
 
                                     {isLastRunItem && run.status === "in_progress" && <div className="text-muted-foreground mt-6">
@@ -527,7 +537,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                             <CommentsThread
                                 target={commentsAndScores.target}
                                 selected={isSelected}
-                                onSelect={(a) => { 
+                                onSelect={(a) => {
                                     if (a) {
                                         setselectedItemId(wallItem.id);
                                     }
@@ -535,7 +545,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                         setselectedItemId(undefined);
                                     }
                                  }}
-                                allStats={allStats}
+                                unseenEvents={getUnseenEvents(commentsAndScores.target)}
                                 comments={commentsAndScores.comments}
                                 scoreConfigs={commentsAndScores.scoreConfigs}
                             /> : undefined
@@ -770,7 +780,7 @@ type MessageFooterProps = {
     isSelected: boolean,
     isSmallSize: boolean,
     isLastRunItem: boolean,
-    allStats?: SessionsStats,
+    unseenEvents?: any[],
 }
 
 
@@ -788,7 +798,7 @@ type MessageFooterProps = {
 
 
 function MessageFooter(props: MessageFooterProps) {
-    const { session, target, run, listParams, comments, scores, scoreConfigs, onSelect, isSelected, isSmallSize, isLastRunItem, allStats } = props;
+    const { session, target, run, listParams, comments, scores, scoreConfigs, onSelect, isSelected, isSmallSize, isLastRunItem, unseenEvents } = props;
     const [scoreDialogOpen, setScoreDialogOpen] = useState(false);
 
     const actionBarScores = scoreConfigs.filter(scoreConfig => scoreConfig.actionBarComponent);
@@ -863,7 +873,7 @@ function MessageFooter(props: MessageFooterProps) {
                 small={true}
                 singleLineMessageHeader={true}
                 onSelect={(selected) => { if (selected) onSelect(); }}
-                allStats={allStats}
+                unseenEvents={unseenEvents}
             />
         </div>)
     }

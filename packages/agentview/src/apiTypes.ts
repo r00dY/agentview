@@ -329,11 +329,21 @@ export const SessionsStatsQueryParamsSchema = SessionsGetQueryParamsSchema.exten
 export type SessionsStatsQueryParams = z.infer<typeof SessionsStatsQueryParamsSchema>
 
 // Sessions stats response
+export type InboxItemStats = {
+  sessionId: string
+  runId: string | null
+  sessionItemId: string | null
+  channelMessageId: string | null
+  unseenEvents: any[]
+}
+
+export type SessionStats = {
+  inboxItems: InboxItemStats[]
+}
+
 export type SessionsStats = {
   unseenCount: number
-  hasMentions: boolean
-  sessions?: Record<string, { unseenEvents: any[], items: Record<string, { unseenEvents: any[] }> }>
-  items?: Record<string, any>
+  sessions?: Record<string, SessionStats>
 }
 
 // Run details response

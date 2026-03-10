@@ -1,7 +1,7 @@
 import { AlertCircleIcon } from "lucide-react";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useFetcher, useRevalidator } from "react-router";
-import type { CommentMessage, Score, SessionsStats, InputTarget } from "agentview/apiTypes";
+import type { CommentMessage, Score, InputTarget } from "agentview/apiTypes";
 import { Button } from "../ui/button";
 import { useFetcherSuccess } from "../../hooks/useFetcherSuccess";
 import { timeAgoShort } from "../../lib/timeAgo";
@@ -31,7 +31,7 @@ export type CommentsThreadRawProps = {
 export type CommentsThreadProps = CommentsThreadRawProps & {
     selected: boolean,
     onSelect: (selected: boolean) => void,
-    allStats?: SessionsStats,
+    unseenEvents?: any[],
 }
 
 type StackedCommentMessage = CommentMessage & {
@@ -219,7 +219,7 @@ export const CommentsThreadRaw = forwardRef<any, CommentsThreadRawProps>(({ targ
     );
 });
 
-export function CommentsThread({ target, scoreConfigs, selected = false, onSelect, allStats, comments }: CommentsThreadProps) {
+export function CommentsThread({ target, scoreConfigs, selected = false, onSelect, unseenEvents, comments }: CommentsThreadProps) {
     const commentThreadRef = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const revalidator = useRevalidator();
@@ -234,12 +234,7 @@ export function CommentsThread({ target, scoreConfigs, selected = false, onSelec
         const element = containerRef.current;
         if (!element) return;
 
-        const sessionId = target.sessionId;
-        const sessionItemId = target.sessionItemId;
-
-        const itemStats = sessionId && sessionItemId ? allStats?.sessions?.[sessionId]?.items?.[sessionItemId] : undefined;
-
-        if (itemStats && itemStats.unseenEvents.length > 0) {
+        if (unseenEvents && unseenEvents.length > 0) {
             const observer = new IntersectionObserver(
                 (entries) => {
                     entries.forEach((entry) => {
