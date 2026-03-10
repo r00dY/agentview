@@ -330,6 +330,8 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                     const runTarget: InputTarget = { sessionId: session.id, runId: run.id };
                     const runCommentsAndScores: CommentsThreadData = { comments: runComments, scoreConfigs: runScoreConfigs, target: runTarget };
 
+                    const firstOutputWallItem = wallItems.find((item) => item.type === 'session-item' && item.sessionItem.type === 'output');
+
                     return wallItems.map((wallItem, index) => {
 
                         /**
@@ -395,8 +397,12 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                 }
                                 else {
 
+                                    if (firstOutputWallItem?.id === wallItem.id) { // only first output shows run comments and scores
+                                        commentsAndScores = runCommentsAndScores;
+                                    }
+
                                     // TODO: only for FIRST output!!!
-                                    commentsAndScores = runCommentsAndScores;
+                                    // commentsAndScores = runCommentsAndScores;
                                 }
                             }
                         }
