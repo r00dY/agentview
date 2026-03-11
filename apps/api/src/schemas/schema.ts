@@ -12,32 +12,6 @@ function createTenantPolicy(tableName: string) {
   });
 }
 
-// export const invitations = pgTable("invitations", {
-//   id: uuid("id").primaryKey().defaultRandom(),
-//   email: varchar("email", { length: 255 }).notNull(),
-//   role: varchar("role", { length: 255 }).notNull(),
-//   expiresAt: timestamp("expires_at", { withTimezone: true, mode: "string" }).notNull(),
-//   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
-//   status: varchar({ length: 255 }).notNull(),
-//   invitedBy: text('invited_by').references(() => users.id, { onDelete: 'cascade' })
-// });
-
-export const emails = pgTable("emails", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  organizationId: text("organization_id").notNull().references(() => organizations.id),
-  userId: text("user_id").references(() => users.id),
-  to: varchar("to", { length: 255 }).notNull(),
-  subject: varchar("subject", { length: 255 }),
-  body: text("body"),
-  text: text("text"),
-  from: varchar("from", { length: 255 }).notNull(),
-  cc: varchar("cc", { length: 255 }),
-  bcc: varchar("bcc", { length: 255 }),
-  replyTo: varchar("reply_to", { length: 255 }),
-  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
-}, () => [createTenantPolicy('emails')]);
-
 export const endUsers = pgTable("end_users", {
   id: uuid("id").primaryKey().defaultRandom(),
   organizationId: text("organization_id").notNull().references(() => organizations.id),
