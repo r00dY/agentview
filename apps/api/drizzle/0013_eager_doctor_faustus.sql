@@ -11,4 +11,5 @@ ALTER TABLE "agent_refs" ADD CONSTRAINT "agent_refs_organization_id_organization
 CREATE UNIQUE INDEX "agent_ref_version_agent_org_unique" ON "agent_refs" USING btree ("version","agent","organization_id");--> statement-breakpoint
 ALTER TABLE "runs" DROP COLUMN "version_id";--> statement-breakpoint
 DROP POLICY "versions_tenant_isolation" ON "agent_refs" CASCADE;--> statement-breakpoint
-CREATE POLICY "agent_refs_tenant_isolation" ON "agent_refs" AS PERMISSIVE FOR ALL TO public USING (organization_id = current_setting('app.organization_id', true)) WITH CHECK (organization_id = current_setting('app.organization_id', true));
+CREATE POLICY "agent_refs_tenant_isolation" ON "agent_refs" AS PERMISSIVE FOR ALL TO public USING (organization_id = current_setting('app.organization_id', true)) WITH CHECK (organization_id = current_setting('app.organization_id', true));--> statement-breakpoint
+ALTER TABLE "sessions" RENAME COLUMN "versions" TO "agent_refs";

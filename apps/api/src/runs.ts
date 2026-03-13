@@ -371,10 +371,10 @@ export async function createRun(
         format: agentConfig.protocol === 'ai-sdk' ? 'ai-sdk' : 'default',
         isProduction: environment.user === null,
         isDev: environment.user !== null,
-        lastRunVersion: lastRun?.agent?.version ?? null,
+        lastRunVersion: lastRun?.agentRef?.version ?? null,
         organizationId,
         sessionId: session.id,
-        existingSessionVersions: (session.versions as string[]) ?? [],
+        existingSessionVersions: (session.agentRefs as string[]) ?? [],
       });
       versionId = resolved.agentRefId;
     }

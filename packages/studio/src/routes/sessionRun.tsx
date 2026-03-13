@@ -95,7 +95,7 @@ function Component() {
                     <PropertyListItem>
                         <PropertyListTitle>Version</PropertyListTitle>
                         <PropertyListTextValue>
-                            {run.agent?.version ?? "-"}
+                            {run.agentRef?.version ?? "-"}
                         </PropertyListTextValue>
                     </PropertyListItem>
 
@@ -150,7 +150,7 @@ function Component() {
                         createdAt: run.createdAt,
                         finishedAt: run.finishedAt,
                         state: run.state,
-                        version: run.agent?.version,
+                        version: run.agentRef?.version,
                         request: run.responseData?.request,
                         response: run.responseData?.response,
                         metadata: run.metadata,

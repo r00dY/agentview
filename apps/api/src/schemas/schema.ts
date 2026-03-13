@@ -46,7 +46,7 @@ export const sessions = pgTable("sessions", {
   channelType: varchar("channel_type", { length: 64 }).notNull(),
   channelAddress: varchar("channel_address", { length: 255 }).notNull(),
   summary: text("summary"),
-  versions: jsonb("versions").$type<string[]>().default([]),
+  agentRefs: jsonb("agent_refs").$type<string[]>().default([]),
   channelThreadId: uuid("channel_thread_id").references(() => channelThreads.id, { onDelete: 'set null' }),
 }, (table) => [
   uniqueIndex('sessions_handle_org_unique').on(table.handleNumber, table.handleSuffix, table.organizationId),

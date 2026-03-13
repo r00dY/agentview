@@ -2208,8 +2208,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "versions": {
-          "name": "versions",
+        "agent_refs": {
+          "name": "agent_refs",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false,

@@ -20,8 +20,8 @@ export function getAllSessionItems<SessionT extends Session>(session: SessionT, 
 export function getVersions(session: Session) {
   const versions: string[] = [];
   for (const run of session.runs) {
-    if (run.agent?.version && !versions.includes(run.agent.version)) {
-      versions.push(run.agent.version);
+    if (run.agentRef?.version && !versions.includes(run.agentRef.version)) {
+      versions.push(run.agentRef.version);
     }
   }
   return versions;

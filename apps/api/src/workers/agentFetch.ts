@@ -190,7 +190,7 @@ async function processAgentFetch(run: Run) {
             format: agentConfig.protocol === 'ai-sdk' ? 'ai-sdk' : 'default',
             isProduction: session.user.space === 'production',
             isDev: session.user.space !== 'production',
-            lastRunVersion: lastPreviousRun?.agent?.version ?? null,
+            lastRunVersion: lastPreviousRun?.agentRef?.version ?? null,
             organizationId: run.organizationId,
             sessionId: run.sessionId,
           });

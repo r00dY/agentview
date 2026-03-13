@@ -103,13 +103,13 @@ export async function resolveAgentRef(tx: Transaction, opts: {
   } else {
     const currentSession = await tx.query.sessions.findFirst({
       where: eq(sessions.id, opts.sessionId),
-      columns: { versions: true },
+      columns: { agentRefs: true },
     });
-    existingVersions = (currentSession?.versions as string[]) ?? [];
+    existingVersions = (currentSession?.agentRefs as string[]) ?? [];
   }
   if (!existingVersions.includes(version)) {
     await tx.update(sessions).set({
-      versions: [...existingVersions, version],
+      agentRefs: [...existingVersions, version],
       updatedAt: new Date().toISOString(),
     }).where(eq(sessions.id, opts.sessionId));
   }

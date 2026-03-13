@@ -321,7 +321,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 
                     type CommentsThreadData = { comments: CommentMessage[], scoreConfigs: ScoreConfig[], target: InputTarget };
 
-                    const agentConfig = findAgentConfig(config, run.agent?.name);
+                    const agentConfig = findAgentConfig(config, run.agentRef?.name);
                     const runConfig = agentConfig ? findRunConfig(agentConfig, run.sessionItems[0].content) : undefined;
                     const runScoreConfigs = (runConfig?.scores ?? []) as ScoreConfig[]; // fixme: types should be automatic without cast
                     const runComments: CommentMessage[] = props.comments.filter((c) => c.runId === run.id && !c.channelMessageId && !c.sessionItemId);

@@ -808,7 +808,7 @@ function mapSessionRow(row: { sessions: typeof sessions.$inferSelect; end_users:
     user: row.end_users!,
     space: row.end_users!.space,
     userId: row.end_users!.id,
-    versions: row.sessions.versions ?? []
+    agentRefs: row.sessions.agentRefs ?? []
   };
 }
 

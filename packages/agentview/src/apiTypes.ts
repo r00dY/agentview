@@ -179,7 +179,7 @@ export const RunSchema = z.object({
   finishedAt: z.iso.date().nullable(),
   status: z.string(),
   failReason: z.any().nullable(),
-  agent: AgentRefSchema.nullable(),
+  agentRef: AgentRefSchema.nullable(),
   metadata: z.record(z.string(), z.any()).nullable(),
   sessionItems: z.array(SessionItemSchema),
   channelMessages: z.array(ChannelMessageSchema),
@@ -233,7 +233,7 @@ export const SessionBaseSchema = z.object({
   space: SpaceSchema, // this is actually user.space, but allows to "think user-less"
   state: z.any().nullable().optional(),
   summary: z.string().nullable(),
-  versions: z.array(z.string()),
+  agentRefs: z.array(z.string()),
 })
 
 export type SessionBase = z.infer<typeof SessionBaseSchema>

@@ -107,7 +107,7 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
     space: row.user.space,
     runs: row.runs.filter((run, index) => run.status === "in_progress" || run.status === "completed" || index === row.runs.length - 1).map(run => ({
       ...run,
-      agent: run.agentRef ? {
+      agentRef: run.agentRef ? {
         name: run.agentRef.agent,
         version: run.agentRef.version,
         format: run.agentRef.format,
@@ -119,7 +119,7 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
     })),
     summary: row.summary,
     state,
-    versions: row.versions ?? []
+    agentRefs: row.agentRefs ?? []
   } as Session;
 }
 
