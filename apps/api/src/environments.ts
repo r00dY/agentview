@@ -5,16 +5,16 @@ import { HTTPException } from "hono/http-exception";
 import { BaseConfigSchemaToZod } from "agentview/configUtils";
 import type { Environment } from "agentview/apiTypes";
 
-export type ProdEnv = {
-    type: 'prod'
-}
+// export type ProdEnv = {
+//     type: 'prod'
+// }
 
-export type DevEnv = {
-    type: 'dev',
-    memberId: string
-}
+// export type DevEnv = {
+//     type: 'dev',
+//     memberId: string
+// }
 
-export type Env = ProdEnv | DevEnv;
+// export type Env = ProdEnv | DevEnv;
 
 
 /**
@@ -22,42 +22,33 @@ export type Env = ProdEnv | DevEnv;
  * - userId = null: production config (shared across org)
  * - userId = string: user's development config
  */
-export async function getEnvironment(tx: Transaction, env: Env) { // envId is actually either null (production) or user id (user's dev environment). For now!
+export async function getEnvironment(tx: Transaction, envHandle?: string) { // envId is actually either null (production) or user id (user's dev environment). For now!
+  if (!envHandle) {
+    return undefined;
+  }
 
-    const environment = await tx.query.environments.findFirst({
-        columns: {
-          id: true,
-        //   userId: true,
-          createdAt: true,
-          config: true,
-        },
-        with: {
-          user: true,
-        },
-        where: env.type === 'prod' ? isNull(environments.userId) : eq(environments.userId, env.memberId),
-      });
+  const environment = await tx.query.environments.findFirst({
+    columns: {
+      id: true,
+      handle: true,
+      createdAt: true,
+      config: true,
+    },
+    with: {
+      user: true,
+    },
+    where: eq(environments.handle, envHandle),
+  });
 
-    return environment ?? undefined;
-  
-    // const configRows = await tx
-    //     .select()
-    //     .from(environments)
-    //     .where(env.type === 'prod' ? isNull(environments.userId) : eq(environments.userId, env.memberId))
-    //     .limit(1);
-
-    // if (configRows.length === 0) {
-    //     return undefined;
-    // }
-
-    // return configRows[0] ?? undefined;
+  return environment ?? undefined;
 }
 
-export async function requireEnvironment(tx: Transaction, env: Env) {
-    const environment = await getEnvironment(tx, env);
-    if (!environment) {
-        throw new HTTPException(404, { message: "Environment not found" });
-    }
-    return environment;
+export async function requireEnvironment(tx: Transaction, envHandle?: string) {
+  const environment = await getEnvironment(tx, envHandle);
+  if (!environment) {
+    throw new HTTPException(404, { message: "Environment not found" });
+  }
+  return environment;
 }
 
 export function getConfigFromEnvironment(environment: Environment) {

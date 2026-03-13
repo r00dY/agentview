@@ -239,11 +239,13 @@ export const inboxItems = pgTable('inbox_items', {
 
 export const environments = pgTable('environments', {
   id: uuid('id').primaryKey().defaultRandom(),
+  handle: varchar('handle', { length: 255 }).notNull(),
   organizationId: text("organization_id").notNull().references(() => organizations.id),
   userId: text("user_id").references(() => users.id, { onDelete: 'cascade' }), // NULL = production, non-NULL = user's dev environment
-  config: jsonb('value').notNull(),
+  config: jsonb('value'),
   createdAt: timestamp('created_at', { withTimezone: true, mode: "string" }).notNull().defaultNow(),
-}, (table) => [
+}, (table) => [   
+  unique('environments_org_handle_unique').on(table.organizationId, table.handle),
   unique('environments_org_user_unique').on(table.organizationId, table.userId).nullsNotDistinct(),
   createTenantPolicy('environments')
 ]);

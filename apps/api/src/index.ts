@@ -50,7 +50,7 @@ import { getAllSessionItems, getLastRun } from 'agentview/sessionUtils';
 import packageJson from '../package.json';
 import { equalJSON } from './equalJSON';
 import { getAllowedOrigin } from './getAllowedOrigin';
-import { getEnvironment, requireEnvironment, type Env } from './environments';
+import { getEnvironment, requireEnvironment } from './environments';
 import { isInboxItemUnread } from './inboxItems';
 import { initDb } from './initDb';
 import { requireValidInvitation } from './invitations';
@@ -62,7 +62,7 @@ import { findUser } from './users';
 import { randomBytes } from 'crypto';
 import { applyRunPatch, getRun, createRun, DEFAULT_IDLE_TIME, getRunInputContent } from './runs';
 import { parseMetadata } from './parseMetadata';
-import { authn, authnUser, authorize, requireMemberPrincipal, getMemberId, requireMemberId, getEnv, type PrivatePrincipal, type Principal, type MemberPrincipal, type ApiKeyPrincipal, type UserPrincipal } from './authMiddleware';
+import { authn, authnUser, authorize, requireMemberPrincipal, getMemberId, requireMemberId, type PrivatePrincipal, type Principal, type MemberPrincipal, type ApiKeyPrincipal, type UserPrincipal } from './authMiddleware';
 
 import { resolveTarget, resolveTargetWithObjects, targetFilter, type RunTarget, type SessionItemTarget, type Target, type TargetWithObjects } from './target';
 
@@ -133,23 +133,21 @@ app.on(["POST", "GET"], "/api/auth/*", (c) => {
 // CONFIG HELPERS
 
 
-async function getEnvironmentByPrincipal(tx: Transaction, principal: PrivatePrincipal): Promise<Awaited<ReturnType<typeof getEnvironment>> | undefined> {
-  const environment = await getEnvironment(tx, getEnv(principal));
+// async function getEnvironmentByPrincipal(tx: Transaction, principal: PrivatePrincipal): Promise<Awaited<ReturnType<typeof getEnvironment>> | undefined> {
+//   const environment = await getEnvironment(tx, getEnv(principal));
 
-  if (!environment) {
-    return undefined;
-  }
+//   if (!environment) {
+//     return undefined;
+//   }
 
-  return environment;
-}
+//   return environment;
+// }
 
 async function requireConfig(tx: Transaction, principal: PrivatePrincipal): Promise<BaseAgentViewConfig> {
-  let environment = await getEnvironmentByPrincipal(tx, principal);
-
-  if (!environment) {
-    throw new HTTPException(404, { message: "Environment not found" });
+  const environment = await requireEnvironment(tx, principal.env);
+  if (environment.config === null) {
+    throw new HTTPException(400, { message: "Environment has no config." });
   }
-
   return BaseConfigSchemaToZod.parse(environment.config)
 }
 
@@ -510,10 +508,7 @@ const usersPOSTRoute = createRoute({
   },
 })
 
-async function createUser(principal: PrivatePrincipal, space_?: Space | null, externalId?: string | null, email?: string | null) {
-  const env = getEnv(principal);
-  const space : Space = space_ ?? (env.type === 'prod' ? 'production' : 'playground'); // default space is set based on environment
-
+async function createUser(principal: PrivatePrincipal, space: Space, externalId?: string | null, email?: string | null) {
   await authorize(principal, { action: "end-user:create", space })
 
   return await withOrg(principal.organizationId, async (tx) => {
@@ -1350,13 +1345,16 @@ app.openapi(sessionsPOSTRoute, async (c) => {
         return principal.user;
       }
 
+      if (!body.space) {
+        throw new HTTPException(400, { message: "'space' is required" });
+      }
+
       return await createUser(principal, body.space, undefined);
     })()
 
     authorize(principal, { action: "end-user:update", user });
 
-    const env = getEnv(principal);
-    const environment = await requireEnvironment(tx, env);
+    const environment = await requireEnvironment(tx, principal.env);
 
     const newSession = await createSession(tx, {
       organizationId: principal.organizationId,
@@ -1640,8 +1638,7 @@ app.openapi(runsPOSTRoute, async (c) => {
     authorize(principal, { action: "end-user:update", user: session.user });
 
     const organizationId = principal.organizationId;
-    const env = getEnv(principal);
-    const environment = await requireEnvironment(tx, env);
+    const environment = await requireEnvironment(tx, principal.env);
 
     await createRun(tx, organizationId, environment, body);
 
@@ -1700,8 +1697,7 @@ app.openapi(runPATCHRoute, async (c) => {
       }
     }
 
-    const env = getEnv(principal);
-    const environment = await requireEnvironment(tx, env);
+    const environment = await requireEnvironment(tx, principal.env);
 
     await applyRunPatch(tx, run.id, environment, body);
 
@@ -2288,7 +2284,7 @@ app.openapi(environmentGETRoute, async (c) => {
   authorize(principal, { action: "environment:read" });
 
   return withOrg(principal.organizationId, async (tx) => {
-    const environment = await getEnvironmentByPrincipal(tx, principal);
+    const environment = await requireEnvironment(tx, principal.env);
     return c.json(environment ?? null, 200)
   })
 })
@@ -2321,30 +2317,25 @@ app.openapi(environmentPATCHRoute, async (c) => {
   }
 
   return withOrg(principal.organizationId, async (tx) => {
-    const environment = await getEnvironmentByPrincipal(tx, principal);
+    const environment = await requireEnvironment(tx, principal.env);
 
     // @ts-ignore
     if (environment && equalJSON(environment.config, data)) {
       return c.json(environment, 200)
     }
 
-    const env = getEnv(principal);
+    // Only update existing config for this user
+    await tx.update(environments)
+      .set({ config: data })
+      .where(
+        and(
+          eq(environments.id, environment.id)
+        )
+      );
 
-    // Upsert: insert or update existing config for this user
-    const [newEnvironment] = await tx.insert(environments).values({
-      organizationId: principal.organizationId,
-      userId: env.type === 'prod' ? null : env.memberId,
-      config: data,
-    })
-    .onConflictDoUpdate({
-      target: [environments.organizationId, environments.userId],
-      set: {
-        config: data,
-      }
-    })
-    .returning()
+    const updatedEnvironment = await requireEnvironment(tx, principal.env);
 
-    return c.json(newEnvironment, 200)
+    return c.json(updatedEnvironment, 200)
   })
 })
 

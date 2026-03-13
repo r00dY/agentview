@@ -32,7 +32,7 @@ async function verifyAndGetKey(bearer: string) {
 export type MemberPrincipal = {
   type: 'member',
   session: NonNullable<Awaited<ReturnType<(typeof getBetterAuthSession)>>>,
-  env: 'prod' | 'dev',
+  env?: string,
   role: string,
   organizationId: any,
   user?: User
@@ -40,6 +40,7 @@ export type MemberPrincipal = {
 
 export type ApiKeyPrincipal = {
   type: 'apiKey',
+  env?: string,
   apiKey: NonNullable<Awaited<ReturnType<typeof verifyAndGetKey>>>,
   role: string,
   organizationId: any,
@@ -48,6 +49,7 @@ export type ApiKeyPrincipal = {
 
 export type UserPrincipal = {
   type: 'user',
+  env?: string,
   user: User,
   organizationId: string
 }
@@ -110,20 +112,14 @@ export async function authn(headers: Headers): Promise<PrivatePrincipal> {
 
   // members (cookies)
   const memberSession = await auth.api.getSession({ headers })
+  const env  = headers.get('x-env');
 
   if (memberSession) {
     const organization = await requireOrganization(headers)
-
-    const envHeader  = headers.get('x-env') ?? 'dev';
-    if (!['prod', 'dev'].includes(envHeader)) {
-      throw new HTTPException(400, { message: "X-Env can be either 'prod' or 'dev'." });
-    }
-    const env = envHeader as 'prod' | 'dev';
-
     const role = await getRole(memberSession.user.id, organization.id)
     const user = userToken ? await requireUserByToken(organization.id, userToken) : undefined;
 
-    return { type: 'member', session: memberSession, user, role, organizationId: organization.id, env }
+    return { type: 'member', session: memberSession, user, role, organizationId: organization.id }
   }
 
   // API Keys
@@ -192,15 +188,15 @@ export function requireMemberId(principal: PrivatePrincipal) {
   return memberId;
 }
 
-export function getEnv(principal: PrivatePrincipal): Env {
-  if (principal.type === 'apiKey') {
-    return principal.apiKey.metadata?.env === 'prod' ? { type: 'prod' } : { type: 'dev', memberId: principal.apiKey.userId };
-  }
-  else if (principal.type === 'member') {
-    return principal.env === 'prod' ? { type: 'prod' } : { type: 'dev', memberId: principal.session.user.id };
-  }
-  throw new HTTPException(401, { message: "Unauthorized" });
-}
+// export function getEnv(principal: PrivatePrincipal): Env {
+//   if (principal.type === 'apiKey') {
+//     return principal.apiKey.metadata?.env === 'prod' ? { type: 'prod' } : { type: 'dev', memberId: principal.apiKey.userId };
+//   }
+//   else if (principal.type === 'member') {
+//     return principal.env === 'prod' ? { type: 'prod' } : { type: 'dev', memberId: principal.session.user.id };
+//   }
+//   throw new HTTPException(401, { message: "Unauthorized" });
+// }
 
 
 

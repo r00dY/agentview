@@ -10,6 +10,7 @@ import { requireValidInvitation } from "./invitations";
 import { getAllowedOrigin } from "./getAllowedOrigin";
 import { Resend } from 'resend';
 import { getWebAppUrl } from "./getWebAppUrl";
+import { environments } from "./schemas/schema";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -79,6 +80,21 @@ The AgentView Team`,
                 }
 
             },
+            organizationHooks: {
+                afterAcceptInvitation: async ({
+                    invitation,
+                    member,
+                    user,
+                    organization,
+                  }) => {
+                    await db__dangerous.insert(environments).values({
+                        handle: `dev:${user.id}`,
+                        userId: user.id,
+                        config: null,
+                        organizationId: organization.id,
+                    })   
+                  }
+            }
         })
     ],
     hooks: {
@@ -137,6 +153,7 @@ The AgentView Team`,
                     },
                     headers
                 })
+
 
                 // await db__dangerous.update(users).set({
                 //     image: image

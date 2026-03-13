@@ -2,7 +2,7 @@ import { db__dangerous } from '../db';
 import { withOrg } from '../withOrg';
 import { runs, sessions, channelMessages, environments, sessionItems } from '../schemas/schema';
 import { eq, and, inArray, sql, not, isNull } from 'drizzle-orm';
-import { getConfigFromEnvironment, getEnvironment, type Env } from '../environments';
+import { getConfigFromEnvironment } from '../environments';
 import { fetchSession } from '../sessions';
 import { callAgentAPI, AgentAPIError } from '../agentApi';
 import { callAgentAPIAISDK } from '../ai-sdk/agentApi';

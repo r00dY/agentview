@@ -1,0 +1,1 @@
+ALTER TABLE "environments" ALTER COLUMN "value" DROP NOT NULL;

@@ -31,7 +31,7 @@ export const UserCreateSchema = UserSchema.pick({
   externalId: true,
   email: true,
   space: true, // default -> playground
-}).partial()
+});
 
 export type UserCreate = z.infer<typeof UserCreateSchema>
 
