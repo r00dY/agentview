@@ -1,5 +1,5 @@
 import { eq, and } from 'drizzle-orm';
-import { versions, sessions } from './schemas/schema';
+import { agentRefs, sessions } from './schemas/schema';
 import { AgentViewError } from 'agentview/AgentViewError';
 import type { Transaction } from './types';
 
@@ -40,21 +40,22 @@ export function compareVersions(v1: ParsedVersion, v2: ParsedVersion): number {
 }
 
 /**
- * Validates, normalizes, and stores a version. Used by both the POST /api/runs
+ * Validates, normalizes, and stores an agent ref. Used by both the POST /api/runs
  * handler (client-provided version) and the worker (agent-provided version via SSE).
  *
- * Returns { versionId, version } for the caller to use (e.g. set on the run row).
+ * Returns { agentRefId, version, agent, format } for the caller to use (e.g. set on the run row).
  */
-export async function resolveVersion(tx: Transaction, opts: {
+export async function resolveAgentRef(tx: Transaction, opts: {
   versionString: string;
   agent: string;
+  format: 'default' | 'ai-sdk';
   isProduction: boolean;
   isDev: boolean;
   lastRunVersion: string | null;
   organizationId: string;
   sessionId: string;
   existingSessionVersions?: string[];
-}): Promise<{ versionId: string; version: string, agent: string }> {
+}): Promise<{ agentRefId: string; version: string; agent: string; format: 'default' | 'ai-sdk' }> {
   const parsedVersion = parseVersion(opts.versionString);
   if (!parsedVersion) {
     throw new AgentViewError("Invalid version number format. Should be like '1.2.3-xxx'", 422);
@@ -85,14 +86,15 @@ export async function resolveVersion(tx: Transaction, opts: {
 
   const version = versionToString(parsedVersion);
 
-  // Upsert version row
-  await tx.insert(versions).values({
+  // Upsert agent ref row
+  await tx.insert(agentRefs).values({
     organizationId: opts.organizationId,
     version,
     agent: opts.agent,
+    format: opts.format,
   }).onConflictDoNothing();
 
-  const [versionRow] = await tx.select().from(versions).where(and(eq(versions.version, version), eq(versions.agent, opts.agent))).limit(1);
+  const [agentRefRow] = await tx.select().from(agentRefs).where(and(eq(agentRefs.version, version), eq(agentRefs.agent, opts.agent))).limit(1);
 
   // Update session's versions array if new
   let existingVersions: string[];
@@ -112,5 +114,5 @@ export async function resolveVersion(tx: Transaction, opts: {
     }).where(eq(sessions.id, opts.sessionId));
   }
 
-  return { versionId: versionRow.id, version, agent: opts.agent };
+  return { agentRefId: agentRefRow.id, version, agent: opts.agent, format: opts.format };
 }

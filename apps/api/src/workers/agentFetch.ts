@@ -8,7 +8,7 @@ import { callAgentAPI, AgentAPIError } from '../agentApi';
 import { callAgentAPIAISDK } from '../ai-sdk/agentApi';
 import { BaseConfigSchemaToZod, findChannelConfig } from 'agentview/configUtils';
 import { applyRunPatch, getRun } from '../runs';
-import { resolveVersion } from '../versions';
+import { resolveAgentRef } from '../agentRefs';
 import type { RunBody } from 'agentview/apiTypes';
 import { createWorker } from './utils';
 
@@ -184,18 +184,19 @@ async function processAgentFetch(run: Run) {
         const lastPreviousRun = previousRuns[previousRuns.length - 1];
 
         await withOrg(run.organizationId, async (tx) => {
-          const { versionId } = await resolveVersion(tx, {
+          const { agentRefId } = await resolveAgentRef(tx, {
             versionString: event.data,
             agent: agentConfig.name,
+            format: agentConfig.protocol === 'ai-sdk' ? 'ai-sdk' : 'default',
             isProduction: session.user.space === 'production',
             isDev: session.user.space !== 'production',
-            lastRunVersion: lastPreviousRun?.version ?? null,
+            lastRunVersion: lastPreviousRun?.agent?.version ?? null,
             organizationId: run.organizationId,
             sessionId: run.sessionId,
           });
 
           await tx.update(runs).set({
-            versionId,
+            agentRefId,
             updatedAt: new Date().toISOString(),
           }).where(eq(runs.id, run.id));
         });

@@ -164,6 +164,14 @@ export type SessionItem = z.infer<typeof SessionItemSchema>
 
 
 
+export const AgentRefSchema = z.object({
+  name: z.string(),
+  version: z.string(),
+  format: z.enum(['default', 'ai-sdk']),
+})
+
+export type AgentRef = z.infer<typeof AgentRefSchema>
+
 export const RunSchema = z.object({
   id: z.string(),
   createdAt: z.iso.date(),
@@ -171,13 +179,11 @@ export const RunSchema = z.object({
   finishedAt: z.iso.date().nullable(),
   status: z.string(),
   failReason: z.any().nullable(),
-  version: z.string().nullable(),
-  agent: z.string().nullable(),
+  agent: AgentRefSchema.nullable(),
   metadata: z.record(z.string(), z.any()).nullable(),
   sessionItems: z.array(SessionItemSchema),
   channelMessages: z.array(ChannelMessageSchema),
   sessionId: z.string(), // potential bloat
-  // versionId: z.string().nullable(), // potential bloat
 })
 
 export const RunCreateSchema = z.object({

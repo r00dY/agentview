@@ -14,7 +14,7 @@ import { db__dangerous } from './db';
 import { extractMentions } from './extractMentions';
 import { body, response_data, response_error, response_no_content } from './hono_utils';
 import { isUUID } from './isUUID';
-import { channelMessages, commentMentions, commentMessageEdits, commentMessages, environments, endUsers, events, inboxItems, runs, scores, sessionItems, sessions, starredSessions, versions, webhookJobs } from './schemas/schema';
+import { channelMessages, commentMentions, commentMessageEdits, commentMessages, environments, endUsers, events, inboxItems, runs, scores, sessionItems, sessions, starredSessions, webhookJobs } from './schemas/schema';
 import { withOrg } from './withOrg';
 import { AgentViewError } from 'agentview/AgentViewError';
 import {

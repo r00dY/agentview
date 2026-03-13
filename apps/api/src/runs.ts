@@ -6,7 +6,7 @@ import type { BaseAgentConfig, BaseRunConfig } from 'agentview/configTypes';
 import { requireRunConfig, findItemConfig, findChannelConfig, requireAgentConfig } from 'agentview/configUtils';
 import { AgentViewError } from 'agentview/AgentViewError';
 import { parseMetadata } from './parseMetadata';
-import { resolveVersion } from './versions';
+import { resolveAgentRef } from './agentRefs';
 import { getLastRun } from 'agentview/sessionUtils';
 import { fetchSession } from './sessions';
 import { getConfigFromEnvironment } from './environments';
@@ -126,7 +126,7 @@ export async function getRun(tx: Transaction, runId: string) {
         orderBy: (sessionItem, { asc }) => [asc(sessionItem.sortOrder)],
         where: (sessionItem, { eq }) => eq(sessionItem.isState, false),
       },
-      version: true,
+      agentRef: true,
     },
   });
 
@@ -166,7 +166,7 @@ export async function applyRunPatch(
   if (body.items || body.metadata || body.state || body.status === 'completed') { // operations requiring run config
     const config = getConfigFromEnvironment(environment);
 
-    const agentName = run.version?.agent;
+    const agentName = run.agentRef?.agent;
     if (!agentName) {
       throw new AgentViewError("You're trying to update run items, metadata or state, but the run doesn't have an agent assigned yet.", 422);
     }
@@ -365,17 +365,18 @@ export async function createRun(
         throw new AgentViewError("In manual mode, version is required.", 422);
       }
 
-      const resolved = await resolveVersion(tx, {
+      const resolved = await resolveAgentRef(tx, {
         versionString: body.version!,
         agent: agentConfig.name,
+        format: agentConfig.protocol === 'ai-sdk' ? 'ai-sdk' : 'default',
         isProduction: environment.user === null,
         isDev: environment.user !== null,
-        lastRunVersion: lastRun?.version ?? null,
+        lastRunVersion: lastRun?.agent?.version ?? null,
         organizationId,
         sessionId: session.id,
         existingSessionVersions: (session.versions as string[]) ?? [],
       });
-      versionId = resolved.versionId;
+      versionId = resolved.agentRefId;
     }
 
     const inputItems = body.items![0];
@@ -412,7 +413,7 @@ export async function createRun(
     failReason,
     expiresAt,
     finishedAt,
-    versionId,
+    agentRefId: versionId,
     metadata,
     fetchStatus: manual ? null : 'pending',
     environmentId: manual ? null : environment.id,

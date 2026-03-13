@@ -1318,21 +1318,21 @@ describe('API', () => {
           await updateConfig()
           const session = await createSession()
           const run = await av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], version: "1.3.0" })
-          expect(run.version).toBe("1.3.0-dev")
+          expect(run.agent?.version).toBe("1.3.0-dev")
         })
 
         test("playground suffix can be overriden", async () => {
           await updateConfig()
           const session = await createSession()
           const run = await av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], version: "1.3.0-xxx" })
-          expect(run.version).toBe("1.3.0-xxx")
+          expect(run.agent?.version).toBe("1.3.0-xxx")
         })
 
         test("no suffix in production is no suffix", async () => {
           await updateConfig({ prod: true })
           const session = await createSession()
           const run = await avProd.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], version: "1.3.0" })
-          expect(run.version).toBe("1.3.0")
+          expect(run.agent?.version).toBe("1.3.0")
         })
 
         test("production can't have suffixed versions", async () => {
@@ -2383,12 +2383,12 @@ describe('API', () => {
       });
 
       expect(run.status).toBe("in_progress");
-      expect(run.version).toBeFalsy(); // version not set yet at creation time
+      expect(run.agent).toBeFalsy(); // agent ref not set yet at creation time
 
       // Wait for the worker to process the run
       const completedRun = await waitForRunStatus(session.id, run.id, ["completed"]);
       expect(completedRun.status).toBe("completed");
-      expect(completedRun.version).toBe("1.0.0-dev"); // dev suffix applied
+      expect(completedRun.agent?.version).toBe("1.0.0-dev"); // dev suffix applied
       // Should have 3 items: input + step + output
       expect(completedRun.sessionItems.length).toBe(3);
       expect(completedRun.sessionItems[0].content.type).toBe("message");
@@ -2714,7 +2714,7 @@ describe('API', () => {
 
       const completedRun = await waitForRunStatus(session.id, run.id, ["completed"]);
       expect(completedRun.status).toBe("completed");
-      expect(completedRun.version).toBe("1.0.0-dev");
+      expect(completedRun.agent?.version).toBe("1.0.0-dev");
       // Should have 2 items: input + text output
       expect(completedRun.sessionItems.length).toBe(2);
       expect(completedRun.sessionItems[0].content.type).toBe("message");
@@ -2832,7 +2832,7 @@ describe('API', () => {
       });
 
       const completedRun = await waitForRunStatus(session.id, run.id, ["completed"]);
-      expect(completedRun.version).toBe("2.5.0-dev");
+      expect(completedRun.agent?.version).toBe("2.5.0-dev");
     }, 30000);
 
     test("missing version header → run fails", async () => {

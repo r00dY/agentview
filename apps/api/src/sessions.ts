@@ -70,11 +70,11 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
           failReason: true,
           metadata: true,
           sessionId: true,
-          versionId: true,
+          agentRefId: true,
         },
         orderBy: (run, { asc }) => [asc(run.createdAt)],
         with: {
-          version: true,
+          agentRef: true,
           sessionItems: {
             orderBy: (sessionItem, { asc }) => [asc(sessionItem.sortOrder)],
             where: (sessionItem, { eq }) => eq(sessionItem.isState, false),
@@ -107,8 +107,11 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
     space: row.user.space,
     runs: row.runs.filter((run, index) => run.status === "in_progress" || run.status === "completed" || index === row.runs.length - 1).map(run => ({
       ...run,
-      version: run.version?.version,
-      agent: run.version?.agent,
+      agent: run.agentRef ? {
+        name: run.agentRef.agent,
+        version: run.agentRef.version,
+        format: run.agentRef.format,
+      } : null,
       sessionItems: run.sessionItems.map((item, index) => ({
         ...item,
         type: item.type ?? (index === 0 ? 'input' : 'step') // this condition is totally unimportant, just backward compat with nothing lol

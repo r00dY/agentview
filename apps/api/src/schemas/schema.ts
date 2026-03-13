@@ -64,7 +64,7 @@ export const runs = pgTable("runs", {
   expiresAt: timestamp("expires_at", { withTimezone: true, mode: "string" }),
   finishedAt: timestamp("finished_at", { withTimezone: true, mode: "string" }),
   sessionId: uuid("session_id").notNull().references(() => sessions.id, { onDelete: 'cascade' }),
-  versionId: uuid("version_id").references(() => versions.id), // version is nullable because when run is created, version is not yet created yet (no `run` was made)
+  agentRefId: uuid("agent_ref_id").references(() => agentRefs.id), // nullable because when run is created, agent ref is not yet known (auto-fetch provides it)
   status: varchar("status", { length: 255 }).notNull(),
   failReason: jsonb("fail_reason"),
   responseData: jsonb("response_data"),
@@ -97,15 +97,16 @@ export const sessionItems = pgTable("session_items", {
 //   channel_session_item_id: varchar({ length: 255 }),
 // }, (table) => [uniqueIndex('channel_session_item_unique').on(table.channel_id, table.channel_session_item_id)]);
 
-export const versions = pgTable("versions", {
+export const agentRefs = pgTable("agent_refs", {
   id: uuid("id").primaryKey().defaultRandom(),
   organizationId: text("organization_id").notNull().references(() => organizations.id),
   version: varchar("version", { length: 255 }).notNull(),
   agent: varchar("agent", { length: 255 }).notNull(),
+  format: varchar("format", { length: 24 }).notNull().$type<'default' | 'ai-sdk'>(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
-  uniqueIndex('version_agent_org_unique').on(table.version, table.agent, table.organizationId),
-  createTenantPolicy('versions'),
+  uniqueIndex('agent_ref_version_agent_org_unique').on(table.version, table.agent, table.organizationId),
+  createTenantPolicy('agent_refs'),
 ]);
 
 // Comment messages within sessions
@@ -319,7 +320,7 @@ export const endUserRelations = relations(endUsers, ({ many, one }) => ({
 //   sessionItems: many(sessionItems),
 // }));
 
-export const versionsRelations = relations(versions, ({ many }) => ({
+export const agentRefsRelations = relations(agentRefs, ({ many }) => ({
   runs: many(runs),
 }));
 
@@ -328,9 +329,9 @@ export const runRelations = relations(runs, ({ one, many }) => ({
     fields: [runs.sessionId],
     references: [sessions.id],
   }),
-  version: one(versions, {
-    fields: [runs.versionId],
-    references: [versions.id],
+  agentRef: one(agentRefs, {
+    fields: [runs.agentRefId],
+    references: [agentRefs.id],
   }),
   sessionItems: many(sessionItems),
   channelMessages: many(channelMessages),
@@ -585,7 +586,7 @@ export const schema = {
   // endUserAuthSessions,
   sessions,
   sessionItems,
-  versions,
+  agentRefs,
   runs,
   commentMessages,
   commentMentions,
@@ -604,7 +605,7 @@ export const schema = {
   // endUserAuthSessionsRelations,
   sessionRelations,
   endUserRelations,
-  versionsRelations,
+  agentRefsRelations,
   runRelations,
   sessionItemsRelations,
 
