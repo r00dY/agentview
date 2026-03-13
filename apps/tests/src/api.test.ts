@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'vitest'
-import { AgentView, PublicAgentView, configDefaults } from 'agentview'
+import { AgentView, configDefaults } from 'agentview'
 import type { User, Run, Session, SessionStreamEvent } from 'agentview';
 import { z } from 'zod';
 import { seedUsers } from './seedUsers';
@@ -310,27 +310,27 @@ describe('API', () => {
       describe("get me", () => {
 
         test("works for existing users", async () => {
-          const avPublic1 = new PublicAgentView({
+          const avPublic1 = new AgentView({
             userToken: initUser1.token
           })
-          const user1 = await avPublic1.getMe()
+          const user1 = await avPublic1.getUser()
           expect(user1).toBeDefined()
           expect(user1.externalId).toBe(EXTERNAL_ID_1)
 
-          const avPublic2 = new PublicAgentView({
+          const avPublic2 = new AgentView({
             userToken: initUser2.token
           })
-          const user2 = await avPublic2.getMe()
+          const user2 = await avPublic2.getUser()
           expect(user2).toBeDefined()
           expect(user2.externalId).toBe(EXTERNAL_ID_2)
         })
 
         test("fails for unknown key", async () => {
-          const avPublic1 = new PublicAgentView({
+          const avPublic1 = new AgentView({
             userToken: "xxx"
           })
 
-          await expect(avPublic1.getMe()).rejects.toThrowError(expect.objectContaining({
+          await expect(avPublic1.getUser()).rejects.toThrowError(expect.objectContaining({
             statusCode: 401,
             message: expect.any(String),
           }))
@@ -342,11 +342,11 @@ describe('API', () => {
           await av.updateEnvironment({ config: { agents: [{ name: "test" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
           const session = await av.createSession({ channel: "test", userId: initUser1.id})
 
-          const avPublic1 = new PublicAgentView({
+          const avPublic1 = new AgentView({
             userToken: initUser1.token
           })
 
-          const fetchedSession = await avPublic1.getSession({ id: session.id })
+          const fetchedSession = await avPublic1.getSession({ id: session.id })as Session;
           expect(fetchedSession).toMatchObject(session)
         })
 
@@ -354,7 +354,7 @@ describe('API', () => {
           await av.updateEnvironment({ config: { agents: [{ name: "test" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
           const session = await av.createSession({ channel: "test", userId: initUser1.id})
 
-          const avPublic2 = new PublicAgentView({
+          const avPublic2 = new AgentView({
             userToken: initUser2.token
           })
 
@@ -884,7 +884,7 @@ describe('API', () => {
       })
 
       test("[public api] works", async () => {
-        const avPublic1 = new PublicAgentView({
+        const avPublic1 = new AgentView({
           userToken: initUser1.token
         })
 
@@ -895,7 +895,7 @@ describe('API', () => {
         expect(user1FetchedSessions.pagination.totalCount).toBeGreaterThanOrEqual(USER_1_SESSIONS_COUNT)
 
 
-        const avPublic2 = new PublicAgentView({
+        const avPublic2 = new AgentView({
           userToken: initUser2.token
         })
 

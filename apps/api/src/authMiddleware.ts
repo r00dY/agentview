@@ -107,7 +107,7 @@ async function requireUserByToken(organizationId: string, userToken: string) {
 
 /** --------- AUTHENTICATION --------- */
 
-export async function authn(headers: Headers): Promise<PrivatePrincipal> {
+export async function getPrivatePrincipal(headers: Headers): Promise<PrivatePrincipal | undefined> {
   const userToken = extractUserToken(headers)
 
   // members (cookies)
@@ -140,11 +140,23 @@ export async function authn(headers: Headers): Promise<PrivatePrincipal> {
       return { type: 'apiKey', apiKey: key, user, role, organizationId: organization.id, env }
     }
   }
-
-  throw new HTTPException(401, { message: "Unauthorized" });
 }
 
-export async function authnUser(headers: Headers): Promise<UserPrincipal> {
+export async function authn(headers: Headers): Promise<PrivatePrincipal> {
+  const principal = await getPrivatePrincipal(headers);
+  if (!principal) {
+    throw new HTTPException(401, { message: "Unauthorized" });
+  }
+
+  return principal;
+}
+
+export async function authnAllowPublic(headers: Headers): Promise<Principal> {
+  const principal = await getPrivatePrincipal(headers);
+  if (principal) {
+    return principal;
+  }
+
   const userToken = extractUserToken(headers)
   const env  = headers.get('x-env') ?? undefined;
 

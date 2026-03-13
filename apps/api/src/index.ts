@@ -63,7 +63,7 @@ import { findUser } from './users';
 import { randomBytes } from 'crypto';
 import { applyRunPatch, getRun, createRun, DEFAULT_IDLE_TIME, getRunInputContent } from './runs';
 import { parseMetadata } from './parseMetadata';
-import { authn, authnUser, authorize, requireMemberPrincipal, type PrivatePrincipal, type Principal, type MemberPrincipal, type ApiKeyPrincipal, type UserPrincipal } from './authMiddleware';
+import { authn, authorize, requireMemberPrincipal, type PrivatePrincipal, type Principal, type MemberPrincipal, type ApiKeyPrincipal, type UserPrincipal, authnAllowPublic } from './authMiddleware';
 
 import { resolveTarget, resolveTargetWithObjects, targetFilter, type RunTarget, type SessionItemTarget, type Target, type TargetWithObjects } from './target';
 
@@ -586,7 +586,7 @@ const userMeRoute = createRoute({
 })
 
 app.openapi(userMeRoute, async (c) => {
-  const principal = await authn(c.req.raw.headers)
+  const principal = await authnAllowPublic(c.req.raw.headers)
   const user = principal.user;
 
   if (!user) {
@@ -597,24 +597,24 @@ app.openapi(userMeRoute, async (c) => {
   return c.json(user, 200);
 })
 
-const publicMeRoute = createRoute({
-  method: 'get',
-  path: '/api/public/me',
-  summary: 'Retrieve the current user',
-  tags: ['Public'],
-  responses: {
-    200: response_data(UserSchema),
-    404: response_error()
-  },
-})
+// const publicMeRoute = createRoute({
+//   method: 'get',
+//   path: '/api/public/me',
+//   summary: 'Retrieve the current user',
+//   tags: ['Public'],
+//   responses: {
+//     200: response_data(UserSchema),
+//     404: response_error()
+//   },
+// })
 
-app.openapi(publicMeRoute, async (c) => {
-  const principal = await authnUser(c.req.raw.headers)
-  const user = principal.user;
+// app.openapi(publicMeRoute, async (c) => {
+//   const principal = await authnUser(c.req.raw.headers)
+//   const user = principal.user;
 
-  await authorize(principal, { action: "end-user:read", user })
-  return c.json(user, 200);
-})
+//   await authorize(principal, { action: "end-user:read", user })
+//   return c.json(user, 200);
+// })
 
 const userGETRoute = createRoute({
   method: 'get',
@@ -894,32 +894,7 @@ const sessionsGETRoute = createRoute({
 })
 
 app.openapi(sessionsGETRoute, async (c) => {
-  const principal = await authn(c.req.raw.headers)
-  const params = c.req.valid("query");
-
-  return withOrg(principal.organizationId, async (tx) => {
-    const sessions = await getSessions(tx, params, principal)
-    return c.json(sessions, 200);
-  })
-})
-
-// public
-const publicSessionsGETRoute = createRoute({
-  method: 'get',
-  path: '/api/public/sessions',
-  summary: 'List sessions',
-  tags: ['Public'],
-  request: {
-    query: PublicSessionsGetQueryParamsSchema,
-  },
-  responses: {
-    200: response_data(SessionsPaginatedResponseSchema),
-    401: response_error(),
-  },
-})
-
-app.openapi(publicSessionsGETRoute, async (c) => {
-  const principal = await authnUser(c.req.raw.headers)
+  const principal = await authnAllowPublic(c.req.raw.headers)
   const params = c.req.valid("query");
 
   return withOrg(principal.organizationId, async (tx) => {
@@ -1053,7 +1028,7 @@ const sessionGETRoute = createRoute({
 })
 
 app.openapi(sessionGETRoute, async (c) => {
-  const principal = await authn(c.req.raw.headers)
+  const principal = await authnAllowPublic(c.req.raw.headers)
   const { session_id } = c.req.param()
 
   return withOrg(principal.organizationId, async (tx) => {
@@ -1188,35 +1163,7 @@ app.openapi(sessionScoresGETRoute, async (c) => {
 
 
 
-const publicSessionGETRoute = createRoute({
-  method: 'get',
-  path: '/api/public/sessions/{session_id}',
-  summary: 'Retrieve a session',
-  tags: ['Public'],
-  request: {
-    params: z.object({
-      session_id: z.string(),
-    }),
-  },
-  responses: {
-    200: response_data(SessionSchema),
-    404: response_error()
-  },
-})
 
-app.openapi(publicSessionGETRoute, async (c) => {
-  const principal = await authnUser(c.req.raw.headers)
-
-  const { session_id } = c.req.param()
-  requireUUID(session_id);
-
-  return withOrg(principal.organizationId, async (tx) => {
-    const session = await requireSession(tx, session_id);
-    authorize(principal, { action: "end-user:read", user: session.user });
-
-    return c.json(session, 200);
-  })
-})
 
 
 const sessionsPOSTRoute = createRoute({
