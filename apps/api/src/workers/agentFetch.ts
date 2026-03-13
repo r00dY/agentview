@@ -117,11 +117,13 @@ async function processAgentFetch(run: Run) {
           where: eq(sessions.id, run.sessionId),
           columns: { agentRefs: true },
         });
-        const existing = (currentSession?.agentRefs as string[]) ?? [];
+        const existing = (currentSession?.agentRefs as { name: string; version: string; format: string }[]) ?? [];
         const version = agentConfig.version;
-        if (!existing.includes(version)) {
+        const format = agentConfig.protocol === 'ai-sdk' ? 'ai-sdk' as const : 'default' as const;
+        const alreadyExists = existing.some(ref => ref.name === agentConfig.name && ref.version === version);
+        if (!alreadyExists) {
           await tx.update(sessions).set({
-            agentRefs: [...existing, version],
+            agentRefs: [...existing, { name: agentConfig.name, version, format }],
             updatedAt: new Date().toISOString(),
           }).where(eq(sessions.id, run.sessionId));
         }

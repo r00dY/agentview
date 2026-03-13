@@ -234,7 +234,7 @@ export const SessionBaseSchema = z.object({
   state: z.any().nullable().optional(),
   summary: z.string().nullable(),
   agentRef: AgentRefSchema.nullable(),
-  agentRefs: z.array(z.string()),
+  agentRefs: z.array(AgentRefSchema),
 })
 
 export type SessionBase = z.infer<typeof SessionBaseSchema>

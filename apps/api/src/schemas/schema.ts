@@ -46,7 +46,7 @@ export const sessions = pgTable("sessions", {
   channelType: varchar("channel_type", { length: 64 }).notNull(),
   channelAddress: varchar("channel_address", { length: 255 }).notNull(),
   summary: text("summary"),
-  agentRefs: jsonb("agent_refs").$type<string[]>().default([]),
+  agentRefs: jsonb("agent_refs").$type<{ name: string; version: string; format: string }[]>().default([]),
   agentRefId: uuid("agent_ref_id").references(() => agentRefs.id),
   initialState: jsonb("initial_state"),
   channelThreadId: uuid("channel_thread_id").references(() => channelThreads.id, { onDelete: 'set null' }),

@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { type ChannelMessage, type CommentMessage, type InputTarget, type Run, type Score, type Session, type SessionBase, type SessionItem, type SessionsStats, type SessionStats } from "agentview/apiTypes";
 import { findAgentConfig, findItemConfigById, findRunConfig, requireAgentConfig, requireChannelConfig } from "agentview/configUtils";
-import { enhanceSession, getActiveRuns, getAllSessionItems, getLastRun, getVersions } from "agentview/sessionUtils";
+import { enhanceSession, getActiveRuns, getAllSessionItems, getLastRun } from "agentview/sessionUtils";
 import type { AgentConfig, ChannelConfig, ScoreConfig, SessionItemConfig, SessionItemDisplayComponentProps } from "agentview/types";
 import { AlertCircleIcon, ChevronDown, CircleGauge, InfoIcon, Loader2, Lock, MessageCirclePlus, UsersIcon } from "lucide-react";
 import { useEffect, useLayoutEffect, useOptimistic, useRef, useState } from "react";
@@ -520,7 +520,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 
 function SessionDetails({ sessionBase, channelConfig }: { sessionBase: SessionBase, channelConfig: ChannelConfig }) {
     const { organization: { members } } = useSessionContext();
-    const versions = sessionBase.versions;
+    const agentRefs = sessionBase.agentRefs;
     const simulatedBy = members.find((member) => member.userId === sessionBase.user.createdBy);
 
     return (
@@ -556,12 +556,12 @@ function SessionDetails({ sessionBase, channelConfig }: { sessionBase: SessionBa
                 </PropertyListItem>
                 <PropertyListItem>
                     <PropertyListTitle>
-                        {versions.length > 1 ? "Versions" : "Version"}
+                        {agentRefs.length > 1 ? "Versions" : "Version"}
                     </PropertyListTitle>
                     <PropertyListTextValue>
-                        {versions.length === 0 && <span className="text-muted-foreground">-</span>}
-                        {versions.length > 0 && <div className="flex flex-row gap-1">{versions.map(version => {
-                            return <Pill key={version}>{version}</Pill>
+                        {agentRefs.length === 0 && <span className="text-muted-foreground">-</span>}
+                        {agentRefs.length > 0 && <div className="flex flex-row gap-1">{agentRefs.map(ref => {
+                            return <Pill key={`${ref.name}@${ref.version}`}>{ref.version}</Pill>
                         })}</div>}
                     </PropertyListTextValue>
                 </PropertyListItem>
