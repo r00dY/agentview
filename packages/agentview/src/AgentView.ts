@@ -55,16 +55,17 @@ export class AgentView {
 
   constructor(options?: AgentViewOptions) {
     // If custom headers are provided (browser mode), don't require apiKey
-    if (options?.headers) {
-      this.customHeaders = options.headers
-    } else {
-      const apiKey = options?.apiKey ?? process.env.AGENTVIEW_API_KEY
-      if (!apiKey) {
-        throw new Error("AgentView: Missing API Key. Set it either via apiKey property of AgentView constructor or via AGENTVIEW_API_KEY environment variable.")
-      }
-      this.apiKey = apiKey
-    }
-
+    // if (options?.headers) {
+    //   this.customHeaders = options.headers
+    // } else {
+    //   const apiKey = options?.apiKey ?? process.env.AGENTVIEW_API_KEY
+    //   if (!apiKey) {
+    //     throw new Error("AgentView: Missing API Key. Set it either via apiKey property of AgentView constructor or via AGENTVIEW_API_KEY environment variable.")
+    //   }
+    //   this.apiKey = apiKey
+    // }
+    
+    this.apiKey = options?.apiKey
     this.userToken = options?.userToken
     this.env = options?.env
   }
