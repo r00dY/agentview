@@ -3,14 +3,14 @@ import { agentRefs, sessions } from './schemas/schema';
 import { AgentViewError } from 'agentview/AgentViewError';
 import type { Transaction } from './types';
 
-export type ParsedVersion = {
+type ParsedVersion = {
   major: number;
   minor: number;
   patch: number;
   suffix?: string;
 };
 
-export function parseVersion(version: string): ParsedVersion | undefined {
+function parseVersion(version: string): ParsedVersion | undefined {
   // Accept version strings like '1.2.3', 'v1.2.3', '1', '1.2', possibly with suffixes like '-beta', '-alpha.1'
   // Normalize: '1' -> '1.0.0', '1.2' -> '1.2.0'
   const m = version.match(/^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-(.+))?$/);
@@ -26,11 +26,11 @@ export function parseVersion(version: string): ParsedVersion | undefined {
   return { major, minor, patch, ...(suffix ? { suffix } : {}) };
 }
 
-export function versionToString(version: ParsedVersion): string {
+function versionToString(version: ParsedVersion): string {
   return `${version.major}.${version.minor}.${version.patch}${version.suffix ? `-${version.suffix}` : ''}`;
 }
 
-export function compareVersions(v1: ParsedVersion, v2: ParsedVersion): number {
+function compareVersions(v1: ParsedVersion, v2: ParsedVersion): number {
   // Returns: -1 if v1 < v2, 0 if v1 === v2, 1 if v1 > v2
   // Note: Suffixes are ignored for comparison purposes
   if (v1.major !== v2.major) return v1.major < v2.major ? -1 : 1;
