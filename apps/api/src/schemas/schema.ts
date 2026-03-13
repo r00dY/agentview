@@ -579,8 +579,6 @@ export const schema = {
   // invitations,
   apikeys,
 
-  emails,
-
   endUsers,
   // endUserAuthSessions,
   sessions,
