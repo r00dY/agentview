@@ -11,7 +11,7 @@ import {
   type LoaderFunctionArgs,
   type RouteObject
 } from "react-router";
-import { useEffect } from "react";
+import { use, Suspense } from "react";
 
 import { ArrowLeft, Building2Icon, ChevronDown, ChevronUp, Database, LogOut, MessageCircle, PlusIcon, UserIcon, WrenchIcon } from "lucide-react";
 import { NotificationBadge } from "../components/internal/NotificationBadge";
@@ -69,9 +69,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const agent = getCurrentAgent(request);
   const env = getEnv();
 
-  agentview.updateEnvironment({ config }).catch(error => { // can easily run in background
-    console.warn("Error while updating remote config", error);
-  });
+  const envUpdate = agentview.updateEnvironment({ config });
 
   const organization = await getOrganizationCached();
   const member = organization.members.find(m => m.userId === session.user.id);
@@ -113,12 +111,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
     locale,
     listStats,
     agent,
-    organization
+    organization,
+    envUpdate
   };
 }
 
+function EnvUpdateWatcher({ promise }: { promise: Promise<unknown> }) {
+  use(promise);
+  return null;
+}
+
 function Component() {
-  const { me, organization, locale, listStats, agent } = useLoaderData<typeof loader>()
+  const { me, organization, locale, listStats, agent, envUpdate } = useLoaderData<typeof loader>()
   const location = useLocation();
   const submitForm = useSubmit();
 
@@ -163,6 +167,9 @@ function Component() {
   }
 
   return (<SessionContext.Provider value={{ me, organization, locale }}>
+    <Suspense fallback={null}>
+      <EnvUpdateWatcher promise={envUpdate} />
+    </Suspense>
 
     <SidebarProvider>
       <div className="flex h-screen bg-background w-full">
