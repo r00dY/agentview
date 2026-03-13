@@ -130,10 +130,6 @@ export async function createSession(tx: Transaction, params: {
   channelThreadId?: string | null;
   authorId?: string | null;
 }): Promise<Session> {
-
-  console.log(params.environment);
-  console.log(params.channelRef);
-
   const config = getConfigFromEnvironment(params.environment);
   const channelConfig = requireChannelConfig(config, params.channelRef);
 

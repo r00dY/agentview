@@ -6,7 +6,7 @@ import { withOrg } from './withOrg';
 import { members, organizations } from './schemas/auth-schema';
 import { findUser } from './users';
 import type { User, Space } from 'agentview/apiTypes';
-import type { Env } from './environments';
+import { requireEnvironment } from './environments';
 
 /** --------- TYPE INFERENCE HELPERS --------- */
 
@@ -112,14 +112,14 @@ export async function authn(headers: Headers): Promise<PrivatePrincipal> {
 
   // members (cookies)
   const memberSession = await auth.api.getSession({ headers })
-  const env  = headers.get('x-env');
+  const env  = headers.get('x-env') ?? undefined;
 
   if (memberSession) {
     const organization = await requireOrganization(headers)
     const role = await getRole(memberSession.user.id, organization.id)
     const user = userToken ? await requireUserByToken(organization.id, userToken) : undefined;
 
-    return { type: 'member', session: memberSession, user, role, organizationId: organization.id }
+    return { type: 'member', session: memberSession, user, role, organizationId: organization.id, env }
   }
 
   // API Keys
@@ -137,7 +137,7 @@ export async function authn(headers: Headers): Promise<PrivatePrincipal> {
       const role = await getRole(key.userId, organization.id)
       const user = userToken ? await requireUserByToken(organization.id, userToken) : undefined;
 
-      return { type: 'apiKey', apiKey: key, user, role, organizationId: organization.id }
+      return { type: 'apiKey', apiKey: key, user, role, organizationId: organization.id, env }
     }
   }
 
@@ -146,13 +146,14 @@ export async function authn(headers: Headers): Promise<PrivatePrincipal> {
 
 export async function authnUser(headers: Headers): Promise<UserPrincipal> {
   const userToken = extractUserToken(headers)
+  const env  = headers.get('x-env') ?? undefined;
 
   if (userToken) {
     const user = await db__dangerous.transaction(async tx => {
       return await findUser(tx, { token: userToken })
     })
     if (user) {
-      return { type: 'user', user, organizationId: user.organizationId }
+      return { type: 'user', user, organizationId: user.organizationId, env }
     }
   }
 
@@ -168,25 +169,24 @@ export function requireMemberPrincipal(principal: Principal) {
   throw new HTTPException(401, { message: "Unauthorized" });
 }
 
-export function getMemberId(principal: PrivatePrincipal) {
-  if (principal.type === 'member') {
-    return principal.session.user.id;
-  }
-  else if (principal.type === 'apiKey') {
-    if (principal.apiKey.metadata?.env !== 'prod') {
-      return principal.apiKey.userId;
-    }
-  }
-  return null;
-}
+// export function getMemberId(principal: PrivatePrincipal) {
+//   if (principal.type === 'member') {
+//     return principal.session.user.id;
+//   }
+//   else if (principal.type === 'apiKey') {
+//     if (principal.apiKey.metadata?.env !== 'prod') {
+//       return principal.apiKey.userId;
+//     }
+//   }
+//   return null;
+// }
 
-export function requireMemberId(principal: PrivatePrincipal) {
-  const memberId = getMemberId(principal);
-  if (!memberId) {
-    throw new HTTPException(401, { message: "Unauthorized" });
-  }
-  return memberId;
-}
+// export function requireMemberId(principal: PrivatePrincipal) {
+//   if (principal.type === 'member') {
+//     return principal.session.user.id;
+//   }
+//   throw new HTTPException(401, { message: "Unauthorized" });
+// }
 
 // export function getEnv(principal: PrivatePrincipal): Env {
 //   if (principal.type === 'apiKey') {
@@ -224,18 +224,17 @@ type Action = {
 }
 
 function validateIfEndUserWriteActionAllowed(principal: PrivatePrincipal, action: Action) {
-  const env = getEnv(principal);
-
   const endUserBelongsToProdSpace =
     (action.action === "end-user:create" && action.space === 'production') ||
     (action.action === "end-user:update" && action.user.space === 'production');
 
-  if (env.type === 'prod' || (env.type === 'dev' && !endUserBelongsToProdSpace)) {
-    return true;
+  if (endUserBelongsToProdSpace && principal.env !== 'production') {
+    throw new HTTPException(401, { message: "Production data can be only accessed with production environment." });
   }
 
-  throw new HTTPException(401, { message: "End user write action not allowed in dev environment for end users in production space." });
+  return true;
 }
+
 
 export function authorize(principal: Principal, action: Action) {
 

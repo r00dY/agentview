@@ -30,8 +30,9 @@ export type User = z.infer<typeof UserSchema>
 export const UserCreateSchema = UserSchema.pick({
   externalId: true,
   email: true,
-  space: true, // default -> playground
-});
+  space: true, // default based on env
+  createdBy: true,
+}).partial();
 
 export type UserCreate = z.infer<typeof UserCreateSchema>
 
@@ -96,6 +97,7 @@ export type CommentMessageCreate = z.infer<typeof CommentMessageCreateSchema>
 
 export const EnvironmentBaseSchema = z.object({
   id: z.string(),
+  handle: z.string(),
   createdAt: z.iso.date(),
   user: z.any()
 })
@@ -242,6 +244,7 @@ export const SessionCreateSchema = z.object({
   metadata: z.record(z.string(), z.any()).optional(),
   userId: z.string().optional(),
   space: SpaceSchema.optional(), // necessary if userId is not provided
+  createdBy: z.string().optional(), // necessary if userId is not provided
   summary: z.string().nullish(),
 })
 

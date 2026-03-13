@@ -27,8 +27,8 @@ describe('Channels', () => {
     mockServer = await createMockServer(AGENT_PORT)
 
     const result = await seedUsers(orgSlug)
-    av = new AgentView({ apiKey: result.apiKeyDev.key })
-    avProd = new AgentView({ apiKey: result.apiKeyProd.key })
+    av = new AgentView({ apiKey: result.apiKeyDev.key, env: `dev:bob@${orgSlug}.com` })
+    avProd = new AgentView({ apiKey: result.apiKeyProd.key, env: 'production' })
 
     const env = await avProd.updateEnvironment({
       config: {

@@ -11,6 +11,7 @@ import { getAllowedOrigin } from "./getAllowedOrigin";
 import { Resend } from 'resend';
 import { getWebAppUrl } from "./getWebAppUrl";
 import { environments } from "./schemas/schema";
+import { createEnvironment } from "./environments";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -81,19 +82,24 @@ The AgentView Team`,
 
             },
             organizationHooks: {
-                afterAcceptInvitation: async ({
-                    invitation,
-                    member,
+
+                afterCreateOrganization: async ({ organization }) => {
+                    await createEnvironment(organization.id, `production`, null);
+                },
+
+                afterAddMember: async ({
                     user,
                     organization,
-                  }) => {
-                    await db__dangerous.insert(environments).values({
-                        handle: `dev:${user.id}`,
-                        userId: user.id,
-                        config: null,
-                        organizationId: organization.id,
-                    })   
-                  }
+                }) => {
+                    await createEnvironment(organization.id, `dev:${user.email}`, user.id);
+                },
+
+                afterAcceptInvitation: async ({
+                    user,
+                    organization,
+                }) => {
+                    await createEnvironment(organization.id, `dev:${user.email}`, user.id);
+                },
             }
         })
     ],

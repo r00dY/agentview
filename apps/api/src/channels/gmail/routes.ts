@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { authn, authorize, requireMemberId } from '../../authMiddleware';
+import { authn, authorize, requireMemberPrincipal } from '../../authMiddleware';
 import { response_data, response_error } from '../../hono_utils';
 import type { EmailChannelProvider } from '../defineEmailChannel';
 import {
@@ -38,9 +38,9 @@ export function createGmailRoutes(gmail: EmailChannelProvider): OpenAPIHono {
   app.openapi(gmailAuthRoute, async (c) => {
     const principal = await authn(c.req.raw.headers);
     authorize(principal, { action: 'environment:write' });
-    const memberId = requireMemberId(principal);
+    const memberPrincipal = requireMemberPrincipal(principal);
 
-    const state = createOAuthState(principal.organizationId, memberId);
+    const state = createOAuthState(principal.organizationId, memberPrincipal.session.user.id);
     const client = createOAuth2Client();
 
     const url = client.generateAuthUrl({

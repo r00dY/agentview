@@ -4,6 +4,7 @@ import type { Transaction } from "./types";
 import { HTTPException } from "hono/http-exception";
 import { BaseConfigSchemaToZod } from "agentview/configUtils";
 import type { Environment } from "agentview/apiTypes";
+import { db__dangerous } from "./db";
 
 // export type ProdEnv = {
 //     type: 'prod'
@@ -53,4 +54,13 @@ export async function requireEnvironment(tx: Transaction, envHandle?: string) {
 
 export function getConfigFromEnvironment(environment: Environment) {
   return BaseConfigSchemaToZod.parse(environment.config)
+}
+
+export async function createEnvironment(orgId: string, envHandle: string, userId: string | null) {
+  await db__dangerous.insert(environments).values({
+    handle: envHandle,
+    organizationId: orgId,
+    userId: userId,
+    config: null,
+  })
 }

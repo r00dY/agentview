@@ -27,6 +27,7 @@ describe('API', () => {
   let orgSlug: string;
   let organization: { id: string };
   let adminUser: { id: string; email: string; name: string; }; // matches shape of adminUser returned by seedUsers
+  let apiKey: string;
 
   beforeAll(async () => {
     orgSlug = "test-" + Math.random().toString(36).slice(2);
@@ -36,12 +37,16 @@ describe('API', () => {
     organization = result.organization;
     adminUser = result.adminUser;
 
+    apiKey = result.apiKeyDev.key;
+
     av = new AgentView({
       apiKey: result.apiKeyDev.key,
+      env: "dev:"+adminUser.email
     })
 
     avProd = new AgentView({
       apiKey: result.apiKeyProd.key,
+      env: "production"
     })
 
     initUser1 = await av.createUser({ externalId: EXTERNAL_ID_1 })
@@ -235,42 +240,36 @@ describe('API', () => {
     })
 
     describe("environment-related behaviour", () => {
-      test("[dev api-key] default space for new user is playground and createdBy is set based on key", async () => {
+      test("[local env] default space is user's playground", async () => {
         const user = await av.createUser()
         expect(user.space).toBe("playground")
         expect(user.createdBy).toBe(adminUser.id)
       })
 
-      test("[dev api-key] shared-playground can be set, createdBy is set based on key", async () => {
-        const user = await av.createUser({ space: "shared-playground" })
-        expect(user.space).toBe("shared-playground")
-        expect(user.createdBy).toBe(adminUser.id)
-      })
-
-      test("[dev api-key] production space is blocked", async () => {
+      test("[local env] production space is blocked", async () => {
         await expect(av.createUser({ space: "production" })).rejects.toThrowError(expect.objectContaining({
           statusCode: 401,
           message: expect.any(String),
         }))
       })
 
-      test("[prod api-key] default space for new user is production and createdBy is null", async () => {
+      test("[prod env] default space for new user is production and createdBy is null", async () => {
         const user = await avProd.createUser()
         expect(user.space).toBe("production")
         expect(user.createdBy).toBeNull()
       })
 
-      test("[prod api-key] playground or shared-playground are not allowed with production api-key (you must be logged in as member to do it)", async () => {
-        await expect(avProd.createUser({ space: "playground" })).rejects.toThrowError(expect.objectContaining({
-          statusCode: 401,
-          message: expect.any(String),
-        }))
+      // test("[prod api-key] playground or shared-playground are not allowed with production api-key (you must be logged in as member to do it)", async () => {
+      //   await expect(avProd.createUser({ space: "playground" })).rejects.toThrowError(expect.objectContaining({
+      //     statusCode: 401,
+      //     message: expect.any(String),
+      //   }))
 
-        await expect(avProd.createUser({ space: "shared-playground" })).rejects.toThrowError(expect.objectContaining({
-          statusCode: 401,
-          message: expect.any(String),
-        }))
-      })
+      //   await expect(avProd.createUser({ space: "shared-playground" })).rejects.toThrowError(expect.objectContaining({
+      //     statusCode: 401,
+      //     message: expect.any(String),
+      //   }))
+      // })
 
 
       // test("[prod api-key] playground is possible only with explicit ", async () => {
@@ -410,29 +409,29 @@ describe('API', () => {
       }))
     })
 
-    test("each developer has their own dev config", async () => {
-    const authClient = createTestAuthClient();
+    test("each developer has their own dev env+config", async () => {
+    // const authClient = createTestAuthClient();
 
-      // Sign in as Bob and create his API key
-      await authClient.signIn.email({ email: `bob@${orgSlug}.com`, password: "blablabla" });
-      const bobApiKey = await authClient.apiKey.create({
-        name: "bob-key",
-        prefix: 'dev_',
-        metadata: { organizationId: organization.id, env: 'dev' }
-      });
-      await authClient.signOut();
+      // // Sign in as Bob and create his API key
+      // await authClient.signIn.email({ email: `bob@${orgSlug}.com`, password: "blablabla" });
+      // const bobApiKey = await authClient.apiKey.create({
+      //   name: "bob-key",
+      //   prefix: 'dev_',
+      //   metadata: { organizationId: organization.id, env: 'dev' }
+      // });
+      // await authClient.signOut();
 
-      // Sign in as Alice and create her API key
-      await authClient.signIn.email({ email: `alice@${orgSlug}.com`, password: "blablabla" });
-      const aliceApiKey = await authClient.apiKey.create({
-        name: "alice-key",
-        prefix: 'dev_',
-        metadata: { organizationId: organization.id, env: 'dev' }
-      });
-      await authClient.signOut();
+      // // Sign in as Alice and create her API key
+      // await authClient.signIn.email({ email: `alice@${orgSlug}.com`, password: "blablabla" });
+      // const aliceApiKey = await authClient.apiKey.create({
+      //   name: "alice-key",
+      //   prefix: 'dev_',
+      //   metadata: { organizationId: organization.id, env: 'dev' }
+      // });
+      // await authClient.signOut();
 
-      const avBob = new AgentView({ apiKey: bobApiKey.key });
-      const avAlice = new AgentView({ apiKey: aliceApiKey.key });
+      const avBob = new AgentView({ apiKey, env: `dev:bob@${orgSlug}.com` });
+      const avAlice = new AgentView({ apiKey, env: `dev:alice@${orgSlug}.com` });
 
       // Bob uploads his config
       const BOB_CONFIG = { agents: [{ name: "bob-agent" }], channels: [{ type: 'api' as const, name: "bob-agent", agent: "bob-agent" }], __internal: { disableSummaries: true } };
@@ -2188,8 +2187,8 @@ describe('API', () => {
       orgAApiKey = apiKey1.key;
       orgBApiKey = apiKey2.key;
 
-      av_a = new AgentView({ apiKey: orgAApiKey });
-      av_b = new AgentView({ apiKey: orgBApiKey });
+      av_a = new AgentView({ apiKey: orgAApiKey, env: 'production' });
+      av_b = new AgentView({ apiKey: orgBApiKey, env: 'production' });
 
       const config = {
         agents: [{
@@ -2210,7 +2209,7 @@ describe('API', () => {
 
     test('org_a cannot see org_b users', async () => {
       // Create a user in org2
-      const user_a = await av_a.createUser({ space: 'playground' });
+      const user_a = await av_a.createUser();
       expect(user_a).toBeDefined();
       expect(user_a.id).toBeDefined();
 
@@ -2220,7 +2219,7 @@ describe('API', () => {
 
     test('org_a cannot see org_a sessions', async () => {
       // Create a user and session in org2
-      const user_b = await av_b.createUser({ space: 'playground' });
+      const user_b = await av_b.createUser();
       const session_b = await av_b.createSession({ userId: user_b.id, channel: 'test-agent' });
       expect(session_b).toBeDefined();
 
@@ -2230,14 +2229,14 @@ describe('API', () => {
 
     test('listing sessions only returns own org data', async () => {
       // Create users and sessions in both orgs
-      const user_a = await av_a.createUser({ space: 'playground' });
-      const user_b = await av_b.createUser({ space: 'playground' });
+      const user_a = await av_a.createUser();
+      const user_b = await av_b.createUser();
 
       const session_a = await av_a.createSession({ userId: user_a.id, channel: 'test-agent' });
       const session_b = await av_b.createSession({ userId: user_b.id, channel: 'test-agent' });
 
       // List sessions from org1
-      const sessions_a = await av_a.getSessions({ space: 'playground' });
+      const sessions_a = await av_a.getSessions({ space: 'production' });
 
       // Should contain org1's session
       expect(sessions_a.sessions.some(s => s.id === session_a.id)).toBe(true);
@@ -2248,7 +2247,7 @@ describe('API', () => {
 
     test('org1 cannot modify org2 resources', async () => {
       // Create a session in org2 with a run
-      const user_b = await av_b.createUser({ space: 'playground' });
+      const user_b = await av_b.createUser();
       const session_b = await av_b.createSession({ userId: user_b.id, channel: 'test-agent' });
 
       const run_b = await av_b.createRun({

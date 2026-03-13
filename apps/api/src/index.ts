@@ -43,6 +43,7 @@ import {
   ScoreCreateSchema,
   InputTargetSchema,
   type ChannelRef,
+  type Environment,
 } from 'agentview/apiTypes';
 import { type BaseAgentViewConfig } from 'agentview/configTypes';
 import { BaseConfigSchema, BaseConfigSchemaToZod, findChannelConfig, findItemConfigById, requireChannelConfig, requireRunConfig } from 'agentview/configUtils';
@@ -62,12 +63,12 @@ import { findUser } from './users';
 import { randomBytes } from 'crypto';
 import { applyRunPatch, getRun, createRun, DEFAULT_IDLE_TIME, getRunInputContent } from './runs';
 import { parseMetadata } from './parseMetadata';
-import { authn, authnUser, authorize, requireMemberPrincipal, getMemberId, requireMemberId, type PrivatePrincipal, type Principal, type MemberPrincipal, type ApiKeyPrincipal, type UserPrincipal } from './authMiddleware';
+import { authn, authnUser, authorize, requireMemberPrincipal, type PrivatePrincipal, type Principal, type MemberPrincipal, type ApiKeyPrincipal, type UserPrincipal } from './authMiddleware';
 
 import { resolveTarget, resolveTargetWithObjects, targetFilter, type RunTarget, type SessionItemTarget, type Target, type TargetWithObjects } from './target';
 
 
-export { authn, authorize, requireMemberPrincipal, requireMemberId } from './authMiddleware';
+// export { authn, authorize, requireMemberPrincipal, requireMemberId } from './authMiddleware';
 
 
 await initDb();
@@ -186,15 +187,15 @@ function requireScoreConfig(scores: { name: string; schema: any }[] | undefined,
 // }
 
 /** Get the acting user object (id) from any private principal (member or dev API key) */
-function requireActingUser(principal: PrivatePrincipal): BetterAuthUser {
-  const memberId = requireMemberId(principal);
-  // For member principal, we have the full user object
-  if (principal.type === 'member') {
-    return principal.session.user;
-  }
-  // For API key principal, construct a minimal user-like object
-  return { id: memberId } as BetterAuthUser;
-}
+// function requireActingUser(principal: PrivatePrincipal): BetterAuthUser {
+//   const memberId = requireMemberId(principal);
+//   // For member principal, we have the full user object
+//   if (principal.type === 'member') {
+//     return principal.session.user;
+//   }
+//   // For API key principal, construct a minimal user-like object
+//   return { id: memberId } as BetterAuthUser;
+// }
 
 // DATA HELPERS
 
@@ -253,8 +254,8 @@ async function requireCommentMessage(tx: Transaction, commentId: string) {
   return comment
 }
 
-function requireCommentOwnership(comment: { userId: string }, user: BetterAuthUser) {
-  if (comment.userId !== user.id) {
+function requireCommentOwnership(comment: { userId: string }, memberId: string) {
+  if (comment.userId !== memberId) {
     throw new HTTPException(401, { message: "You can only edit your own comments." });
   }
 }
@@ -266,7 +267,7 @@ function requireCommentOwnership(comment: { userId: string }, user: BetterAuthUs
 async function createComment(
   tx: Transaction,
   target: Target,
-  user: BetterAuthUser,
+  memberId: string,
   content: string | null,
   organizationId: string,
 ) {
@@ -275,7 +276,7 @@ async function createComment(
     organizationId,
     ...target.ids,
     // ...commentTargetColumns(target),
-    userId: user.id,
+    userId: memberId,
     content,
   }).returning();
 
@@ -302,7 +303,7 @@ async function createComment(
   const [event] = await tx.insert(events).values({
     organizationId,
     type: 'comment_created',
-    authorId: user.id,
+    authorId: memberId,
     payload: {
       comment_id: newMessage.id,
       has_comment: content ? true : false,
@@ -403,21 +404,21 @@ async function updateComment(
 async function deleteComment(
   tx: Transaction,
   commentId: any,
-  user: BetterAuthUser,
+  memberId: string,
   organizationId: string,
 ): Promise<void> {
   await tx.delete(commentMentions).where(eq(commentMentions.commentMessageId, commentId));
   await tx.delete(scores).where(eq(scores.commentId, commentId));
   await tx.update(commentMessages).set({
     deletedAt: new Date().toISOString(),
-    deletedBy: user.id
+    deletedBy: memberId
   }).where(eq(commentMessages.id, commentId));
 
   // Emit event
   const [event] = await tx.insert(events).values({
     organizationId,
     type: 'comment_deleted',
-    authorId: user.id,
+    authorId: memberId,
     payload: {
       comment_id: commentId
     }
@@ -508,7 +509,33 @@ const usersPOSTRoute = createRoute({
   },
 })
 
-async function createUser(principal: PrivatePrincipal, space: Space, externalId?: string | null, email?: string | null) {
+function getDefaultSpaceFromEnvironment(environment: Environment) : { space: Space, createdBy: string | null } {
+  if (environment.handle === 'production') {
+    return {
+      space: 'production',
+      createdBy: null,
+    }
+  }
+  else if (environment.handle.startsWith('dev:')) {
+    return {
+      space: 'playground',
+      createdBy: environment.user!.id as string,
+    }
+  }
+  else {
+    throw new AgentViewError('Invalid environment handle', 400)
+  }
+}
+
+async function createUser(principal: PrivatePrincipal, space_: Space | undefined | null, createdBy_: string | null | undefined, externalId?: string | null, email?: string | null) {
+  const environment = await withOrg(principal.organizationId, async (tx) => { return await requireEnvironment(tx, principal.env) })
+
+  if (space_ && space_ === 'playground' && createdBy_ !== null) {
+    throw new AgentViewError('Users in playground space must have "createdBy" set.', 400)
+  }
+
+  const { space, createdBy } = space_ ? { space: space_, createdBy: createdBy_ ?? null } : getDefaultSpaceFromEnvironment(environment);
+
   await authorize(principal, { action: "end-user:create", space })
 
   return await withOrg(principal.organizationId, async (tx) => {
@@ -519,7 +546,6 @@ async function createUser(principal: PrivatePrincipal, space: Space, externalId?
       }
     }
   
-    const createdBy = getMemberId(principal);
     if (space === 'production' && createdBy !== null) { // sanity check
       throw new AgentViewError('Users in production space can be created only with production api key.', 401)
     }
@@ -543,7 +569,7 @@ async function createUser(principal: PrivatePrincipal, space: Space, externalId?
 app.openapi(usersPOSTRoute, async (c) => {
   const principal = await authn(c.req.raw.headers)
   const body = await c.req.valid('json')
-  const newUser = await createUser(principal, body.space, body.externalId, body.email);
+  const newUser = await createUser(principal, body.space, body.createdBy, body.externalId, body.email);
   return c.json(newUser, 201);
 })
 
@@ -1161,121 +1187,6 @@ app.openapi(sessionScoresGETRoute, async (c) => {
 })
 
 
-// // Star a session
-// const sessionStarPUTRoute = createRoute({
-//   method: 'put',
-//   path: '/api/sessions/{session_id}/star',
-//   summary: 'Star a session',
-//   tags: ['Sessions'],
-//   request: {
-//     params: z.object({
-//       session_id: z.string(),
-//     }),
-//   },
-//   responses: {
-//     200: response_data(z.object({ starred: z.boolean() })),
-//     401: response_error(),
-//     404: response_error(),
-//   },
-// })
-
-// app.openapi(sessionStarPUTRoute, async (c) => {
-//   const principal = await authn(c.req.raw.headers)
-//   const { session_id } = c.req.param()
-
-//   const memberId = requireMemberId(principal);
-
-//   return withOrg(principal.organizationId, async (tx) => {
-//     const session = await requireSession(tx, session_id);
-//     authorize(principal, { action: "end-user:read", user: session.user });
-
-//     await tx.insert(starredSessions).values({
-//       organizationId: (principal as PrivatePrincipal).organizationId,
-//       userId: memberId,
-//       sessionId: session_id,
-//     }).onConflictDoNothing();
-
-//     return c.json({ starred: true }, 200);
-//   })
-// })
-
-// // Unstar a session
-// const sessionStarDELETERoute = createRoute({
-//   method: 'delete',
-//   path: '/api/sessions/{session_id}/star',
-//   summary: 'Unstar a session',
-//   tags: ['Sessions'],
-//   request: {
-//     params: z.object({
-//       session_id: z.string(),
-//     }),
-//   },
-//   responses: {
-//     200: response_data(z.object({ starred: z.boolean() })),
-//     401: response_error(),
-//     404: response_error(),
-//   },
-// })
-
-// app.openapi(sessionStarDELETERoute, async (c) => {
-//   const principal = await authn(c.req.raw.headers)
-//   const { session_id } = c.req.param()
-
-//   const memberId = requireMemberId(principal);
-
-//   return withOrg(principal.organizationId, async (tx) => {
-//     const session = await requireSession(tx, session_id);
-//     authorize(principal, { action: "end-user:read", user: session.user });
-
-//     await tx.delete(starredSessions).where(
-//       and(
-//         eq(starredSessions.userId, memberId),
-//         eq(starredSessions.sessionId, session_id)
-//       )
-//     );
-
-//     return c.json({ starred: false }, 200);
-//   })
-// })
-
-// // Check if session is starred
-// const sessionStarGETRoute = createRoute({
-//   method: 'get',
-//   path: '/api/sessions/{session_id}/star',
-//   summary: 'Get star status',
-//   tags: ['Sessions'],
-//   request: {
-//     params: z.object({
-//       session_id: z.string(),
-//     }),
-//   },
-//   responses: {
-//     200: response_data(z.object({ starred: z.boolean() })),
-//     401: response_error(),
-//     404: response_error(),
-//   },
-// })
-
-// app.openapi(sessionStarGETRoute, async (c) => {
-//   const principal = await authn(c.req.raw.headers)
-//   const { session_id } = c.req.param()
-
-//   const memberId = requireMemberId(principal);
-
-//   return withOrg(principal.organizationId, async (tx) => {
-//     const session = await requireSession(tx, session_id);
-//     authorize(principal, { action: "end-user:read", user: session.user });
-
-//     const star = await tx.query.starredSessions.findFirst({
-//       where: and(
-//         eq(starredSessions.userId, memberId),
-//         eq(starredSessions.sessionId, session_id)
-//       )
-//     });
-
-//     return c.json({ starred: !!star }, 200);
-//   })
-// })
 
 const publicSessionGETRoute = createRoute({
   method: 'get',
@@ -1326,6 +1237,8 @@ app.openapi(sessionsPOSTRoute, async (c) => {
   const principal = await authn(c.req.raw.headers)
   const body = await c.req.valid('json')
 
+  const authorId = principal.type === 'member' ? principal.session.user.id : null;
+
   return withOrg(principal.organizationId, async (tx) => {
     const config = await requireConfig(tx, principal)
 
@@ -1345,11 +1258,7 @@ app.openapi(sessionsPOSTRoute, async (c) => {
         return principal.user;
       }
 
-      if (!body.space) {
-        throw new HTTPException(400, { message: "'space' is required" });
-      }
-
-      return await createUser(principal, body.space, undefined);
+      return await createUser(principal, body.space, body.createdBy, undefined);
     })()
 
     authorize(principal, { action: "end-user:update", user });
@@ -1363,7 +1272,7 @@ app.openapi(sessionsPOSTRoute, async (c) => {
       userId: user.id,
       metadata: body.metadata,
       summary: body.summary,
-      authorId: getMemberId(principal),
+      authorId,
     });
 
     return c.json(newSession, 201);
@@ -1924,6 +1833,19 @@ app.openapi(runKeepAliveRoute, async (c) => {
 
 /* --------- FLAT COMMENTS API --------- */
 
+function getMemberIdBasedOnPrincipal(principal: Principal) { // we use it only for comments, and mostly for testing for now
+  if (principal.type === 'member') {
+    return principal.session.user.id;
+  }
+  else if (principal.type === 'apiKey') {
+    return principal.apiKey.userId;
+  }
+  else {
+    throw new HTTPException(401, { message: "Unauthorized" });
+  }
+}
+
+
 const CommentCreateBodySchema = InputTargetSchema.extend({
   content: z.string(),
 })
@@ -1947,12 +1869,12 @@ const commentsPOSTRoute = createRoute({
 
 app.openapi(commentsPOSTRoute, async (c) => {
   const principal = await authn(c.req.raw.headers)
-  const actingUser = requireActingUser(principal);
+  const memberId = getMemberIdBasedOnPrincipal(principal);
   const body = await c.req.valid('json')
 
   return withOrg(principal.organizationId, async (tx) => {
     const target = await resolveTarget(tx, body);
-    await createComment(tx, target, actingUser, body.content ?? null, principal.organizationId);
+    await createComment(tx, target, memberId, body.content ?? null, principal.organizationId);
     return c.json({}, 201);
   })
 })
@@ -1980,14 +1902,14 @@ const commentsPUTRoute = createRoute({
 
 app.openapi(commentsPUTRoute, async (c) => {
   const principal = await authn(c.req.raw.headers)
-  const actingUser = requireActingUser(principal);
+  const memberId = getMemberIdBasedOnPrincipal(principal);
 
   const { commentId } = c.req.param()
   const body = await c.req.valid('json')
 
   return withOrg(principal.organizationId, async (tx) => {
     const commentMessage = await requireCommentMessage(tx, commentId);
-    requireCommentOwnership(commentMessage, actingUser);
+    requireCommentOwnership(commentMessage, memberId);
 
     try {
       await updateComment(tx, commentMessage, body.content, principal.organizationId);
@@ -2020,15 +1942,15 @@ const commentsDELETERoute = createRoute({
 
 app.openapi(commentsDELETERoute, async (c) => {
   const principal = await authn(c.req.raw.headers)
-  const actingUser = requireActingUser(principal);
+  const memberId = getMemberIdBasedOnPrincipal(principal);
 
   const { commentId } = c.req.param()
 
   return withOrg(principal.organizationId, async (tx) => {
     const commentMessage = await requireCommentMessage(tx, commentId);
-    requireCommentOwnership(commentMessage, actingUser);
+    requireCommentOwnership(commentMessage, memberId);
 
-    await deleteComment(tx, commentMessage.id, actingUser, principal.organizationId);
+    await deleteComment(tx, commentMessage.id, memberId, principal.organizationId);
     return c.json({}, 200);
   })
 })
@@ -2078,7 +2000,7 @@ const scoresPATCHRoute = createRoute({
 
 app.openapi(scoresPATCHRoute, async (c) => {
   const principal = await authn(c.req.raw.headers)
-  const actingUser = requireActingUser(principal);
+  const memberId = getMemberIdBasedOnPrincipal(principal);
 
   const body = await c.req.valid('json');
   // const target = parseScoreTarget(body);
@@ -2120,7 +2042,7 @@ app.openapi(scoresPATCHRoute, async (c) => {
         where: and(
           targetFilter(scores, target),
           eq(scores.name, name),
-          eq(scores.createdBy, actingUser.id),
+          eq(scores.createdBy, memberId),
           isNull(scores.deletedAt)
         )
       });
@@ -2128,7 +2050,7 @@ app.openapi(scoresPATCHRoute, async (c) => {
       // delete
       if (value === null || value === undefined) {
         if (existingScore) {
-          await deleteComment(tx, existingScore.commentId, actingUser, principal.organizationId);
+          await deleteComment(tx, existingScore.commentId, memberId, principal.organizationId);
           await tx.delete(scores)
             .where(eq(scores.id, existingScore.id));
         }
@@ -2154,7 +2076,7 @@ app.openapi(scoresPATCHRoute, async (c) => {
         }
         // create
         else {
-          const commentMessage = await createComment(tx, target, actingUser, null, principal.organizationId);
+          const commentMessage = await createComment(tx, target, memberId, null, principal.organizationId);
 
           await tx.insert(scores).values({
             organizationId: principal.organizationId,
@@ -2162,7 +2084,7 @@ app.openapi(scoresPATCHRoute, async (c) => {
             name,
             value,
             commentId: commentMessage.id,
-            createdBy: actingUser.id,
+            createdBy: memberId,
           });
         }
       }

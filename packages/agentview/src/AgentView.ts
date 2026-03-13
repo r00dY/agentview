@@ -38,6 +38,7 @@ import { parseSSE } from './parseSSE.js'
 export interface AgentViewOptions {
   apiKey?: string
   userToken?: string
+  env?: string
   headers?: HeadersInit | (() => HeadersInit)
 }
 
@@ -50,6 +51,7 @@ export class AgentView {
   private userToken?: string
   private customHeaders?: HeadersInit | (() => HeadersInit)
   private credentials?: RequestCredentials
+  private env?: string
 
   constructor(options?: AgentViewOptions) {
     // If custom headers are provided (browser mode), don't require apiKey
@@ -64,6 +66,7 @@ export class AgentView {
     }
 
     this.userToken = options?.userToken
+    this.env = options?.env
   }
 
   private getHeaders(): Record<string, string> {
@@ -71,14 +74,19 @@ export class AgentView {
       'Content-Type': 'application/json',
     }
 
+    headers['Authorization'] = `Bearer ${this.apiKey}`
+
+    if (this.env) {
+      headers['X-Env'] = this.env
+    }
+
+    if (this.userToken) {
+      headers['X-User-Token'] = this.userToken
+    }
+
     if (this.customHeaders) {
       const customHeaders = typeof this.customHeaders === 'function' ? this.customHeaders() : this.customHeaders
       Object.assign(headers, customHeaders)
-    } else {
-      if (this.userToken) {
-        headers['X-User-Token'] = this.userToken
-      }
-      headers['Authorization'] = `Bearer ${this.apiKey}`
     }
 
     return headers
@@ -244,6 +252,7 @@ export class AgentView {
     return new AgentView({
       apiKey: this.apiKey,
       userToken,
+      env: this.env,
       headers: this.customHeaders,
     })
   }
