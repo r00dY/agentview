@@ -73,7 +73,7 @@ describe('API', () => {
     }))
   }
 
-  const updateConfig = async (options: { strictMatching?: boolean, runMetadata?: Record<string, z.ZodType>, allowUnknownMetadata?: boolean, validateSteps?: boolean, prod?: boolean, itemScores?: { name: string, schema: z.ZodType }[], runScores?: { name: string, schema: z.ZodType }[] } = {}) => {
+  const updateConfig = async (options: { strictMatching?: boolean, runMetadata?: Record<string, z.ZodType>, allowUnknownMetadata?: boolean, validateSteps?: boolean, prod?: boolean, itemScores?: { name: string, schema: z.ZodType }[], runScores?: { name: string, schema: z.ZodType }[], version?: string } = {}) => {
 
     let inputSchema = z.looseObject({ type: z.literal("message"), role: z.literal("user"), content: z.string() })
     let stepSchema = z.looseObject({ type: z.literal("reasoning"), content: z.string() })
@@ -92,7 +92,7 @@ describe('API', () => {
       agents: [
         {
           name: "test",
-          version: "1.0.0",
+          version: options.version ?? "1.0.0",
           runs: [
             {
               input: { schema: inputSchema },
@@ -1289,6 +1289,82 @@ describe('API', () => {
           message: expect.any(String),
         }))
       })
+
+      // VERSIONING
+
+      describe("versioning", () => {
+        test("incorrect version format in config fails at session creation", async () => {
+          await updateConfig({ version: "xxx" })
+          await expectToFail(av.createSession({ agent: "test", userId: initUser1.id }), 422)
+
+          await updateConfig({ version: "blah.blah.blah" })
+          await expectToFail(av.createSession({ agent: "test", userId: initUser1.id }), 422)
+        })
+
+        test("compatibility enforced across config version changes", async () => {
+          await updateConfig({ version: "1.2" })
+          const session = await createSession()
+
+          await av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], status: "completed" }) // 1.2 -> ok
+
+          await updateConfig({ version: "1.2.3" })
+          await av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], status: "completed" }) // same major, higher -> ok
+
+          await updateConfig({ version: "1.2.4" })
+          await av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], status: "completed" }) // higher patch -> ok
+
+          await updateConfig({ version: "1.3.0" })
+          await av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], status: "completed" }) // higher minor -> ok
+
+          await updateConfig({ version: "1.2.2" })
+          await expectToFail(av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput] }), 422) // smaller patch fails
+
+          await updateConfig({ version: "2.0.0" })
+          await expectToFail(av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput] }), 422) // different major fails
+
+          // suffixes
+          await updateConfig({ version: "1.3.3" })
+          await av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], status: "completed" })
+
+          await updateConfig({ version: "1.3.3-dev" })
+          await av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], status: "completed" })
+
+          await updateConfig({ version: "1.3.3-xxx" })
+          await av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], status: "completed" })
+
+          await updateConfig({ version: "1.3.4" })
+          await av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], status: "completed" })
+
+          await updateConfig({ version: "1.3.4-local" })
+          await av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], status: "completed" })
+
+          await updateConfig({ version: "1.3.3-local" })
+          await expectToFail(av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput] }), 422) // smaller patch fails even with suffix
+
+          await updateConfig({ version: "1.3.3-xxx" })
+          await expectToFail(av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput] }), 422) // smaller patch with different suffix fails
+
+          await updateConfig({ version: "2.0.0" })
+          await expectToFail(av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput] }), 422) // different major fails
+
+          await updateConfig({ version: "2.0.0-dev" })
+          await expectToFail(av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput] }), 422) // different major with suffix fails
+        })
+
+        test("version stored as-is", async () => {
+          await updateConfig({ version: "1.3.0" })
+          const session = await createSession()
+          const run = await av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput] })
+          expect(run.agentRef?.version).toBe("1.3.0")
+        })
+
+        test("suffixed version stored as-is", async () => {
+          await updateConfig({ version: "1.3.0-xxx" })
+          const session = await createSession()
+          const run = await av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput] })
+          expect(run.agentRef?.version).toBe("1.3.0-xxx")
+        })
+      });
 
       // METADATA
 
