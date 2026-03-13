@@ -55,12 +55,6 @@ export async function* callAgentAPI(body: RunBody, url: string, signal?: AbortSi
       data: responseData
     }
 
-    // Yield version from header (before any stream events)
-    const versionHeader = response.headers.get('x-agentview-version');
-    if (versionHeader) {
-      yield { name: 'version', data: versionHeader };
-    }
-
     if (!response.ok) {
       const content = tryParseJSON(await response.text());
       responseData.response.body = content;

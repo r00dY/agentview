@@ -46,7 +46,7 @@ import {
   type Environment,
 } from 'agentview/apiTypes';
 import { type BaseAgentViewConfig } from 'agentview/configTypes';
-import { BaseConfigSchema, BaseConfigSchemaToZod, findChannelConfig, findItemConfigById, requireChannelConfig, requireRunConfig } from 'agentview/configUtils';
+import { BaseConfigSchema, BaseConfigSchemaToZod, findChannelConfig, findItemConfigById, requireChannelConfig, requireRunConfig, getChannelAgent } from 'agentview/configUtils';
 import { getAllSessionItems, getLastRun } from 'agentview/sessionUtils';
 import packageJson from '../package.json';
 import { equalJSON } from './equalJSON';
@@ -62,6 +62,7 @@ import { updateInboxes } from './updateInboxes';
 import { findUser } from './users';
 import { randomBytes } from 'crypto';
 import { applyRunPatch, getRun, createRun, DEFAULT_IDLE_TIME, getRunInputContent } from './runs';
+import { upsertAgentRef } from './agentRefs';
 import { parseMetadata } from './parseMetadata';
 import { authn, authorize, requireMemberPrincipal, type PrivatePrincipal, type Principal, type MemberPrincipal, type ApiKeyPrincipal, type UserPrincipal, authnAllowPublic } from './authMiddleware';
 
@@ -808,6 +809,7 @@ function mapSessionRow(row: { sessions: typeof sessions.$inferSelect; end_users:
     user: row.end_users!,
     space: row.end_users!.space,
     userId: row.end_users!.id,
+    agentRef: null, // not resolved in list view
     agentRefs: row.sessions.agentRefs ?? []
   };
 }
@@ -1190,10 +1192,10 @@ app.openapi(sessionsPOSTRoute, async (c) => {
     const config = await requireConfig(tx, principal)
 
     // in API channel and agent must exist
-    const channelRef : ChannelRef = { type: 'api', name: body.channel }
+    const channelRef : ChannelRef = { type: 'api', name: body.agent }
 
     const channelConfig = requireChannelConfig(config, channelRef)
-    requireAgentConfig(config, channelConfig.agent)
+    const agentConfig = requireAgentConfig(config, getChannelAgent(channelConfig)?.name)
 
     // find user or create new one if not found
     const user = await (async () => {
@@ -1212,6 +1214,12 @@ app.openapi(sessionsPOSTRoute, async (c) => {
 
     const environment = await requireEnvironment(tx, principal.env);
 
+    // Resolve agent ref at session creation
+    const { agentRefId } = await upsertAgentRef(tx, {
+      agentRef: { version: agentConfig.version, agent: agentConfig.name, format: agentConfig.protocol ?? 'default' },
+      organizationId: principal.organizationId,
+    });
+
     const newSession = await createSession(tx, {
       organizationId: principal.organizationId,
       environment,
@@ -1220,6 +1228,8 @@ app.openapi(sessionsPOSTRoute, async (c) => {
       metadata: body.metadata,
       summary: body.summary,
       authorId,
+      agentRefId,
+      initialState: body.initialState,
     });
 
     return c.json(newSession, 201);
@@ -1590,7 +1600,7 @@ app.openapi(runKeepAliveRoute, async (c) => {
 
     const config = await requireConfig(tx, principal);
     const channelConfig = requireChannelConfig(config, session.channel);
-    const agentConfig = requireAgentConfig(config, channelConfig.agent);
+    const agentConfig = requireAgentConfig(config, getChannelAgent(channelConfig)?.name);
     const inputItem = getRunInputContent(run.sessionItems);
     const runConfig = requireRunConfig(agentConfig, inputItem);
 
@@ -1966,7 +1976,7 @@ app.openapi(scoresPATCHRoute, async (c) => {
 
     // Resolve score configs based on target type
     const channelConfig = requireChannelConfig(config, session.channel);
-    const agentConfig = requireAgentConfig(config, channelConfig.agent);
+    const agentConfig = requireAgentConfig(config, getChannelAgent(channelConfig)?.name);
     const runConfig = requireRunConfig(agentConfig, getRunInputContent(run.sessionItems));
 
     let scoreConfigs: { name: string; schema: any }[] | undefined;

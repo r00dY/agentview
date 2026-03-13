@@ -3,7 +3,7 @@ import { runs, sessionItems, webhookJobs } from './schemas/schema';
 import type { Transaction } from './types';
 import type { Environment, Run, RunCreate, RunUpdate, Session } from 'agentview/apiTypes';
 import type { BaseAgentConfig, BaseRunConfig } from 'agentview/configTypes';
-import { requireRunConfig, findItemConfig, findChannelConfig, requireAgentConfig } from 'agentview/configUtils';
+import { requireRunConfig, findItemConfig, findChannelConfig, requireAgentConfig, getChannelAgent } from 'agentview/configUtils';
 import { AgentViewError } from 'agentview/AgentViewError';
 import { parseMetadata } from './parseMetadata';
 import { resolveAgentRef } from './agentRefs';
@@ -288,7 +288,8 @@ export async function createRun(
   const manual = body.manual ?? false;
 
   const channelConfig = findChannelConfig(config, session.channel);
-  const agentConfig = config.agents?.find(a => a.name === channelConfig?.agent);
+  const channelAgent = channelConfig ? getChannelAgent(channelConfig) : undefined;
+  const agentConfig = config.agents?.find(a => a.name === channelAgent?.name);
 
   /** Only one in_progress run is allowed per session **/
   if (lastRun?.status === 'in_progress') {
@@ -326,8 +327,8 @@ export async function createRun(
     if (body.failReason !== undefined && body.failReason !== null) {
       throw new AgentViewError("failReason cannot be set on creation.", 422);
     }
-    if (body.version !== undefined) {
-      throw new AgentViewError("Version cannot be set on creation (the agent endpoint provides it).", 422);
+    if (body.agent !== undefined) {
+      throw new AgentViewError("Agent override is not supported for auto-fetch runs.", 422);
     }
   }
   else {
@@ -361,12 +362,8 @@ export async function createRun(
     }
 
     if (manual) {
-      if (!body.version) {
-        throw new AgentViewError("In manual mode, version is required.", 422);
-      }
-
       const resolved = await resolveAgentRef(tx, {
-        agentRef: { version: body.version!, agent: agentConfig.name, format: agentConfig.protocol === 'ai-sdk' ? 'ai-sdk' : 'default' },
+        agentRef: { version: agentConfig.version, agent: agentConfig.name, format: agentConfig.protocol === 'ai-sdk' ? 'ai-sdk' : 'default' },
         previousAgentRef: lastRun?.agentRef ?? null,
         organizationId,
         sessionId: session.id,

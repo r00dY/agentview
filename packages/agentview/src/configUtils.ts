@@ -45,6 +45,15 @@ export function findChannelConfig<T extends BaseAgentViewConfig>(config: T, chan
     return channelConfig;
 }
 
+export function getChannelAgent(channelConfig: BaseChannelConfig): { name: string; initialState?: any } | undefined {
+    if (channelConfig.type === 'api') {
+        return { name: channelConfig.agent };
+    }
+    if (!channelConfig.agent) return undefined;
+    if (typeof channelConfig.agent === 'string') return { name: channelConfig.agent };
+    return channelConfig.agent;
+}
+
 export function requireChannelConfig<T extends BaseAgentViewConfig>(config: T, channelRef: ChannelRef) {
     const channelConfig = findChannelConfig(config, channelRef);
     if (!channelConfig) {
@@ -314,7 +323,7 @@ function baseConfigSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
     const externalChannelSchema = z.object({
         type: z.union([z.literal('gmail'), z.literal('mock')]),
         address: z.string(),
-        agent: z.string()
+        agent: z.union([z.string(), z.object({ name: z.string(), initialState: z.any().optional() })]),
     });
 
     const channelSchema = z.discriminatedUnion('type', [apiChannelSchema, externalChannelSchema]);
@@ -322,6 +331,7 @@ function baseConfigSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
     return z.object({
         agents: z.array(z.object({
             name: z.string(),
+            version: z.string(),
             url: z.string().optional(),
             protocol: z.enum(['default', 'ai-sdk']).optional(),
             runs: z.array(z.object({

@@ -26,6 +26,7 @@ export interface BaseRunConfig<TSessionItemConfig extends BaseSessionItemConfig 
 
 export interface BaseAgentConfig<TRunConfig extends BaseRunConfig = BaseRunConfig> {
     name: string;
+    version: string;
     url?: string;
     protocol?: 'default' | 'ai-sdk';
     runs?: TRunConfig[];
@@ -42,7 +43,7 @@ export interface ApiChannelConfig {
 export interface ExternalChannelConfig {
     type: 'gmail' | 'mock';
     address: string;
-    agent?: string;
+    agent?: string | { name: string; initialState?: any };
 }
 
 export type BaseChannelConfig = ApiChannelConfig | ExternalChannelConfig;

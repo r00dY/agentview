@@ -60,6 +60,7 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
     where,
     with: {
       user: true,
+      agentRef: true,
       runs: {
         columns: {
           id: true,
@@ -118,7 +119,12 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
       })),
     })),
     summary: row.summary,
-    state,
+    state: state ?? row.initialState ?? null,
+    agentRef: row.agentRef ? {
+      name: row.agentRef.agent,
+      version: row.agentRef.version,
+      format: row.agentRef.format,
+    } : null,
     agentRefs: row.agentRefs ?? []
   } as Session;
 }
@@ -132,6 +138,8 @@ export async function createSession(tx: Transaction, params: {
   summary?: string | null;
   channelThreadId?: string | null;
   authorId?: string | null;
+  agentRefId?: string | null;
+  initialState?: any;
 }): Promise<Session> {
   const config = getConfigFromEnvironment(params.environment);
   const channelConfig = requireChannelConfig(config, params.channelRef);
@@ -165,6 +173,8 @@ export async function createSession(tx: Transaction, params: {
     userId: params.userId,
     summary: params.summary ?? null,
     channelThreadId: params.channelThreadId ?? null,
+    agentRefId: params.agentRefId ?? null,
+    initialState: params.initialState ?? null,
   }).returning();
 
   const [event] = await tx.insert(events).values({

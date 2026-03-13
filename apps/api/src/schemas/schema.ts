@@ -47,6 +47,8 @@ export const sessions = pgTable("sessions", {
   channelAddress: varchar("channel_address", { length: 255 }).notNull(),
   summary: text("summary"),
   agentRefs: jsonb("agent_refs").$type<string[]>().default([]),
+  agentRefId: uuid("agent_ref_id").references(() => agentRefs.id),
+  initialState: jsonb("initial_state"),
   channelThreadId: uuid("channel_thread_id").references(() => channelThreads.id, { onDelete: 'set null' }),
 }, (table) => [
   uniqueIndex('sessions_handle_org_unique').on(table.handleNumber, table.handleSuffix, table.organizationId),
@@ -293,6 +295,10 @@ export const sessionRelations = relations(sessions, ({ many, one }) => ({
     fields: [sessions.userId],
     references: [endUsers.id],
   }),
+  agentRef: one(agentRefs, {
+    fields: [sessions.agentRefId],
+    references: [agentRefs.id],
+  }),
   inboxItems: many(inboxItems),
   starredSessions: many(starredSessions),
   channelThread: one(channelThreads, {
@@ -322,6 +328,7 @@ export const endUserRelations = relations(endUsers, ({ many, one }) => ({
 
 export const agentRefsRelations = relations(agentRefs, ({ many }) => ({
   runs: many(runs),
+  sessions: many(sessions),
 }));
 
 export const runRelations = relations(runs, ({ one, many }) => ({

@@ -6,9 +6,9 @@ import { getConfigFromEnvironment } from '../environments';
 import { fetchSession } from '../sessions';
 import { callAgentAPI, AgentAPIError } from '../agentApi';
 import { callAgentAPIAISDK } from '../ai-sdk/agentApi';
-import { BaseConfigSchemaToZod, findChannelConfig } from 'agentview/configUtils';
+import { BaseConfigSchemaToZod, findChannelConfig, getChannelAgent } from 'agentview/configUtils';
 import { applyRunPatch, getRun } from '../runs';
-import { resolveAgentRef } from '../agentRefs';
+import { upsertAgentRef } from '../agentRefs';
 import type { RunBody } from 'agentview/apiTypes';
 import { createWorker } from './utils';
 
@@ -77,7 +77,9 @@ async function processAgentFetch(run: Run) {
     if (!channelConfig) {
       throw new Error(`Channel config not found for ${JSON.stringify(session.channel)}.`);
     }
-    const agentName = channelConfig.agent;
+
+    const channelAgent = getChannelAgent(channelConfig);
+    const agentName = channelAgent?.name;
     const agentConfig = config.agents?.find((a) => a.name === agentName);
 
     if (!agentConfig) {
@@ -89,6 +91,52 @@ async function processAgentFetch(run: Run) {
       throw new Error(`Agent '${agentName}' has no url`);
     }
 
+    // Resolve agent ref from config version and assign to run
+    await withOrg(run.organizationId, async (tx) => {
+      const { agentRefId } = await upsertAgentRef(tx, {
+        agentRef: { version: agentConfig.version, agent: agentConfig.name, format: agentConfig.protocol === 'ai-sdk' ? 'ai-sdk' : 'default' },
+        organizationId: run.organizationId,
+      });
+
+      // Set agentRef on run
+      await tx.update(runs).set({
+        agentRefId,
+        updatedAt: new Date().toISOString(),
+      }).where(eq(runs.id, run.id));
+
+      // If session doesn't have agentRef yet, set it + initialState from channelConfig
+      if (!session!.agentRef) {
+        await tx.update(sessions).set({
+          agentRefId,
+          initialState: channelAgent?.initialState ?? null,
+          updatedAt: new Date().toISOString(),
+        }).where(eq(sessions.id, run.sessionId));
+
+        // Update session.agentRefs array
+        const currentSession = await tx.query.sessions.findFirst({
+          where: eq(sessions.id, run.sessionId),
+          columns: { agentRefs: true },
+        });
+        const existing = (currentSession?.agentRefs as string[]) ?? [];
+        const version = agentConfig.version;
+        if (!existing.includes(version)) {
+          await tx.update(sessions).set({
+            agentRefs: [...existing, version],
+            updatedAt: new Date().toISOString(),
+          }).where(eq(sessions.id, run.sessionId));
+        }
+      }
+    });
+
+    // Refetch session after agentRef assignment
+    session = await withOrg(run.organizationId, async (tx) => {
+      return fetchSession(tx, run.sessionId);
+    });
+
+    if (!session) {
+      throw new Error(`Session ${run.sessionId} not found`);
+    }
+
     /**
      * CHANNEL MESSAGES -> SESSION ITEM
      */
@@ -98,7 +146,7 @@ async function processAgentFetch(run: Run) {
       if (agentConfig.protocol !== 'ai-sdk') {
         throw new Error('Agent protocol must be ai-sdk to create session items from channel messages');
       }
-      
+
       const fullRun = session.runs.find(r => r.id === run.id);
       if (!fullRun) {
         throw new Error(`Run ${run.id} not found`);
@@ -122,7 +170,7 @@ async function processAgentFetch(run: Run) {
       await withOrg(run.organizationId, async (tx) => {
         await tx.insert(sessionItems).values({
           organizationId: run.organizationId,
-          sessionId: run.sessionId,        
+          sessionId: run.sessionId,
           runId: run.id,
           type: 'input',
           content: inputSessionItemContent,
@@ -143,8 +191,6 @@ async function processAgentFetch(run: Run) {
     const body: RunBody = { session };
 
     const callFn = agentConfig.protocol === 'ai-sdk' ? callAgentAPIAISDK : callAgentAPI;
-
-    let versionReceived = false;
 
     const getCurrentRunStatus = async () => {
       return await withOrg(run.organizationId, async (tx) => {
@@ -177,31 +223,7 @@ async function processAgentFetch(run: Run) {
           }).where(eq(runs.id, run.id));
         });
       }
-      else if (event.name === 'version') {
-        versionReceived = true;
-
-        const previousRuns = session.runs.filter(r => r.id !== run.id);
-        const lastPreviousRun = previousRuns[previousRuns.length - 1];
-
-        await withOrg(run.organizationId, async (tx) => {
-          const { agentRefId } = await resolveAgentRef(tx, {
-            agentRef: { version: event.data, agent: agentConfig.name, format: agentConfig.protocol === 'ai-sdk' ? 'ai-sdk' : 'default' },
-            previousAgentRef: lastPreviousRun?.agentRef ?? null,
-            organizationId: run.organizationId,
-            sessionId: run.sessionId,
-          });
-
-          await tx.update(runs).set({
-            agentRefId,
-            updatedAt: new Date().toISOString(),
-          }).where(eq(runs.id, run.id));
-        });
-      }
       else if (event.name === 'run.patch') {
-        if (!versionReceived) {
-          throw new Error('Agent must provide X-AgentView-Version response header');
-        }
-
         await withOrg(run.organizationId, async (tx) => {
           await applyRunPatch(
             tx,
@@ -245,10 +267,6 @@ async function processAgentFetch(run: Run) {
           const outputItems = completedRun.sessionItems.filter(si => si.type === 'output');
 
           const outputText = outputItems.map(si => (si.content as any)?.text).filter(Boolean).join('\n\n');
-
-          // const lastOutputItem = outputItems[outputItems.length - 1];
-          // const content = lastOutputItem?.content as any;
-          // const outputText = content?.text ?? "";
 
           // Insert outgoing channel message
           await tx.insert(channelMessages).values({

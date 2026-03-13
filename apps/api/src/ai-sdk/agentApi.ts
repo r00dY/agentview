@@ -117,12 +117,6 @@ export async function* callAgentAPIAISDK(
 
     yield { name: 'response_data', data: responseData };
 
-    // Yield version from header
-    const versionHeader = response.headers.get('x-agentview-version');
-    if (versionHeader) {
-      yield { name: 'version', data: versionHeader };
-    }
-
     if (!response.ok) {
       const content = tryParseJSON(await response.text());
       responseData.response.body = content;

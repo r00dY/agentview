@@ -52,23 +52,17 @@ export async function createMockServer(port: number): Promise<MockServer> {
 
 export type SSEEvent = { event: string; data: any }
 
-type SSEOptions = { version?: string }
-
-function writeSSEHeaders(res: ServerResponse, opts?: SSEOptions) {
-  const headers: Record<string, string> = {
+function writeSSEHeaders(res: ServerResponse) {
+  res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
-  }
-  if (opts?.version) {
-    headers['X-AgentView-Version'] = opts.version
-  }
-  res.writeHead(200, headers)
+  })
 }
 
 /** Named-event SSE format: `event: name\ndata: {...}\n\n` */
-export function writeSSE(res: ServerResponse, events: SSEEvent[], opts?: SSEOptions) {
-  writeSSEHeaders(res, opts)
+export function writeSSE(res: ServerResponse, events: SSEEvent[]) {
+  writeSSEHeaders(res)
   for (const ev of events) {
     res.write(`event: ${ev.event}\ndata: ${JSON.stringify(ev.data)}\n\n`)
   }
@@ -76,8 +70,8 @@ export function writeSSE(res: ServerResponse, events: SSEEvent[], opts?: SSEOpti
 }
 
 /** AI SDK streaming format: `data: {...}\n\n` with `data: [DONE]\n\n` sentinel */
-export function writeAISDKStream(res: ServerResponse, chunks: any[], opts?: SSEOptions) {
-  writeSSEHeaders(res, opts)
+export function writeAISDKStream(res: ServerResponse, chunks: any[]) {
+  writeSSEHeaders(res)
   for (const chunk of chunks) {
     res.write(`data: ${JSON.stringify(chunk)}\n\n`)
   }

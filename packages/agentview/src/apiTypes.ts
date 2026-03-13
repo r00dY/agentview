@@ -191,7 +191,7 @@ export const RunCreateSchema = z.object({
   items: z.array(z.record(z.string(), z.any())).optional(),
   // input: z.array(z.record(z.string(), z.any())).optional(),
   manual: z.boolean().optional(),
-  version: z.string().optional(),
+  agent: z.string().optional(),
   metadata: z.record(z.string(), z.any()).optional(),
   status: z.enum(['in_progress', 'completed', 'cancelled', 'failed']).optional(),
   state: z.any().optional(),
@@ -233,6 +233,7 @@ export const SessionBaseSchema = z.object({
   space: SpaceSchema, // this is actually user.space, but allows to "think user-less"
   state: z.any().nullable().optional(),
   summary: z.string().nullable(),
+  agentRef: AgentRefSchema.nullable(),
   agentRefs: z.array(z.string()),
 })
 
@@ -246,7 +247,8 @@ export type Session = z.infer<typeof SessionSchema>
 
 
 export const SessionCreateSchema = z.object({
-  channel: z.string(),
+  agent: z.string(),
+  initialState: z.any().optional(),
   metadata: z.record(z.string(), z.any()).optional(),
   userId: z.string().optional(),
   space: SpaceSchema.optional(), // necessary if userId is not provided

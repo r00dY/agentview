@@ -92,6 +92,7 @@ describe('API', () => {
       agents: [
         {
           name: "test",
+          version: "1.0.0",
           runs: [
             {
               input: { schema: inputSchema },
@@ -137,7 +138,7 @@ describe('API', () => {
 
 
   async function createSession() {
-    return await av.createSession({ channel: "test", userId: initUser1.id })
+    return await av.createSession({ agent: "test", userId: initUser1.id })
   }
 
   async function waitForRunStatus(sessionId: string, runId: string, statuses: string[], timeoutMs: number = 15000): Promise<Run> {
@@ -339,8 +340,8 @@ describe('API', () => {
 
       describe("get session by id", () => {
         test("works for own session", async () => {
-          await av.updateEnvironment({ config: { agents: [{ name: "test" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
-          const session = await av.createSession({ channel: "test", userId: initUser1.id})
+          await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
+          const session = await av.createSession({ agent: "test", userId: initUser1.id})
 
           const avPublic1 = new AgentView({
             userToken: initUser1.token
@@ -351,8 +352,8 @@ describe('API', () => {
         })
 
         test("fails for someone else's session", async () => {
-          await av.updateEnvironment({ config: { agents: [{ name: "test" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
-          const session = await av.createSession({ channel: "test", userId: initUser1.id})
+          await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
+          const session = await av.createSession({ agent: "test", userId: initUser1.id})
 
           const avPublic2 = new AgentView({
             userToken: initUser2.token
@@ -374,7 +375,7 @@ describe('API', () => {
   describe("environments", () => {
 
     test("works", async () => {
-      const CONFIG = { agents: [{ name: "test" }], __internal: { disableSummaries: true } };
+      const CONFIG = { agents: [{ name: "test", version: "1.0.0" }], __internal: { disableSummaries: true } };
 
       let environment = await av.updateEnvironment({ config: CONFIG })
       expect(environment.config).toEqual(CONFIG);
@@ -382,7 +383,7 @@ describe('API', () => {
       environment = await av.getEnvironment();
       expect(environment.config).toEqual(CONFIG);
 
-      const CONFIG_2 = { agents: [{ name: "test2" }], __internal: { disableSummaries: true } };
+      const CONFIG_2 = { agents: [{ name: "test2", version: "1.0.0" }], __internal: { disableSummaries: true } };
 
       environment = await av.updateEnvironment({ config: CONFIG_2 })
       expect(environment.config).toEqual(CONFIG_2);
@@ -434,11 +435,11 @@ describe('API', () => {
       const avAlice = new AgentView({ apiKey, env: `dev:alice@${orgSlug}.com` });
 
       // Bob uploads his config
-      const BOB_CONFIG = { agents: [{ name: "bob-agent" }], channels: [{ type: 'api' as const, name: "bob-agent", agent: "bob-agent" }], __internal: { disableSummaries: true } };
+      const BOB_CONFIG = { agents: [{ name: "bob-agent", version: "1.0.0" }], channels: [{ type: 'api' as const, name: "bob-agent", agent: "bob-agent" }], __internal: { disableSummaries: true } };
       await avBob.updateEnvironment({ config: BOB_CONFIG });
 
       // Alice uploads her config
-      const ALICE_CONFIG = { agents: [{ name: "alice-agent" }], channels: [{ type: 'api' as const, name: "alice-agent", agent: "alice-agent" }], __internal: { disableSummaries: true } };
+      const ALICE_CONFIG = { agents: [{ name: "alice-agent", version: "1.0.0" }], channels: [{ type: 'api' as const, name: "alice-agent", agent: "alice-agent" }], __internal: { disableSummaries: true } };
       await avAlice.updateEnvironment({ config: ALICE_CONFIG });
 
       // Verify each developer sees only their own config
@@ -455,20 +456,20 @@ describe('API', () => {
       // Test that configs are isolated for real operations (sessions/runs)
       // Bob can create sessions for his channel
       const bobUser = await avBob.createUser({ externalId: "bob-test-user" });
-      const bobSession = await avBob.createSession({ channel: "bob-agent", userId: bobUser.id });
+      const bobSession = await avBob.createSession({ agent: "bob-agent", userId: bobUser.id });
       expect(bobSession.channel).toEqual({ type: 'api', name: 'bob-agent' });
 
       // Alice can create sessions for her channel
       const aliceUser = await avAlice.createUser({ externalId: "alice-test-user" });
-      const aliceSession = await avAlice.createSession({ channel: "alice-agent", userId: aliceUser.id });
+      const aliceSession = await avAlice.createSession({ agent: "alice-agent", userId: aliceUser.id });
       expect(aliceSession.channel).toEqual({ type: 'api', name: 'alice-agent' });
 
       // Bob cannot create sessions for Alice's channel (not in his config)
-      await expect(avBob.createSession({ channel: "alice-agent", userId: bobUser.id }))
+      await expect(avBob.createSession({ agent: "alice-agent", userId: bobUser.id }))
         .rejects.toThrowError(expect.objectContaining({ statusCode: 404 }));
 
       // Alice cannot create sessions for Bob's channel (not in her config)
-      await expect(avAlice.createSession({ channel: "bob-agent", userId: aliceUser.id }))
+      await expect(avAlice.createSession({ agent: "bob-agent", userId: aliceUser.id }))
         .rejects.toThrowError(expect.objectContaining({ statusCode: 404 }));
     })
 
@@ -481,7 +482,7 @@ describe('API', () => {
       expect(prodUser).toBeDefined()
 
       // creating prod session allowed with prod key
-      const prodSession = await avProd.createSession({ channel: "test", userId: prodUser.id })
+      const prodSession = await avProd.createSession({ agent: "test", userId: prodUser.id })
       expect(prodSession).toBeDefined()
 
       // creating prod user not allowed with dev key
@@ -491,7 +492,7 @@ describe('API', () => {
       }))
 
       // creating prod session not allowed with dev key
-      await expect(av.createSession({ channel: "test", userId: prodUser.id })).rejects.toThrowError(expect.objectContaining({
+      await expect(av.createSession({ agent: "test", userId: prodUser.id })).rejects.toThrowError(expect.objectContaining({
         statusCode: 401,
         message: expect.any(String),
       }))
@@ -500,9 +501,9 @@ describe('API', () => {
 
   describe("sessions", async () => {
     test("create for specific user", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
+      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
 
-      const session = await av.createSession({ channel: "test", userId: initUser1.id})
+      const session = await av.createSession({ agent: "test", userId: initUser1.id})
       expect(session).toMatchObject({
         metadata: {},
         runs: [],
@@ -516,9 +517,9 @@ describe('API', () => {
     })
 
     test("create for no user (creates new user)", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
+      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
 
-      const session = await av.createSession({ channel: "test" })
+      const session = await av.createSession({ agent: "test" })
       expect(session.userId).toBeDefined()
 
       const fetchedSession = await av.as(session.user).getSession({ id: session.id });
@@ -526,9 +527,9 @@ describe('API', () => {
     })
 
     test("create session for other user with 'as' -> should throw", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
+      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
 
-      await expect(av.as(initUser1).createSession({ channel: "test", userId: initUser2.id })).rejects.toThrowError(expect.objectContaining({
+      await expect(av.as(initUser1).createSession({ agent: "test", userId: initUser2.id })).rejects.toThrowError(expect.objectContaining({
         statusCode: 401,
         message: expect.any(String),
       }))
@@ -536,9 +537,9 @@ describe('API', () => {
     })
 
     test("create - fails at wrong agent", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
+      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
 
-      await expect(av.createSession({ channel: "wrong_channel", userId: initUser1.id })).rejects.toThrowError(expect.objectContaining({
+      await expect(av.createSession({ agent: "wrong_channel", userId: initUser1.id })).rejects.toThrowError(expect.objectContaining({
         statusCode: 404,
         message: expect.any(String),
       }))
@@ -548,9 +549,9 @@ describe('API', () => {
 
 
     test("get by id for existing session", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
+      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
 
-      const session = await av.createSession({ channel: "test", userId: initUser1.id})
+      const session = await av.createSession({ agent: "test", userId: initUser1.id})
       const fetchedSession = await av.getSession({ id: session.id })
       expect(fetchedSession).toMatchObject({
         metadata: {},
@@ -560,7 +561,7 @@ describe('API', () => {
     })
 
     test("get by id - wrong id", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
+      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
 
       await expect(av.getSession({ id: 'xxx' })).rejects.toThrowError(expect.objectContaining({
         statusCode: 404,
@@ -576,7 +577,7 @@ describe('API', () => {
       expect(session.lastRun).toBeUndefined()
 
       // First run, check 
-      let run1 = await av.createRun({ sessionId: session.id, items: [baseInput], version: "1.0.0", manual: true })
+      let run1 = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true })
       session = await av.getSession({ id: session.id })
       expect(session.items).toEqual([baseInput])
       expect(session.lastRun?.id).toBe(run1.id)
@@ -587,13 +588,13 @@ describe('API', () => {
       expect(session.lastRun?.id).toBe(run1.id)
 
       // // Second run, failed, but items in the history
-      // let run2 = await av.createRun({ sessionId: session.id, items: [baseInput, baseStep, baseOutput], status: "failed", version: "1.0.0" })
+      // let run2 = await av.createRun({ sessionId: session.id, items: [baseInput, baseStep, baseOutput], status: "failed" })
       // session = await av.getSession({ id: session.id })
       // expect(session.items).toEqual([baseInput, baseOutput, baseInput, baseStep, baseOutput])
       // expect(session.lastRun?.id).toBe(run2.id)
 
       // // Retry, successful
-      // let run3 = await av.createRun({ sessionId: session.id, items: [baseInput, baseStep, baseOutput], status: "completed", version: "1.0.0" })
+      // let run3 = await av.createRun({ sessionId: session.id, items: [baseInput, baseStep, baseOutput], status: "completed" })
       // session = await av.getSession({ id: session.id })
       // expect(session.items).toEqual([baseInput, baseOutput, baseInput, baseStep, baseOutput])
       // expect(session.lastRun?.id).toBe(run3.id)
@@ -606,7 +607,7 @@ describe('API', () => {
       expect(session.state).toBeNull();
 
       // First run, check 
-      let run1 = await av.createRun({ sessionId: session.id, items: [baseInput], version: "1.0.0", manual: true })
+      let run1 = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true })
       session = await av.getSession({ id: session.id })
       expect(session.state).toEqual(null)
 
@@ -615,12 +616,12 @@ describe('API', () => {
       expect(session.state).toEqual({ x: 1 })
 
       // Second run, failed
-      let run2 = await av.createRun({ sessionId: session.id, items: [baseInput, baseStep, baseOutput], status: "failed", version: "1.0.0", state: { x: 2 }, manual: true })
+      let run2 = await av.createRun({ sessionId: session.id, items: [baseInput, baseStep, baseOutput], status: "failed", state: { x: 2 }, manual: true })
       session = await av.getSession({ id: session.id })
       expect(session.state).toEqual({ x: 2 })
 
       // Retry, successful
-      let run3 = await av.createRun({ sessionId: session.id, items: [baseInput, baseStep, baseOutput], status: "completed", version: "1.0.0", state: { x: 3 }, manual: true })
+      let run3 = await av.createRun({ sessionId: session.id, items: [baseInput, baseStep, baseOutput], status: "completed", state: { x: 3 }, manual: true })
       session = await av.getSession({ id: session.id })
       expect(session.state).toEqual({ x: 3 })
 
@@ -635,9 +636,9 @@ describe('API', () => {
 
     // METADATA TESTS
     test("create / with known metadata / saved", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { product_id: z.string() } }] } })
+      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { product_id: z.string() } }] } })
 
-      const session = await av.createSession({ channel: "test", userId: initUser1.id, metadata: { product_id: "123" } })
+      const session = await av.createSession({ agent: "test", userId: initUser1.id, metadata: { product_id: "123" } })
       expect(session).toMatchObject({
         metadata: {
           product_id: "123",
@@ -646,9 +647,9 @@ describe('API', () => {
     })
 
     test("create / optional & nullable metadata / all saved as null", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { x: z.nullable(z.string()), y: z.nullable(z.number()) } }] } })
+      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { x: z.nullable(z.string()), y: z.nullable(z.number()) } }] } })
 
-      const session = await av.createSession({ channel: "test", userId: initUser1.id })
+      const session = await av.createSession({ agent: "test", userId: initUser1.id })
       expect(session).toMatchObject({
         metadata: {
           x: null,
@@ -658,9 +659,9 @@ describe('API', () => {
     })
 
     test("create / with known metadata + allowUnknownMetadata=false / saved", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { product_id: z.string() }, allowUnknownMetadata: false }] } })
+      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { product_id: z.string() }, allowUnknownMetadata: false }] } })
 
-      const session = await av.createSession({ channel: "test", userId: initUser1.id, metadata: { product_id: "123" } })
+      const session = await av.createSession({ agent: "test", userId: initUser1.id, metadata: { product_id: "123" } })
       expect(session).toMatchObject({
         metadata: {
           product_id: "123",
@@ -669,9 +670,9 @@ describe('API', () => {
     })
 
     test("create / with unknown metadata / saved", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
+      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
 
-      const session = await av.createSession({ channel: "test", userId: initUser1.id, metadata: { product_id: "123" } })
+      const session = await av.createSession({ agent: "test", userId: initUser1.id, metadata: { product_id: "123" } })
       expect(session).toMatchObject({
         metadata: {
           product_id: "123",
@@ -680,18 +681,18 @@ describe('API', () => {
     })
 
     test("create / with unknown metadata + allowUnknownMetadata=false / failed", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test" }], channels: [{ type: 'api', name: "test", agent: "test", allowUnknownMetadata: false }] } })
+      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", allowUnknownMetadata: false }] } })
 
-      await expect(av.createSession({ channel: "test", userId: initUser1.id, metadata: { product_id: "123" } })).rejects.toThrowError(expect.objectContaining({
+      await expect(av.createSession({ agent: "test", userId: initUser1.id, metadata: { product_id: "123" } })).rejects.toThrowError(expect.objectContaining({
         statusCode: 422,
         message: expect.any(String),
       }))
     })
 
     test("create / with incompatible metadata / fails", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { product_id: z.string() } }] } })
+      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { product_id: z.string() } }] } })
 
-      await expect(av.createSession({ channel: "test", userId: initUser1.id, metadata: { product_id: 123 } })).rejects.toThrowError(expect.objectContaining({
+      await expect(av.createSession({ agent: "test", userId: initUser1.id, metadata: { product_id: 123 } })).rejects.toThrowError(expect.objectContaining({
         statusCode: 422,
         message: expect.any(String),
       }))
@@ -699,9 +700,9 @@ describe('API', () => {
 
 
     test("update metadata", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { field1: z.string(), field2: z.number() }, allowUnknownMetadata: false }] } })
+      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { field1: z.string(), field2: z.number() }, allowUnknownMetadata: false }] } })
 
-      const session = await av.createSession({ channel: "test", metadata: { field1: "A", field2: 0 }, userId: initUser1.id })
+      const session = await av.createSession({ agent: "test", metadata: { field1: "A", field2: 0 }, userId: initUser1.id })
 
       const updated = await av.updateSession({ id: session.id, metadata: { field1: "B", field2: 1 } })
       expect(updated.metadata).toEqual({ field1: "B", field2: 1 })
@@ -711,9 +712,9 @@ describe('API', () => {
     })
 
     test("update metadata - partial update", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { field1: z.string(), field2: z.number() }, allowUnknownMetadata: false }] } })
+      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { field1: z.string(), field2: z.number() }, allowUnknownMetadata: false }] } })
 
-      const session = await av.createSession({ channel: "test", metadata: { field1: "A", field2: 0 }, userId: initUser1.id })
+      const session = await av.createSession({ agent: "test", metadata: { field1: "A", field2: 0 }, userId: initUser1.id })
 
       const updated = await av.updateSession({ id: session.id, metadata: { field1: "B" } })
       expect(updated.metadata).toEqual({ field1: "B", field2: 0 })
@@ -723,9 +724,9 @@ describe('API', () => {
     })
 
     test("update metadata - make field null", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { field1: z.string(), field2: z.number().nullable() }, allowUnknownMetadata: false }] } })
+      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { field1: z.string(), field2: z.number().nullable() }, allowUnknownMetadata: false }] } })
 
-      const session = await av.createSession({ channel: "test", metadata: { field1: "A", field2: 0 }, userId: initUser1.id })
+      const session = await av.createSession({ agent: "test", metadata: { field1: "A", field2: 0 }, userId: initUser1.id })
 
       const updated = await av.updateSession({ id: session.id, metadata: { field2: null } })
       expect(updated.metadata).toEqual({ field1: "A", field2: null })
@@ -735,9 +736,9 @@ describe('API', () => {
     })
 
     test("update metadata only - validation enforced", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { product_id: z.string() }, allowUnknownMetadata: false }] } })
+      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { product_id: z.string() }, allowUnknownMetadata: false }] } })
 
-      const session = await av.createSession({ channel: "test", metadata: { product_id: "A" }, userId: initUser1.id })
+      const session = await av.createSession({ agent: "test", metadata: { product_id: "A" }, userId: initUser1.id })
 
       await expect(av.updateSession({ id: session.id, metadata: { wrong: "x" } })).rejects.toThrowError(expect.objectContaining({
         statusCode: 422,
@@ -758,26 +759,26 @@ describe('API', () => {
       let agentName = 'agent-for-testing-lists'
 
       beforeAll(async () => {
-        await avProd.updateEnvironment({ config: { agents: [{ name: agentName }], channels: [{ type: 'api', name: agentName, agent: agentName }] } })
+        await avProd.updateEnvironment({ config: { agents: [{ name: agentName, version: "1.0.0" }], channels: [{ type: 'api', name: agentName, agent: agentName }] } })
 
         // Create 20 sessions for testing
         user1Sessions = []
         for (let i = 0; i < USER_1_SESSIONS_COUNT; i++) {
-          const session = await avProd.createSession({ channel: agentName, userId: initUser1.id })
+          const session = await avProd.createSession({ agent: agentName, userId: initUser1.id })
           user1Sessions.push(session)
           await new Promise(resolve => setTimeout(resolve, 10)) // Small delay to ensure different updatedAt timestamps
         }
 
         user2Sessions = []
         for (let i = 0; i < USER_2_SESSIONS_COUNT; i++) {
-          const session = await avProd.createSession({ channel: agentName, userId: initUser2.id })
+          const session = await avProd.createSession({ agent: agentName, userId: initUser2.id })
           user2Sessions.push(session)
           await new Promise(resolve => setTimeout(resolve, 10)) // Small delay to ensure different updatedAt timestamps
         }
 
         prodUserSessions = []
         for (let i = 0; i < PROD_USER_SESSIONS_COUNT; i++) {
-          const session = await avProd.createSession({ channel: agentName, userId: initProdUser.id })
+          const session = await avProd.createSession({ agent: agentName, userId: initProdUser.id })
           prodUserSessions.push(session)
           await new Promise(resolve => setTimeout(resolve, 10)) // Small delay to ensure different updatedAt timestamps
         }
@@ -913,7 +914,7 @@ describe('API', () => {
       test("creating run with non-existing sessionId", async () => {
         await updateConfig()
 
-        await expect(av.createRun({ sessionId: 'non-existing', items: [baseInput], version: "1.0.0", manual: true })).rejects.toThrowError(expect.objectContaining({
+        await expect(av.createRun({ sessionId: 'non-existing', items: [baseInput], manual: true })).rejects.toThrowError(expect.objectContaining({
           statusCode: 404,
           message: expect.any(String),
         }))
@@ -932,7 +933,7 @@ describe('API', () => {
         await updateConfig()
         const session = await createSession()
 
-        await expect(av.createRun({ sessionId: session.id, items: [], version: "1.0.0", manual: true })).rejects.toThrowError(expect.objectContaining({
+        await expect(av.createRun({ sessionId: session.id, items: [], manual: true })).rejects.toThrowError(expect.objectContaining({
           statusCode: 422,
           message: expect.any(String),
         }))
@@ -942,7 +943,7 @@ describe('API', () => {
         await updateConfig()
         const session = await createSession()
 
-        const run = await av.createRun({ sessionId: session.id, items: [baseInput], version: "1.0.0", manual: true })
+        const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true })
         expect(run.status).toBe("in_progress")
       })
 
@@ -950,8 +951,8 @@ describe('API', () => {
         await updateConfig()
         const session = await createSession()
 
-        await av.createRun({ sessionId: session.id, items: [baseInput], version: "1.0.0", manual: true })
-        await expect(av.createRun({ sessionId: session.id, items: [baseInput], version: "1.0.0", manual: true })).rejects.toThrowError(expect.objectContaining({
+        await av.createRun({ sessionId: session.id, items: [baseInput], manual: true })
+        await expect(av.createRun({ sessionId: session.id, items: [baseInput], manual: true })).rejects.toThrowError(expect.objectContaining({
           statusCode: 422,
           message: expect.any(String),
         }))
@@ -1174,7 +1175,7 @@ describe('API', () => {
                 let promise: any;
 
                 if (isFirst && isLast) {
-                  promise = av.createRun({ sessionId: session.id, items: iteration, version: "1.0.0", status: lastRunStatus, manual: true });
+                  promise = av.createRun({ sessionId: session.id, items: iteration, status: lastRunStatus, manual: true });
                   expectedStatus = lastRunStatus ?? "in_progress";
                   expectedHasFinishedAt = expectedStatus !== "in_progress";
                 } else if (isLast) {
@@ -1182,7 +1183,7 @@ describe('API', () => {
                   expectedStatus = lastRunStatus ?? "in_progress";
                   expectedHasFinishedAt = expectedStatus !== "in_progress";
                 } else if (isFirst) {
-                  promise = av.createRun({ sessionId: session.id, items: iteration, version: "1.0.0", manual: true })
+                  promise = av.createRun({ sessionId: session.id, items: iteration, manual: true })
                   expectedStatus = "in_progress";
                   expectedHasFinishedAt = false;
                 } else {
@@ -1240,7 +1241,7 @@ describe('API', () => {
         await updateConfig()
         const session = await createSession()
 
-        const run = await av.createRun({ sessionId: session.id, items: [baseInput], version: "1.0.0", manual: true })
+        const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true })
         const completed = await av.updateRun({ id: run.id, items: [baseOutput], status: "completed", metadata: { trace_id: "abc" } })
         expect(completed.status).toBe("completed")
 
@@ -1260,7 +1261,7 @@ describe('API', () => {
         await updateConfig()
         const session = await createSession()
 
-        const run = await av.createRun({ sessionId: session.id, items: [baseInput], version: "1.0.0", manual: true })
+        const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true })
 
         const failReason = { message: "oops" }
 
@@ -1279,62 +1280,11 @@ describe('API', () => {
       })
 
 
-      describe("versioning", () => {
-        test("incorrect formats fail", async () => {
-          await updateConfig()
-          const session = await createSession()
-
-          await expectToFail(av.createRun({ sessionId: session.id, items: [baseInput], version: "xxx", manual: true }), 422)
-          await expectToFail(av.createRun({ sessionId: session.id, items: [baseInput], version: "blah.blah.blah", manual: true }), 422)
-
-        })
-
-        test("compatibility enforced - playground", async () => {
-          await updateConfig()
-          const session = await createSession()
-
-          await av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], status: "completed", version: "1.2" }) // allow for partial version
-          await av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], status: "completed", version: "1.2.3" })
-          await av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], status: "completed", version: "1.2.4" }) // higher patch works
-          await av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], status: "completed", version: "1.3.0" }) // higher minor works
-
-          await expectToFail(av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], version: "1.2.2" }), 422) // smaller patch fails
-          await expectToFail(av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], version: "2.0.0" }), 422) // different minor fails
-
-          // suffixes
-          await av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], status: "completed", version: "1.3.3" })
-          await av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], status: "completed", version: "1.3.3-dev" })
-          await av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], status: "completed", version: "1.3.3-xxx" })
-          await av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], status: "completed", version: "1.3.4" })
-          await av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], status: "completed", version: "1.3.4-local" })
-
-          await expectToFail(av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], version: "1.3.3-local" }), 422) // smaller patch fails even with suffix
-          await expectToFail(av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], version: "1.3.3-xxx" }), 422) // smaller patch with §§different suffix fails
-          await expectToFail(av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], version: "2.0.0" }), 422) // different suffix fails
-          await expectToFail(av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], version: "2.0.0-dev" }), 422) // different suffix fails
-        })
-
-        test("version stored as-is", async () => {
-          await updateConfig()
-          const session = await createSession()
-          const run = await av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], version: "1.3.0" })
-          expect(run.agentRef?.version).toBe("1.3.0")
-        })
-
-        test("suffixed version stored as-is", async () => {
-          await updateConfig()
-          const session = await createSession()
-          const run = await av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], version: "1.3.0-xxx" })
-          expect(run.agentRef?.version).toBe("1.3.0-xxx")
-        })
-
-      });
-
       test("userToken scoped permissions", async () => {
         await updateConfig()
         const session = await createSession()
 
-        await expect(av.as(initUser2).createRun({ sessionId: session.id, manual: true, items: [baseInput], version: "1.0.0" })).rejects.toThrowError(expect.objectContaining({
+        await expect(av.as(initUser2).createRun({ sessionId: session.id, manual: true, items: [baseInput] })).rejects.toThrowError(expect.objectContaining({
           statusCode: 401,
           message: expect.any(String),
         }))
@@ -1345,7 +1295,7 @@ describe('API', () => {
       test("create / with known metadata / saved", async () => {
         await updateConfig({ runMetadata: { product_id: z.string() } })
         const session = await createSession()
-        const run = await av.createRun({ sessionId: session.id, manual: true, items: [baseInput], version: "1.0.0", metadata: { product_id: "123" } })
+        const run = await av.createRun({ sessionId: session.id, manual: true, items: [baseInput], metadata: { product_id: "123" } })
 
         expect(run.metadata).toMatchObject({
           product_id: "123",
@@ -1356,7 +1306,7 @@ describe('API', () => {
         await updateConfig({ runMetadata: { x: z.nullable(z.string()), y: z.nullable(z.number()) } })
 
         const session = await createSession()
-        const run = await av.createRun({ sessionId: session.id, manual: true, items: [baseInput], version: "1.0.0", metadata: { product_id: "123" } })
+        const run = await av.createRun({ sessionId: session.id, manual: true, items: [baseInput], metadata: { product_id: "123" } })
 
         expect(run.metadata).toMatchObject({
           x: null,
@@ -1372,7 +1322,6 @@ describe('API', () => {
           sessionId: session.id,
           manual: true,
           items: [baseInput],
-          version: "1.0.0",
           metadata: { product_id: "123" }
         })
 
@@ -1388,7 +1337,6 @@ describe('API', () => {
           sessionId: session.id,
           manual: true,
           items: [baseInput],
-          version: "1.0.0",
           metadata: { product_id: "123" }
         })
 
@@ -1405,7 +1353,6 @@ describe('API', () => {
           sessionId: session.id,
           manual: true,
           items: [baseInput],
-          version: "1.0.0",
           metadata: { product_id: "123" }
         })).rejects.toThrowError(expect.objectContaining({
           statusCode: 422,
@@ -1421,7 +1368,6 @@ describe('API', () => {
           sessionId: session.id,
           manual: true,
           items: [baseInput],
-          version: "1.0.0",
           metadata: { product_id: 123 }
         })).rejects.toThrowError(expect.objectContaining({
           statusCode: 422,
@@ -1437,7 +1383,6 @@ describe('API', () => {
           sessionId: session.id,
           manual: true,
           items: [baseInput],
-          version: "1.0.0",
           metadata: { field1: "A", field2: 0 }
         })
 
@@ -1453,7 +1398,6 @@ describe('API', () => {
           sessionId: session.id,
           manual: true,
           items: [baseInput],
-          version: "1.0.0",
           metadata: { field1: "A", field2: 0 }
         })
 
@@ -1469,7 +1413,6 @@ describe('API', () => {
           sessionId: session.id,
           manual: true,
           items: [baseInput],
-          version: "1.0.0",
           metadata: { field1: "A", field2: 0 }
         })
 
@@ -1485,7 +1428,6 @@ describe('API', () => {
           sessionId: session.id,
           manual: true,
           items: [baseInput],
-          version: "1.0.0",
           metadata: { product_id: "A" }
         })
 
@@ -1498,7 +1440,7 @@ describe('API', () => {
       test("metadata can be updated AFTER the run is completed", async () => {
         await updateConfig({ runMetadata: { product_id: z.string() } })
         const session = await createSession()
-        let run = await av.createRun({ sessionId: session.id, manual: true, items: [baseInput], version: "1.0.0", metadata: { product_id: "123" } })
+        let run = await av.createRun({ sessionId: session.id, manual: true, items: [baseInput], metadata: { product_id: "123" } })
 
         expect(run.metadata).toMatchObject({
           product_id: "123",
@@ -1522,7 +1464,7 @@ describe('API', () => {
         await updateConfig()
         const session = await createSession()
 
-        const run = await av.createRun({ sessionId: session.id, items: [baseInput], version: "1.0.0", manual: true })
+        const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true })
         const updated = await av.updateRun({ id: run.id, items: [baseStep] })
 
         // Non-input items should be 'step' while run is in progress
@@ -1535,7 +1477,7 @@ describe('API', () => {
         await updateConfig()
         const session = await createSession()
 
-        const run = await av.createRun({ sessionId: session.id, items: [baseInput], version: "1.0.0", manual: true })
+        const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true })
         await av.updateRun({ id: run.id, items: [baseStep] })
         const completed = await av.updateRun({ id: run.id, items: [baseOutput], status: "completed" })
 
@@ -1551,7 +1493,7 @@ describe('API', () => {
         await updateConfig()
         const session = await createSession()
 
-        const run = await av.createRun({ sessionId: session.id, items: [baseInput], version: "1.0.0", manual: true })
+        const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true })
         await av.updateRun({ id: run.id, items: [baseStep, baseOutput, baseOutput] })
         const completed = await av.updateRun({ id: run.id, status: "completed", outputItemCount: 2 })
 
@@ -1568,7 +1510,7 @@ describe('API', () => {
         await updateConfig()
         const session = await createSession()
 
-        const run = await av.createRun({ sessionId: session.id, items: [baseInput], version: "1.0.0", manual: true })
+        const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true })
         await av.updateRun({ id: run.id, items: [baseStep] })
         const failed = await av.updateRun({ id: run.id, status: "failed", failReason: { message: "error" } })
 
@@ -1582,7 +1524,7 @@ describe('API', () => {
         await updateConfig()
         const session = await createSession()
 
-        const run = await av.createRun({ sessionId: session.id, items: [baseInput], version: "1.0.0", manual: true })
+        const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true })
         await av.updateRun({ id: run.id, items: [baseStep] })
         const cancelled = await av.updateRun({ id: run.id, status: "cancelled" })
 
@@ -1594,7 +1536,7 @@ describe('API', () => {
         await updateConfig()
         const session = await createSession()
 
-        const run = await av.createRun({ sessionId: session.id, items: [baseInput], version: "1.0.0", manual: true })
+        const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true })
         await av.updateRun({ id: run.id, items: [baseStep] })
 
         await expectToFail(av.updateRun({ id: run.id, items: [baseOutput], outputItemCount: 1 }), 422)
@@ -1605,7 +1547,7 @@ describe('API', () => {
         await updateConfig()
         const session = await createSession()
 
-        const run = await av.createRun({ sessionId: session.id, items: [baseInput, baseOutput], version: "1.0.0", manual: true, status: "completed" })
+        const run = await av.createRun({ sessionId: session.id, items: [baseInput, baseOutput], manual: true, status: "completed" })
         const fetchedSession = await av.getSession({ id: session.id })
         const fetchedRun = fetchedSession.runs[0]
 
@@ -1625,6 +1567,7 @@ describe('API', () => {
           agents: [
             {
               name: "test",
+              version: "1.0.0",
               runs: [
                 {
                   input: { schema: inputSchema },
@@ -1644,8 +1587,8 @@ describe('API', () => {
 
       test("keepAliveRun returns expiresAt timestamp for in_progress run", async () => {
         await updateConfigWithTimeout(SHORT_TIMEOUT)
-        const session = await av.createSession({ channel: "test", userId: initUser1.id})
-        const run = await av.createRun({ sessionId: session.id, manual: true, items: [baseInput], version: "1.0.0" })
+        const session = await av.createSession({ agent: "test", userId: initUser1.id})
+        const run = await av.createRun({ sessionId: session.id, manual: true, items: [baseInput] })
 
         expect(run.status).toBe("in_progress")
 
@@ -1660,12 +1603,11 @@ describe('API', () => {
 
       test("keepAliveRun returns null expiresAt for completed run", async () => {
         await updateConfigWithTimeout(SHORT_TIMEOUT)
-        const session = await av.createSession({ channel: "test", userId: initUser1.id})
+        const session = await av.createSession({ agent: "test", userId: initUser1.id})
         const run = await av.createRun({
           sessionId: session.id,
           manual: true,
           items: [baseInput, baseOutput],
-          version: "1.0.0",
           status: "completed"
         })
 
@@ -1677,8 +1619,8 @@ describe('API', () => {
 
       test("run expires when idle timeout passes without keep-alive", async () => {
         await updateConfigWithTimeout(SHORT_TIMEOUT)
-        const session = await av.createSession({ channel: "test", userId: initUser1.id})
-        const run = await av.createRun({ sessionId: session.id, manual: true, items: [baseInput], version: "1.0.0" })
+        const session = await av.createSession({ agent: "test", userId: initUser1.id})
+        const run = await av.createRun({ sessionId: session.id, manual: true, items: [baseInput] })
 
         expect(run.status).toBe("in_progress")
 
@@ -1695,8 +1637,8 @@ describe('API', () => {
 
       test("keep-alive prevents expiration", async () => {
         await updateConfigWithTimeout(SHORT_TIMEOUT)
-        const session = await av.createSession({ channel: "test", userId: initUser1.id})
-        const run = await av.createRun({ sessionId: session.id, manual: true, items: [baseInput], version: "1.0.0" })
+        const session = await av.createSession({ agent: "test", userId: initUser1.id})
+        const run = await av.createRun({ sessionId: session.id, manual: true, items: [baseInput] })
 
         expect(run.status).toBe("in_progress")
 
@@ -1718,8 +1660,8 @@ describe('API', () => {
 
       test("update run also resets expiration timer", async () => {
         await updateConfigWithTimeout(SHORT_TIMEOUT)
-        const session = await av.createSession({ channel: "test", userId: initUser1.id})
-        const run = await av.createRun({ sessionId: session.id, manual: true, items: [baseInput], version: "1.0.0" })
+        const session = await av.createSession({ agent: "test", userId: initUser1.id})
+        const run = await av.createRun({ sessionId: session.id, manual: true, items: [baseInput] })
 
         expect(run.status).toBe("in_progress")
 
@@ -1823,6 +1765,7 @@ describe('API', () => {
             webhookUrl: WEBHOOK_URL,
             agents: [{
               name: "test",
+              version: "1.0.0",
               runs: [{
                 input: { schema: inputSchema },
                 steps: [{ schema: stepSchema }, { schema: functionCallSchema, callResult: { schema: functionResultSchema } }],
@@ -1858,12 +1801,11 @@ describe('API', () => {
 
       test("first run triggers webhook with session_id", async () => {
         await updateConfigWithWebhook();
-        const session = await av.createSession({ channel: "test", userId: initUser1.id});
+        const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
         const run = await av.createRun({
           sessionId: session.id,
           items: [baseInput],
-          version: "1.0.0",
           manual: true,
         });
         expect(run).toBeDefined();
@@ -1881,13 +1823,12 @@ describe('API', () => {
 
       test("second run does NOT trigger webhook", async () => {
         await updateConfigWithWebhook();
-        const session = await av.createSession({ channel: "test", userId: initUser1.id});
+        const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
         // Create first run
         const run1 = await av.createRun({
           sessionId: session.id,
           items: [baseInput, baseOutput],
-          version: "1.0.0",
           manual: true,
           status: "completed"
         });
@@ -1906,7 +1847,6 @@ describe('API', () => {
         const run2 = await av.createRun({
           sessionId: session.id,
           items: [baseInput, baseOutput],
-          version: "1.0.0",
           manual: true,
           status: "completed"
         });
@@ -1931,12 +1871,11 @@ describe('API', () => {
         });
 
         await updateConfigWithWebhook();
-        const session = await av.createSession({ channel: "test", userId: initUser1.id});
+        const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
         const run = await av.createRun({
           sessionId: session.id,
           items: [baseInput],
-          version: "1.0.0",
           manual: true,
         });
         expect(run).toBeDefined();
@@ -1996,7 +1935,6 @@ describe('API', () => {
           sessionId: session.id,
           manual: true,
           items: [baseInput, baseOutput],
-          version: "1.0.0",
           status: "completed"
         });
 
@@ -2037,7 +1975,6 @@ describe('API', () => {
         const run = await av.createRun({
           sessionId: session.id,
           items: [baseInput],
-          version: "1.0.0",
           manual: true,
         });
         expect(run.status).toBe("in_progress");
@@ -2111,7 +2048,6 @@ describe('API', () => {
           sessionId: session.id,
           manual: true,
           items: [baseInput],
-          version: "1.0.0"
         });
 
         const abortController = new AbortController();
@@ -2178,6 +2114,7 @@ describe('API', () => {
       const config = {
         agents: [{
           name: 'test-agent',
+          version: '1.0.0',
           runs: [{
             input: { schema: z.looseObject({ type: z.literal("message"), content: z.string() }) },
             steps: [],
@@ -2205,7 +2142,7 @@ describe('API', () => {
     test('org_a cannot see org_a sessions', async () => {
       // Create a user and session in org2
       const user_b = await av_b.createUser();
-      const session_b = await av_b.createSession({ userId: user_b.id, channel: 'test-agent' });
+      const session_b = await av_b.createSession({ userId: user_b.id, agent: 'test-agent' });
       expect(session_b).toBeDefined();
 
       // Try to get that session from org1 - should fail with 404
@@ -2217,8 +2154,8 @@ describe('API', () => {
       const user_a = await av_a.createUser();
       const user_b = await av_b.createUser();
 
-      const session_a = await av_a.createSession({ userId: user_a.id, channel: 'test-agent' });
-      const session_b = await av_b.createSession({ userId: user_b.id, channel: 'test-agent' });
+      const session_a = await av_a.createSession({ userId: user_a.id, agent: 'test-agent' });
+      const session_b = await av_b.createSession({ userId: user_b.id, agent: 'test-agent' });
 
       // List sessions from org1
       const sessions_a = await av_a.getSessions({ space: 'production' });
@@ -2233,11 +2170,10 @@ describe('API', () => {
     test('org1 cannot modify org2 resources', async () => {
       // Create a session in org2 with a run
       const user_b = await av_b.createUser();
-      const session_b = await av_b.createSession({ userId: user_b.id, channel: 'test-agent' });
+      const session_b = await av_b.createSession({ userId: user_b.id, agent: 'test-agent' });
 
       const run_b = await av_b.createRun({
         sessionId: session_b.id,
-        version: '1.0.0',
         manual: true,
         items: [{ type: 'message', content: 'hello' }],
         status: 'in_progress'
@@ -2324,6 +2260,7 @@ describe('API', () => {
         config: {
           agents: [{
             name: "test",
+            version: "1.0.0",
             url: AGENT_URL,
             runs: [{
               input: { schema: inputSchema },
@@ -2351,15 +2288,15 @@ describe('API', () => {
       mockAgentServer?.resetRequests();
     });
 
-    test("happy path: agent streams run.patch events with version header", async () => {
+    test("happy path: agent streams run.patch events", async () => {
       await updateConfigWithUrl();
-      const session = await av.createSession({ channel: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
       mockAgentServer!.setHandler((_body, res) => {
         writeSSE(res, [
           { event: "run.patch", data: { items: [{ type: "reasoning", content: "Thinking..." }] } },
           { event: "run.patch", data: { items: [{ type: "message", role: "assistant", content: "Hello!" }], status: "completed" } },
-        ], { version: "1.0.0" });
+        ]);
       });
 
       const run = await av.createRun({
@@ -2391,7 +2328,7 @@ describe('API', () => {
 
     test("POST validation: creating run with >1 item when url set → 422", async () => {
       await updateConfigWithUrl();
-      const session = await av.createSession({ channel: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
       await expectToFail(av.createRun({
         sessionId: session.id,
@@ -2402,20 +2339,11 @@ describe('API', () => {
       }), 422);
     });
 
-    test("POST validation: setting version when url set → 422", async () => {
-      await updateConfigWithUrl();
-      const session = await av.createSession({ channel: "test", userId: initUser1.id});
-
-      await expectToFail(av.createRun({
-        sessionId: session.id,
-        items: [{ type: "message", role: "user", content: "Hi" }],
-        version: "1.0.0",
-      }), 422);
-    });
+    // test removed: "POST validation: setting version when url set → 422" - version no longer set in createRun
 
     test("POST validation: setting status when url set → 422", async () => {
       await updateConfigWithUrl();
-      const session = await av.createSession({ channel: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
       await expectToFail(av.createRun({
         sessionId: session.id,
@@ -2426,7 +2354,7 @@ describe('API', () => {
 
     test("POST validation: setting state when url set → 422", async () => {
       await updateConfigWithUrl();
-      const session = await av.createSession({ channel: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
       await expectToFail(av.createRun({
         sessionId: session.id,
@@ -2437,7 +2365,7 @@ describe('API', () => {
 
     test("POST validation: setting failReason when url set → 422", async () => {
       await updateConfigWithUrl();
-      const session = await av.createSession({ channel: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
       await expectToFail(av.createRun({
         sessionId: session.id,
@@ -2449,7 +2377,7 @@ describe('API', () => {
 
     test("PATCH blocked: PATCH with items while fetchStatus active → 422", async () => {
       await updateConfigWithUrl();
-      const session = await av.createSession({ channel: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
       // Set up a slow handler so the run stays in fetching state
       mockAgentServer!.setHandler((_body, res) => {
@@ -2479,7 +2407,7 @@ describe('API', () => {
 
     test("PATCH cancellation: PATCH { status: 'cancelled' } → succeeds and aborts connection", async () => {
       await updateConfigWithUrl();
-      const session = await av.createSession({ channel: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
       // Track whether the connection was closed, and when it's connected
       let connectionClosed = false;
@@ -2524,7 +2452,7 @@ describe('API', () => {
 
     test("error event: agent sends event: error → run marked failed", async () => {
       await updateConfigWithUrl();
-      const session = await av.createSession({ channel: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
       mockAgentServer!.setHandler((_body, res) => {
         writeSSE(res, [
@@ -2544,7 +2472,7 @@ describe('API', () => {
 
     test("bad HTTP response: agent returns 500 → run marked failed", async () => {
       await updateConfigWithUrl();
-      const session = await av.createSession({ channel: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
       mockAgentServer!.setHandler((_body, res) => {
         res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -2563,13 +2491,13 @@ describe('API', () => {
 
     test("stream ends without completion → run fails", async () => {
       await updateConfigWithUrl();
-      const session = await av.createSession({ channel: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
       mockAgentServer!.setHandler((_body, res) => {
         writeSSE(res, [
           { event: "run.patch", data: { items: [{ type: "reasoning", content: "Thinking..." }] } },
           // Stream ends without completing (no status: 'completed')
-        ], { version: "1.0.0" });
+        ]);
       });
 
       const run = await av.createRun({
@@ -2584,7 +2512,7 @@ describe('API', () => {
 
     test("multiple incremental patches: items accumulate correctly", async () => {
       await updateConfigWithUrl();
-      const session = await av.createSession({ channel: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
       mockAgentServer!.setHandler((_body, res) => {
         writeSSE(res, [
@@ -2592,7 +2520,7 @@ describe('API', () => {
           { event: "run.patch", data: { items: [{ type: "reasoning", content: "Step 2" }] } },
           { event: "run.patch", data: { items: [{ type: "reasoning", content: "Step 3" }] } },
           { event: "run.patch", data: { items: [{ type: "message", role: "assistant", content: "Final" }], status: "completed" } },
-        ], { version: "1.0.0" });
+        ]);
       });
 
       const run = await av.createRun({
@@ -2610,26 +2538,6 @@ describe('API', () => {
       expect(completedRun.sessionItems[4].content.content).toBe("Final");
     }, 30000);
 
-    test("agent must provide X-AgentView-Version header", async () => {
-      await updateConfigWithUrl();
-      const session = await av.createSession({ channel: "test", userId: initUser1.id});
-
-      mockAgentServer!.setHandler((_body, res) => {
-        // No version header → should fail when run.patch arrives
-        writeSSE(res, [
-          { event: "run.patch", data: { items: [{ type: "reasoning", content: "Thinking..." }] } },
-        ]);
-      });
-
-      const run = await av.createRun({
-        sessionId: session.id,
-        items: [{ type: "message", role: "user", content: "Hi" }],
-      });
-
-      const failedRun = await waitForRunStatus(session.id, run.id, ["failed"]);
-      expect(failedRun.status).toBe("failed");
-      expect(failedRun.failReason.message).toContain("Version");
-    }, 30000);
   });
 
   describe("agent endpoint auto-fetch (ai-sdk protocol)", () => {
@@ -2647,6 +2555,7 @@ describe('API', () => {
         config: {
           agents: [{
             name: "test",
+            version: "1.0.0",
             url: AI_SDK_AGENT_URL,
             protocol: 'ai-sdk',
             runs: [{
@@ -2677,7 +2586,7 @@ describe('API', () => {
 
     test("happy path: text response", async () => {
       await updateConfigWithAiSdkUrl();
-      const session = await av.createSession({ channel: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKStream(res, [
@@ -2687,7 +2596,7 @@ describe('API', () => {
           { type: "text-delta", id: "t1", delta: "world!" },
           { type: "text-end", id: "t1" },
           { type: "finish", finishReason: "stop" },
-        ], { version: "1.0.0" });
+        ]);
       });
 
       const run = await av.createRun({
@@ -2710,7 +2619,7 @@ describe('API', () => {
 
     test("happy path: text + reasoning", async () => {
       await updateConfigWithAiSdkUrl();
-      const session = await av.createSession({ channel: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKStream(res, [
@@ -2722,7 +2631,7 @@ describe('API', () => {
           { type: "text-delta", id: "t1", delta: "The answer is 42" },
           { type: "text-end", id: "t1" },
           { type: "finish", finishReason: "stop" },
-        ], { version: "1.0.0" });
+        ]);
       });
 
       const run = await av.createRun({
@@ -2751,6 +2660,7 @@ describe('API', () => {
         config: {
           agents: [{
             name: "test",
+            version: "1.0.0",
             url: AI_SDK_AGENT_URL,
             protocol: 'ai-sdk',
             runs: [{
@@ -2763,7 +2673,7 @@ describe('API', () => {
         },
       });
 
-      const session = await av.createSession({ channel: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKStream(res, [
@@ -2776,7 +2686,7 @@ describe('API', () => {
           { type: "text-delta", id: "t1", delta: "It's 72F in NYC" },
           { type: "text-end", id: "t1" },
           { type: "finish", finishReason: "stop" },
-        ], { version: "1.0.0" });
+        ]);
       });
 
       const run = await av.createRun({
@@ -2797,62 +2707,15 @@ describe('API', () => {
       expect(completedRun.sessionItems[2].content.text).toBe("It's 72F in NYC");
     }, 30000);
 
-    test("version header: X-AgentView-Version → version set on run", async () => {
-      await updateConfigWithAiSdkUrl();
-      const session = await av.createSession({ channel: "test", userId: initUser1.id});
-
-      mockAISDKServer!.setHandler((_body, res) => {
-        writeAISDKStream(res, [
-          { type: "start", messageId: "msg_1" },
-          { type: "text-start", id: "t1" },
-          { type: "text-delta", id: "t1", delta: "Hi" },
-          { type: "text-end", id: "t1" },
-          { type: "finish", finishReason: "stop" },
-        ], { version: "2.5.0" });
-      });
-
-      const run = await av.createRun({
-        sessionId: session.id,
-        items: [{ type: "message", role: "user", content: "Hi" }],
-      });
-
-      const completedRun = await waitForRunStatus(session.id, run.id, ["completed"]);
-      expect(completedRun.agentRef?.version).toBe("2.5.0");
-    }, 30000);
-
-    test("missing version header → run fails", async () => {
-      await updateConfigWithAiSdkUrl();
-      const session = await av.createSession({ channel: "test", userId: initUser1.id});
-
-      mockAISDKServer!.setHandler((_body, res) => {
-        // No version header
-        writeAISDKStream(res, [
-          { type: "start", messageId: "msg_1" },
-          { type: "text-start", id: "t1" },
-          { type: "text-delta", id: "t1", delta: "Hi" },
-          { type: "text-end", id: "t1" },
-          { type: "finish", finishReason: "stop" },
-        ]);
-      });
-
-      const run = await av.createRun({
-        sessionId: session.id,
-        items: [{ type: "message", role: "user", content: "Hi" }],
-      });
-
-      const failedRun = await waitForRunStatus(session.id, run.id, ["failed"]);
-      expect(failedRun.status).toBe("failed");
-      expect(failedRun.failReason.message).toContain("Version");
-    }, 30000);
 
     test("error event → run marked failed", async () => {
       await updateConfigWithAiSdkUrl();
-      const session = await av.createSession({ channel: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKStream(res, [
           { type: "error", errorText: "Something went wrong" },
-        ], { version: "1.0.0" });
+        ]);
       });
 
       const run = await av.createRun({
@@ -2867,7 +2730,7 @@ describe('API', () => {
 
     test("HTTP error: 500 → run marked failed", async () => {
       await updateConfigWithAiSdkUrl();
-      const session = await av.createSession({ channel: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -2886,7 +2749,7 @@ describe('API', () => {
 
     test("stream ends without finish → run marked failed", async () => {
       await updateConfigWithAiSdkUrl();
-      const session = await av.createSession({ channel: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKStream(res, [
@@ -2895,7 +2758,7 @@ describe('API', () => {
           { type: "text-delta", id: "t1", delta: "Partial..." },
           { type: "text-end", id: "t1" },
           // No finish event → stream ends without completing
-        ], { version: "1.0.0" });
+        ]);
       });
 
       const run = await av.createRun({
@@ -2910,7 +2773,7 @@ describe('API', () => {
 
     test("request body format: sends UIMessage[] with correct history", async () => {
       await updateConfigWithAiSdkUrl();
-      const session = await av.createSession({ channel: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKStream(res, [
@@ -2919,7 +2782,7 @@ describe('API', () => {
           { type: "text-delta", id: "t1", delta: "Hi there" },
           { type: "text-end", id: "t1" },
           { type: "finish", finishReason: "stop" },
-        ], { version: "1.0.0" });
+        ]);
       });
 
       const run = await av.createRun({
@@ -2943,7 +2806,7 @@ describe('API', () => {
 
     test("multi-turn: second request has full conversation history", async () => {
       await updateConfigWithAiSdkUrl();
-      const session = await av.createSession({ channel: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
       // First turn
       mockAISDKServer!.setHandler((_body, res) => {
@@ -2953,7 +2816,7 @@ describe('API', () => {
           { type: "text-delta", id: "t1", delta: "Hello!" },
           { type: "text-end", id: "t1" },
           { type: "finish", finishReason: "stop" },
-        ], { version: "1.0.0" });
+        ]);
       });
 
       const run1 = await av.createRun({
@@ -2973,7 +2836,7 @@ describe('API', () => {
           { type: "text-delta", id: "t2", delta: "I'm fine!" },
           { type: "text-end", id: "t2" },
           { type: "finish", finishReason: "stop" },
-        ], { version: "1.0.0" });
+        ]);
       });
 
       const run2 = await av.createRun({
@@ -3007,7 +2870,7 @@ describe('API', () => {
       });
 
       const session = await createSession();
-      const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true, version: "1.0" });
+      const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true });
       await av.updateRun({ id: run.id, items: [baseOutput], status: "completed" });
 
       const updatedSession = await av.getSession({ id: session.id });
@@ -3046,7 +2909,7 @@ describe('API', () => {
       await updateConfig();
 
       const session = await createSession();
-      const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true, version: "1.0" });
+      const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true });
 
       // Create comment on run
       await av.createComment({ runId: run.id, content: "Run comment" });
@@ -3063,8 +2926,8 @@ describe('API', () => {
       await updateConfig();
 
       const session = await createSession();
-      const run = await av.createRun({ sessionId: session.id, items: [baseInput, baseOutput], status: "completed",  manual: true, version: "1.0" });
-      const run2 = await av.createRun({ sessionId: session.id, items: [baseInput, baseOutput], status: "completed",  manual: true, version: "1.0" });
+      const run = await av.createRun({ sessionId: session.id, items: [baseInput, baseOutput], status: "completed",  manual: true });
+      const run2 = await av.createRun({ sessionId: session.id, items: [baseInput, baseOutput], status: "completed",  manual: true });
 
       
       // No target
@@ -3089,7 +2952,7 @@ describe('API', () => {
       });
 
       const session = await createSession();
-      const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true, version: "1.0" });
+      const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true });
       await av.updateRun({ id: run.id, items: [baseOutput], status: "completed" });
 
       const updatedSession = await av.getSession({ id: session.id });
@@ -3127,7 +2990,7 @@ describe('API', () => {
       });
 
       const session = await createSession();
-      const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true, version: "1.0" });
+      const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true });
 
       // Create run-level score
       await av.updateScores({ runId: run.id, scores: [{ name: "accuracy", value: 0.95 }] });
@@ -3155,7 +3018,7 @@ describe('API', () => {
     //   });
 
     //   const session = await createSession();
-    //   const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true, version: "1.0" });
+    //   const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true });
 
     //   // No target
     //   await expectToFail(
@@ -3170,7 +3033,7 @@ describe('API', () => {
       });
 
       const session = await createSession();
-      const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true, version: "1.0" });
+      const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true });
       await av.updateRun({ id: run.id, items: [baseOutput], status: "completed" });
 
       const updatedSession = await av.getSession({ id: session.id });
@@ -3189,7 +3052,7 @@ describe('API', () => {
       });
 
       const session = await createSession();
-      const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true, version: "1.0" });
+      const run = await av.createRun({ sessionId: session.id, items: [baseInput], manual: true });
       await av.updateRun({ id: run.id, items: [baseOutput], status: "completed" });
 
       const updatedSession = await av.getSession({ id: session.id });

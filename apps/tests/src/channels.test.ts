@@ -34,6 +34,7 @@ describe('Channels', () => {
       config: {
         agents: [{
           name: 'support-agent',
+          version: '1.0.0',
           url: AGENT_URL,
           protocol: 'ai-sdk',
           runs: [{
@@ -325,7 +326,7 @@ describe('Channels', () => {
             { type: 'text-delta', id: 't1', delta: reply },
             { type: 'text-end', id: 't1' },
             { type: 'finish', finishReason: 'stop' },
-          ], { version: '1.0.0' })
+          ])
         }
 
         if (opts?.delayMs) {

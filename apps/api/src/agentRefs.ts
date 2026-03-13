@@ -38,6 +38,33 @@ function compareVersions(v1: ParsedVersion, v2: ParsedVersion): number {
 export type AgentRefInput = { version: string; agent: string; format: 'default' | 'ai-sdk' };
 
 /**
+ * Simple upsert: inserts agent_ref row if not exists, returns the row.
+ * No version comparison, no session update.
+ */
+export async function upsertAgentRef(tx: Transaction, opts: {
+  agentRef: AgentRefInput;
+  organizationId: string;
+}): Promise<{ agentRefId: string; version: string; agent: string; format: 'default' | 'ai-sdk' }> {
+  const parsed = parseVersion(opts.agentRef.version);
+  if (!parsed) {
+    throw new AgentViewError("Invalid version number format. Should be like '1.2.3' or '1.2.3-beta'", 422);
+  }
+
+  const version = versionToString(parsed);
+
+  await tx.insert(agentRefs).values({
+    organizationId: opts.organizationId,
+    version,
+    agent: opts.agentRef.agent,
+    format: opts.agentRef.format,
+  }).onConflictDoNothing();
+
+  const [row] = await tx.select().from(agentRefs).where(and(eq(agentRefs.version, version), eq(agentRefs.agent, opts.agentRef.agent))).limit(1);
+
+  return { agentRefId: row.id, version, agent: opts.agentRef.agent, format: opts.agentRef.format };
+}
+
+/**
  * Validates version against previous, upserts the agent_refs row,
  * and updates the session's agentRefs array.
  */
