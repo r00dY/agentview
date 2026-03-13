@@ -1314,33 +1314,18 @@ describe('API', () => {
           await expectToFail(av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], version: "2.0.0-dev" }), 422) // different suffix fails
         })
 
-        test("no suffix in playground results in -dev suffix", async () => {
+        test("version stored as-is", async () => {
           await updateConfig()
           const session = await createSession()
           const run = await av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], version: "1.3.0" })
-          expect(run.agentRef?.version).toBe("1.3.0-dev")
+          expect(run.agentRef?.version).toBe("1.3.0")
         })
 
-        test("playground suffix can be overriden", async () => {
+        test("suffixed version stored as-is", async () => {
           await updateConfig()
           const session = await createSession()
           const run = await av.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], version: "1.3.0-xxx" })
           expect(run.agentRef?.version).toBe("1.3.0-xxx")
-        })
-
-        test("no suffix in production is no suffix", async () => {
-          await updateConfig({ prod: true })
-          const session = await createSession()
-          const run = await avProd.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], version: "1.3.0" })
-          expect(run.agentRef?.version).toBe("1.3.0")
-        })
-
-        test("production can't have suffixed versions", async () => {
-          await updateConfig({ prod: true })
-          const session = await avProd.createSession({ channel: "test", userId: initProdUser.id })
-
-          await expectToFail(avProd.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], version: "1.3.0-dev" }), 422) // production can't have suffixes
-          await expectToFail(avProd.createRun({ sessionId: session.id, manual: true, items: [baseInput, baseOutput], version: "1.3.1-local" }), 422) // production can't have suffixes
         })
 
       });
@@ -2388,7 +2373,7 @@ describe('API', () => {
       // Wait for the worker to process the run
       const completedRun = await waitForRunStatus(session.id, run.id, ["completed"]);
       expect(completedRun.status).toBe("completed");
-      expect(completedRun.agentRef?.version).toBe("1.0.0-dev"); // dev suffix applied
+      expect(completedRun.agentRef?.version).toBe("1.0.0");
       // Should have 3 items: input + step + output
       expect(completedRun.sessionItems.length).toBe(3);
       expect(completedRun.sessionItems[0].content.type).toBe("message");
@@ -2714,7 +2699,7 @@ describe('API', () => {
 
       const completedRun = await waitForRunStatus(session.id, run.id, ["completed"]);
       expect(completedRun.status).toBe("completed");
-      expect(completedRun.agentRef?.version).toBe("1.0.0-dev");
+      expect(completedRun.agentRef?.version).toBe("1.0.0");
       // Should have 2 items: input + text output
       expect(completedRun.sessionItems.length).toBe(2);
       expect(completedRun.sessionItems[0].content.type).toBe("message");
@@ -2832,7 +2817,7 @@ describe('API', () => {
       });
 
       const completedRun = await waitForRunStatus(session.id, run.id, ["completed"]);
-      expect(completedRun.agentRef?.version).toBe("2.5.0-dev");
+      expect(completedRun.agentRef?.version).toBe("2.5.0");
     }, 30000);
 
     test("missing version header → run fails", async () => {

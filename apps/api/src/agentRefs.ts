@@ -11,8 +11,6 @@ type ParsedVersion = {
 };
 
 function parseVersion(version: string): ParsedVersion | undefined {
-  // Accept version strings like '1.2.3', 'v1.2.3', '1', '1.2', possibly with suffixes like '-beta', '-alpha.1'
-  // Normalize: '1' -> '1.0.0', '1.2' -> '1.2.0'
   const m = version.match(/^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-(.+))?$/);
   if (!m) return undefined;
 
@@ -31,88 +29,69 @@ function versionToString(version: ParsedVersion): string {
 }
 
 function compareVersions(v1: ParsedVersion, v2: ParsedVersion): number {
-  // Returns: -1 if v1 < v2, 0 if v1 === v2, 1 if v1 > v2
-  // Note: Suffixes are ignored for comparison purposes
   if (v1.major !== v2.major) return v1.major < v2.major ? -1 : 1;
   if (v1.minor !== v2.minor) return v1.minor < v2.minor ? -1 : 1;
   if (v1.patch !== v2.patch) return v1.patch < v2.patch ? -1 : 1;
   return 0;
 }
 
+export type AgentRefInput = { version: string; agent: string; format: 'default' | 'ai-sdk' };
+
 /**
- * Validates, normalizes, and stores an agent ref. Used by both the POST /api/runs
- * handler (client-provided version) and the worker (agent-provided version via SSE).
- *
- * Returns { agentRefId, version, agent, format } for the caller to use (e.g. set on the run row).
+ * Validates version against previous, upserts the agent_refs row,
+ * and updates the session's agentRefs array.
  */
 export async function resolveAgentRef(tx: Transaction, opts: {
-  versionString: string;
-  agent: string;
-  format: 'default' | 'ai-sdk';
-  isProduction: boolean;
-  isDev: boolean;
-  lastRunVersion: string | null;
+  agentRef: AgentRefInput;
+  previousAgentRef?: { version: string } | null;
   organizationId: string;
   sessionId: string;
-  existingSessionVersions?: string[];
 }): Promise<{ agentRefId: string; version: string; agent: string; format: 'default' | 'ai-sdk' }> {
-  const parsedVersion = parseVersion(opts.versionString);
-  if (!parsedVersion) {
-    throw new AgentViewError("Invalid version number format. Should be like '1.2.3-xxx'", 422);
+  const parsed = parseVersion(opts.agentRef.version);
+  if (!parsed) {
+    throw new AgentViewError("Invalid version number format. Should be like '1.2.3' or '1.2.3-beta'", 422);
   }
 
-  if (opts.isProduction && parsedVersion.suffix) {
-    throw new AgentViewError("Production sessions can't have suffixed versions.", 422);
-  }
+  const version = versionToString(parsed);
 
-  if (opts.isDev && !parsedVersion.suffix) {
-    parsedVersion.suffix = 'dev';
-  }
-
-  if (opts.lastRunVersion) {
-    const lastVersionParsed = parseVersion(opts.lastRunVersion);
-    if (!lastVersionParsed) {
+  if (opts.previousAgentRef) {
+    const prevParsed = parseVersion(opts.previousAgentRef.version);
+    if (!prevParsed) {
       throw new AgentViewError("Invalid version format in previous run.", 422);
     }
 
-    if (lastVersionParsed.major !== parsedVersion.major) {
+    if (prevParsed.major !== parsed.major) {
       throw new AgentViewError("Cannot continue a session with a different major version.", 422);
     }
 
-    if (compareVersions(parsedVersion, lastVersionParsed) < 0) {
+    if (compareVersions(parsed, prevParsed) < 0) {
       throw new AgentViewError("Cannot continue a session with an older version.", 422);
     }
   }
-
-  const version = versionToString(parsedVersion);
 
   // Upsert agent ref row
   await tx.insert(agentRefs).values({
     organizationId: opts.organizationId,
     version,
-    agent: opts.agent,
-    format: opts.format,
+    agent: opts.agentRef.agent,
+    format: opts.agentRef.format,
   }).onConflictDoNothing();
 
-  const [agentRefRow] = await tx.select().from(agentRefs).where(and(eq(agentRefs.version, version), eq(agentRefs.agent, opts.agent))).limit(1);
+  const [agentRefRow] = await tx.select().from(agentRefs).where(and(eq(agentRefs.version, version), eq(agentRefs.agent, opts.agentRef.agent))).limit(1);
 
-  // Update session's versions array if new
-  let existingVersions: string[];
-  if (opts.existingSessionVersions) {
-    existingVersions = opts.existingSessionVersions;
-  } else {
-    const currentSession = await tx.query.sessions.findFirst({
-      where: eq(sessions.id, opts.sessionId),
-      columns: { agentRefs: true },
-    });
-    existingVersions = (currentSession?.agentRefs as string[]) ?? [];
-  }
-  if (!existingVersions.includes(version)) {
+  // Update session's agentRefs array if new
+  const currentSession = await tx.query.sessions.findFirst({
+    where: eq(sessions.id, opts.sessionId),
+    columns: { agentRefs: true },
+  });
+  const existing = (currentSession?.agentRefs as string[]) ?? [];
+
+  if (!existing.includes(version)) {
     await tx.update(sessions).set({
-      agentRefs: [...existingVersions, version],
+      agentRefs: [...existing, version],
       updatedAt: new Date().toISOString(),
     }).where(eq(sessions.id, opts.sessionId));
   }
 
-  return { agentRefId: agentRefRow.id, version, agent: opts.agent, format: opts.format };
+  return { agentRefId: agentRefRow.id, version, agent: opts.agentRef.agent, format: opts.agentRef.format };
 }

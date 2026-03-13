@@ -366,15 +366,10 @@ export async function createRun(
       }
 
       const resolved = await resolveAgentRef(tx, {
-        versionString: body.version!,
-        agent: agentConfig.name,
-        format: agentConfig.protocol === 'ai-sdk' ? 'ai-sdk' : 'default',
-        isProduction: environment.user === null,
-        isDev: environment.user !== null,
-        lastRunVersion: lastRun?.agentRef?.version ?? null,
+        agentRef: { version: body.version!, agent: agentConfig.name, format: agentConfig.protocol === 'ai-sdk' ? 'ai-sdk' : 'default' },
+        previousAgentRef: lastRun?.agentRef ?? null,
         organizationId,
         sessionId: session.id,
-        existingSessionVersions: (session.agentRefs as string[]) ?? [],
       });
       versionId = resolved.agentRefId;
     }

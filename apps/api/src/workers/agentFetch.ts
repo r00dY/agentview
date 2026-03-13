@@ -185,12 +185,8 @@ async function processAgentFetch(run: Run) {
 
         await withOrg(run.organizationId, async (tx) => {
           const { agentRefId } = await resolveAgentRef(tx, {
-            versionString: event.data,
-            agent: agentConfig.name,
-            format: agentConfig.protocol === 'ai-sdk' ? 'ai-sdk' : 'default',
-            isProduction: session.user.space === 'production',
-            isDev: session.user.space !== 'production',
-            lastRunVersion: lastPreviousRun?.agentRef?.version ?? null,
+            agentRef: { version: event.data, agent: agentConfig.name, format: agentConfig.protocol === 'ai-sdk' ? 'ai-sdk' : 'default' },
+            previousAgentRef: lastPreviousRun?.agentRef ?? null,
             organizationId: run.organizationId,
             sessionId: run.sessionId,
           });
