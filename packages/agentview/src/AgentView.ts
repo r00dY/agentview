@@ -64,10 +64,10 @@ export class AgentView {
     //   }
     //   this.apiKey = apiKey
     // }
-    
     this.apiKey = options?.apiKey
     this.userToken = options?.userToken
     this.env = options?.env
+    this.customHeaders = options?.headers
   }
 
   private getHeaders(): Record<string, string> {

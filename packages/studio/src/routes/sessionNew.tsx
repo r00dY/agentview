@@ -8,16 +8,16 @@ import { config } from "../config";
 import { requireAgentConfig, requireChannelConfig } from "agentview/configUtils";
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { AlertCircleIcon } from "lucide-react";
-import type { ApiChannelConfig } from "agentview/configTypes";
+import { getSessionCached } from "../lib/auth-client";
 
-function getChannelNameFromRequest(request: Request): string {
+function getAgentNameFromRequest(request: Request): string {
   const url = new URL(request.url);
-  const channelName = url.searchParams.get('channel');
-  if (!channelName) {
-    throw new Error('Channel name is required');
+  const agentName = url.searchParams.get('agent');
+  if (!agentName) {
+    throw new Error('Agent name is required');
   }
 
-  return channelName
+  return agentName
 
   // const channelConfig = config.channels?.find(
   //   (c): c is ApiChannelConfig => c.type === 'api' && c.name === channelName
@@ -30,7 +30,7 @@ function getChannelNameFromRequest(request: Request): string {
 }
 
 async function loader({ request }: LoaderFunctionArgs) {
-  const channelConfig = requireChannelConfig(config, { type: 'api', name: getChannelNameFromRequest(request) });
+  const channelConfig = requireChannelConfig(config, { type: 'api', name: getAgentNameFromRequest(request) });
 
   return {
     channelConfig
@@ -38,9 +38,10 @@ async function loader({ request }: LoaderFunctionArgs) {
 }
 
 async function action({ request, params }: ActionFunctionArgs): Promise<ActionResponse | Response> {
-  const channelName = getChannelNameFromRequest(request);
+  const authSession = (await getSessionCached())!;
+  const agentName = getAgentNameFromRequest(request);
 
-  const channelConfig = requireChannelConfig(config, { type: 'api', name: channelName });
+  const channelConfig = requireChannelConfig(config, { type: 'api', name: agentName });
   // const agentConfig = requireAgentConfig(config, channelConfig.agent);
   const listParams = getListParams(request);
 
@@ -51,13 +52,13 @@ async function action({ request, params }: ActionFunctionArgs): Promise<ActionRe
   }
 
   if (!payload && channelConfig.newSessionComponent) {
-    return redirect(`/sessions/new?channel=${channelName}&${toQueryParams(listParams)}`, { status: 303 });
+    return redirect(`/sessions/new?agent=${agentName}&${toQueryParams(listParams)}`, { status: 303 });
   }
 
   try {
-    const user = await agentview.createUser({ space: "playground" });
+    const user = await agentview.createUser();
     const session = await agentview.createSession({
-      channel: channelName,
+      agent: agentName,
       userId: user.id,
       metadata: payload?.metadata
     });

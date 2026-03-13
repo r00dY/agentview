@@ -120,6 +120,7 @@ export default defineConfig({
   agents: [
     {
       name: "weather-chat",
+      // version: "0.0.1",
       url: "http://localhost:3000/api/double-text",
       protocol: "ai-sdk",
       runs: [

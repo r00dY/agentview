@@ -69,11 +69,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const agent = getCurrentAgent(request);
   const env = getEnv();
 
-  if (env === "dev" || env === "prod") {
-    agentview.updateEnvironment({ config }).catch(error => { // can easily run in background
-      console.warn("Error while updating remote config", error);
-    });
-  }
+  agentview.updateEnvironment({ config }).catch(error => { // can easily run in background
+    console.warn("Error while updating remote config", error);
+  });
 
   const organization = await getOrganizationCached();
   const member = organization.members.find(m => m.userId === session.user.id);
@@ -197,7 +195,7 @@ function Component() {
 
               <SidebarMenuItem>
                 {apiChannels.length === 1 ? (
-                  <Form action={`/sessions/new?channel=${apiChannels[0].name}&space=playground`} method="post" className="flex flex-col items-stretch relative mt-1 px-1">
+                  <Form action={`/sessions/new?agent=${apiChannels[0].name}&space=playground`} method="post" className="flex flex-col items-stretch relative mt-1 px-1">
                     <Button variant="outline" size="sm" type="submit">
                       <PlusIcon className="h-4 w-4" />
                       New Session
@@ -215,7 +213,7 @@ function Component() {
                       <DropdownMenuContent align="start" className="w-[--radix-popper-anchor-width]">
                         {apiChannels.map(channel => (
                           <DropdownMenuItem key={channel.name} onClick={() => {
-                            submitForm(null, { method: 'post', action: `/sessions/new?channel=${channel.name}&space=playground` });
+                            submitForm(null, { method: 'post', action: `/sessions/new?agent=${channel.name}&space=playground` });
                           }}>
                             {channel.name}
                           </DropdownMenuItem>
