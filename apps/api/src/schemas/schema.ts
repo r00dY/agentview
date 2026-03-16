@@ -46,7 +46,7 @@ export const sessions = pgTable("sessions", {
   channelType: varchar("channel_type", { length: 64 }).notNull(),
   channelAddress: varchar("channel_address", { length: 255 }).notNull(),
   summary: text("summary"),
-  agentRefs: jsonb("agent_refs").$type<{ name: string; version: string; format: string }[]>().default([]),
+  agentRefs: jsonb("agent_refs").$type<{ name: string; version: string; adapter: string }[]>().default([]),
   agentRefId: uuid("agent_ref_id").references(() => agentRefs.id),
   initialState: jsonb("initial_state"),
   channelThreadId: uuid("channel_thread_id").references(() => channelThreads.id, { onDelete: 'set null' }),
@@ -104,7 +104,7 @@ export const agentRefs = pgTable("agent_refs", {
   organizationId: text("organization_id").notNull().references(() => organizations.id),
   version: varchar("version", { length: 255 }).notNull(),
   agent: varchar("agent", { length: 255 }).notNull(),
-  format: varchar("format", { length: 24 }).notNull().$type<'default' | 'ai-sdk'>(),
+  adapter: varchar("adapter", { length: 24 }).notNull().$type<'agentview' | 'ai-sdk'>(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex('agent_ref_version_agent_org_unique').on(table.version, table.agent, table.organizationId),

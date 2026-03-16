@@ -111,7 +111,7 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
       agentRef: run.agentRef ? {
         name: run.agentRef.agent,
         version: run.agentRef.version,
-        format: run.agentRef.format,
+        adapter: run.agentRef.adapter,
       } : null,
       sessionItems: run.sessionItems.map((item, index) => ({
         ...item,
@@ -123,7 +123,7 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
     agentRef: row.agentRef ? {
       name: row.agentRef.agent,
       version: row.agentRef.version,
-      format: row.agentRef.format,
+      adapter: row.agentRef.adapter,
     } : null,
     agentRefs: row.agentRefs ?? []
   } as Session;

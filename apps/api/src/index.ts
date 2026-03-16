@@ -1217,7 +1217,7 @@ app.openapi(sessionsPOSTRoute, async (c) => {
 
     // Resolve agent ref at session creation
     const { agentRefId } = await upsertAgentRef(tx, {
-      agentRef: { version: agentConfig.version, agent: agentConfig.name, format: agentConfig.protocol ?? 'default' },
+      agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter ?? 'agentview' },
       organizationId: principal.organizationId,
     });
 

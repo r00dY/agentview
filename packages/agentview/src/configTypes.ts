@@ -28,7 +28,7 @@ export interface BaseAgentConfig<TRunConfig extends BaseRunConfig = BaseRunConfi
     name: string;
     version: string;
     url?: string;
-    protocol?: 'default' | 'ai-sdk';
+    adapter?: 'agentview' | 'ai-sdk';
     runs?: TRunConfig[];
 }
 

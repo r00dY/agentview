@@ -36,7 +36,7 @@ describe('Channels', () => {
           name: 'support-agent',
           version: '1.0.0',
           url: AGENT_URL,
-          protocol: 'ai-sdk',
+          adapter: 'ai-sdk',
           runs: [{
             input: { schema: z.looseObject({ role: z.literal('user'), parts: z.array(z.any()) }) },
             output: { schema: z.looseObject({ type: z.literal('text'), text: z.string() }) },

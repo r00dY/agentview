@@ -2550,7 +2550,7 @@ describe('API', () => {
 
   });
 
-  describe("agent endpoint auto-fetch (ai-sdk protocol)", () => {
+  describe("agent endpoint auto-fetch (ai-sdk adapter)", () => {
     const AI_SDK_AGENT_PORT = 3458;
     const AI_SDK_AGENT_URL = `http://localhost:${AI_SDK_AGENT_PORT}/agent`;
 
@@ -2567,7 +2567,7 @@ describe('API', () => {
             name: "test",
             version: "1.0.0",
             url: AI_SDK_AGENT_URL,
-            protocol: 'ai-sdk',
+            adapter: 'ai-sdk',
             runs: [{
               input: { schema: inputSchema },
               steps: [{ schema: stepSchema }],
@@ -2672,7 +2672,7 @@ describe('API', () => {
             name: "test",
             version: "1.0.0",
             url: AI_SDK_AGENT_URL,
-            protocol: 'ai-sdk',
+            adapter: 'ai-sdk',
             runs: [{
               input: { schema: inputSchema },
               steps: [{ schema: reasoningSchema }, { schema: toolCallSchema }],

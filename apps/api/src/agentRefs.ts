@@ -35,7 +35,7 @@ function compareVersions(v1: ParsedVersion, v2: ParsedVersion): number {
   return 0;
 }
 
-export type AgentRefInput = { version: string; agent: string; format: 'default' | 'ai-sdk' };
+export type AgentRefInput = { version: string; agent: string; adapter: 'agentview' | 'ai-sdk' };
 
 /**
  * Simple upsert: inserts agent_ref row if not exists, returns the row.
@@ -44,7 +44,7 @@ export type AgentRefInput = { version: string; agent: string; format: 'default' 
 export async function upsertAgentRef(tx: Transaction, opts: {
   agentRef: AgentRefInput;
   organizationId: string;
-}): Promise<{ agentRefId: string; version: string; agent: string; format: 'default' | 'ai-sdk' }> {
+}): Promise<{ agentRefId: string; version: string; agent: string; adapter: 'agentview' | 'ai-sdk' }> {
   const parsed = parseVersion(opts.agentRef.version);
   if (!parsed) {
     throw new AgentViewError("Invalid version number format. Should be like '1.2.3' or '1.2.3-beta'", 422);
@@ -56,12 +56,12 @@ export async function upsertAgentRef(tx: Transaction, opts: {
     organizationId: opts.organizationId,
     version,
     agent: opts.agentRef.agent,
-    format: opts.agentRef.format,
+    adapter: opts.agentRef.adapter,
   }).onConflictDoNothing();
 
   const [row] = await tx.select().from(agentRefs).where(and(eq(agentRefs.version, version), eq(agentRefs.agent, opts.agentRef.agent))).limit(1);
 
-  return { agentRefId: row.id, version, agent: opts.agentRef.agent, format: opts.agentRef.format };
+  return { agentRefId: row.id, version, agent: opts.agentRef.agent, adapter: opts.agentRef.adapter };
 }
 
 /**
@@ -73,7 +73,7 @@ export async function resolveAgentRef(tx: Transaction, opts: {
   previousAgentRef?: { version: string } | null;
   organizationId: string;
   sessionId: string;
-}): Promise<{ agentRefId: string; version: string; agent: string; format: 'default' | 'ai-sdk' }> {
+}): Promise<{ agentRefId: string; version: string; agent: string; adapter: 'agentview' | 'ai-sdk' }> {
   const parsed = parseVersion(opts.agentRef.version);
   if (!parsed) {
     throw new AgentViewError("Invalid version number format. Should be like '1.2.3' or '1.2.3-beta'", 422);
@@ -101,7 +101,7 @@ export async function resolveAgentRef(tx: Transaction, opts: {
     organizationId: opts.organizationId,
     version,
     agent: opts.agentRef.agent,
-    format: opts.agentRef.format,
+    adapter: opts.agentRef.adapter,
   }).onConflictDoNothing();
 
   const [agentRefRow] = await tx.select().from(agentRefs).where(and(eq(agentRefs.version, version), eq(agentRefs.agent, opts.agentRef.agent))).limit(1);
@@ -111,15 +111,15 @@ export async function resolveAgentRef(tx: Transaction, opts: {
     where: eq(sessions.id, opts.sessionId),
     columns: { agentRefs: true },
   });
-  const existing = (currentSession?.agentRefs as { name: string; version: string; format: string }[]) ?? [];
+  const existing = (currentSession?.agentRefs as { name: string; version: string; adapter: string }[]) ?? [];
 
   const alreadyExists = existing.some(ref => ref.name === opts.agentRef.agent && ref.version === version);
   if (!alreadyExists) {
     await tx.update(sessions).set({
-      agentRefs: [...existing, { name: opts.agentRef.agent, version, format: opts.agentRef.format }],
+      agentRefs: [...existing, { name: opts.agentRef.agent, version, adapter: opts.agentRef.adapter }],
       updatedAt: new Date().toISOString(),
     }).where(eq(sessions.id, opts.sessionId));
   }
 
-  return { agentRefId: agentRefRow.id, version, agent: opts.agentRef.agent, format: opts.agentRef.format };
+  return { agentRefId: agentRefRow.id, version, agent: opts.agentRef.agent, adapter: opts.agentRef.adapter };
 }

@@ -333,7 +333,7 @@ function baseConfigSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
             name: z.string(),
             version: z.string(),
             url: z.string().optional(),
-            protocol: z.enum(['default', 'ai-sdk']).optional(),
+            adapter: z.enum(['agentview', 'ai-sdk']).optional(),
             runs: z.array(z.object({
                 input: BaseSessionItemConfigSchema,
                 output: BaseSessionItemConfigSchema,

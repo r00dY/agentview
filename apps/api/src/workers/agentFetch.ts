@@ -94,7 +94,7 @@ async function processAgentFetch(run: Run) {
     // Resolve agent ref from config version and assign to run
     await withOrg(run.organizationId, async (tx) => {
       const { agentRefId } = await upsertAgentRef(tx, {
-        agentRef: { version: agentConfig.version, agent: agentConfig.name, format: agentConfig.protocol === 'ai-sdk' ? 'ai-sdk' : 'default' },
+        agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter === 'ai-sdk' ? 'ai-sdk' : 'agentview' },
         organizationId: run.organizationId,
       });
 
@@ -117,13 +117,13 @@ async function processAgentFetch(run: Run) {
           where: eq(sessions.id, run.sessionId),
           columns: { agentRefs: true },
         });
-        const existing = (currentSession?.agentRefs as { name: string; version: string; format: string }[]) ?? [];
+        const existing = (currentSession?.agentRefs as { name: string; version: string; adapter: string }[]) ?? [];
         const version = agentConfig.version;
-        const format = agentConfig.protocol === 'ai-sdk' ? 'ai-sdk' as const : 'default' as const;
+        const adapter = agentConfig.adapter === 'ai-sdk' ? 'ai-sdk' as const : 'agentview' as const;
         const alreadyExists = existing.some(ref => ref.name === agentConfig.name && ref.version === version);
         if (!alreadyExists) {
           await tx.update(sessions).set({
-            agentRefs: [...existing, { name: agentConfig.name, version, format }],
+            agentRefs: [...existing, { name: agentConfig.name, version, adapter }],
             updatedAt: new Date().toISOString(),
           }).where(eq(sessions.id, run.sessionId));
         }
@@ -145,8 +145,8 @@ async function processAgentFetch(run: Run) {
 
 
     if (session.channel.type !== 'api') {
-      if (agentConfig.protocol !== 'ai-sdk') {
-        throw new Error('Agent protocol must be ai-sdk to create session items from channel messages');
+      if (agentConfig.adapter !== 'ai-sdk') {
+        throw new Error('Agent adapter must be ai-sdk to create session items from channel messages');
       }
 
       const fullRun = session.runs.find(r => r.id === run.id);
@@ -192,7 +192,7 @@ async function processAgentFetch(run: Run) {
     // Call the agent endpoint
     const body: RunBody = { session };
 
-    const callFn = agentConfig.protocol === 'ai-sdk' ? callAgentAPIAISDK : callAgentAPI;
+    const callFn = agentConfig.adapter === 'ai-sdk' ? callAgentAPIAISDK : callAgentAPI;
 
     const getCurrentRunStatus = async () => {
       return await withOrg(run.organizationId, async (tx) => {
@@ -256,8 +256,8 @@ async function processAgentFetch(run: Run) {
           });
           if (!sessionRow?.channelThreadId) return;
 
-          if (agentConfig.protocol !== 'ai-sdk') {
-            throw new Error('Agent protocol must be ai-sdk to create outgoing channel message');
+          if (agentConfig.adapter !== 'ai-sdk') {
+            throw new Error('Agent adapter must be ai-sdk to create outgoing channel message');
           }
 
           console.log(`[agentFetch][${run.id}] creating outgoing channel message`);
