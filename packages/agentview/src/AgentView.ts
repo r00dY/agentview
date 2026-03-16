@@ -159,8 +159,9 @@ export class AgentView {
     return enhanceSession(await this.request<Session>('PATCH', `/api/sessions/${options.id}`, options))
   }
 
-  async createRun(options: RunCreate): Promise<Run> {
-    return await this.request<Run>('POST', `/api/runs`, options)
+  async createRun(options_: RunCreate & { sessionId: string }): Promise<Run> {
+    const { sessionId, ...options } = options_;
+    return await this.request<Run>('POST', `/api/sessions/${sessionId}/runs`, options)
   }
 
   async updateRun(options: RunUpdate & { id: string }): Promise<Run> {

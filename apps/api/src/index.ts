@@ -1481,10 +1481,13 @@ app.openapi(seenRoute, async (c) => {
 
 const runsPOSTRoute = createRoute({
   method: 'post',
-  path: '/api/runs',
+  path: '/api/sessions/{session_id}/runs',
   summary: 'Create a run',
-  tags: ['Runs'],
+  tags: ['Sessions'],
   request: {
+    params: z.object({
+      session_id: z.string(),
+    }),
     body: body(RunCreateSchema)
   },
   responses: {
@@ -1497,18 +1500,19 @@ const runsPOSTRoute = createRoute({
 app.openapi(runsPOSTRoute, async (c) => {
   const principal = await authn(c.req.raw.headers)
   const body = await c.req.valid('json')
+  const params = await c.req.param();
 
   return withOrg(principal.organizationId, async (tx) => {
-    const session = await requireSession(tx, body.sessionId);
+    const session = await requireSession(tx, params.session_id);
 
     authorize(principal, { action: "end-user:update", user: session.user });
 
     const organizationId = principal.organizationId;
     const environment = await requireEnvironment(tx, principal.env);
 
-    await createRun(tx, organizationId, environment, body);
+    await createRun(tx, organizationId, environment, params.session_id, body);
 
-    const updatedSession = await requireSession(tx, body.sessionId);
+    const updatedSession = await requireSession(tx, params.session_id);
     const newRun = getLastRun(updatedSession)!;
 
     return c.json(newRun, 201);

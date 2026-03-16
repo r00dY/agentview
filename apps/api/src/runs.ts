@@ -276,9 +276,10 @@ export async function createRun(
   tx: Transaction,
   organizationId: string,
   environment: Environment,
+  sessionId: string,
   body: RunCreate
 ): Promise<typeof runs.$inferSelect> {
-  const session = await fetchSession(tx, body.sessionId);
+  const session = await fetchSession(tx, sessionId);
   if (!session) {
     throw new AgentViewError("Session not found.", 404);
   }

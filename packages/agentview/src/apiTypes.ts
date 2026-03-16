@@ -187,7 +187,6 @@ export const RunSchema = z.object({
 })
 
 export const RunCreateSchema = z.object({
-  sessionId: z.string(),
   items: z.array(z.record(z.string(), z.any())).optional(),
   // input: z.array(z.record(z.string(), z.any())).optional(),
   manual: z.boolean().optional(),

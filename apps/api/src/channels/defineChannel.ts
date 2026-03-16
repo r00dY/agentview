@@ -344,13 +344,7 @@ export function channelProvider(type: string) {
        * Create RUN
        */
 
-      const newRun = await createRun(tx, thread.organizationId, environment, {
-        sessionId,
-        // input: inputMessages.map(m => ({
-        //   role: 'user',
-        //   parts: [{ type: 'text', text: m.text ?? "" }],
-        // })),
-      });
+      const newRun = await createRun(tx, thread.organizationId, environment, sessionId, {});
 
       console.log('[ingestMessage] new run created: ', newRun.id);
 
