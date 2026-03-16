@@ -75,6 +75,12 @@ export class CachedAgentView extends AgentView {
     return result
   }
 
+  override async createManualRun(...args: Parameters<AgentView['createManualRun']>) {
+    const result = await super.createManualRun(...args)
+    invalidateCache(cacheKeys.session(args[0].sessionId))
+    return result
+  }
+
   // cached version of updateRun need extra param sessionId to invalidate the correct cache
   override async updateRun(options_: Parameters<AgentView['updateRun']>[0] & { sessionId: string }) {
     const { sessionId, ...options } = options_;

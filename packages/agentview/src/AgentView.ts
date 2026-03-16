@@ -4,7 +4,8 @@ import {
   type UserCreate,
   type Run,
   type RunCreate,
-  type RunUpdate,
+  type ManualRunCreate,
+  type ManualRunUpdate,
   type SessionCreate,
   type SessionUpdate,
   type EnvironmentBase,
@@ -159,12 +160,17 @@ export class AgentView {
     return enhanceSession(await this.request<Session>('PATCH', `/api/sessions/${options.id}`, options))
   }
 
-  async createRun(options_: RunCreate & { sessionId: string }): Promise<Run> {
-    const { sessionId, ...options } = options_;
-    return await this.request<Run>('POST', `/api/sessions/${sessionId}/runs`, options)
+  async createRun(options: RunCreate & { sessionId: string }): Promise<Run> {
+    const { sessionId, ...body } = options;
+    return await this.request<Run>('POST', `/api/sessions/${sessionId}/runs`, body)
   }
 
-  async updateRun(options: RunUpdate & { id: string }): Promise<Run> {
+  async createManualRun(options: ManualRunCreate & { sessionId: string }): Promise<Run> {
+    const { sessionId, ...body } = options;
+    return await this.request<Run>('POST', `/api/sessions/${sessionId}/runs/manual`, body)
+  }
+
+  async updateRun(options: ManualRunUpdate & { id: string }): Promise<Run> {
     return await this.request<Run>('PATCH', `/api/runs/${options.id}`, options)
   }
 

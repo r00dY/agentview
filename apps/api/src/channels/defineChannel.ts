@@ -5,7 +5,7 @@ import { channels, channelThreads, channelMessages, endUsers, sessions } from '.
 import { withOrg } from '../withOrg';
 import { db__dangerous } from '../db';
 import type { Transaction } from '../types';
-import { applyRunPatch, createRun } from '../runs';
+import { applyRunPatch, createAutoRun } from '../runs';
 import { randomBytes } from 'crypto';
 import { createSession } from '../sessions';
 import type { ChannelRef } from 'agentview';
@@ -344,7 +344,7 @@ export function channelProvider(type: string) {
        * Create RUN
        */
 
-      const newRun = await createRun(tx, thread.organizationId, environment, sessionId, {});
+      const newRun = await createAutoRun(tx, thread.organizationId, environment, sessionId, {});
 
       console.log('[ingestMessage] new run created: ', newRun.id);
 

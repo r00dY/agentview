@@ -19,7 +19,8 @@ const schemasToExport: Record<string, z.ZodTypeAny> = {
 
   Run: schemas.RunSchema,
   RunCreate: schemas.RunCreateSchema,
-  RunUpdate: schemas.RunUpdateSchema,
+  ManualRunCreate: schemas.ManualRunCreateSchema,
+  ManualRunUpdate: schemas.ManualRunUpdateSchema,
 
   SessionItem: schemas.SessionItemSchema,
   SessionItemWithCollaboration: schemas.SessionItemWithCollaborationSchema,

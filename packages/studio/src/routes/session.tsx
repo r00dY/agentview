@@ -666,7 +666,7 @@ function InputForm({ session, channelConfig, styles, onRunningStateChange }: { s
     const submit2 = async (items: any[]) => {
         onRunningStateChange?.(true);
         try {
-            await agentview.createRun({ sessionId: session.id, items });
+            await agentview.createRun({ sessionId: session.id, input: items[0] });
         } catch (error: any) {
             console.error('Error creating run:', error);
             toast.error(`Error: "${error.message}". Check console.`);

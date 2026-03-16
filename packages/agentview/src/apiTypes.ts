@@ -186,30 +186,36 @@ export const RunSchema = z.object({
   sessionId: z.string(), // potential bloat
 })
 
+// Auto-fetch run creation: just send the input
 export const RunCreateSchema = z.object({
-  items: z.array(z.record(z.string(), z.any())).optional(),
-  // input: z.array(z.record(z.string(), z.any())).optional(),
-  manual: z.boolean().optional(),
-  agent: z.string().optional(),
-  metadata: z.record(z.string(), z.any()).optional(),
-  status: z.enum(['in_progress', 'completed', 'cancelled', 'failed']).optional(),
-  state: z.any().optional(),
-  failReason: z.any().nullable().optional()
+  input: z.record(z.string(), z.any()),
 });
 
 export type RunCreate = z.infer<typeof RunCreateSchema>
 
-export const RunUpdateSchema = RunCreateSchema.pick({
-  items: true,
-  metadata: true,
-  status: true,
-  state: true,
-  failReason: true
-}).partial().extend({
-  outputItemCount: z.number().int().min(0).optional(),
-})
+// Manual run creation: full control over items, status, state, etc.
+export const ManualRunCreateSchema = z.object({
+  items: z.array(z.record(z.string(), z.any())),
+  agent: z.string().optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
+  status: z.enum(['in_progress', 'completed', 'cancelled', 'failed']).optional(),
+  state: z.any().optional(),
+  failReason: z.any().nullable().optional(),
+});
 
-export type RunUpdate = z.infer<typeof RunUpdateSchema>
+export type ManualRunCreate = z.infer<typeof ManualRunCreateSchema>
+
+// Manual run update
+export const ManualRunUpdateSchema = z.object({
+  items: z.array(z.record(z.string(), z.any())).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
+  status: z.enum(['in_progress', 'completed', 'cancelled', 'failed']).optional(),
+  state: z.any().optional(),
+  failReason: z.any().nullable().optional(),
+  outputItemCount: z.number().int().min(0).optional(),
+});
+
+export type ManualRunUpdate = z.infer<typeof ManualRunUpdateSchema>
 
 export type Run = z.infer<typeof RunSchema>
 

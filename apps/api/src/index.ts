@@ -24,8 +24,9 @@ import {
   SpaceSchema,
   PublicSessionsGetQueryParamsSchema,
   RunCreateSchema,
+  ManualRunCreateSchema,
   RunSchema,
-  RunUpdateSchema,
+  ManualRunUpdateSchema,
   SessionCreateSchema,
   SessionSchema,
   SessionsGetQueryParamsSchema,
@@ -61,7 +62,7 @@ import type { Transaction } from './types';
 import { updateInboxes } from './updateInboxes';
 import { findUser } from './users';
 import { randomBytes } from 'crypto';
-import { applyRunPatch, getRun, createRun, DEFAULT_IDLE_TIME, getRunInputContent } from './runs';
+import { applyRunPatch, getRun, createAutoRun, createManualRun, DEFAULT_IDLE_TIME, getRunInputContent } from './runs';
 import { upsertAgentRef } from './agentRefs';
 import { parseMetadata } from './parseMetadata';
 import { authn, authorize, requireMemberPrincipal, type PrivatePrincipal, type Principal, type MemberPrincipal, type ApiKeyPrincipal, type UserPrincipal, authnAllowPublic } from './authMiddleware';
@@ -1482,7 +1483,7 @@ app.openapi(seenRoute, async (c) => {
 const runsPOSTRoute = createRoute({
   method: 'post',
   path: '/api/sessions/{session_id}/runs',
-  summary: 'Create a run',
+  summary: 'Create a run (auto-fetch)',
   tags: ['Sessions'],
   request: {
     params: z.object({
@@ -1510,7 +1511,47 @@ app.openapi(runsPOSTRoute, async (c) => {
     const organizationId = principal.organizationId;
     const environment = await requireEnvironment(tx, principal.env);
 
-    await createRun(tx, organizationId, environment, params.session_id, body);
+    await createAutoRun(tx, organizationId, environment, params.session_id, body);
+
+    const updatedSession = await requireSession(tx, params.session_id);
+    const newRun = getLastRun(updatedSession)!;
+
+    return c.json(newRun, 201);
+  })
+})
+
+const runsManualPOSTRoute = createRoute({
+  method: 'post',
+  path: '/api/sessions/{session_id}/runs/manual',
+  summary: 'Create a manual run',
+  tags: ['Sessions'],
+  request: {
+    params: z.object({
+      session_id: z.string(),
+    }),
+    body: body(ManualRunCreateSchema)
+  },
+  responses: {
+    201: response_data(RunSchema),
+    400: response_error(),
+    404: response_error()
+  },
+})
+
+app.openapi(runsManualPOSTRoute, async (c) => {
+  const principal = await authn(c.req.raw.headers)
+  const body = await c.req.valid('json')
+  const params = await c.req.param();
+
+  return withOrg(principal.organizationId, async (tx) => {
+    const session = await requireSession(tx, params.session_id);
+
+    authorize(principal, { action: "end-user:update", user: session.user });
+
+    const organizationId = principal.organizationId;
+    const environment = await requireEnvironment(tx, principal.env);
+
+    await createManualRun(tx, organizationId, environment, params.session_id, body);
 
     const updatedSession = await requireSession(tx, params.session_id);
     const newRun = getLastRun(updatedSession)!;
@@ -1531,7 +1572,7 @@ const runPATCHRoute = createRoute({
     params: z.object({
       run_id: z.string(),
     }),
-    body: body(RunUpdateSchema)
+    body: body(ManualRunUpdateSchema)
   },
   responses: {
     201: response_data(RunSchema),
