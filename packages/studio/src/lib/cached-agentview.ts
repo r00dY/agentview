@@ -82,9 +82,16 @@ export class CachedAgentView extends AgentView {
   }
 
   // cached version of updateRun need extra param sessionId to invalidate the correct cache
-  override async updateRun(options_: Parameters<AgentView['updateRun']>[0] & { sessionId: string }) {
+  override async updateManualRun(options_: Parameters<AgentView['updateManualRun']>[0] & { sessionId: string }) {
     const { sessionId, ...options } = options_;
-    const result = await super.updateRun(options)
+    const result = await super.updateManualRun(options)
+    invalidateCache(cacheKeys.session(sessionId))
+    return result
+  }
+
+  override async cancelRun(options_: Parameters<AgentView['cancelRun']>[0] & { sessionId: string }) {
+    const { sessionId, ...options } = options_;
+    const result = await super.cancelRun(options)
     invalidateCache(cacheKeys.session(sessionId))
     return result
   }

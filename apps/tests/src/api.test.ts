@@ -582,7 +582,7 @@ describe('API', () => {
       expect(session.items).toEqual([baseInput])
       expect(session.lastRun?.id).toBe(run1.id)
 
-      run1 = await av.updateRun({ id: run1.id, items: [baseOutput], status: "completed" })
+      run1 = await av.updateManualRun({ id: run1.id, items: [baseOutput], status: "completed" })
       session = await av.getSession({ id: session.id })
       expect(session.items).toEqual([baseInput, baseOutput])
       expect(session.lastRun?.id).toBe(run1.id)
@@ -611,7 +611,7 @@ describe('API', () => {
       session = await av.getSession({ id: session.id })
       expect(session.state).toEqual(null)
 
-      run1 = await av.updateRun({ id: run1.id, items: [baseOutput], status: "completed", state: { x: 1 } })
+      run1 = await av.updateManualRun({ id: run1.id, items: [baseOutput], status: "completed", state: { x: 1 } })
       session = await av.getSession({ id: session.id })
       expect(session.state).toEqual({ x: 1 })
 
@@ -626,7 +626,7 @@ describe('API', () => {
       expect(session.state).toEqual({ x: 3 })
 
       // can't change state after run is completed
-      await expect(av.updateRun({ id: run3.id, state: { x: 4 } })).rejects.toThrowError(expect.objectContaining({
+      await expect(av.updateManualRun({ id: run3.id, state: { x: 4 } })).rejects.toThrowError(expect.objectContaining({
         statusCode: 422,
         message: expect.any(String),
       }))
@@ -923,7 +923,7 @@ describe('API', () => {
       test("updating run with non-existing run id", async () => {
         await updateConfig()
 
-        await expect(av.updateRun({ id: 'non-existing', items: [baseOutput] })).rejects.toThrowError(expect.objectContaining({
+        await expect(av.updateManualRun({ id: 'non-existing', items: [baseOutput] })).rejects.toThrowError(expect.objectContaining({
           statusCode: 404,
           message: expect.any(String),
         }))
@@ -1179,7 +1179,7 @@ describe('API', () => {
                   expectedStatus = lastRunStatus ?? "in_progress";
                   expectedHasFinishedAt = expectedStatus !== "in_progress";
                 } else if (isLast) {
-                  promise = av.updateRun({ id: run!.id, items: iteration, status: lastRunStatus })
+                  promise = av.updateManualRun({ id: run!.id, items: iteration, status: lastRunStatus })
                   expectedStatus = lastRunStatus ?? "in_progress";
                   expectedHasFinishedAt = expectedStatus !== "in_progress";
                 } else if (isFirst) {
@@ -1187,7 +1187,7 @@ describe('API', () => {
                   expectedStatus = "in_progress";
                   expectedHasFinishedAt = false;
                 } else {
-                  promise = av.updateRun({ id: run!.id, items: iteration })
+                  promise = av.updateManualRun({ id: run!.id, items: iteration })
                   expectedStatus = "in_progress";
                   expectedHasFinishedAt = false;
                 }
@@ -1242,15 +1242,15 @@ describe('API', () => {
         const session = await createSession()
 
         const run = await av.createManualRun({ sessionId: session.id, items: [baseInput] })
-        const completed = await av.updateRun({ id: run.id, items: [baseOutput], status: "completed", metadata: { trace_id: "abc" } })
+        const completed = await av.updateManualRun({ id: run.id, items: [baseOutput], status: "completed", metadata: { trace_id: "abc" } })
         expect(completed.status).toBe("completed")
 
-        await expect(av.updateRun({ id: run.id, items: [baseStep] })).rejects.toThrowError(expect.objectContaining({
+        await expect(av.updateManualRun({ id: run.id, items: [baseStep] })).rejects.toThrowError(expect.objectContaining({
           statusCode: 422,
           message: expect.any(String),
         }))
 
-        await expect(av.updateRun({ id: run.id, status: "failed" })).rejects.toThrowError(expect.objectContaining({
+        await expect(av.updateManualRun({ id: run.id, status: "failed" })).rejects.toThrowError(expect.objectContaining({
           statusCode: 422,
           message: expect.any(String),
         }))
@@ -1265,17 +1265,17 @@ describe('API', () => {
 
         const failReason = { message: "oops" }
 
-        await expect(av.updateRun({ id: run.id, items: [baseStep], failReason })).rejects.toThrowError(expect.objectContaining({
+        await expect(av.updateManualRun({ id: run.id, items: [baseStep], failReason })).rejects.toThrowError(expect.objectContaining({
           statusCode: 422,
           message: expect.any(String),
         }))
 
-        await expect(av.updateRun({ id: run.id, items: [baseOutput], failReason, status: "completed" })).rejects.toThrowError(expect.objectContaining({
+        await expect(av.updateManualRun({ id: run.id, items: [baseOutput], failReason, status: "completed" })).rejects.toThrowError(expect.objectContaining({
           statusCode: 422,
           message: expect.any(String),
         }))
 
-        const updated = await av.updateRun({ id: run.id, items: [baseOutput], status: "failed", failReason })
+        const updated = await av.updateManualRun({ id: run.id, items: [baseOutput], status: "failed", failReason })
         expect(updated.failReason).toEqual(failReason)
       })
 
@@ -1457,7 +1457,7 @@ describe('API', () => {
           metadata: { field1: "A", field2: 0 }
         })
 
-        const updated = await av.updateRun({ id: run.id, metadata: { field1: "B", field2: 1 } })
+        const updated = await av.updateManualRun({ id: run.id, metadata: { field1: "B", field2: 1 } })
         expect(updated.metadata).toEqual({ field1: "B", field2: 1 })
       })
 
@@ -1471,7 +1471,7 @@ describe('API', () => {
           metadata: { field1: "A", field2: 0 }
         })
 
-        const updated = await av.updateRun({ id: run.id, metadata: { field1: "B" } })
+        const updated = await av.updateManualRun({ id: run.id, metadata: { field1: "B" } })
         expect(updated.metadata).toEqual({ field1: "B", field2: 0 })
       })
 
@@ -1485,7 +1485,7 @@ describe('API', () => {
           metadata: { field1: "A", field2: 0 }
         })
 
-        const updated = await av.updateRun({ id: run.id, metadata: { field2: null } })
+        const updated = await av.updateManualRun({ id: run.id, metadata: { field2: null } })
         expect(updated.metadata).toEqual({ field1: "A", field2: null })
       })
 
@@ -1499,7 +1499,7 @@ describe('API', () => {
           metadata: { product_id: "A" }
         })
 
-        await expect(av.updateRun({ id: run.id, metadata: { wrong: "x" } })).rejects.toThrowError(expect.objectContaining({
+        await expect(av.updateManualRun({ id: run.id, metadata: { wrong: "x" } })).rejects.toThrowError(expect.objectContaining({
           statusCode: 422,
           message: expect.any(String),
         }))
@@ -1514,12 +1514,12 @@ describe('API', () => {
           product_id: "123",
         })
 
-        run = await av.updateRun({ id: run.id, items: [baseOutput], status: "completed", metadata: { product_id: "456" } })
+        run = await av.updateManualRun({ id: run.id, items: [baseOutput], status: "completed", metadata: { product_id: "456" } })
         expect(run.metadata).toMatchObject({
           product_id: "456",
         })
 
-        run = await av.updateRun({ id: run.id, metadata: { product_id: "789" } })
+        run = await av.updateManualRun({ id: run.id, metadata: { product_id: "789" } })
         expect(run.metadata).toMatchObject({
           product_id: "789",
         })
@@ -1533,7 +1533,7 @@ describe('API', () => {
         const session = await createSession()
 
         const run = await av.createManualRun({ sessionId: session.id, items: [baseInput] })
-        const updated = await av.updateRun({ id: run.id, items: [baseStep] })
+        const updated = await av.updateManualRun({ id: run.id, items: [baseStep] })
 
         // Non-input items should be 'step' while run is in progress
         const stepItem = updated.sessionItems.find(si => si.content.type === 'reasoning')
@@ -1546,8 +1546,8 @@ describe('API', () => {
         const session = await createSession()
 
         const run = await av.createManualRun({ sessionId: session.id, items: [baseInput] })
-        await av.updateRun({ id: run.id, items: [baseStep] })
-        const completed = await av.updateRun({ id: run.id, items: [baseOutput], status: "completed" })
+        await av.updateManualRun({ id: run.id, items: [baseStep] })
+        const completed = await av.updateManualRun({ id: run.id, items: [baseOutput], status: "completed" })
 
         // Input should be 'input'
         expect(completed.sessionItems[0].type).toBe('input')
@@ -1562,8 +1562,8 @@ describe('API', () => {
         const session = await createSession()
 
         const run = await av.createManualRun({ sessionId: session.id, items: [baseInput] })
-        await av.updateRun({ id: run.id, items: [baseStep, baseOutput, baseOutput] })
-        const completed = await av.updateRun({ id: run.id, status: "completed", outputItemCount: 2 })
+        await av.updateManualRun({ id: run.id, items: [baseStep, baseOutput, baseOutput] })
+        const completed = await av.updateManualRun({ id: run.id, status: "completed", outputItemCount: 2 })
 
         // Input should be 'input'
         expect(completed.sessionItems[0].type).toBe('input')
@@ -1579,8 +1579,8 @@ describe('API', () => {
         const session = await createSession()
 
         const run = await av.createManualRun({ sessionId: session.id, items: [baseInput] })
-        await av.updateRun({ id: run.id, items: [baseStep] })
-        const failed = await av.updateRun({ id: run.id, status: "failed", failReason: { message: "error" } })
+        await av.updateManualRun({ id: run.id, items: [baseStep] })
+        const failed = await av.updateManualRun({ id: run.id, status: "failed", failReason: { message: "error" } })
 
         // Input should be 'input'
         expect(failed.sessionItems[0].type).toBe('input')
@@ -1593,8 +1593,8 @@ describe('API', () => {
         const session = await createSession()
 
         const run = await av.createManualRun({ sessionId: session.id, items: [baseInput] })
-        await av.updateRun({ id: run.id, items: [baseStep] })
-        const cancelled = await av.updateRun({ id: run.id, status: "cancelled" })
+        await av.updateManualRun({ id: run.id, items: [baseStep] })
+        const cancelled = await av.updateManualRun({ id: run.id, status: "cancelled" })
 
         expect(cancelled.sessionItems[0].type).toBe('input')
         expect(cancelled.sessionItems[1].type).toBe('step')
@@ -1605,10 +1605,10 @@ describe('API', () => {
         const session = await createSession()
 
         const run = await av.createManualRun({ sessionId: session.id, items: [baseInput] })
-        await av.updateRun({ id: run.id, items: [baseStep] })
+        await av.updateManualRun({ id: run.id, items: [baseStep] })
 
-        await expectToFail(av.updateRun({ id: run.id, items: [baseOutput], outputItemCount: 1 }), 422)
-        await expectToFail(av.updateRun({ id: run.id, status: "failed", failReason: { message: "error" }, outputItemCount: 1 }), 422)
+        await expectToFail(av.updateManualRun({ id: run.id, items: [baseOutput], outputItemCount: 1 }), 422)
+        await expectToFail(av.updateManualRun({ id: run.id, status: "failed", failReason: { message: "error" }, outputItemCount: 1 }), 422)
       })
 
       test("run created with status: 'completed' has output items marked", async () => {
@@ -1734,7 +1734,7 @@ describe('API', () => {
 
         // Wait half the timeout time, then update the run with output (should reset timer)
         await new Promise(resolve => setTimeout(resolve, SHORT_TIMEOUT / 2))
-        await av.updateRun({ id: run.id, items: [baseOutput], status: "in_progress" })
+        await av.updateManualRun({ id: run.id, items: [baseOutput], status: "in_progress" })
 
         // Wait another full timeout time
         await new Promise(resolve => setTimeout(resolve, SHORT_TIMEOUT))
@@ -2063,14 +2063,14 @@ describe('API', () => {
         await new Promise(r => setTimeout(r, 500));
 
         // Add step and output, then complete
-        await av.updateRun({
+        await av.updateManualRun({
           id: run.id,
           items: [baseStep],
         });
 
         await new Promise(r => setTimeout(r, 1500)); // Wait for polling interval
 
-        await av.updateRun({
+        await av.updateManualRun({
           id: run.id,
           items: [baseOutput],
           status: "completed"
@@ -2239,7 +2239,7 @@ describe('API', () => {
       });
 
       // Try to update the run from org1 - should fail
-      await expect(av_a.updateRun({
+      await expect(av_a.updateManualRun({
         id: run_b.id,
         status: 'completed',
         items: [{ type: 'output', content: 'response' }]
@@ -2405,13 +2405,13 @@ describe('API', () => {
       });
 
       // Try to patch with items - should fail
-      await expectToFail(av.updateRun({
+      await expectToFail(av.updateManualRun({
         id: run.id,
         items: [{ type: "reasoning", content: "Thinking..." }],
       }), 422);
 
       // Cancel the run to clean up
-      const cancelled = await av.updateRun({ id: run.id, status: "cancelled" });
+      const cancelled = await av.cancelRun({ id: run.id });
       expect(cancelled.status).toBe("cancelled");
     }, 30000);
 
@@ -2451,7 +2451,7 @@ describe('API', () => {
       await connectionEstablishedPromise;
 
       // Cancel the run
-      const cancelled = await av.updateRun({ id: run.id, status: "cancelled" });
+      const cancelled = await av.cancelRun({ id: run.id });
       expect(cancelled.status).toBe("cancelled");
       expect(cancelled.finishedAt).toBeDefined();
 
@@ -2881,7 +2881,7 @@ describe('API', () => {
 
       const session = await createSession();
       const run = await av.createManualRun({ sessionId: session.id, items: [baseInput] });
-      await av.updateRun({ id: run.id, items: [baseOutput], status: "completed" });
+      await av.updateManualRun({ id: run.id, items: [baseOutput], status: "completed" });
 
       const updatedSession = await av.getSession({ id: session.id });
       const outputItem = updatedSession.runs[0].sessionItems.find(i => i.type === "output")!;
@@ -2963,7 +2963,7 @@ describe('API', () => {
 
       const session = await createSession();
       const run = await av.createManualRun({ sessionId: session.id, items: [baseInput] });
-      await av.updateRun({ id: run.id, items: [baseOutput], status: "completed" });
+      await av.updateManualRun({ id: run.id, items: [baseOutput], status: "completed" });
 
       const updatedSession = await av.getSession({ id: session.id });
       const outputItem = updatedSession.runs[0].sessionItems.find(i => i.type === "output")!;
@@ -3044,7 +3044,7 @@ describe('API', () => {
 
       const session = await createSession();
       const run = await av.createManualRun({ sessionId: session.id, items: [baseInput] });
-      await av.updateRun({ id: run.id, items: [baseOutput], status: "completed" });
+      await av.updateManualRun({ id: run.id, items: [baseOutput], status: "completed" });
 
       const updatedSession = await av.getSession({ id: session.id });
       const outputItem = updatedSession.runs[0].sessionItems.find(i => i.type === "output")!;
@@ -3063,7 +3063,7 @@ describe('API', () => {
 
       const session = await createSession();
       const run = await av.createManualRun({ sessionId: session.id, items: [baseInput] });
-      await av.updateRun({ id: run.id, items: [baseOutput], status: "completed" });
+      await av.updateManualRun({ id: run.id, items: [baseOutput], status: "completed" });
 
       const updatedSession = await av.getSession({ id: session.id });
       const outputItem = updatedSession.runs[0].sessionItems.find(i => i.type === "output")!;

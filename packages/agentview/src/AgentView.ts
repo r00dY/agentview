@@ -170,8 +170,12 @@ export class AgentView {
     return await this.request<Run>('POST', `/api/sessions/${sessionId}/runs/manual`, body)
   }
 
-  async updateRun(options: ManualRunUpdate & { id: string }): Promise<Run> {
+  async updateManualRun(options: ManualRunUpdate & { id: string }): Promise<Run> {
     return await this.request<Run>('PATCH', `/api/runs/${options.id}`, options)
+  }
+
+  async cancelRun(options: { id: string }): Promise<Run> {
+    return await this.request<Run>('POST', `/api/runs/${options.id}/cancel`)
   }
 
   async keepAliveRun(options: { id: string }): Promise<{ expiresAt: string | null }> {

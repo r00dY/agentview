@@ -1561,6 +1561,49 @@ app.openapi(runsManualPOSTRoute, async (c) => {
 })
 
 
+const runCancelRoute = createRoute({
+  method: 'post',
+  path: '/api/runs/{run_id}/cancel',
+  summary: 'Cancels a run',
+  tags: ['Runs'],
+  request: {
+    params: z.object({
+      run_id: z.string(),
+    })
+  },
+  responses: {
+    201: response_data(RunSchema),
+    400: response_error(),
+    404: response_error()
+  },
+})
+
+app.openapi(runCancelRoute, async (c) => {
+  const principal = await authn(c.req.raw.headers)
+
+  const { run_id } = c.req.param()
+  requireUUID(run_id);
+
+  return withOrg(principal.organizationId, async (tx) => {
+    const run = await requireRun(tx, run_id);
+    const session = await requireSession(tx, run.sessionId);
+
+    authorize(principal, { action: "end-user:update", user: session.user });
+
+    const environment = await requireEnvironment(tx, principal.env);
+
+    if (run.status !== 'in_progress') {
+      throw new AgentViewError("Cannot cancel a run that is not in progress.", 422);
+    }
+
+    await applyRunPatch(tx, run.id, environment, { status: 'cancelled' });
+
+    const updatedSession = await requireSession(tx, session.id);
+    const newRun = getLastRun(updatedSession)!;
+
+    return c.json(newRun, 201);
+  })
+})
 
 
 const runPATCHRoute = createRoute({
@@ -1597,15 +1640,7 @@ app.openapi(runPATCHRoute, async (c) => {
 
     // Guard: API can only cancel auto-fetch runs which are being auto-fetched
     if (run.fetchStatus) {
-      const hasOnlyStatus = body.status === 'cancelled'
-        && !body.items?.length
-        && body.metadata === undefined
-        && body.state === undefined
-        && body.failReason === undefined;
-
-      if (!hasOnlyStatus) {
-        throw new AgentViewError("Cannot modify a run while agent fetch is in progress. Only cancellation is allowed.", 422);
-      }
+      throw new AgentViewError("This endpoint is allowed only for manual runs.", 422);
     }
 
     const environment = await requireEnvironment(tx, principal.env);

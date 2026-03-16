@@ -677,7 +677,7 @@ function InputForm({ session, channelConfig, styles, onRunningStateChange }: { s
 
     const cancel = async () => {
         if (lastRun?.status === 'in_progress') {
-            await agentview.updateRun({ id: lastRun.id, status: 'cancelled', sessionId: session.id });
+            await agentview.cancelRun({ id: lastRun.id, sessionId: session.id });
 
             // must go *after* request above to prevent race
             abortController?.abort();
