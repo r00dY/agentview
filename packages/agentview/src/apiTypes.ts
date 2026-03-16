@@ -251,8 +251,11 @@ export const SessionCreateSchema = z.object({
   initialState: z.any().optional(),
   metadata: z.record(z.string(), z.any()).optional(),
   userId: z.string().optional(),
-  space: SpaceSchema.optional(), // necessary if userId is not provided
-  createdBy: z.string().optional(), // necessary if userId is not provided
+
+  // mandatory if userId is not provided -> determines destination space basically
+  space: SpaceSchema.optional(),
+  createdBy: z.string().optional(),
+
   summary: z.string().nullish(),
 })
 
