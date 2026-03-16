@@ -461,8 +461,8 @@ export async function createRun(
       await tx.insert(webhookJobs).values({
         organizationId,
         eventType: 'session.on_first_run_created',
-        payload: { session_id: body.sessionId },
-        sessionId: body.sessionId,
+        payload: { session_id: sessionId },
+        sessionId: sessionId,
         status: 'pending',
         nextAttemptAt: new Date().toISOString(),
         environmentId: environment.id,
@@ -473,8 +473,8 @@ export async function createRun(
       await tx.insert(webhookJobs).values({
         organizationId,
         eventType: 'session.generate_summary',
-        payload: { session_id: body.sessionId },
-        sessionId: body.sessionId,
+        payload: { session_id: sessionId },
+        sessionId: sessionId,
         status: 'pending',
         nextAttemptAt: new Date().toISOString(),
         environmentId: environment.id,
