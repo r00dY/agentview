@@ -886,7 +886,7 @@ const sessionsGETRoute = createRoute({
   method: 'get',
   path: '/api/sessions',
   summary: 'List sessions',
-  tags: ['Sessions'],
+  tags: ['Sessions and Runs'],
   request: {
     query: SessionsGetQueryParamsSchema,
   },
@@ -927,7 +927,7 @@ const sessionsGETStatsRoute = createRoute({
   method: 'get',
   path: '/api/sessions/stats',
   summary: 'Get stats',
-  tags: ['Sessions'],
+  tags: ['Inbox'],
   request: {
     query: SessionsGetQueryParamsSchema.extend({
       granular: z.stringbool().optional()
@@ -1018,7 +1018,7 @@ const sessionGETRoute = createRoute({
   method: 'get',
   path: '/api/sessions/{session_id}',
   summary: 'Retrieve a session',
-  tags: ['Sessions'],
+  tags: ['Sessions and Runs'],
   request: {
     params: z.object({
       session_id: z.string(),
@@ -1046,7 +1046,7 @@ const sessionPATCHRoute = createRoute({
   method: 'patch',
   path: '/api/sessions/{session_id}',
   summary: 'Update a session',
-  tags: ['Sessions'],
+  tags: ['Sessions and Runs'],
   request: {
     params: z.object({
       session_id: z.string(),
@@ -1093,7 +1093,7 @@ const sessionCommentsGETRoute = createRoute({
   method: 'get',
   path: '/api/sessions/{session_id}/comments',
   summary: 'List comments',
-  tags: ['Sessions'],
+  tags: ['Comments'],
   request: {
     params: z.object({
       session_id: z.string(),
@@ -1132,7 +1132,7 @@ const sessionScoresGETRoute = createRoute({
   method: 'get',
   path: '/api/sessions/{session_id}/scores',
   summary: 'List scores',
-  tags: ['Sessions'],
+  tags: ['Scores'],
   request: {
     params: z.object({
       session_id: z.string(),
@@ -1173,7 +1173,7 @@ const sessionsPOSTRoute = createRoute({
   method: 'post',
   path: '/api/sessions',
   summary: 'Create a session',
-  tags: ['Sessions'],
+  tags: ['Sessions and Runs'],
   request: {
     body: body(SessionCreateSchema)
   },
@@ -1374,7 +1374,7 @@ const sessionStreamRoute = createRoute({
   method: 'get',
   path: '/api/sessions/{session_id}/stream',
   summary: 'Stream updates',
-  tags: ['Sessions'],
+  tags: ['Sessions and Runs'],
   request: {
     params: z.object({
       session_id: z.string(),
@@ -1484,7 +1484,7 @@ const runsPOSTRoute = createRoute({
   method: 'post',
   path: '/api/sessions/{session_id}/runs',
   summary: 'Create a run (auto-fetch)',
-  tags: ['Sessions'],
+  tags: ['Sessions and Runs'],
   request: {
     params: z.object({
       session_id: z.string(),
@@ -1520,52 +1520,12 @@ app.openapi(runsPOSTRoute, async (c) => {
   })
 })
 
-const runsManualPOSTRoute = createRoute({
-  method: 'post',
-  path: '/api/sessions/{session_id}/runs/manual',
-  summary: 'Create a manual run',
-  tags: ['Sessions'],
-  request: {
-    params: z.object({
-      session_id: z.string(),
-    }),
-    body: body(ManualRunCreateSchema)
-  },
-  responses: {
-    201: response_data(RunSchema),
-    400: response_error(),
-    404: response_error()
-  },
-})
-
-app.openapi(runsManualPOSTRoute, async (c) => {
-  const principal = await authn(c.req.raw.headers)
-  const body = await c.req.valid('json')
-  const params = await c.req.param();
-
-  return withOrg(principal.organizationId, async (tx) => {
-    const session = await requireSession(tx, params.session_id);
-
-    authorize(principal, { action: "end-user:update", user: session.user });
-
-    const organizationId = principal.organizationId;
-    const environment = await requireEnvironment(tx, principal.env);
-
-    await createManualRun(tx, organizationId, environment, params.session_id, body);
-
-    const updatedSession = await requireSession(tx, params.session_id);
-    const newRun = getLastRun(updatedSession)!;
-
-    return c.json(newRun, 201);
-  })
-})
-
 
 const runCancelRoute = createRoute({
   method: 'post',
   path: '/api/runs/{run_id}/cancel',
   summary: 'Cancels a run',
-  tags: ['Runs'],
+  tags: ['Sessions and Runs'],
   request: {
     params: z.object({
       run_id: z.string(),
@@ -1606,59 +1566,11 @@ app.openapi(runCancelRoute, async (c) => {
 })
 
 
-const runPATCHRoute = createRoute({
-  method: 'patch',
-  path: '/api/runs/{run_id}',
-  summary: 'Update a run',
-  tags: ['Runs'],
-  request: {
-    params: z.object({
-      run_id: z.string(),
-    }),
-    body: body(ManualRunUpdateSchema)
-  },
-  responses: {
-    201: response_data(RunSchema),
-    400: response_error(),
-    404: response_error()
-  },
-})
-
-app.openapi(runPATCHRoute, async (c) => {
-  const principal = await authn(c.req.raw.headers)
-
-  const { run_id } = c.req.param()
-  requireUUID(run_id);
-
-  const body = await c.req.valid('json')
-
-  return withOrg(principal.organizationId, async (tx) => {
-    const run = await requireRun(tx, run_id);
-    const session = await requireSession(tx, run.sessionId);
-
-    authorize(principal, { action: "end-user:update", user: session.user });
-
-    // Guard: API can only cancel auto-fetch runs which are being auto-fetched
-    if (run.fetchStatus) {
-      throw new AgentViewError("This endpoint is allowed only for manual runs.", 422);
-    }
-
-    const environment = await requireEnvironment(tx, principal.env);
-
-    await applyRunPatch(tx, run.id, environment, body);
-
-    const updatedSession = await requireSession(tx, session.id);
-    const newRun = getLastRun(updatedSession)!;
-
-    return c.json(newRun, 201);
-  })
-})
-
 const runKeepAliveRoute = createRoute({
   method: 'post',
   path: '/api/runs/{run_id}/keep-alive',
   summary: 'Keep alive',
-  tags: ['Runs'],
+  tags: ['Sessions and Runs'],
   responses: {
     200: response_data(z.object({ expiresAt: z.string().nullable() })),
     400: response_error(),
@@ -1700,11 +1612,104 @@ app.openapi(runKeepAliveRoute, async (c) => {
   })
 })
 
+
+
+const runsManualPOSTRoute = createRoute({
+  method: 'post',
+  path: '/api/sessions/{session_id}/runs/manual',
+  summary: 'Create a manual run',
+  tags: ['Sessions and Runs'],
+  request: {
+    params: z.object({
+      session_id: z.string(),
+    }),
+    body: body(ManualRunCreateSchema)
+  },
+  responses: {
+    201: response_data(RunSchema),
+    400: response_error(),
+    404: response_error()
+  },
+})
+
+app.openapi(runsManualPOSTRoute, async (c) => {
+  const principal = await authn(c.req.raw.headers)
+  const body = await c.req.valid('json')
+  const params = await c.req.param();
+
+  return withOrg(principal.organizationId, async (tx) => {
+    const session = await requireSession(tx, params.session_id);
+
+    authorize(principal, { action: "end-user:update", user: session.user });
+
+    const organizationId = principal.organizationId;
+    const environment = await requireEnvironment(tx, principal.env);
+
+    await createManualRun(tx, organizationId, environment, params.session_id, body);
+
+    const updatedSession = await requireSession(tx, params.session_id);
+    const newRun = getLastRun(updatedSession)!;
+
+    return c.json(newRun, 201);
+  })
+})
+
+
+const runManualPATCHRoute = createRoute({
+  method: 'patch',
+  path: '/api/runs/{run_id}/manual',
+  summary: 'Update a run',
+  tags: ['Sessions and Runs'],
+  request: {
+    params: z.object({
+      run_id: z.string(),
+    }),
+    body: body(ManualRunUpdateSchema)
+  },
+  responses: {
+    201: response_data(RunSchema),
+    400: response_error(),
+    404: response_error()
+  },
+})
+
+app.openapi(runManualPATCHRoute, async (c) => {
+  const principal = await authn(c.req.raw.headers)
+
+  const { run_id } = c.req.param()
+  requireUUID(run_id);
+
+  const body = await c.req.valid('json')
+
+  return withOrg(principal.organizationId, async (tx) => {
+    const run = await requireRun(tx, run_id);
+    const session = await requireSession(tx, run.sessionId);
+
+    authorize(principal, { action: "end-user:update", user: session.user });
+
+    // Guard: API can only cancel auto-fetch runs which are being auto-fetched
+    if (run.fetchStatus) {
+      throw new AgentViewError("This endpoint is allowed only for manual runs.", 422);
+    }
+
+    const environment = await requireEnvironment(tx, principal.env);
+
+    await applyRunPatch(tx, run.id, environment, body);
+
+    const updatedSession = await requireSession(tx, session.id);
+    const newRun = getLastRun(updatedSession)!;
+
+    return c.json(newRun, 201);
+  })
+})
+
+
+
 // const runWatchRoute = createRoute({
 //   method: 'get',
 //   path: '/api/runs/{run_id}/watch',
 //   summary: 'Watch Run',
-//   tags: ['Runs'],
+//   tags: ['Sessions and Runs'],
 //   request: {
 //     params: z.object({
 //       run_id: z.string()

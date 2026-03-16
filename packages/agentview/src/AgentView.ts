@@ -171,7 +171,7 @@ export class AgentView {
   }
 
   async updateManualRun(options: ManualRunUpdate & { id: string }): Promise<Run> {
-    return await this.request<Run>('PATCH', `/api/runs/${options.id}`, options)
+    return await this.request<Run>('PATCH', `/api/runs/${options.id}/manual`, options)
   }
 
   async cancelRun(options: { id: string }): Promise<Run> {
