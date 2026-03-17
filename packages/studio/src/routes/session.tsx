@@ -140,8 +140,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         )?.unseenEvents;
     };
 
-    const [expectingRun, setExpectingRun] = useState(false);
-    const session = useSession(props.session, { wait: expectingRun });
+    const { session, createRun, cancelRun } = useSession(props.session);
 
     const listParams = loaderData.listParams;
     const activeItems = getAllSessionItems(session, { activeOnly: true })
@@ -228,7 +227,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         };
     }
 
-    console.log(session);
+    // console.log(session);
 
     const rerender = useRerender();
 
@@ -246,13 +245,12 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         };
     }, [])
 
-
     return (
         <SessionShell
             sessionBase={session}
             channelConfig={channelConfig}
             headerExtra={session.user.createdBy === me.id && <ShareForm session={session} />}
-            footer={session.user.createdBy === me.id && <InputForm session={session} channelConfig={channelConfig} styles={styles} onRunningStateChange={setExpectingRun} />}
+            footer={session.user.createdBy === me.id && <InputForm session={session} channelConfig={channelConfig} styles={styles} createRun={createRun} cancelRun={cancelRun} />}
             outletContext={{ session }}
         >
             <div ref={bodyRef}>
@@ -321,7 +319,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 
                     type CommentsThreadData = { comments: CommentMessage[], scoreConfigs: ScoreConfig[], target: InputTarget };
 
-                    const agentConfig = findAgentConfig(config, run.agentRef?.name);
+                    const agentConfig = findAgentConfig(config, run.agentRef?.agent);
                     const runConfig = agentConfig ? findRunConfig(agentConfig, run.sessionItems[0].content) : undefined;
                     const runScoreConfigs = (runConfig?.scores ?? []) as ScoreConfig[]; // fixme: types should be automatic without cast
                     const runComments: CommentMessage[] = props.comments.filter((c) => c.runId === run.id && !c.channelMessageId && !c.sessionItemId);
@@ -561,7 +559,7 @@ function SessionDetails({ sessionBase, channelConfig }: { sessionBase: SessionBa
                     <PropertyListTextValue>
                         {agentRefs.length === 0 && <span className="text-muted-foreground">-</span>}
                         {agentRefs.length > 0 && <div className="flex flex-row gap-1">{agentRefs.map(ref => {
-                            return <Pill key={`${ref.name}@${ref.version}`}>{ref.version}</Pill>
+                            return <Pill key={`${ref.agent}@${ref.version}`}>{ref.agent}@{ref.version}</Pill>
                         })}</div>}
                     </PropertyListTextValue>
                 </PropertyListItem>
@@ -613,82 +611,19 @@ function DefaultToolComponent({ item, resultItem }: SessionItemDisplayComponentP
     </Step>
 }
 
-function InputForm({ session, channelConfig, styles, onRunningStateChange }: { session: Session, channelConfig: ChannelConfig, styles: Record<string, number>, onRunningStateChange?: (isRunning: boolean) => void }) {
+function InputForm({ session, channelConfig, styles, createRun, cancelRun }: { session: Session, channelConfig: ChannelConfig, styles: Record<string, number>, createRun: (input: any) => Promise<void>, cancelRun: () => Promise<void> }) {
     const lastRun = getLastRun(session)
 
-    const [abortController, setAbortController] = useState<AbortController | undefined>(undefined)
-
-    const submit = async (url: string, body: Record<string, any>, init?: RequestInit) => {
-        const abortController = new AbortController();
-        setAbortController(abortController);
-        onRunningStateChange?.(true);
-
-        const fetchOptions: RequestInit = {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(body),
-            ...(init ?? {}),
-            signal: abortController.signal, // you can't override the signal if you're using `submit`
-        }
-
-        try {
-            const response = await fetch(url, fetchOptions);
-
-            if (!response.ok) {
-                console.error(`The fetch to '${url}' (done via 'submit' function) returned error response (${response.status} ${response.statusText}). Check Network tab in browser for error details.`);
-                toast.error(`Error: "${response.status} ${response.statusText}". Check console.`);
-            }
-
-            await response.text(); // this is important. It waits until the full stream finished. Only after that we can call "finally" and reset abort controller.
-
-            return response;
-
-        } catch (error: any) {
-            console.log('catch: ', error?.name);
-            if (error?.name === 'AbortError') {
-                console.log('stream aborted');
-                throw error;
-            }
-
-            console.error(`The fetch to '${url}' (done via 'submit' function) threw an error. Check Network tab in browser for error details.`);
-            console.error(error);
-            toast.error(`Error: "${error.message}". Check console.`);
-            throw error;
-
-        } finally {
-            setAbortController(undefined);
-            onRunningStateChange?.(false);
-        }
-    }
-
     const submit2 = async (items: any[]) => {
-        onRunningStateChange?.(true);
         try {
-            await agentview.createRun({ sessionId: session.id, input: items[0] });
+            await createRun(items[0]);
         } catch (error: any) {
             console.error('Error creating run:', error);
             toast.error(`Error: "${error.message}". Check console.`);
-        } finally {
-            onRunningStateChange?.(false);
         }
     }
 
-    const cancel = async () => {
-        if (lastRun?.status === 'in_progress') {
-            await agentview.cancelRun({ id: lastRun.id, sessionId: session.id });
-
-            // must go *after* request above to prevent race
-            abortController?.abort();
-        }
-
-        setAbortController(undefined);
-    }
-
-    // submit, cancel are *special* (shorthand). isRunning is legit when session is running. It's THAT SIMPLE. Trivial. Do not overthink it.
-
-    const isRunning = lastRun?.status === 'in_progress' || !!abortController;
+    const isRunning = lastRun?.status === 'in_progress';
 
     const InputComponent = channelConfig.inputComponent;
     if (InputComponent === null) {
@@ -702,8 +637,7 @@ function InputForm({ session, channelConfig, styles, onRunningStateChange }: { s
             {InputComponent && (
                 <div>
                     <InputComponent
-                        cancel={cancel}
-                        submit={submit}
+                        cancel={cancelRun}
                         submit2={submit2}
                         isRunning={isRunning}
                         session={enhanceSession(session)}

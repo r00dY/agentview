@@ -2346,7 +2346,7 @@ describe('API', () => {
       mockAgentServer?.resetRequests();
     });
 
-    test("happy path: agent streams run.patch events", async () => {
+    test.only("happy path: agent streams run.patch events", async () => {
       await updateConfigWithUrl();
       const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
@@ -2363,7 +2363,11 @@ describe('API', () => {
       });
 
       expect(run.status).toBe("in_progress");
-      expect(run.agentRef).toBeFalsy(); // agent ref not set yet at creation time
+      expect(run.agentRef).toMatchObject({
+        version: "1.0.0",
+        agent: "test",
+        adapter: "agentview",
+      });
 
       // Wait for the worker to process the run
       const completedRun = await waitForRunStatus(session.id, run.id, ["completed"]);

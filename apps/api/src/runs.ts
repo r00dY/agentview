@@ -424,6 +424,7 @@ export async function createAutoRun(
 
   let parsedInputItems: any[] = [];
   let runConfig: BaseRunConfig | undefined;
+  let agentRefId: string | null = null;
 
   if (session.channel.type !== 'api') {
     // Non-API channels: simplified procedure, no input validation
@@ -440,6 +441,14 @@ export async function createAutoRun(
       throw new AgentViewError("Input is required for API channel runs.", 422);
     }
 
+    const result = await resolveAgentRef(tx, {
+      agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
+      previousAgentRef: lastRun?.agentRef ?? session.agentRef,
+      organizationId,
+      sessionId: session.id,
+    });
+
+    agentRefId = result.agentRefId;
     runConfig = requireRunConfig(agentConfig, body.input);
     parsedInputItems = [runConfig.input.schema.parse(body.input)];
   }
@@ -454,7 +463,7 @@ export async function createAutoRun(
     expiresAt: new Date(Date.now() + idleTimeout).toISOString(),
     finishedAt: null,
     metadata: undefined,
-    agentRefId: null,
+    agentRefId,
     fetchStatus: 'pending',
     state: undefined,
     runConfig,

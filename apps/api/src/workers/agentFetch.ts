@@ -94,50 +94,56 @@ async function processAgentFetch(run: Run) {
     }
 
     // Resolve agent ref for session & run
-    await withOrg(run.organizationId, async (tx) => {
-      if (!session) {
-        throw new Error(`Session ${run.sessionId} not found`);
-      }
-      
-      let sessionAgentRef: AgentRef;
+    if (session.channel.type !== 'api') {
 
-      // First set session ref if necessary (new sessions from channel don't have agentRef assigned yet)
-      if (!session.agentRef) {
-        const result = await upsertAgentRef(tx, {
+      await withOrg(run.organizationId, async (tx) => {
+        if (!session) {
+          throw new Error(`Session ${run.sessionId} not found`);
+        }
+        
+        let sessionAgentRef: AgentRef;
+  
+        // First set session ref if necessary (new sessions from channel don't have agentRef assigned yet)
+        if (!session.agentRef) {
+          const result = await upsertAgentRef(tx, {
+            agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
+            organizationId: run.organizationId,
+          });
+  
+          sessionAgentRef = {
+            agent: result.agent,
+            version: result.version,
+            adapter: result.adapter
+          };
+  
+          await tx.update(sessions).set({
+            agentRefId: result.agentRefId,
+          }).where(eq(sessions.id, run.sessionId));
+        }
+        else {
+          sessionAgentRef = session.agentRef;
+        }
+  
+        // Assign agentRef to a run
+        const lastCompletedRunAgentRef = session.runs.reverse().find(r => r.status === 'completed')?.agentRef;
+        const previousAgentRef = lastCompletedRunAgentRef ?? sessionAgentRef;
+  
+        const { agentRefId } = await resolveAgentRef(tx, {
           agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
+          previousAgentRef,
           organizationId: run.organizationId,
+          sessionId: run.sessionId,
         });
-
-        sessionAgentRef = {
-          agent: result.agent,
-          version: result.version,
-          adapter: result.adapter
-        };
-
-        await tx.update(sessions).set({
-          agentRefId: result.agentRefId,
-        }).where(eq(sessions.id, run.sessionId));
-      }
-      else {
-        sessionAgentRef = session.agentRef;
-      }
-
-      // Assign agentRef to a run
-      const lastCompletedRunAgentRef = session.runs.reverse().find(r => r.status === 'completed')?.agentRef;
-      const previousAgentRef = lastCompletedRunAgentRef ?? sessionAgentRef;
-
-      const { agentRefId } = await resolveAgentRef(tx, {
-        agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
-        previousAgentRef,
-        organizationId: run.organizationId,
-        sessionId: run.sessionId,
+  
+        await tx.update(runs).set({
+          agentRefId,
+          updatedAt: new Date().toISOString(),
+        }).where(eq(runs.id, run.id));
       });
 
-      await tx.update(runs).set({
-        agentRefId,
-        updatedAt: new Date().toISOString(),
-      }).where(eq(runs.id, run.id));
-    });
+    }
+
+    
 
     // Refetch session after agentRef assignment
     session = await withOrg(run.organizationId, async (tx) => {

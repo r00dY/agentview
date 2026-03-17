@@ -79,7 +79,6 @@ export type AgentInputComponentProps<TSchema extends z.ZodTypeAny = z.ZodAny> = 
   token: string,
   isRunning: boolean,
   cancel: () => void,
-  submit: (url: string, body: Record<string, any>, init?: RequestInit) => Promise<Response>, // no idea why this type is correct
   submit2: (items: any[]) => Promise<void>,
 }
 

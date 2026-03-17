@@ -7,16 +7,13 @@ import type { Session } from "agentview/apiTypes";
 
 export function useSession(
     externalSession: Session,
-    options?: { wait?: boolean }
-): Session {
-    const { wait = false } = options ?? {};
-
+): { session: Session, createRun: (input: any) => Promise<void>, cancelRun: () => Promise<void> } {
     const [localSession, setLocalSession] = useState<Session | undefined>(undefined);
 
     const activeSession = localSession ?? externalSession; // localSession overrides externalSession EVEN IF isWatching is false! This is by design.
     const lastRun = getLastRun(activeSession);
 
-    const abortControllerRef = useRef<AbortController | undefined>(undefined); // this is also a lock, if defined -> watch is in progrss
+    const abortControllerRef = useRef<AbortController | undefined>(undefined); // this is also a lock, if defined -> watch is in progress
 
     useEffect(() => {
         return () => {
@@ -24,40 +21,52 @@ export function useSession(
         }
     }, [])
 
+
+    async function startWatching() {
+        if (abortControllerRef.current !== undefined) { // is streaming?
+            return;
+        }
+
+        abortControllerRef.current = new AbortController();
+
+        try {
+            console.log("[useSession] starting watch for session", externalSession.id);
+
+            const stream = await agentview.getSessionStream({
+                id: externalSession.id,
+                signal: abortControllerRef.current!.signal,
+            });
+
+            if (stream) {
+                console.log("[useSession] stream started for session", externalSession.id);
+                for await (const { session, event } of stream) {
+                    console.log("[useSession] event", event.type, event.data);
+                    setLocalSession(session as Session);
+                    invalidateCache(`session:${session.id}`) // this could be direct *update* of cache.
+                }
+            }
+
+        } catch (err: any) {
+            if (err?.name === 'AbortError') {
+                return;
+            };
+            console.error("[useSession] error watching session", err);
+        } finally {
+            console.log("[useSession] stopping watch for session", externalSession.id);
+            abortControllerRef.current = undefined;
+        }
+    }
+
     useEffect(() => {
         if (abortControllerRef.current !== undefined) { // is streaming?
             return;
         }
 
-        if (lastRun?.status === "in_progress" || wait) {
-            abortControllerRef.current = new AbortController();
-
-            (async () => {
-                try {
-                    const stream = await agentview.getSessionStream({
-                        id: externalSession.id,
-                        signal: abortControllerRef.current!.signal,
-                        wait
-                    });
-
-                    if (stream) {
-                        for await (const { session, event } of stream) {
-                            setLocalSession(session as Session);
-                            invalidateCache(`session:${session.id}`) // this could be direct *update* of cache.
-                        }
-                    }
-
-                } catch (err: any) {
-                    if (err?.name === 'AbortError') {
-                        return;
-                    };
-                } finally {
-                    abortControllerRef.current = undefined;
-                }
-            })();
+        if (lastRun?.status === "in_progress") {
+            startWatching();
         }
         else {
-            if (localSession) { // if not watching 
+            if (localSession) { // if not watching
                 const localSessionLastActivityAt = getLastActivityAt(localSession);
                 const externalSessionLastActivityAt = getLastActivityAt(externalSession);
                 if (localSessionLastActivityAt <= externalSessionLastActivityAt) {
@@ -67,7 +76,18 @@ export function useSession(
         }
     })
 
-    return activeSession;
+    const createRun = async (input: any) => {
+        await agentview.createRun({ sessionId: externalSession.id, input });
+        startWatching();
+    };
+
+    const cancelRun = async () => {
+        if (lastRun?.status === 'in_progress') {
+            await agentview.cancelRun({ id: lastRun.id, sessionId: activeSession.id });
+        }
+    };
+
+    return { session: activeSession, createRun, cancelRun };
 }
 
 

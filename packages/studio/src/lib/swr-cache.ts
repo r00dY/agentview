@@ -139,7 +139,7 @@ export function swrSync<T>(
 
 export function invalidateCache(key?: string) {
   if (key) {
-    console.log('[cache] invalidating key: ' + key);
+    // console.log('[cache] invalidating key: ' + key);
     cache.delete(key);
   } else {
     cache.clear();

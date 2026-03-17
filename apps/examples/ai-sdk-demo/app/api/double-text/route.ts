@@ -28,7 +28,7 @@ export async function POST() {
     async start(controller) {
       for (const part of parts) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(part)}\n\n`));
-        await new Promise((r) => setTimeout(r, 50));
+        await new Promise((r) => setTimeout(r, 500));
       }
       controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       controller.close();
