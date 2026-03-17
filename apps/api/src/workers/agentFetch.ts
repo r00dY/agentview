@@ -11,6 +11,7 @@ import { applyRunPatch, getRun } from '../runs';
 import { upsertAgentRef } from '../agentRefs';
 import type { RunBody } from 'agentview/apiTypes';
 import { createWorker } from './utils';
+import { getLastRun } from 'agentview/sessionUtils';
 
 type Run = typeof runs.$inferSelect;
 
@@ -93,6 +94,9 @@ async function processAgentFetch(run: Run) {
 
     // Resolve agent ref from config version and assign to run
     await withOrg(run.organizationId, async (tx) => {
+
+      const lastRun = await getLastRun(session!);
+
       const { agentRefId } = await upsertAgentRef(tx, {
         agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter === 'ai-sdk' ? 'ai-sdk' : 'agentview' },
         organizationId: run.organizationId,
@@ -117,7 +121,7 @@ async function processAgentFetch(run: Run) {
           where: eq(sessions.id, run.sessionId),
           columns: { agentRefs: true },
         });
-        const existing = (currentSession?.agentRefs as { name: string; version: string; adapter: string }[]) ?? [];
+        const existing = (currentSession?.agentRefs as { name: string; version: string; adapter: "agentview" | "ai-sdk" }[]) ?? [];
         const version = agentConfig.version;
         const adapter = agentConfig.adapter === 'ai-sdk' ? 'ai-sdk' as const : 'agentview' as const;
         const alreadyExists = existing.some(ref => ref.name === agentConfig.name && ref.version === version);

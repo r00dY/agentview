@@ -111,7 +111,7 @@ export async function resolveAgentRef(tx: Transaction, opts: {
     where: eq(sessions.id, opts.sessionId),
     columns: { agentRefs: true },
   });
-  const existing = (currentSession?.agentRefs as { name: string; version: string; adapter: string }[]) ?? [];
+  const existing = (currentSession?.agentRefs as { name: string; version: string; adapter: "agentview" | "ai-sdk" }[]) ?? [];
 
   const alreadyExists = existing.some(ref => ref.name === opts.agentRef.agent && ref.version === version);
   if (!alreadyExists) {

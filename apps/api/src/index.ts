@@ -806,7 +806,7 @@ function mapSessionRow(row: { sessions: typeof sessions.$inferSelect; end_users:
     summary: row.sessions.summary,
     channel: row.sessions.channelType === 'api'
       ? { type: 'api' as const, name: row.sessions.channelAddress }
-      : { type: row.sessions.channelType, address: row.sessions.channelAddress },
+      : { type: row.sessions.channelType as "gmail" | "mock", address: row.sessions.channelAddress },
     user: row.end_users!,
     space: row.end_users!.space,
     userId: row.end_users!.id,
