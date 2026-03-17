@@ -1,0 +1,2 @@
+DROP INDEX "agent_ref_version_agent_org_unique";--> statement-breakpoint
+CREATE UNIQUE INDEX "agent_ref_version_agent_adapter_org_unique" ON "agent_refs" USING btree ("version","agent","adapter","organization_id");

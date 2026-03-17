@@ -103,7 +103,7 @@ async function processAgentFetch(run: Run) {
       // First set session ref if necessary (new sessions from channel don't have agentRef assigned yet)
       if (!session.agentRef) {
         const result = await upsertAgentRef(tx, {
-          agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter === 'ai-sdk' ? 'ai-sdk' : 'agentview' },
+          agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
           organizationId: run.organizationId,
         });
 
@@ -126,7 +126,7 @@ async function processAgentFetch(run: Run) {
       const previousAgentRef = lastCompletedRunAgentRef ?? sessionAgentRef;
 
       const { agentRefId } = await resolveAgentRef(tx, {
-        agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter === 'ai-sdk' ? 'ai-sdk' : 'agentview' },
+        agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
         previousAgentRef,
         organizationId: run.organizationId,
         sessionId: run.sessionId,

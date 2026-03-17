@@ -480,8 +480,8 @@ export async function createManualRun(
   }
 
   const resolved = await resolveAgentRef(tx, {
-    agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter === 'ai-sdk' ? 'ai-sdk' : 'agentview' },
-    previousAgentRef: lastRun?.agentRef ?? null,
+    agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
+    previousAgentRef: lastRun?.agentRef ?? session.agentRef,
     organizationId,
     sessionId: session.id,
   });

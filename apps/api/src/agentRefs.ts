@@ -36,12 +36,19 @@ function compareVersions(v1: ParsedVersion, v2: ParsedVersion): number {
   return 0;
 }
 
+
+export type InputAgentRef = {
+  version: string;
+  agent: string;
+  adapter?: 'agentview' | 'ai-sdk';
+}
+
 /**
  * Simple upsert: inserts agent_ref row if not exists, returns the row.
  * No version comparison, no session update.
  */
 export async function upsertAgentRef(tx: Transaction, opts: {
-  agentRef: AgentRef;
+  agentRef: InputAgentRef;
   organizationId: string;
 }): Promise<{ agentRefId: string; version: string; agent: string; adapter: 'agentview' | 'ai-sdk' }> {
   const parsed = parseVersion(opts.agentRef.version);
@@ -50,17 +57,19 @@ export async function upsertAgentRef(tx: Transaction, opts: {
   }
 
   const version = versionToString(parsed);
+  const agent = opts.agentRef.agent;
+  const adapter = opts.agentRef.adapter ?? 'agentview';
 
   await tx.insert(agentRefs).values({
     organizationId: opts.organizationId,
     version,
-    agent: opts.agentRef.agent,
-    adapter: opts.agentRef.adapter,
+    agent,
+    adapter,
   }).onConflictDoNothing();
 
-  const [row] = await tx.select().from(agentRefs).where(and(eq(agentRefs.version, version), eq(agentRefs.agent, opts.agentRef.agent))).limit(1);
+  const [row] = await tx.select().from(agentRefs).where(and(eq(agentRefs.version, version), eq(agentRefs.agent, agent), eq(agentRefs.adapter, adapter))).limit(1);
 
-  return { agentRefId: row.id, version, agent: opts.agentRef.agent, adapter: opts.agentRef.adapter };
+  return { agentRefId: row.id, version, agent, adapter };
 }
 
 /**
@@ -68,7 +77,7 @@ export async function upsertAgentRef(tx: Transaction, opts: {
  * and updates the session's agentRefs array.
  */
 export async function resolveAgentRef(tx: Transaction, opts: {
-  agentRef: AgentRef;
+  agentRef: InputAgentRef;
   previousAgentRef?: AgentRef | null;
   organizationId: string;
   sessionId: string;
@@ -79,8 +88,19 @@ export async function resolveAgentRef(tx: Transaction, opts: {
   }
 
   const version = versionToString(parsed);
+  const agent = opts.agentRef.agent;
+  const adapter = opts.agentRef.adapter ?? 'agentview';
 
   if (opts.previousAgentRef) {
+
+    if (opts.previousAgentRef.adapter !== adapter) {
+      throw new AgentViewError("Cannot continue a session with a different adapter.", 422);
+    }
+
+    if (opts.previousAgentRef.agent !== agent) {
+      throw new AgentViewError("Cannot continue a session with a different agent.", 422);
+    }
+
     const prevParsed = parseVersion(opts.previousAgentRef.version);
     if (!prevParsed) {
       throw new AgentViewError("Invalid version format in previous run.", 422);
@@ -99,11 +119,11 @@ export async function resolveAgentRef(tx: Transaction, opts: {
   await tx.insert(agentRefs).values({
     organizationId: opts.organizationId,
     version,
-    agent: opts.agentRef.agent,
-    adapter: opts.agentRef.adapter,
+    agent,
+    adapter,
   }).onConflictDoNothing();
 
-  const [agentRefRow] = await tx.select().from(agentRefs).where(and(eq(agentRefs.version, version), eq(agentRefs.agent, opts.agentRef.agent))).limit(1);
+  const [agentRefRow] = await tx.select().from(agentRefs).where(and(eq(agentRefs.version, version), eq(agentRefs.agent, agent), eq(agentRefs.adapter, adapter))).limit(1);
 
   // Update session's agentRefs array if new
   const currentSession = await tx.query.sessions.findFirst({
@@ -115,10 +135,10 @@ export async function resolveAgentRef(tx: Transaction, opts: {
   const alreadyExists = existing.some(ref => ref.agent === opts.agentRef.agent && ref.version === version);
   if (!alreadyExists) {
     await tx.update(sessions).set({
-      agentRefs: [...existing, { agent: opts.agentRef.agent, version, adapter: opts.agentRef.adapter }],
+      agentRefs: [...existing, { agent, version, adapter }],
       updatedAt: new Date().toISOString(),
     }).where(eq(sessions.id, opts.sessionId));
   }
 
-  return { agentRefId: agentRefRow.id, version, agent: opts.agentRef.agent, adapter: opts.agentRef.adapter };
+  return { agentRefId: agentRefRow.id, version, agent: opts.agentRef.agent, adapter };
 }

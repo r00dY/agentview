@@ -107,7 +107,7 @@ export const agentRefs = pgTable("agent_refs", {
   adapter: varchar("adapter", { length: 24 }).notNull().$type<'agentview' | 'ai-sdk'>(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
-  uniqueIndex('agent_ref_version_agent_org_unique').on(table.version, table.agent, table.organizationId),
+  uniqueIndex('agent_ref_version_agent_adapter_org_unique').on(table.version, table.agent, table.adapter, table.organizationId),
   createTenantPolicy('agent_refs'),
 ]);
 

@@ -2564,7 +2564,7 @@ describe('API', () => {
       await av.updateEnvironment({
         config: {
           agents: [{
-            name: "test",
+            name: "test-ai-sdk",
             version: "1.0.0",
             url: AI_SDK_AGENT_URL,
             adapter: 'ai-sdk',
@@ -2574,7 +2574,7 @@ describe('API', () => {
               output: { schema: outputSchema },
             }]
           }],
-          channels: [{ type: 'api', name: "test", agent: "test" }],
+          channels: [{ type: 'api', name: "test-ai-sdk", agent: "test-ai-sdk" }],
         },
       });
     };
@@ -2596,7 +2596,7 @@ describe('API', () => {
 
     test("happy path: text response", async () => {
       await updateConfigWithAiSdkUrl();
-      const session = await av.createSession({ agent: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKStream(res, [
@@ -2629,7 +2629,7 @@ describe('API', () => {
 
     test("happy path: text + reasoning", async () => {
       await updateConfigWithAiSdkUrl();
-      const session = await av.createSession({ agent: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKStream(res, [
@@ -2669,7 +2669,7 @@ describe('API', () => {
       await av.updateEnvironment({
         config: {
           agents: [{
-            name: "test",
+            name: "test-ai-sdk",
             version: "1.0.0",
             url: AI_SDK_AGENT_URL,
             adapter: 'ai-sdk',
@@ -2679,11 +2679,11 @@ describe('API', () => {
               output: { schema: outputSchema },
             }]
           }],
-          channels: [{ type: 'api', name: "test", agent: "test" }],
+          channels: [{ type: 'api', name: "test-ai-sdk", agent: "test-ai-sdk" }],
         },
       });
 
-      const session = await av.createSession({ agent: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKStream(res, [
@@ -2720,7 +2720,7 @@ describe('API', () => {
 
     test("error event → run marked failed", async () => {
       await updateConfigWithAiSdkUrl();
-      const session = await av.createSession({ agent: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKStream(res, [
@@ -2740,7 +2740,7 @@ describe('API', () => {
 
     test("HTTP error: 500 → run marked failed", async () => {
       await updateConfigWithAiSdkUrl();
-      const session = await av.createSession({ agent: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -2759,7 +2759,7 @@ describe('API', () => {
 
     test("stream ends without finish → run marked failed", async () => {
       await updateConfigWithAiSdkUrl();
-      const session = await av.createSession({ agent: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKStream(res, [
@@ -2783,7 +2783,7 @@ describe('API', () => {
 
     test("request body format: sends UIMessage[] with correct history", async () => {
       await updateConfigWithAiSdkUrl();
-      const session = await av.createSession({ agent: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKStream(res, [
@@ -2816,7 +2816,7 @@ describe('API', () => {
 
     test("multi-turn: second request has full conversation history", async () => {
       await updateConfigWithAiSdkUrl();
-      const session = await av.createSession({ agent: "test", userId: initUser1.id});
+      const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
       // First turn
       mockAISDKServer!.setHandler((_body, res) => {
