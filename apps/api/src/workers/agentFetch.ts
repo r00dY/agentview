@@ -148,52 +148,19 @@ async function processAgentFetch(run: Run) {
     }
 
     /**
-     * CHANNEL MESSAGES -> SESSION ITEM
+     * Pre-call validation for channel-based runs
      */
-
-
     if (session.channel.type !== 'api') {
-      if (agentConfig.adapter !== 'ai-sdk') {
-        throw new Error('Agent adapter must be ai-sdk to create session items from channel messages');
-      }
-
       const fullRun = session.runs.find(r => r.id === run.id);
       if (!fullRun) {
         throw new Error(`Run ${run.id} not found`);
       }
 
-      if (fullRun.sessionItems.length > 0) {
-        throw new Error(`Run ${run.id} already has session items`);
-      }
+      const hasInput = fullRun.sessionItems.some(si => si.type === 'input');
+      const hasIncomingMessages = fullRun.channelMessages.some(cm => cm.direction === 'incoming');
 
-      const inputChannelMessages = fullRun.channelMessages.filter(cm => cm.direction === 'incoming');
-
-      if (inputChannelMessages.length === 0) {
-        throw new Error('No input channel messages found');
-      }
-
-      const inputSessionItemContent = {
-        role: 'user',
-        parts: inputChannelMessages.map(cm => ({ type: 'text', text: cm.text ?? "" })),
-      }
-
-      await withOrg(run.organizationId, async (tx) => {
-        await tx.insert(sessionItems).values({
-          organizationId: run.organizationId,
-          sessionId: run.sessionId,
-          runId: run.id,
-          type: 'input',
-          content: inputSessionItemContent,
-        });
-      });
-
-      // Refetch session
-      session = await withOrg(run.organizationId, async (tx) => {
-        return fetchSession(tx, run.sessionId);
-      });
-
-      if (!session) {
-        throw new Error(`Session ${run.sessionId} not found`);
+      if (!hasInput && !hasIncomingMessages) {
+        throw new Error(`Run ${run.id} has no input and no incoming channel messages`);
       }
     }
 
@@ -225,7 +192,31 @@ async function processAgentFetch(run: Run) {
         break;
       }
 
-      if (event.name === 'response_data') {
+      if (event.name === 'run.set_input') {
+        await withOrg(run.organizationId, async (tx) => {
+          // Validate: run must have no items or only input items
+          const existing = await tx
+            .select({ type: sessionItems.type })
+            .from(sessionItems)
+            .where(and(
+              eq(sessionItems.runId, run.id),
+              eq(sessionItems.isState, false),
+            ));
+
+          if (existing.some(item => item.type !== 'input')) {
+            throw new Error('Cannot set input: run already has non-input items');
+          }
+
+          await tx.insert(sessionItems).values({
+            organizationId: run.organizationId,
+            sessionId: run.sessionId,
+            runId: run.id,
+            type: 'input',
+            content: event.data,
+          });
+        });
+      }
+      else if (event.name === 'response_data') {
         // Store response data
         await withOrg(run.organizationId, async (tx) => {
           await tx.update(runs).set({

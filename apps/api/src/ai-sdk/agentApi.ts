@@ -91,6 +91,24 @@ export async function* callAgentAPIAISDK(
     // Build AI SDK request body
     const messages = sessionToUIMessages(body.session);
 
+    // For channel-based runs: create input from incoming channel messages
+    const currentRun = body.session.runs[body.session.runs.length - 1];
+    const incomingMessages = currentRun.channelMessages.filter(cm => cm.direction === 'incoming');
+    const hasInput = currentRun.sessionItems.some(si => si.type === 'input');
+
+    if (incomingMessages.length > 0 && !hasInput) {
+      const inputContent = {
+        role: 'user',
+        parts: incomingMessages.map(cm => ({ type: 'text', text: cm.text ?? '' })),
+      };
+      yield { name: 'run.set_input', data: inputContent };
+      messages.push({
+        id: currentRun.id + '-input',
+        role: 'user',
+        parts: inputContent.parts,
+      });
+    }
+
     response = await fetch(url, {
       method: 'POST',
       headers: {
