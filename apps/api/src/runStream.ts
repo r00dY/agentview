@@ -4,7 +4,12 @@ const TERMINAL_STATUSES = ['completed', 'failed', 'cancelled'];
 
 export async function publishRunStreamEvent(runId: string, event: object) {
   const key = `run-stream:${runId}`;
-  await redis.xadd(key, '*', 'data', JSON.stringify(event));
+
+  // Use the event's updatedAt as the stream ID so consumer can use the same
+  // clock (Node.js) to compute its starting offset — no Redis clock skew.
+  const updatedAt = (event as any).updatedAt;
+  const ms = new Date(updatedAt).getTime();
+  await redis.xadd(key, `${ms}-*`, 'data', JSON.stringify(event));
 
   const status = (event as any).status;
   if (status && TERMINAL_STATUSES.includes(status)) {
@@ -23,7 +28,8 @@ export async function* consumeRunStream(
 ) {
   const key = `run-stream:${runId}`;
 
-  // Convert ISO timestamp to ms for initial offset
+  // Both this offset and the stream entry IDs use the Node.js clock (updatedAt),
+  // so there's no cross-clock skew.
   const startMs = new Date(afterTimestamp).getTime();
   let lastId = `${startMs}-0`;
 
