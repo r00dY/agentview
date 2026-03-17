@@ -1242,7 +1242,7 @@ app.openapi(sessionsPOSTRoute, async (c) => {
 
 
 // watches session and its last run changes
-async function* watchSession(organizationId: string, session: Session, signal: AbortSignal) {
+async function* watchSession(session: Session, signal: AbortSignal) {
   yield {
     event: 'session.snapshot',
     data: session
@@ -1300,7 +1300,7 @@ app.openapi(sessionStreamRoute, async (c) => {
     return c.body(null, 204);
   }
 
-  const generator = watchSession(principal.organizationId, session, c.req.raw.signal);
+  const generator = watchSession(session, c.req.raw.signal);
 
   // TODO: heartbeat
   return streamSSE(c, async (stream) => {
