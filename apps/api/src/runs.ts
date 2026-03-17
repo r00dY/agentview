@@ -10,6 +10,7 @@ import { resolveAgentRef } from './agentRefs';
 import { getLastRun } from 'agentview/sessionUtils';
 import { fetchSession } from './sessions';
 import { getConfigFromEnvironment } from './environments';
+import { publishRunStreamEvent } from './runStream';
 
 export const DEFAULT_IDLE_TIME = 1000 * 60; // 60 seconds
 
@@ -211,25 +212,23 @@ export async function applyRunPatch(
     }
   }
 
+  const now = new Date();
+  const nowIso = now.toISOString();
+
   const isFinished = status === 'completed' || status === 'failed' || status === 'cancelled';
-  const finishedAt = run.finishedAt ?? (isFinished ? new Date().toISOString() : null);
+  const finishedAt = run.finishedAt ?? (isFinished ? nowIso : null);
 
   let expiresAt: string | null = null;
   if (!isFinished) {
     if (!idleTimeout) { // if not finished, then idleTimeout must be set
       throw new AgentViewError("idleTimeout must be set when run is not finished.", 422);
     }
-    expiresAt = new Date(Date.now() + idleTimeout).toISOString();
+    expiresAt = new Date(now.getTime() + idleTimeout).toISOString();
   }
 
-
-  // if (!idleTimeout)
-  // console.assert(!isFinished && idleTimeout !== undefined, "idleTimeout must be set when run is not finished");
-
-  // const expiresAt = isFinished ? null : new Date(Date.now() + idleTimeout).toISOString();
-
+  let insertedItems: any[] = [];
   if (parsedItems.length > 0) {
-    await tx.insert(sessionItems).values(
+    insertedItems = await tx.insert(sessionItems).values(
       parsedItems.map(item => ({
         organizationId: run.organizationId,
         sessionId: run.sessionId,
@@ -237,7 +236,7 @@ export async function applyRunPatch(
         runId: run.id,
         type: 'step' as const,
       }))
-    );
+    ).returning();
   }
 
   await tx.update(runs).set({
@@ -246,7 +245,7 @@ export async function applyRunPatch(
     failReason,
     finishedAt,
     expiresAt,
-    updatedAt: new Date().toISOString(),
+    updatedAt: nowIso,
   }).where(eq(runs.id, run.id));
 
   if (body.state !== undefined) {
@@ -264,6 +263,17 @@ export async function applyRunPatch(
     const outputItemCount = body.outputItemCount ?? 1;
     await markOutputItems(tx, run.id, outputItemCount, runConfig);
   }
+
+  // Publish to Redis stream
+  const streamEvent: Record<string, any> = { updatedAt: nowIso };
+  if (body.status) streamEvent.status = body.status;
+  if (insertedItems.length > 0) streamEvent.items = insertedItems;
+  if (body.metadata) streamEvent.metadata = body.metadata;
+  if (body.failReason !== undefined) streamEvent.failReason = body.failReason;
+  if (body.state !== undefined) streamEvent.state = body.state;
+  if (body.outputItemCount !== undefined) streamEvent.outputItemCount = body.outputItemCount;
+
+  await publishRunStreamEvent(runId, streamEvent);
 
   return (await getRun(tx, runId))!;
 }

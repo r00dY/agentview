@@ -12,6 +12,7 @@ import { resolveAgentRef, upsertAgentRef } from '../agentRefs';
 import type { AgentRef, RunBody } from 'agentview/apiTypes';
 import { createWorker } from './utils';
 import { getLastRun } from 'agentview/sessionUtils';
+import { publishRunStreamEvent, expireRunStream } from '../runStream';
 
 type Run = typeof runs.$inferSelect;
 
@@ -284,16 +285,24 @@ async function processAgentFetch(run: Run) {
 
     console.log(`[agentFetch][${run.id}] error: ${errorMessage}`);
 
+    const now = new Date().toISOString();
     await withOrg(run.organizationId, async (tx) => {
       await tx.update(runs).set({
         status: 'failed',
         failReason: { message: errorMessage },
-        finishedAt: new Date().toISOString(),
+        finishedAt: now,
         fetchStatus: null,
         expiresAt: null,
-        updatedAt: new Date().toISOString(),
+        updatedAt: now,
       }).where(eq(runs.id, run.id));
     });
+
+    await publishRunStreamEvent(run.id, {
+      updatedAt: now,
+      status: 'failed',
+      failReason: { message: errorMessage },
+    });
+    await expireRunStream(run.id);
   } finally {
     console.log(`[agentFetch][${run.id}] finished`);
 

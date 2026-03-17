@@ -309,13 +309,11 @@ export class AgentView {
   }
 
 
-  async getSessionStream(options: { id: string, signal?: AbortSignal, wait?: boolean }): Promise<AsyncGenerator<{
+  async getSessionStream(options: { id: string, signal?: AbortSignal }): Promise<AsyncGenerator<{
     event: SessionStreamEvent;
     session: Session;
   }> | null> {
-    const queryParams = options.wait ? '?wait=true' : ''
-
-    const response = await fetch(`${getApiUrl()}/api/sessions/${options.id}/stream${queryParams}`, {
+    const response = await fetch(`${getApiUrl()}/api/sessions/${options.id}/stream`, {
       method: 'GET',
       headers: this.getHeaders(),
       signal: options.signal
@@ -359,6 +357,27 @@ export class AgentView {
               }
               return run
             })
+          }
+        } else if (rawEvent.event === 'run.patch' && session) {
+          const lastRun = session.runs[session.runs.length - 1];
+          if (lastRun) {
+            session = {
+              ...session,
+              runs: session.runs.map(run => {
+                if (run.id !== lastRun.id) return run;
+                return {
+                  ...run,
+                  ...(rawEvent.data.status && { status: rawEvent.data.status }),
+                  ...(rawEvent.data.metadata && { metadata: rawEvent.data.metadata }),
+                  ...(rawEvent.data.failReason !== undefined && { failReason: rawEvent.data.failReason }),
+                  updatedAt: rawEvent.data.updatedAt,
+                  sessionItems: [
+                    ...run.sessionItems,
+                    ...(rawEvent.data.items ?? [])
+                  ]
+                }
+              })
+            }
           }
         }
 

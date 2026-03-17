@@ -2068,7 +2068,7 @@ describe('API', () => {
           items: [baseStep],
         });
 
-        await new Promise(r => setTimeout(r, 1500)); // Wait for polling interval
+        await new Promise(r => setTimeout(r, 500));
 
         await av.updateManualRun({
           id: run.id,
@@ -2087,11 +2087,10 @@ describe('API', () => {
         expect(events[0].event.data.id).toBe(session.id);
         expect(events[0].event.data.runs[0].sessionItems.length).toBe(1); // just input
 
-        // Subsequent events should be run.updated
+        // Subsequent events should be run.patch
         const updateEvents = events.slice(1);
         for (const e of updateEvents) {
-          expect(e.event.type).toBe("run.updated");
-          expect(e.event.data.id).toBe(run.id);
+          expect(e.event.type).toBe("run.patch");
         }
 
         // Final session state should have all items

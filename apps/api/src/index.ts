@@ -57,12 +57,13 @@ import { isInboxItemUnread } from './inboxItems';
 import { initDb } from './initDb';
 import { requireValidInvitation } from './invitations';
 import { members, organizations, users } from './schemas/auth-schema';
-import { createSession, fetchLastRunStatus, fetchSession } from './sessions';
+import { createSession, fetchSession } from './sessions';
 import type { Transaction } from './types';
 import { updateInboxes } from './updateInboxes';
 import { findUser } from './users';
 import { randomBytes } from 'crypto';
 import { applyRunPatch, getRun, createAutoRun, createManualRun, DEFAULT_IDLE_TIME, getRunInputContent } from './runs';
+import { consumeRunStream } from './runStream';
 import { upsertAgentRef } from './agentRefs';
 import { getAdapter } from './adapters';
 import { parseMetadata } from './parseMetadata';
@@ -1241,134 +1242,22 @@ app.openapi(sessionsPOSTRoute, async (c) => {
 
 
 // watches session and its last run changes
-async function* watchSession(organizationId: string, initSession: Session, wait: boolean, randomId: string, signal: AbortSignal) {
-  console.log(`[watch ${randomId}] wait: `, wait);
-
-  const initLastRunId = getLastRun(initSession)?.id;
-
-  // if wait is true, we wait for the session to be in progress using lightweight polling
-  if (wait) {
-    while(true) {
-      if (signal.aborted) {
-        console.log(`[watch ${randomId}] signal aborted`);
-        return;
-      }
-
-      // Use lightweight polling to check status without fetching full session
-      const lastRunStatus = await withOrg(organizationId, async (tx) => fetchLastRunStatus(tx, initSession.id));
-
-      if (lastRunStatus?.status === 'in_progress' || lastRunStatus?.id !== initLastRunId) {
-        // Only fetch full session once we know it's in progress
-        initSession = await withOrg(organizationId, async (tx) => requireSession(tx, initSession.id));
-        break;
-      }
-
-      console.log(`[watch ${randomId}] waiting for session to be in progress...`);
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-  }
-
-  console.log(`[watch ${randomId}] session is in progress, streaming...`);
-
-  let prevLastRun = getLastRun(initSession);
-  let prevUpdatedAt = prevLastRun?.updatedAt;
-
+async function* watchSession(organizationId: string, session: Session, signal: AbortSignal) {
   yield {
     event: 'session.snapshot',
-    data: initSession
+    data: session
   }
 
-  // we do not stream session when run is *not* in progress
-  if (prevLastRun?.status !== 'in_progress') {
+  const lastRun = getLastRun(session);
+  if (!lastRun || lastRun.status !== 'in_progress') {
     return;
   }
 
-  while (true) {
-    if (signal.aborted) {
-      console.log(`[watch ${randomId}] signal aborted`);
+  for await (const event of consumeRunStream(lastRun.id, lastRun.updatedAt, signal)) {
+    yield { event: 'run.patch', data: event };
+    if (['completed', 'failed', 'cancelled'].includes(event.status)) {
       return;
     }
-
-    // Use lightweight polling to check if updatedAt has changed
-    const lastRunStatus = await withOrg(organizationId, async (tx) => fetchLastRunStatus(tx, initSession.id));
-
-    if (!lastRunStatus) {
-      throw new Error('unreachable');
-    }
-
-    if (prevLastRun.updatedAt === lastRunStatus.updatedAt) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      continue;
-    }
-
-    // Changes detected - fetch full session to get details
-    const session = await withOrg(organizationId, async (tx) => requireSession(tx, initSession.id));
-    const lastRun = getLastRun(session);
-
-    if (!lastRun) {
-      throw new Error('unreachable');
-    }
-
-    const hasNewRun = prevLastRun?.id !== lastRun.id;
-
-    // current run changed
-    if (hasNewRun) {
-
-      throw new Error('unreachable - new run created while old one was being streamed');
-
-
-      // // if previous last run existed and it's not in session.runs now it means it is both failed & not active -> therefore archived.
-      // if (prevLastRun && !session.runs.find(r => r.id === prevLastRun?.id)) {
-      //   yield {
-      //     event: 'run.archived',
-      //     data: {
-      //       id: prevLastRun.id,
-      //     },
-      //   }
-      // }
-
-      // yield {
-      //   event: 'run.created',
-      //   data: lastRun,
-      // }
-
-      // prevLastRun = lastRun;
-    }
-
-    const changedFields: Partial<typeof lastRun> = {};
-
-    const newItems = lastRun.sessionItems.filter(i => !prevLastRun?.sessionItems.find(i2 => i2.id === i.id))
-
-    if (newItems.length > 0) {
-      changedFields.sessionItems = newItems;
-    }
-
-    const runFieldsToCompare = ['id', 'status', 'finishedAt', 'failReason', 'metadata', 'updatedAt'] as const;
-
-    for (const field of runFieldsToCompare) {
-      if (JSON.stringify(prevLastRun![field] ?? null) !== JSON.stringify(lastRun[field] ?? null)) {
-        changedFields[field] = lastRun[field];
-      }
-    }
-
-    if (Object.keys(changedFields).length > 0) {
-      yield {
-        event: 'run.updated',
-        data: {
-          id: lastRun.id,
-          ...changedFields,
-        },
-      };
-    }
-
-    if (lastRun.status !== 'in_progress') {
-      break;
-    }
-
-    prevLastRun = lastRun;
-    prevUpdatedAt = lastRun.updatedAt;
-
-    await new Promise(resolve => setTimeout(resolve, 1000));
   }
 }
 
@@ -1380,9 +1269,6 @@ const sessionStreamRoute = createRoute({
   request: {
     params: z.object({
       session_id: z.string(),
-    }),
-    query: z.object({
-       wait: z.string().optional()
     }),
   },
   responses: {
@@ -1405,25 +1291,16 @@ app.openapi(sessionStreamRoute, async (c) => {
   const principal = await authn(c.req.raw.headers);
 
   const { session_id } = c.req.param()
-  const query = c.req.valid("query");
-  const wait = query.wait === "true";
 
   const session = await withOrg(principal.organizationId, async (tx) => requireSession(tx, session_id))
 
   authorize(principal, { action: "end-user:read", user: session.user });
 
-  // if session is not in progress and no wait -> 204
-  if (getLastRun(session)?.status !== 'in_progress' && !wait) {
+  if (getLastRun(session)?.status !== 'in_progress') {
     return c.body(null, 204);
   }
 
-  const randomId = Math.random().toString(36).substring(2, 8);
-  console.log(`[watch ${randomId}] starting request`)
-  const generator = watchSession(principal.organizationId, session, wait, randomId, c.req.raw.signal);
-
-  c.req.raw.signal.addEventListener('abort', () => {
-    console.log(`[watch ${randomId}] close event`)
-  })
+  const generator = watchSession(principal.organizationId, session, c.req.raw.signal);
 
   // TODO: heartbeat
   return streamSSE(c, async (stream) => {
