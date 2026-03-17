@@ -100,7 +100,7 @@ async function processAgentFetch(run: Run) {
       
       let sessionAgentRef: AgentRef;
 
-      // First set session ref if necessary
+      // First set session ref if necessary (new sessions from channel don't have agentRef assigned yet)
       if (!session.agentRef) {
         const result = await upsertAgentRef(tx, {
           agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter === 'ai-sdk' ? 'ai-sdk' : 'agentview' },
@@ -121,6 +121,7 @@ async function processAgentFetch(run: Run) {
         sessionAgentRef = session.agentRef;
       }
 
+      // Assign agentRef to a run
       const lastCompletedRunAgentRef = session.runs.reverse().find(r => r.status === 'completed')?.agentRef;
       const previousAgentRef = lastCompletedRunAgentRef ?? sessionAgentRef;
 
@@ -135,40 +136,6 @@ async function processAgentFetch(run: Run) {
         agentRefId,
         updatedAt: new Date().toISOString(),
       }).where(eq(runs.id, run.id));
-
-      // const lastRun = await getLastRun(session!);
-
-      // const { agentRefId } = await upsertAgentRef(tx, {
-      //   agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter === 'ai-sdk' ? 'ai-sdk' : 'agentview' },
-      //   organizationId: run.organizationId,
-      // });
-
-      // Set agentRef on run
-
-      // // If session doesn't have agentRef yet, set it + initialState from channelConfig
-      // if (!session!.agentRef) {
-      //   await tx.update(sessions).set({
-      //     agentRefId,
-      //     initialState: channelAgent?.initialState ?? null,
-      //     updatedAt: new Date().toISOString(),
-      //   }).where(eq(sessions.id, run.sessionId));
-
-      //   // Update session.agentRefs array
-      //   const currentSession = await tx.query.sessions.findFirst({
-      //     where: eq(sessions.id, run.sessionId),
-      //     columns: { agentRefs: true },
-      //   });
-      //   const existing = (currentSession?.agentRefs as { name: string; version: string; adapter: "agentview" | "ai-sdk" }[]) ?? [];
-      //   const version = agentConfig.version;
-      //   const adapter = agentConfig.adapter === 'ai-sdk' ? 'ai-sdk' as const : 'agentview' as const;
-      //   const alreadyExists = existing.some(ref => ref.name === agentConfig.name && ref.version === version);
-      //   if (!alreadyExists) {
-      //     await tx.update(sessions).set({
-      //       agentRefs: [...existing, { name: agentConfig.name, version, adapter }],
-      //       updatedAt: new Date().toISOString(),
-      //     }).where(eq(sessions.id, run.sessionId));
-      //   }
-      // }
     });
 
     // Refetch session after agentRef assignment
@@ -247,6 +214,7 @@ async function processAgentFetch(run: Run) {
     }
 
     console.log(`[agentFetch][${run.id}] calling agent API`);
+
     for await (const event of callFn(body, agentUrl, abortController.signal)) {
       console.log(`[agentFetch][${run.id}] event: ${event.name}`);
       // Check for cancellation after each new event received. We immediately abort the stream if the run is not in progress.
