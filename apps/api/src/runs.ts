@@ -142,7 +142,7 @@ export async function getRun(tx: Transaction, runId: string) {
 export async function applyRunPatch(
   tx: Transaction,
   runId: string,
-  environment: Environment,
+  environment: Environment | null,
   body: ManualRunUpdate
 ) {
   const run = await getRun(tx, runId);
@@ -165,6 +165,9 @@ export async function applyRunPatch(
   let runConfig: BaseRunConfig | undefined;
 
   if (body.items || body.metadata || body.state || body.status === 'completed') { // operations requiring run config
+    if (!environment) {
+      throw new AgentViewError("Environment is required for this operation.", 422);
+    }
     const config = getConfigFromEnvironment(environment);
 
     const agentName = run.agentRef?.agent;
@@ -273,7 +276,7 @@ export async function applyRunPatch(
   if (body.state !== undefined) streamEvent.state = body.state;
   if (body.outputItemCount !== undefined) streamEvent.outputItemCount = body.outputItemCount;
 
-  await publishRunStreamEvent(runId, streamEvent);
+  await publishRunStreamEvent(runId, streamEvent, { expire: isFinished });
 
   return (await getRun(tx, runId))!;
 }

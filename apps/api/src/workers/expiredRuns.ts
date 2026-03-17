@@ -1,39 +1,35 @@
 import { db__dangerous } from '../db';
 import { runs } from '../schemas/schema';
-import { eq, and, lt } from 'drizzle-orm';
-import { createPeriodicWorker } from './utils';
-import { publishRunStreamEvent, expireRunStream } from '../runStream';
+import { eq, and, lt, inArray, sql } from 'drizzle-orm';
+import { createWorker } from './utils';
+import { withOrg } from '../withOrg';
+import { applyRunPatch } from '../runs';
 
-export const expiredRunsWorker = createPeriodicWorker({
+type Run = typeof runs.$inferSelect;
+
+export const expiredRunsWorker = createWorker<Run>({
   name: 'expired-runs',
-  intervalMs: 1000,
-  async run() {
+  pollIntervalMs: 1000,
+  maxConcurrency: 100,
+  async claim(limit) {
     const now = new Date().toISOString();
-    const expiredRuns = await db__dangerous
+    return db__dangerous
       .update(runs)
-      .set({
-        expiresAt: null,
-        finishedAt: now,
-        updatedAt: now,
-        status: 'failed',
-        failReason: { message: 'Timeout' },
-        fetchStatus: null,
-      })
+      .set({ expiresAt: null })
       .where(
-        and(
-          eq(runs.status, 'in_progress'),
-          lt(runs.expiresAt, now)
+        inArray(
+          runs.id,
+          sql`(SELECT ${runs.id} FROM ${runs} WHERE ${runs.status} = 'in_progress' AND ${runs.expiresAt} < ${now} LIMIT ${sql.raw(String(limit))} FOR UPDATE SKIP LOCKED)`
         )
       )
-      .returning({ id: runs.id });
-
-    for (const expiredRun of expiredRuns) {
-      await publishRunStreamEvent(expiredRun.id, {
-        updatedAt: now,
+      .returning();
+  },
+  async process(run) {
+    await withOrg(run.organizationId, async (tx) => {
+      await applyRunPatch(tx, run.id, null, {
         status: 'failed',
         failReason: { message: 'Timeout' },
       });
-      await expireRunStream(expiredRun.id);
-    }
+    });
   },
 });

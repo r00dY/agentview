@@ -2,7 +2,7 @@ import { redis } from './redis';
 
 const TERMINAL_STATUSES = ['completed', 'failed', 'cancelled'];
 
-export async function publishRunStreamEvent(runId: string, event: object) {
+export async function publishRunStreamEvent(runId: string, event: object, options?: { expire?: boolean }) {
   const key = `run-stream:${runId}`;
 
   // Use the event's updatedAt as the stream ID so consumer can use the same
@@ -11,14 +11,9 @@ export async function publishRunStreamEvent(runId: string, event: object) {
   const ms = new Date(updatedAt).getTime();
   await redis.xadd(key, `${ms}-*`, 'data', JSON.stringify(event));
 
-  const status = (event as any).status;
-  if (status && TERMINAL_STATUSES.includes(status)) {
+  if (options?.expire) {
     await redis.expire(key, 60);
   }
-}
-
-export async function expireRunStream(runId: string) {
-  await redis.expire(`run-stream:${runId}`, 60);
 }
 
 export async function* consumeRunStream(
