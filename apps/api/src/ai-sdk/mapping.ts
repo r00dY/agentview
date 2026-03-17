@@ -1,11 +1,4 @@
-import type { Session } from 'agentview/apiTypes';
-
-export interface UIMessage {
-  id: string;
-  role: 'user' | 'assistant' | 'system';
-  parts: any[];
-  metadata?: any;
-}
+import type { Session, UIMessage } from 'agentview/apiTypes';
 
 /**
  * Converts an AgentView session (with runs and items) to UIMessage array for the AI SDK request body.

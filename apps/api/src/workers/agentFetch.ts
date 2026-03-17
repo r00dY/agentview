@@ -4,8 +4,8 @@ import { runs, sessions, channelMessages, environments, sessionItems } from '../
 import { eq, and, inArray, sql, not, isNull } from 'drizzle-orm';
 import { getConfigFromEnvironment } from '../environments';
 import { fetchSession } from '../sessions';
-import { callAgentAPI, AgentAPIError } from '../agentApi';
-import { callAgentAPIAISDK } from '../ai-sdk/agentApi';
+import { AgentAPIError } from '../agentApi';
+import { getAdapter } from '../adapters';
 import { BaseConfigSchemaToZod, findChannelConfig, getChannelAgent } from 'agentview/configUtils';
 import { applyRunPatch } from '../runs';
 import { resolveAgentRef, upsertAgentRef } from '../agentRefs';
@@ -167,7 +167,7 @@ async function processAgentFetch(run: Run) {
     // Call the agent endpoint
     const body: RunBody = { session };
 
-    const callFn = agentConfig.adapter === 'ai-sdk' ? callAgentAPIAISDK : callAgentAPI;
+    const adapter = getAdapter(agentConfig.adapter);
 
     const getCurrentRunStatus = async () => {
       return await withOrg(run.organizationId, async (tx) => {
@@ -182,7 +182,7 @@ async function processAgentFetch(run: Run) {
 
     console.log(`[agentFetch][${run.id}] calling agent API`);
 
-    for await (const event of callFn(body, agentUrl, abortController.signal)) {
+    for await (const event of adapter.callAgent(body, agentUrl, abortController.signal)) {
       console.log(`[agentFetch][${run.id}] event: ${event.name}`);
       // Check for external cancellation after each event received.
       const runStatus = await getCurrentRunStatus();

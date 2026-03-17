@@ -64,6 +64,7 @@ import { findUser } from './users';
 import { randomBytes } from 'crypto';
 import { applyRunPatch, getRun, createAutoRun, createManualRun, DEFAULT_IDLE_TIME, getRunInputContent } from './runs';
 import { upsertAgentRef } from './agentRefs';
+import { getAdapter } from './adapters';
 import { parseMetadata } from './parseMetadata';
 import { authn, authorize, requireMemberPrincipal, type PrivatePrincipal, type Principal, type MemberPrincipal, type ApiKeyPrincipal, type UserPrincipal, authnAllowPublic } from './authMiddleware';
 
@@ -1037,7 +1038,8 @@ app.openapi(sessionGETRoute, async (c) => {
   return withOrg(principal.organizationId, async (tx) => {
     const session = await requireSession(tx, session_id);
     await authorize(principal, { action: "end-user:read", user: session.user });
-    return c.json(session, 200);
+    const adapter = getAdapter(session.agentRef?.adapter);
+    return c.json({ ...session, ...adapter.enrichSession(session) }, 200);
   })
 })
 

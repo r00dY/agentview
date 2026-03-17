@@ -244,8 +244,18 @@ export const SessionBaseSchema = z.object({
 
 export type SessionBase = z.infer<typeof SessionBaseSchema>
 
+export const UIMessageSchema = z.object({
+  id: z.string(),
+  role: z.enum(['user', 'assistant', 'system']),
+  parts: z.array(z.any()),
+  metadata: z.any().optional(),
+})
+
+export type UIMessage = z.infer<typeof UIMessageSchema>
+
 export const SessionSchema = SessionBaseSchema.extend({
   runs: z.array(RunSchema),
+  messages: z.array(UIMessageSchema).optional(),
 })
 
 export type Session = z.infer<typeof SessionSchema>
