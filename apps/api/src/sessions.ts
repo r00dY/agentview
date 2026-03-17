@@ -108,11 +108,7 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
     space: row.user.space,
     runs: row.runs.filter((run, index) => run.status === "in_progress" || run.status === "completed" || index === row.runs.length - 1).map(run => ({
       ...run,
-      agentRef: run.agentRef ? {
-        name: run.agentRef.agent,
-        version: run.agentRef.version,
-        adapter: run.agentRef.adapter,
-      } : null,
+      // agentRef: run.agentRef ?? : null,
       sessionItems: run.sessionItems.map((item, index) => ({
         ...item,
         type: item.type ?? (index === 0 ? 'input' : 'step') // this condition is totally unimportant, just backward compat with nothing lol
@@ -120,11 +116,7 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
     })),
     summary: row.summary,
     state: state ?? row.initialState ?? null,
-    agentRef: row.agentRef ? {
-      name: row.agentRef.agent,
-      version: row.agentRef.version,
-      adapter: row.agentRef.adapter,
-    } : null,
+    agentRef: row.agentRef ?? null,
     agentRefs: row.agentRefs ?? []
   } as Session;
 }

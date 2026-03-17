@@ -2,6 +2,7 @@ import { eq, and } from 'drizzle-orm';
 import { agentRefs, sessions } from './schemas/schema';
 import { AgentViewError } from 'agentview/AgentViewError';
 import type { Transaction } from './types';
+import type { AgentRef } from 'agentview/apiTypes';
 
 type ParsedVersion = {
   major: number;
@@ -35,14 +36,12 @@ function compareVersions(v1: ParsedVersion, v2: ParsedVersion): number {
   return 0;
 }
 
-export type AgentRefInput = { version: string; agent: string; adapter: 'agentview' | 'ai-sdk' };
-
 /**
  * Simple upsert: inserts agent_ref row if not exists, returns the row.
  * No version comparison, no session update.
  */
 export async function upsertAgentRef(tx: Transaction, opts: {
-  agentRef: AgentRefInput;
+  agentRef: AgentRef;
   organizationId: string;
 }): Promise<{ agentRefId: string; version: string; agent: string; adapter: 'agentview' | 'ai-sdk' }> {
   const parsed = parseVersion(opts.agentRef.version);
@@ -69,8 +68,8 @@ export async function upsertAgentRef(tx: Transaction, opts: {
  * and updates the session's agentRefs array.
  */
 export async function resolveAgentRef(tx: Transaction, opts: {
-  agentRef: AgentRefInput;
-  previousAgentRef?: { version: string } | null;
+  agentRef: AgentRef;
+  previousAgentRef?: AgentRef | null;
   organizationId: string;
   sessionId: string;
 }): Promise<{ agentRefId: string; version: string; agent: string; adapter: 'agentview' | 'ai-sdk' }> {
@@ -111,12 +110,12 @@ export async function resolveAgentRef(tx: Transaction, opts: {
     where: eq(sessions.id, opts.sessionId),
     columns: { agentRefs: true },
   });
-  const existing = (currentSession?.agentRefs as { name: string; version: string; adapter: "agentview" | "ai-sdk" }[]) ?? [];
+  const existing = (currentSession?.agentRefs as { agent: string; version: string; adapter: "agentview" | "ai-sdk" }[]) ?? [];
 
-  const alreadyExists = existing.some(ref => ref.name === opts.agentRef.agent && ref.version === version);
+  const alreadyExists = existing.some(ref => ref.agent === opts.agentRef.agent && ref.version === version);
   if (!alreadyExists) {
     await tx.update(sessions).set({
-      agentRefs: [...existing, { name: opts.agentRef.agent, version, adapter: opts.agentRef.adapter }],
+      agentRefs: [...existing, { agent: opts.agentRef.agent, version, adapter: opts.agentRef.adapter }],
       updatedAt: new Date().toISOString(),
     }).where(eq(sessions.id, opts.sessionId));
   }

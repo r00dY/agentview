@@ -8,8 +8,8 @@ import { callAgentAPI, AgentAPIError } from '../agentApi';
 import { callAgentAPIAISDK } from '../ai-sdk/agentApi';
 import { BaseConfigSchemaToZod, findChannelConfig, getChannelAgent } from 'agentview/configUtils';
 import { applyRunPatch, getRun } from '../runs';
-import { upsertAgentRef } from '../agentRefs';
-import type { RunBody } from 'agentview/apiTypes';
+import { resolveAgentRef, upsertAgentRef } from '../agentRefs';
+import type { AgentRef, RunBody } from 'agentview/apiTypes';
 import { createWorker } from './utils';
 import { getLastRun } from 'agentview/sessionUtils';
 
@@ -92,46 +92,83 @@ async function processAgentFetch(run: Run) {
       throw new Error(`Agent '${agentName}' has no url`);
     }
 
-    // Resolve agent ref from config version and assign to run
+    // Resolve agent ref for session & run
     await withOrg(run.organizationId, async (tx) => {
+      if (!session) {
+        throw new Error(`Session ${run.sessionId} not found`);
+      }
+      
+      let sessionAgentRef: AgentRef;
 
-      const lastRun = await getLastRun(session!);
+      // First set session ref if necessary
+      if (!session.agentRef) {
+        const result = await upsertAgentRef(tx, {
+          agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter === 'ai-sdk' ? 'ai-sdk' : 'agentview' },
+          organizationId: run.organizationId,
+        });
 
-      const { agentRefId } = await upsertAgentRef(tx, {
+        sessionAgentRef = {
+          agent: result.agent,
+          version: result.version,
+          adapter: result.adapter
+        };
+
+        await tx.update(sessions).set({
+          agentRefId: result.agentRefId,
+        }).where(eq(sessions.id, run.sessionId));
+      }
+      else {
+        sessionAgentRef = session.agentRef;
+      }
+
+      const lastCompletedRunAgentRef = session.runs.reverse().find(r => r.status === 'completed')?.agentRef;
+      const previousAgentRef = lastCompletedRunAgentRef ?? sessionAgentRef;
+
+      const { agentRefId } = await resolveAgentRef(tx, {
         agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter === 'ai-sdk' ? 'ai-sdk' : 'agentview' },
+        previousAgentRef,
         organizationId: run.organizationId,
+        sessionId: run.sessionId,
       });
 
-      // Set agentRef on run
       await tx.update(runs).set({
         agentRefId,
         updatedAt: new Date().toISOString(),
       }).where(eq(runs.id, run.id));
 
-      // If session doesn't have agentRef yet, set it + initialState from channelConfig
-      if (!session!.agentRef) {
-        await tx.update(sessions).set({
-          agentRefId,
-          initialState: channelAgent?.initialState ?? null,
-          updatedAt: new Date().toISOString(),
-        }).where(eq(sessions.id, run.sessionId));
+      // const lastRun = await getLastRun(session!);
 
-        // Update session.agentRefs array
-        const currentSession = await tx.query.sessions.findFirst({
-          where: eq(sessions.id, run.sessionId),
-          columns: { agentRefs: true },
-        });
-        const existing = (currentSession?.agentRefs as { name: string; version: string; adapter: "agentview" | "ai-sdk" }[]) ?? [];
-        const version = agentConfig.version;
-        const adapter = agentConfig.adapter === 'ai-sdk' ? 'ai-sdk' as const : 'agentview' as const;
-        const alreadyExists = existing.some(ref => ref.name === agentConfig.name && ref.version === version);
-        if (!alreadyExists) {
-          await tx.update(sessions).set({
-            agentRefs: [...existing, { name: agentConfig.name, version, adapter }],
-            updatedAt: new Date().toISOString(),
-          }).where(eq(sessions.id, run.sessionId));
-        }
-      }
+      // const { agentRefId } = await upsertAgentRef(tx, {
+      //   agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter === 'ai-sdk' ? 'ai-sdk' : 'agentview' },
+      //   organizationId: run.organizationId,
+      // });
+
+      // Set agentRef on run
+
+      // // If session doesn't have agentRef yet, set it + initialState from channelConfig
+      // if (!session!.agentRef) {
+      //   await tx.update(sessions).set({
+      //     agentRefId,
+      //     initialState: channelAgent?.initialState ?? null,
+      //     updatedAt: new Date().toISOString(),
+      //   }).where(eq(sessions.id, run.sessionId));
+
+      //   // Update session.agentRefs array
+      //   const currentSession = await tx.query.sessions.findFirst({
+      //     where: eq(sessions.id, run.sessionId),
+      //     columns: { agentRefs: true },
+      //   });
+      //   const existing = (currentSession?.agentRefs as { name: string; version: string; adapter: "agentview" | "ai-sdk" }[]) ?? [];
+      //   const version = agentConfig.version;
+      //   const adapter = agentConfig.adapter === 'ai-sdk' ? 'ai-sdk' as const : 'agentview' as const;
+      //   const alreadyExists = existing.some(ref => ref.name === agentConfig.name && ref.version === version);
+      //   if (!alreadyExists) {
+      //     await tx.update(sessions).set({
+      //       agentRefs: [...existing, { name: agentConfig.name, version, adapter }],
+      //       updatedAt: new Date().toISOString(),
+      //     }).where(eq(sessions.id, run.sessionId));
+      //   }
+      // }
     });
 
     // Refetch session after agentRef assignment

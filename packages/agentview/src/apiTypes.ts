@@ -165,7 +165,7 @@ export type SessionItem = z.infer<typeof SessionItemSchema>
 
 
 export const AgentRefSchema = z.object({
-  name: z.string(),
+  agent: z.string(),
   version: z.string(),
   adapter: z.enum(['agentview', 'ai-sdk']),
 })
