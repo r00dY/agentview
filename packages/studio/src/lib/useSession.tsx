@@ -3,11 +3,12 @@ import { useEffect, useRef, useState } from "react";
 import { agentview } from "./agentview";
 import { invalidateCache } from "./swr-cache";
 import type { Session } from "agentview/apiTypes";
+import { useRerender } from "../hooks/useRerender";
 
 
 export function useSession(
     externalSession: Session,
-): { session: Session, createRun: (input: any) => Promise<void>, cancelRun: () => Promise<void> } {
+): { session: Session, createRun: (input: any) => Promise<void>, cancelRun: () => Promise<void>, isRunning: boolean } {
     const [localSession, setLocalSession] = useState<Session | undefined>(undefined);
 
     const activeSession = localSession ?? externalSession; // localSession overrides externalSession EVEN IF isWatching is false! This is by design.
@@ -21,6 +22,9 @@ export function useSession(
         }
     }, [])
 
+    const rerender = useRerender();
+
+    const [isRunBeingCreated, setIsRunBeingCreated] = useState(false);
 
     async function startWatching() {
         if (abortControllerRef.current !== undefined) { // is streaming?
@@ -54,6 +58,7 @@ export function useSession(
         } finally {
             console.log("[useSession] stopping watch for session", externalSession.id);
             abortControllerRef.current = undefined;
+            rerender();
         }
     }
 
@@ -77,9 +82,15 @@ export function useSession(
     })
 
     const createRun = async (input: any) => {
-        await agentview.createRun({ sessionId: externalSession.id, input });
-        startWatching();
-    };
+        try {
+            setIsRunBeingCreated(true);
+            await agentview.createRun({ sessionId: externalSession.id, input });
+            startWatching();
+
+        } finally {
+            setIsRunBeingCreated(false);
+        };
+    }
 
     const cancelRun = async () => {
         if (lastRun?.status === 'in_progress') {
@@ -87,7 +98,7 @@ export function useSession(
         }
     };
 
-    return { session: activeSession, createRun, cancelRun };
+    return { session: activeSession, createRun, cancelRun, isRunning: isRunBeingCreated || lastRun?.status === 'in_progress' || abortControllerRef.current !== undefined };
 }
 
 

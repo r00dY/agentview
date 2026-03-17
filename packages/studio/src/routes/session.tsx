@@ -140,7 +140,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         )?.unseenEvents;
     };
 
-    const { session, createRun, cancelRun } = useSession(props.session);
+    const { session, createRun, cancelRun, isRunning } = useSession(props.session);
 
     const listParams = loaderData.listParams;
     const activeItems = getAllSessionItems(session, { activeOnly: true })
@@ -250,7 +250,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
             sessionBase={session}
             channelConfig={channelConfig}
             headerExtra={session.user.createdBy === me.id && <ShareForm session={session} />}
-            footer={session.user.createdBy === me.id && <InputForm session={session} channelConfig={channelConfig} styles={styles} createRun={createRun} cancelRun={cancelRun} />}
+            footer={session.user.createdBy === me.id && <InputForm session={session} channelConfig={channelConfig} styles={styles} createRun={createRun} cancelRun={cancelRun} isRunning={isRunning} />}
             outletContext={{ session }}
         >
             <div ref={bodyRef}>
@@ -611,7 +611,7 @@ function DefaultToolComponent({ item, resultItem }: SessionItemDisplayComponentP
     </Step>
 }
 
-function InputForm({ session, channelConfig, styles, createRun, cancelRun }: { session: Session, channelConfig: ChannelConfig, styles: Record<string, number>, createRun: (input: any) => Promise<void>, cancelRun: () => Promise<void> }) {
+function InputForm({ session, channelConfig, styles, createRun, cancelRun, isRunning }: { session: Session, channelConfig: ChannelConfig, styles: Record<string, number>, createRun: (input: any) => Promise<void>, cancelRun: () => Promise<void>, isRunning: boolean }) {
     const lastRun = getLastRun(session)
 
     const submit2 = async (items: any[]) => {
@@ -622,8 +622,6 @@ function InputForm({ session, channelConfig, styles, createRun, cancelRun }: { s
             toast.error(`Error: "${error.message}". Check console.`);
         }
     }
-
-    const isRunning = lastRun?.status === 'in_progress';
 
     const InputComponent = channelConfig.inputComponent;
     if (InputComponent === null) {
