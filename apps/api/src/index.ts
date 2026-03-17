@@ -2203,7 +2203,7 @@ app.openapi(environmentsListRoute, async (c) => {
     const environments = await tx.query.environments.findMany({
       columns: {
         id: true,
-        // userId: true,
+        handle: true,
         createdAt: true,
       },
       with: {
