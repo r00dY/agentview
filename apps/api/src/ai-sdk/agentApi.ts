@@ -95,8 +95,9 @@ export async function* callAgentAPIAISDK(
     const currentRun = body.session.runs[body.session.runs.length - 1];
     const incomingMessages = currentRun.channelMessages.filter(cm => cm.direction === 'incoming');
     const hasInput = currentRun.sessionItems.some(si => si.type === 'input');
+    const isChannelRun = incomingMessages.length > 0 && !hasInput;
 
-    if (incomingMessages.length > 0 && !hasInput) {
+    if (isChannelRun) {
       const inputContent = {
         role: 'user',
         parts: incomingMessages.map(cm => ({ type: 'text', text: cm.text ?? '' })),
@@ -157,6 +158,7 @@ export async function* callAgentAPIAISDK(
     const toolStates = new Map<string, { toolName: string; inputText: string; input?: any }>();
     let messageMetadata: any = undefined;
     const emittedItemTypes: string[] = [];
+    const outputTexts: string[] = [];
 
     for await (const chunk of parseAISDKStream(response.body)) {
       switch (chunk.type) {
@@ -182,6 +184,7 @@ export async function* callAgentAPIAISDK(
           const text = textBuffers.get(chunk.id) ?? '';
           textBuffers.delete(chunk.id);
           emittedItemTypes.push('text');
+          outputTexts.push(text);
           yield {
             name: 'run.patch',
             data: { items: [{ type: 'text', text }] },
@@ -292,6 +295,11 @@ export async function* callAgentAPIAISDK(
               ...(messageMetadata !== undefined ? { metadata: messageMetadata } : {}),
             },
           };
+
+          if (isChannelRun) {
+            const replyText = outputTexts.filter(Boolean).join('\n\n');
+            yield { name: 'channel.reply', data: { text: replyText } };
+          }
           break;
         }
 

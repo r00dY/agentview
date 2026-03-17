@@ -7,7 +7,7 @@ import { fetchSession } from '../sessions';
 import { callAgentAPI, AgentAPIError } from '../agentApi';
 import { callAgentAPIAISDK } from '../ai-sdk/agentApi';
 import { BaseConfigSchemaToZod, findChannelConfig, getChannelAgent } from 'agentview/configUtils';
-import { applyRunPatch, getRun } from '../runs';
+import { applyRunPatch } from '../runs';
 import { resolveAgentRef, upsertAgentRef } from '../agentRefs';
 import type { AgentRef, RunBody } from 'agentview/apiTypes';
 import { createWorker } from './utils';
@@ -184,10 +184,10 @@ async function processAgentFetch(run: Run) {
 
     for await (const event of callFn(body, agentUrl, abortController.signal)) {
       console.log(`[agentFetch][${run.id}] event: ${event.name}`);
-      // Check for cancellation after each new event received. We immediately abort the stream if the run is not in progress.
+      // Check for external cancellation after each event received.
       const runStatus = await getCurrentRunStatus();
-      if (runStatus !== 'in_progress') {
-        console.log(`[agentFetch][${run.id}] aborting!!!`);
+      if (runStatus === 'cancelled') {
+        console.log(`[agentFetch][${run.id}] cancelled, aborting`);
         abortController.abort();
         break;
       }
@@ -235,6 +235,33 @@ async function processAgentFetch(run: Run) {
           );
         });
       }
+      else if (event.name === 'channel.reply') {
+        try {
+          await withOrg(run.organizationId, async (tx) => {
+            const sessionRow = await tx.query.sessions.findFirst({
+              where: eq(sessions.id, run.sessionId),
+              columns: { channelThreadId: true },
+            });
+            if (!sessionRow?.channelThreadId) return;
+
+            console.log(`[agentFetch][${run.id}] creating outgoing channel message`);
+
+            await tx.insert(channelMessages).values({
+              organizationId: run.organizationId,
+              channelThreadId: sessionRow.channelThreadId,
+              direction: 'outgoing',
+              status: 'pending',
+              date: new Date().toISOString(),
+              text: event.data.text,
+              runId: run.id,
+            });
+
+            console.log(`[agentFetch][${run.id}] created outgoing channel message`);
+          });
+        } catch (e) {
+          console.error(`[agentFetch][${run.id}] failed to create outgoing channel message:`, e);
+        }
+      }
     }
 
     // Automatically fail the run if it is not in progress after stream is finished
@@ -244,50 +271,6 @@ async function processAgentFetch(run: Run) {
     }
 
     console.log(`[agentFetch][${run.id}] success`);
-
-    // Create outgoing channel message if session has a channel thread
-    if (finalRunStatus === 'completed' && session.channel.type !== 'api') {
-      try {
-        await withOrg(run.organizationId, async (tx) => {
-          // Check if session is connected to a channel thread
-          const sessionRow = await tx.query.sessions.findFirst({
-            where: eq(sessions.id, run.sessionId),
-            columns: { channelThreadId: true },
-          });
-          if (!sessionRow?.channelThreadId) return;
-
-          if (agentConfig.adapter !== 'ai-sdk') {
-            throw new Error('Agent adapter must be ai-sdk to create outgoing channel message');
-          }
-
-          console.log(`[agentFetch][${run.id}] creating outgoing channel message`);
-
-          // Get the completed run with its items
-          const completedRun = (await getRun(tx, run.id))!;
-
-          // Filter for output items and use the last one for channel message
-          const outputItems = completedRun.sessionItems.filter(si => si.type === 'output');
-
-          const outputText = outputItems.map(si => (si.content as any)?.text).filter(Boolean).join('\n\n');
-
-          // Insert outgoing channel message
-          await tx.insert(channelMessages).values({
-            organizationId: run.organizationId,
-            channelThreadId: sessionRow.channelThreadId,
-            direction: 'outgoing',
-            status: 'pending',
-            date: new Date().toISOString(),
-            text: outputText,
-            runId: run.id,
-          });
-
-          console.log(`[agentFetch][${run.id}] created outgoing channel message`);
-        });
-      } catch (e) {
-        // Don't let outgoing message creation failure affect run completion
-        console.error(`[agentFetch][${run.id}] failed to create outgoing channel message:`, e);
-      }
-    }
 
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
