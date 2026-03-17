@@ -2346,7 +2346,7 @@ describe('API', () => {
       mockAgentServer?.resetRequests();
     });
 
-    test.only("happy path: agent streams run.patch events", async () => {
+    test("happy path: agent streams run.patch events", async () => {
       await updateConfigWithUrl();
       const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
