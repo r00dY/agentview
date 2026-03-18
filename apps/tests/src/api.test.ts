@@ -2845,11 +2845,9 @@ describe('API', () => {
       expect(chunks.some(c => c.type === "error")).toBe(true);
 
       // The stream ends before the worker marks the run as failed, so wait briefly
-      const midSession = await av.getSession({ id: session.id });
-      const runId = midSession.lastRun!.id;
-      const failedRun = await waitForRunStatus(session.id, runId, ["failed"]);
-      expect(failedRun.status).toBe("failed");
-      expect(failedRun.failReason).toBeDefined();
+      const updatedSession = await av.getSession({ id: session.id });
+      expect(updatedSession.lastRun!.status).toBe("failed");
+      expect(updatedSession.lastRun!.failReason).toBeDefined();
     }, 30000);
 
     test("HTTP error: 500 → run marked failed (validated via ai-sdk stream)", async () => {
@@ -2877,11 +2875,9 @@ describe('API', () => {
       expect(chunks.length).toBe(0);
 
       // The stream ends before the worker marks the run as failed, so wait briefly
-      const midSession = await av.getSession({ id: session.id });
-      const runId = midSession.lastRun!.id;
-      const failedRun = await waitForRunStatus(session.id, runId, ["failed"]);
-      expect(failedRun.status).toBe("failed");
-      expect(failedRun.failReason).toBeDefined();
+      const updatedSession = await av.getSession({ id: session.id });
+      expect(updatedSession.lastRun!.status).toBe("failed");
+      expect(updatedSession.lastRun!.failReason).toBeDefined();
     }, 30000);
 
     test("stream ends without finish → run marked failed (validated via ai-sdk stream)", async () => {
