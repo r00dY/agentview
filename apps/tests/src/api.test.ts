@@ -2914,13 +2914,9 @@ describe('API', () => {
       expect(chunks.some(c => c.type === "text-delta")).toBe(true);
       expect(chunks.some(c => c.type === "finish")).toBe(false);
 
-      // The stream ends before the worker marks the run as failed, so wait briefly
-      // Find the run ID from the session
-      const midSession = await av.getSession({ id: session.id });
-      const runId = midSession.lastRun!.id;
-      const failedRun = await waitForRunStatus(session.id, runId, ["failed"]);
-      expect(failedRun.status).toBe("failed");
-      expect(failedRun.failReason.message).toContain("Agent stream ended without completing");
+      const updatedSession = await av.getSession({ id: session.id });
+      expect(updatedSession.lastRun!.status).toBe("failed");
+      expect(updatedSession.lastRun!.failReason.message).toContain("Agent stream ended without completing");
     }, 30000);
 
     test("request body format: sends UIMessage[] with correct history", async () => {
