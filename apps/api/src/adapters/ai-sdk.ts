@@ -14,7 +14,7 @@ interface AISDKChunk {
  * AI SDK uses `data: <json>\n\n` format (no `event:` field).
  * Stream ends with `data: [DONE]\n\n`.
  */
-async function* parseAISDKStream(body: ReadableStream<Uint8Array>): AsyncGenerator<AISDKChunk, void, unknown> {
+async function* parseAISDKStream(body: ReadableStream<Uint8Array>): AsyncGenerator<string, void, unknown> {
     const reader = body.getReader();
     const decoder = new TextDecoder();
 
@@ -52,18 +52,20 @@ async function* parseAISDKStream(body: ReadableStream<Uint8Array>): AsyncGenerat
     }
 }
 
-function parseDataLine(line: string): AISDKChunk | null {
+function parseDataLine(line: string): string | null {
     if (!line.startsWith('data: ')) return null;
     const payload = line.substring(6).trim();
-    if (payload === '[DONE]') return null;
-    try {
-        return JSON.parse(payload);
-    } catch {
-        throw new AgentAPIError({
-            message: 'Error parsing AI SDK stream chunk (invalid JSON)',
-            data: payload,
-        });
-    }
+
+    return payload;
+    // if (payload === '[DONE]') return null;
+    // try {
+    //     return JSON.parse(payload);
+    // } catch {
+    //     throw new AgentAPIError({
+    //         message: 'Error parsing AI SDK stream chunk (invalid JSON)',
+    //         data: payload,
+    //     });
+    // }
 }
 
 /**
@@ -163,9 +165,15 @@ async function* callAgentAPIAISDK(
         const emittedItemTypes: string[] = [];
         const outputTexts: string[] = [];
 
-        for await (const chunk of parseAISDKStream(response.body)) {
-            publishRunStreamEvent(currentRun.id, 'ai-sdk', new Date().toISOString(), chunk);
+        for await (const data of parseAISDKStream(response.body)) {
+            if (data === '[DONE]') {
+                break; // we do not resend [DONE], it's handled in 'finally' block, so that it's ALWAYS sent last, and even if we handle internal errors. We "intercept" sending [DONE] basically.
+            }
 
+            publishRunStreamEvent(currentRun.id, 'ai-sdk', new Date().toISOString(), data);
+
+            const chunk = JSON.parse(data) as AISDKChunk;
+            
             switch (chunk.type) {
                 case 'start': {
                     if (chunk.messageMetadata !== undefined) {
@@ -340,7 +348,7 @@ async function* callAgentAPIAISDK(
             throw error;
         }
     } finally {
-        await expireRunStream(currentRun.id, 'ai-sdk');
+        await publishRunStreamEvent(currentRun.id, 'ai-sdk', new Date().toISOString(), "[DONE]");
     }
 }
 

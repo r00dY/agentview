@@ -268,10 +268,11 @@ export async function applyRunPatch(
   }
 
   // Publish to Redis stream
-  const streamEvent: Record<string, any> = {
+  const dataToStream = JSON.stringify({
     ...body,
-    items: insertedItems
-  }
+    items: insertedItems,
+    updatedAt: nowIso
+  });
   // if (body.status) streamEvent.status = body.status;
   // if (insertedItems.length > 0) streamEvent.items = insertedItems;
   // if (body.metadata) streamEvent.metadata = body.metadata;
@@ -279,7 +280,10 @@ export async function applyRunPatch(
   // if (body.state !== undefined) streamEvent.state = body.state;
   // if (body.outputItemCount !== undefined) streamEvent.outputItemCount = body.outputItemCount;
 
-  await publishRunStreamEvent(runId, 'agentview', nowIso, streamEvent, { expire: isFinished });
+  await publishRunStreamEvent(runId, 'agentview', nowIso, dataToStream);
+  if (isFinished) {
+    await publishRunStreamEvent(runId, 'agentview', nowIso, '[DONE]');
+  }
 
   return (await getRun(tx, runId))!;
 }

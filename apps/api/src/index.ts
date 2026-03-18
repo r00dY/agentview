@@ -513,7 +513,7 @@ const usersPOSTRoute = createRoute({
   },
 })
 
-function getDefaultSpaceFromEnvironment(environment: Environment) : { space: Space, createdBy: string | null } {
+function getDefaultSpaceFromEnvironment(environment: Environment): { space: Space, createdBy: string | null } {
   if (environment.handle === 'production') {
     return {
       space: 'production',
@@ -549,14 +549,14 @@ async function createUser(principal: PrivatePrincipal, space_: Space | undefined
         throw new AgentViewError('User with this external ID already exists', 422)
       }
     }
-  
+
     if (space === 'production' && createdBy !== null) { // sanity check
       throw new AgentViewError('Users in production space can be created only with production api key.', 401)
     }
     if ((space === 'playground' || space === 'shared-playground') && createdBy === null) {
       throw new AgentViewError(`Users in '${space}' space can't be created with production api key, only via member login.`, 401)
     }
-  
+
     const [newEndUser] = await tx.insert(endUsers).values({
       organizationId: principal.organizationId,
       externalId,
@@ -565,7 +565,7 @@ async function createUser(principal: PrivatePrincipal, space_: Space | undefined
       space,
       token: randomBytes(32).toString('hex'),
     }).returning()
-  
+
     return newEndUser
   })
 }
@@ -1196,7 +1196,7 @@ app.openapi(sessionsPOSTRoute, async (c) => {
     const config = await requireConfig(tx, principal)
 
     // in API channel and agent must exist
-    const channelRef : ChannelRef = { type: 'api', name: body.agent }
+    const channelRef: ChannelRef = { type: 'api', name: body.agent }
 
     const channelConfig = requireChannelConfig(config, channelRef)
     const agentConfig = requireAgentConfig(config, getChannelAgent(channelConfig)?.name)
@@ -1242,23 +1242,35 @@ app.openapi(sessionsPOSTRoute, async (c) => {
 
 
 // watches session and its last run changes
-async function* watchSession(session: Session, signal: AbortSignal) {
-  yield {
-    event: 'session.snapshot',
-    data: session
-  }
-
+function getSessionStreamResponse(c: any, session: Session) {
   const lastRun = getLastRun(session);
+
   if (!lastRun || lastRun.status !== 'in_progress') {
-    return;
+    return c.body(null, 204); // 204 when no stream in our internal protocol
   }
 
-  for await (const event of consumeRunStream(lastRun.id, 'agentview', lastRun.updatedAt, signal)) {
-    yield { event: 'run.patch', data: event };
-    if (['completed', 'failed', 'cancelled'].includes(event.status)) {
+  return streamSSE(c, async (stream) => {
+    if (c.req.raw.signal.aborted) {
       return;
+    };
+
+    // session snapshot first
+    await stream.writeSSE({
+      event: 'session.snapshot',
+      data: JSON.stringify(session),
+    });
+
+    // stream run events from last updatedAt
+    for await (const data of consumeRunStream(lastRun.id, 'agentview', c.req.raw.signal, lastRun.updatedAt)) {
+      if (data === '[DONE]') {
+        return;
+      }
+      await stream.writeSSE({
+        event: 'run.patch',
+        data
+      });
     }
-  }
+  });
 }
 
 const sessionStreamRoute = createRoute({
@@ -1269,6 +1281,9 @@ const sessionStreamRoute = createRoute({
   request: {
     params: z.object({
       session_id: z.string(),
+    }),
+    query: z.object({
+      adapter: z.enum(['agentview', 'ai-sdk']).optional(),
     }),
   },
   responses: {
@@ -1291,28 +1306,35 @@ app.openapi(sessionStreamRoute, async (c) => {
   const principal = await authn(c.req.raw.headers);
 
   const { session_id } = c.req.param()
+  const { adapter = 'agentview' } = c.req.valid('query');
 
   const session = await withOrg(principal.organizationId, async (tx) => requireSession(tx, session_id))
 
   authorize(principal, { action: "end-user:read", user: session.user });
 
-  if (getLastRun(session)?.status !== 'in_progress') {
-    return c.body(null, 204);
+  const lastRun = getLastRun(session);
+
+  if (adapter === 'agentview') {
+    return getSessionStreamResponse(c, session);
+  }
+  else if (adapter === 'ai-sdk') {
+    if (lastRun?.status !== 'in_progress') {
+      return c.body(null, 204); // 204 when no stream in ai-sdk
+    }
+
+    return streamSSE(c, async (stream) => {
+      // Stream from the very beginning (use run createdAt as the starting point)
+      for await (const chunk of consumeRunStream(lastRun.id, 'ai-sdk', c.req.raw.signal)) {
+        if (c.req.raw.signal.aborted) { return };
+        await stream.writeSSE({ data: JSON.stringify(chunk) });
+      }
+      await stream.writeSSE({ data: '[DONE]' });
+    });
+  }
+  else {
+    throw new AgentViewError("Invalid adapter", 400);
   }
 
-  const generator = watchSession(session, c.req.raw.signal);
-
-  // TODO: heartbeat
-  return streamSSE(c, async (stream) => {
-    for await (const event of generator) {
-      if (c.req.raw.signal.aborted) return;
-
-      await stream.writeSSE({
-        data: JSON.stringify(event.data),
-        event: event.event,
-      });
-    }
-  });
 });
 
 
@@ -1368,9 +1390,20 @@ const runsPOSTRoute = createRoute({
     params: z.object({
       session_id: z.string(),
     }),
+    query: z.object({
+      adapter: z.enum(['agentview', 'ai-sdk']).optional(),
+    }),
     body: body(RunCreateSchema)
   },
   responses: {
+    200: {
+      content: {
+        'text/event-stream': {
+          schema: z.string(),
+        },
+      },
+      description: "Streams native AI SDK events",
+    },
     201: response_data(RunSchema),
     400: response_error(),
     404: response_error()
@@ -1381,8 +1414,9 @@ app.openapi(runsPOSTRoute, async (c) => {
   const principal = await authn(c.req.raw.headers)
   const body = await c.req.valid('json')
   const params = await c.req.param();
+  const { adapter = 'agentview' } = c.req.valid('query');
 
-  return withOrg(principal.organizationId, async (tx) => {
+  const { newRun } = await withOrg(principal.organizationId, async (tx) => {
     const session = await requireSession(tx, params.session_id);
 
     authorize(principal, { action: "end-user:update", user: session.user });
@@ -1395,8 +1429,20 @@ app.openapi(runsPOSTRoute, async (c) => {
     const updatedSession = await requireSession(tx, params.session_id);
     const newRun = getLastRun(updatedSession)!;
 
+    return { newRun };
+  });
+
+  if (adapter === 'agentview') {
     return c.json(newRun, 201);
-  })
+  }
+  else if (adapter === 'ai-sdk') {
+    return streamSSE(c, async (stream) => {
+      for await (const chunk of consumeRunStream(newRun.id, 'ai-sdk', c.req.raw.signal)) {
+        await stream.writeSSE({ data: JSON.stringify(chunk) });
+      }
+    });
+  }
+  throw new AgentViewError("Invalid adapter", 400);
 })
 
 
@@ -1934,7 +1980,7 @@ app.openapi(scoresPATCHRoute, async (c) => {
     if (target.type !== 'sessionItem' && target.type !== 'run') {
       throw new AgentViewError(`Invalid target: "${target.type}"`, 400);
     }
-    
+
     const session = target.session;
     const run = target.run;
 
