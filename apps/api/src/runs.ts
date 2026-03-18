@@ -273,12 +273,6 @@ export async function applyRunPatch(
     items: insertedItems,
     updatedAt: nowIso
   });
-  // if (body.status) streamEvent.status = body.status;
-  // if (insertedItems.length > 0) streamEvent.items = insertedItems;
-  // if (body.metadata) streamEvent.metadata = body.metadata;
-  // if (body.failReason !== undefined) streamEvent.failReason = body.failReason;
-  // if (body.state !== undefined) streamEvent.state = body.state;
-  // if (body.outputItemCount !== undefined) streamEvent.outputItemCount = body.outputItemCount;
 
   await publishRunStreamEvent(runId, 'agentview', nowIso, dataToStream);
   if (isFinished) {

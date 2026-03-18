@@ -1273,6 +1273,21 @@ function getSessionStreamResponse(c: any, session: Session) {
   });
 }
 
+function getAISDKStreamResponse(c: any, session: Session) {
+  const lastRun = getLastRun(session);
+
+  if (lastRun?.status !== 'in_progress') {
+    return c.body(null, 204); // 204 when no stream in ai-sdk
+  }
+
+  return streamSSE(c, async (stream) => {
+    for await (const chunk of consumeRunStream(lastRun.id, 'ai-sdk', c.req.raw.signal)) { // we stream from the beginning
+      if (c.req.raw.signal.aborted) { return };
+      await stream.writeSSE({ data: JSON.stringify(chunk) });
+    }
+  });
+}
+
 const sessionStreamRoute = createRoute({
   method: 'get',
   path: '/api/sessions/{session_id}/stream',
@@ -1318,18 +1333,7 @@ app.openapi(sessionStreamRoute, async (c) => {
     return getSessionStreamResponse(c, session);
   }
   else if (adapter === 'ai-sdk') {
-    if (lastRun?.status !== 'in_progress') {
-      return c.body(null, 204); // 204 when no stream in ai-sdk
-    }
-
-    return streamSSE(c, async (stream) => {
-      // Stream from the very beginning (use run createdAt as the starting point)
-      for await (const chunk of consumeRunStream(lastRun.id, 'ai-sdk', c.req.raw.signal)) {
-        if (c.req.raw.signal.aborted) { return };
-        await stream.writeSSE({ data: JSON.stringify(chunk) });
-      }
-      await stream.writeSSE({ data: '[DONE]' });
-    });
+    return getAISDKStreamResponse(c, session);
   }
   else {
     throw new AgentViewError("Invalid adapter", 400);
@@ -1416,7 +1420,7 @@ app.openapi(runsPOSTRoute, async (c) => {
   const params = await c.req.param();
   const { adapter = 'agentview' } = c.req.valid('query');
 
-  const { newRun } = await withOrg(principal.organizationId, async (tx) => {
+  const { updatedSession, newRun } = await withOrg(principal.organizationId, async (tx) => {
     const session = await requireSession(tx, params.session_id);
 
     authorize(principal, { action: "end-user:update", user: session.user });
@@ -1429,19 +1433,16 @@ app.openapi(runsPOSTRoute, async (c) => {
     const updatedSession = await requireSession(tx, params.session_id);
     const newRun = getLastRun(updatedSession)!;
 
-    return { newRun };
+    return { newRun, updatedSession };
   });
 
   if (adapter === 'agentview') {
     return c.json(newRun, 201);
   }
   else if (adapter === 'ai-sdk') {
-    return streamSSE(c, async (stream) => {
-      for await (const chunk of consumeRunStream(newRun.id, 'ai-sdk', c.req.raw.signal)) {
-        await stream.writeSSE({ data: JSON.stringify(chunk) });
-      }
-    });
+    return getAISDKStreamResponse(c, updatedSession);
   }
+  
   throw new AgentViewError("Invalid adapter", 400);
 })
 
