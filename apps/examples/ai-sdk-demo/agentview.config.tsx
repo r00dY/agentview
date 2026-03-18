@@ -121,7 +121,7 @@ export default defineConfig({
     {
       name: "weather-chat",
       version: "0.0.1",
-      url: "http://localhost:3000/api/double-text",
+      url: "http://localhost:3000/api/chat",
       adapter: "ai-sdk",
       runs: [
         {
