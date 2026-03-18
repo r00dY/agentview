@@ -2,7 +2,7 @@
  * Parse an AI SDK-style SSE stream (`data: <json>\n\n`).
  * Yields parsed JSON objects. Stops when `data: [DONE]` is received.
  */
-export async function* parseDataStream(response: Response): AsyncGenerator<any, void, unknown> {
+export async function* parseAISDKDataStream(response: Response): AsyncGenerator<any, void, unknown> {
   if (!response.body) throw new Error('No response body');
 
   const reader = response.body.getReader();
@@ -36,7 +36,10 @@ export async function* parseDataStream(response: Response): AsyncGenerator<any, 
       for (const line of buffer.trim().split('\n')) {
         if (!line.startsWith('data:')) continue;
         const payload = line.slice(5).trim();
-        if (payload === '[DONE]') return;
+        if (payload === '[DONE]') { 
+          yield '[DONE]'; 
+          return; 
+        }
         yield JSON.parse(payload);
       }
     }

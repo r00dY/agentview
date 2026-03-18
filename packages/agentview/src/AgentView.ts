@@ -35,7 +35,7 @@ import { enhanceSession } from './sessionUtils.js'
 import type { InternalConfig } from './configTypes.js'
 import { getApiUrl } from './urls.js'
 import { parseSSE } from './parseSSE.js'
-import { parseDataStream } from './parseDataStream.js'
+import { parseAISDKDataStream } from './parseAISDKDataStream.js'
 
 export interface AgentViewOptions {
   apiKey?: string
@@ -171,12 +171,16 @@ export class AgentView {
    * Each yielded value is a parsed AI SDK chunk (the JSON from `data: <json>`).
    * The stream ends when `data: [DONE]` is received.
    */
-  async createRunStream(options: RunCreate & { sessionId: string, adapter: 'ai-sdk', signal?: AbortSignal }): Promise<AsyncGenerator<any, void, unknown>> {
-    const { sessionId, adapter, signal, ...body } = options;
-    const response = await fetch(`${getApiUrl()}/api/sessions/${sessionId}/runs?adapter=${adapter}`, {
+  async createRunStreamAISDK(options: RunCreate & { sessionId: string, signal?: AbortSignal }): Promise<AsyncGenerator<any, void, unknown>> {
+    const { sessionId, signal, ...body } = options;
+    const response = await fetch(`${getApiUrl()}/api/sessions/${sessionId}/runs`, {
       method: 'POST',
       headers: this.getHeaders(),
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        ...body,
+        adapter: 'ai-sdk',
+        stream: true,
+      }),
       signal,
     });
 
@@ -186,7 +190,7 @@ export class AgentView {
       throw new AgentViewError(message ?? "Unknown error", response.status, details);
     }
 
-    return parseDataStream(response);
+    return parseAISDKDataStream(response);
   }
 
   async createManualRun(options: ManualRunCreate & { sessionId: string }): Promise<Run> {
@@ -333,14 +337,12 @@ export class AgentView {
   }
 
 
-  async getSessionStream(options: { id: string, adapter?: 'agentview' | 'ai-sdk', signal?: AbortSignal }): Promise<AsyncGenerator<{
+  async getSessionStream(options: { id: string, signal?: AbortSignal }): Promise<AsyncGenerator<{
     event: SessionStreamEvent;
     session: Session;
   }> | null> {
-    let url = `${getApiUrl()}/api/sessions/${options.id}/stream`;
-    if (options.adapter) {
-      url += `?adapter=${options.adapter}`;
-    }
+    let url = `${getApiUrl()}/api/sessions/${options.id}/stream?adapter=agentview`;
+
     const response = await fetch(url, {
       method: 'GET',
       headers: this.getHeaders(),

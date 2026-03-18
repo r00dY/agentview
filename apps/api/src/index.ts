@@ -1321,13 +1321,11 @@ app.openapi(sessionStreamRoute, async (c) => {
   const principal = await authn(c.req.raw.headers);
 
   const { session_id } = c.req.param()
-  const { adapter = 'agentview' } = c.req.valid('query');
+  const { adapter = 'ai-sdk' } = c.req.valid('query');
 
   const session = await withOrg(principal.organizationId, async (tx) => requireSession(tx, session_id))
 
   authorize(principal, { action: "end-user:read", user: session.user });
-
-  const lastRun = getLastRun(session);
 
   if (adapter === 'agentview') {
     return getSessionStreamResponse(c, session);
@@ -1394,10 +1392,10 @@ const runsPOSTRoute = createRoute({
     params: z.object({
       session_id: z.string(),
     }),
-    query: z.object({
+    body: body(RunCreateSchema.extend({
       adapter: z.enum(['agentview', 'ai-sdk']).optional(),
-    }),
-    body: body(RunCreateSchema)
+      stream: z.boolean().optional(),
+    }))
   },
   responses: {
     200: {
@@ -1418,7 +1416,8 @@ app.openapi(runsPOSTRoute, async (c) => {
   const principal = await authn(c.req.raw.headers)
   const body = await c.req.valid('json')
   const params = await c.req.param();
-  const { adapter = 'agentview' } = c.req.valid('query');
+
+  const { adapter = 'agentview', stream = false } = body;
 
   const { updatedSession, newRun } = await withOrg(principal.organizationId, async (tx) => {
     const session = await requireSession(tx, params.session_id);
@@ -1436,11 +1435,16 @@ app.openapi(runsPOSTRoute, async (c) => {
     return { newRun, updatedSession };
   });
 
-  if (adapter === 'agentview') {
-    return c.json(newRun, 201);
+  if (stream) {
+    if (adapter === 'agentview') {
+      return getSessionStreamResponse(c, updatedSession);
+    }
+    else if (adapter === 'ai-sdk') {
+      return getAISDKStreamResponse(c, updatedSession);
+    }
   }
-  else if (adapter === 'ai-sdk') {
-    return getAISDKStreamResponse(c, updatedSession);
+  else {
+    return c.json(newRun, 201);
   }
 
   throw new AgentViewError("Invalid adapter", 400);

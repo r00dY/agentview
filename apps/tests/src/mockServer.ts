@@ -70,11 +70,16 @@ export function writeSSE(res: ServerResponse, events: SSEEvent[]) {
 }
 
 /** AI SDK streaming format: `data: {...}\n\n` with `data: [DONE]\n\n` sentinel */
-export function writeAISDKStream(res: ServerResponse, chunks: any[]) {
+export function writeAISDKStream(res: ServerResponse, chunks: any[], options?: { endWithDone?: boolean }) {
   writeSSEHeaders(res)
   for (const chunk of chunks) {
     res.write(`data: ${JSON.stringify(chunk)}\n\n`)
   }
-  res.write('data: [DONE]\n\n')
+
+  const shouldEndWithDone = options?.endWithDone ?? true;
+
+  if (shouldEndWithDone) {
+    res.write('data: [DONE]\n\n')
+  }
   res.end()
 }

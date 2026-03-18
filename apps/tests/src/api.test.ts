@@ -2333,6 +2333,24 @@ describe('API', () => {
       });
     };
 
+    
+    async function collectSessionStream(stream: Awaited<ReturnType<typeof av.getSessionStream>>) {
+      const streamEvents: Array<{ event: SessionStreamEvent; session: Session }> = [];
+      for await (const e of stream!) {
+        streamEvents.push(e);
+      }
+
+      const finalSession = streamEvents[streamEvents.length - 1]?.session;
+      const finalRun = finalSession?.runs[finalSession.runs.length - 1];
+
+      return { 
+        streamEvents,
+        finalSession,
+        finalRun,
+      };
+    }
+
+
     beforeAll(async () => {
       mockAgentServer = await createMockServer(AGENT_PORT);
     });
@@ -2372,13 +2390,10 @@ describe('API', () => {
       });
 
       // Watch the session stream instead of polling
-      const streamEvents: Array<{ event: SessionStreamEvent; session: Session }> = [];
       const stream = await av.getSessionStream({ id: session.id });
       expect(stream).not.toBeNull();
 
-      for await (const e of stream!) {
-        streamEvents.push(e);
-      }
+      const { streamEvents, finalSession, finalRun } = await collectSessionStream(stream)
 
       // Validate stream events
       expect(streamEvents.length).toBeGreaterThanOrEqual(2);
@@ -2388,16 +2403,14 @@ describe('API', () => {
       expect(patchEvents.length).toBeGreaterThanOrEqual(1);
 
       // Validate final session state from the stream
-      const finalSession = streamEvents[streamEvents.length - 1].session;
-      const completedRun = finalSession.runs[finalSession.runs.length - 1]!;
-      expect(completedRun.status).toBe("completed");
-      expect(completedRun.agentRef?.version).toBe("1.0.0");
-      expect(completedRun.sessionItems.length).toBe(3);
-      expect(completedRun.sessionItems[0].content.type).toBe("message");
-      expect(completedRun.sessionItems[0].content.role).toBe("user");
-      expect(completedRun.sessionItems[1].content.type).toBe("reasoning");
-      expect(completedRun.sessionItems[2].content.type).toBe("message");
-      expect(completedRun.sessionItems[2].content.role).toBe("assistant");
+      expect(finalRun.status).toBe("completed");
+      expect(finalRun.agentRef?.version).toBe("1.0.0");
+      expect(finalRun.sessionItems.length).toBe(3);
+      expect(finalRun.sessionItems[0].content.type).toBe("message");
+      expect(finalRun.sessionItems[0].content.role).toBe("user");
+      expect(finalRun.sessionItems[1].content.type).toBe("reasoning");
+      expect(finalRun.sessionItems[2].content.type).toBe("message");
+      expect(finalRun.sessionItems[2].content.role).toBe("assistant");
 
       // Verify the agent received the session
       expect(mockAgentServer!.requests.length).toBeGreaterThanOrEqual(1);
@@ -2497,9 +2510,12 @@ describe('API', () => {
         input: { type: "message", role: "user", content: "Hi" },
       });
 
-      const failedRun = await waitForRunStatus(session.id, run.id, ["failed"]);
-      expect(failedRun.status).toBe("failed");
-      expect(failedRun.failReason).toBeDefined();
+      const stream = await av.getSessionStream({ id: session.id });
+      expect(stream).not.toBeNull();
+
+      const { finalRun } = await collectSessionStream(stream)
+      expect(finalRun.status).toBe("failed");
+      expect(finalRun.failReason).toBeDefined();
     }, 30000);
 
     test("bad HTTP response: agent returns 500 → run marked failed", async () => {
@@ -2561,27 +2577,22 @@ describe('API', () => {
       });
 
       // Watch the session stream
-      const streamEvents: Array<{ event: SessionStreamEvent; session: Session }> = [];
       const stream = await av.getSessionStream({ id: session.id });
       expect(stream).not.toBeNull();
 
-      for await (const e of stream!) {
-        streamEvents.push(e);
-      }
+      const { streamEvents, finalRun } = await collectSessionStream(stream)
 
       // Validate we got multiple run.patch events (one per patch from the agent)
       const patchEvents = streamEvents.filter(e => e.event.type === "run.patch");
       expect(patchEvents.length).toBeGreaterThanOrEqual(4); // 3 steps + 1 completion
 
       // Validate final state from the stream
-      const finalSession = streamEvents[streamEvents.length - 1].session;
-      const completedRun = finalSession.runs[finalSession.runs.length - 1]!;
-      expect(completedRun.status).toBe("completed");
-      expect(completedRun.sessionItems.length).toBe(5);
-      expect(completedRun.sessionItems[1].content.content).toBe("Step 1");
-      expect(completedRun.sessionItems[2].content.content).toBe("Step 2");
-      expect(completedRun.sessionItems[3].content.content).toBe("Step 3");
-      expect(completedRun.sessionItems[4].content.content).toBe("Final");
+      expect(finalRun.status).toBe("completed");
+      expect(finalRun.sessionItems.length).toBe(5);
+      expect(finalRun.sessionItems[1].content.content).toBe("Step 1");
+      expect(finalRun.sessionItems[2].content.content).toBe("Step 2");
+      expect(finalRun.sessionItems[3].content.content).toBe("Step 3");
+      expect(finalRun.sessionItems[4].content.content).toBe("Final");
     }, 30000);
 
   });
@@ -2647,9 +2658,8 @@ describe('API', () => {
 
       // Create run and get the native AI SDK stream
       const chunks: any[] = [];
-      const stream = await av.createRunStream({
+      const stream = await av.createRunStreamAISDK({
         sessionId: session.id,
-        adapter: 'ai-sdk',
         input: { type: "message", role: "user", content: "Hi" },
       });
 
@@ -2700,9 +2710,8 @@ describe('API', () => {
 
       // Create run and get the native AI SDK stream
       const chunks: any[] = [];
-      const stream = await av.createRunStream({
+      const stream = await av.createRunStreamAISDK({
         sessionId: session.id,
-        adapter: 'ai-sdk',
         input: { type: "message", role: "user", content: "What is the answer?" },
       });
 
@@ -2781,9 +2790,8 @@ describe('API', () => {
 
       // Create run and get the native AI SDK stream
       const chunks: any[] = [];
-      const stream = await av.createRunStream({
+      const stream = await av.createRunStreamAISDK({
         sessionId: session.id,
-        adapter: 'ai-sdk',
         input: { type: "message", role: "user", content: "What's the weather?" },
       });
 
@@ -2831,9 +2839,8 @@ describe('API', () => {
 
       // Create run and consume the AI SDK stream
       const chunks: any[] = [];
-      const stream = await av.createRunStream({
+      const stream = await av.createRunStreamAISDK({
         sessionId: session.id,
-        adapter: 'ai-sdk',
         input: { type: "message", role: "user", content: "Hi" },
       });
 
@@ -2861,9 +2868,8 @@ describe('API', () => {
 
       // The stream will end without any chunks (HTTP error → no AI SDK chunks published)
       const chunks: any[] = [];
-      const stream = await av.createRunStream({
+      const stream = await av.createRunStreamAISDK({
         sessionId: session.id,
-        adapter: 'ai-sdk',
         input: { type: "message", role: "user", content: "Hi" },
       });
 
@@ -2891,14 +2897,13 @@ describe('API', () => {
           { type: "text-delta", id: "t1", delta: "Partial..." },
           { type: "text-end", id: "t1" },
           // No finish event → stream ends without completing
-        ]);
+        ], { endWithDone: false });
       });
 
       // The stream will contain the partial chunks, then end
       const chunks: any[] = [];
-      const stream = await av.createRunStream({
+      const stream = await av.createRunStreamAISDK({
         sessionId: session.id,
-        adapter: 'ai-sdk',
         input: { type: "message", role: "user", content: "Hi" },
       });
 
@@ -2930,9 +2935,8 @@ describe('API', () => {
       });
 
       // Use createRunStream so we wait for the stream to complete
-      const stream = await av.createRunStream({
+      const stream = await av.createRunStreamAISDK({
         sessionId: session.id,
-        adapter: 'ai-sdk',
         input: { type: "message", role: "user", content: "Hello AI SDK" },
       });
 
@@ -2966,9 +2970,8 @@ describe('API', () => {
         ]);
       });
 
-      const stream1 = await av.createRunStream({
+      const stream1 = await av.createRunStreamAISDK({
         sessionId: session.id,
-        adapter: 'ai-sdk',
         input: { type: "message", role: "user", content: "Hi" },
       });
 
@@ -2988,9 +2991,8 @@ describe('API', () => {
         ]);
       });
 
-      const stream2 = await av.createRunStream({
+      const stream2 = await av.createRunStreamAISDK({
         sessionId: session.id,
-        adapter: 'ai-sdk',
         input: { type: "message", role: "user", content: "How are you?" },
       });
 
