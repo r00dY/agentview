@@ -11,8 +11,13 @@ export async function publishRunStreamEvent(runId: string, adapter: string, crea
   await redis.xadd(key, `${ms}-*`, 'data', JSON.stringify(event));
 
   if (options?.expire) {
-    await redis.expire(key, 60);
+    await expireRunStream(runId, adapter);
   }
+}
+
+export async function expireRunStream(runId: string, adapter: string) {
+  const key = `run-stream:${adapter}:${runId}`;
+  await redis.expire(key, 60);
 }
 
 export async function* consumeRunStream(

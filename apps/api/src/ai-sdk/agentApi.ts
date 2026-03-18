@@ -1,6 +1,7 @@
 import type { RunBody } from 'agentview/apiTypes';
 import { AgentAPIError, type AgentAPIEvent } from '../agentApi';
 import { sessionToUIMessages } from './mapping';
+import { expireRunStream, publishRunStreamEvent } from '../runStream';
 
 interface AISDKChunk {
   type: string;
@@ -87,12 +88,13 @@ export async function* callAgentAPIAISDK(
 ): AsyncGenerator<AgentAPIEvent, void, unknown> {
   let response: Response;
 
+  const currentRun = body.session.runs[body.session.runs.length - 1];
+
   try {
     // Build AI SDK request body
     const messages = sessionToUIMessages(body.session);
 
     // For channel-based runs: create input from incoming channel messages
-    const currentRun = body.session.runs[body.session.runs.length - 1];
     const incomingMessages = currentRun.channelMessages.filter(cm => cm.direction === 'incoming');
     const hasInput = currentRun.sessionItems.some(si => si.type === 'input');
     const isChannelRun = incomingMessages.length > 0 && !hasInput;
@@ -161,6 +163,8 @@ export async function* callAgentAPIAISDK(
     const outputTexts: string[] = [];
 
     for await (const chunk of parseAISDKStream(response.body)) {
+      publishRunStreamEvent(currentRun.id, 'ai-sdk', new Date().toISOString(), chunk);
+
       switch (chunk.type) {
         case 'start': {
           if (chunk.messageMetadata !== undefined) {
@@ -334,6 +338,8 @@ export async function* callAgentAPIAISDK(
     } else {
       throw error;
     }
+  } finally {
+    await expireRunStream(currentRun.id, 'ai-sdk');
   }
 }
 
