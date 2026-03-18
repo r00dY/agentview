@@ -254,7 +254,7 @@ export function authorize(principal: Principal, action: Action) {
   if (action.action === "end-user:read" || action.action === "end-user:update" || action.action === "end-user:create") {
 
     if (principal.type === 'user') {
-      if (action.action === "end-user:read") {
+      if (action.action === "end-user:read" || action.action === "end-user:update") {
         if (action.user.id === principal.user.id) {
           return true;
         }

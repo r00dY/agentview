@@ -148,7 +148,7 @@ app.on(["POST", "GET"], "/api/auth/*", (c) => {
 //   return environment;
 // }
 
-async function requireConfig(tx: Transaction, principal: PrivatePrincipal): Promise<BaseAgentViewConfig> {
+async function requireConfig(tx: Transaction, principal: Principal): Promise<BaseAgentViewConfig> {
   const environment = await requireEnvironment(tx, principal.env);
   if (environment.config === null) {
     throw new HTTPException(400, { message: "Environment has no config." });
@@ -531,7 +531,7 @@ function getDefaultSpaceFromEnvironment(environment: Environment): { space: Spac
   }
 }
 
-async function createUser(principal: PrivatePrincipal, space_: Space | undefined | null, createdBy_: string | null | undefined, externalId?: string | null, email?: string | null) {
+async function createUser(principal: Principal, space_: Space | undefined | null, createdBy_: string | null | undefined, externalId?: string | null, email?: string | null) {
   const environment = await withOrg(principal.organizationId, async (tx) => { return await requireEnvironment(tx, principal.env) })
 
   if (space_ && space_ === 'playground' && createdBy_ !== null) {
@@ -1187,7 +1187,7 @@ const sessionsPOSTRoute = createRoute({
 })
 
 app.openapi(sessionsPOSTRoute, async (c) => {
-  const principal = await authn(c.req.raw.headers)
+  const principal = await authnAllowPublic(c.req.raw.headers)
   const body = await c.req.valid('json')
 
   const authorId = principal.type === 'member' ? principal.session.user.id : null;
@@ -1413,7 +1413,7 @@ const runsPOSTRoute = createRoute({
 })
 
 app.openapi(runsPOSTRoute, async (c) => {
-  const principal = await authn(c.req.raw.headers)
+  const principal = await authnAllowPublic(c.req.raw.headers)
   const body = await c.req.valid('json')
   const params = await c.req.param();
 

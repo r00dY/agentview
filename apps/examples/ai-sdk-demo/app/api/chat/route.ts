@@ -131,6 +131,14 @@ export async function POST(req: Request) {
     onError(error) {
       console.error(error);
     },
+
+    experimental_telemetry: {
+      isEnabled: true,
+      metadata: {
+        query: "weather",
+        location: "San Francisco",
+      },
+    },
     // output: Output.object({
     //   schema: z.object({
     //     response: z.string(),

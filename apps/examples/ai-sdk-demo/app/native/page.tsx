@@ -6,45 +6,31 @@ import {
   isToolUIPart,
   lastAssistantMessageIsCompleteWithToolCalls,
 } from "ai";
-import { useState, useEffect, useMemo } from "react";
-import { createSessionAction } from "./actions";
+import { useState } from "react";
 
-const AGENTVIEW_API_URL = "http://localhost:1990";
-
-function ChatUI({
-  sessionId,
-  userToken,
-}: {
-  sessionId: string;
-  userToken: string;
-}) {
-  const transport = useMemo(
-    () =>
-      new DefaultChatTransport({
-        api: `${AGENTVIEW_API_URL}/api/sessions/${sessionId}/runs`,
-        headers: {
-          "X-User-Token": userToken,
-          "X-Env": "dev:admin@acme.com",
-        },
-        prepareSendMessagesRequest: ({ messages }) => ({
-          body: {
-            adapter: "ai-sdk",
-            stream: true,
-            input: messages[messages.length - 1],
-          }
-        }),
-      }),
-    [sessionId, userToken]
-  );
-
+export default function Chat() {
   const { messages, sendMessage, status } = useChat({
-    transport,
+    transport: new DefaultChatTransport({ api: "/api/chat" }),
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
   });
   const [input, setInput] = useState("");
 
   return (
-    <>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        width: "100%",
+        maxWidth: 600,
+        margin: "0 auto",
+        padding: "2rem 1rem",
+        minHeight: "100vh",
+      }}
+    >
+      <h1 style={{ marginBottom: "1.5rem", fontSize: "1.25rem" }}>
+        AI SDK Demo
+      </h1>
+
       <div style={{ flex: 1, overflowY: "auto", marginBottom: "1rem" }}>
         {messages.map((m) => (
           <div
@@ -204,46 +190,6 @@ function ChatUI({
           Send
         </button>
       </form>
-    </>
-  );
-}
-
-export default function Chat() {
-  const [sessionInfo, setSessionInfo] = useState<{
-    sessionId: string;
-    userToken: string;
-  } | null>(null);
-
-  useEffect(() => {
-    createSessionAction().then(setSessionInfo);
-  }, []);
-
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        width: "100%",
-        maxWidth: 600,
-        margin: "0 auto",
-        padding: "2rem 1rem",
-        minHeight: "100vh",
-      }}
-    >
-      <h1 style={{ marginBottom: "1.5rem", fontSize: "1.25rem" }}>
-        AI SDK Demo
-      </h1>
-
-      {sessionInfo ? (
-        <ChatUI
-          sessionId={sessionInfo.sessionId}
-          userToken={sessionInfo.userToken}
-        />
-      ) : (
-        <div style={{ color: "#888", padding: "0.5rem" }}>
-          Creating session...
-        </div>
-      )}
     </div>
   );
 }
