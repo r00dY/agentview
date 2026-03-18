@@ -2079,6 +2079,8 @@ describe('API', () => {
         // Wait for watch to complete
         await watchPromise;
 
+        console.log(events)
+
         // Should get at least 2 events: snapshot + at least one run.updated
         expect(events.length).toBeGreaterThanOrEqual(2);
 

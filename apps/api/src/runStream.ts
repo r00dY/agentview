@@ -2,13 +2,12 @@ import { redis } from './redis';
 
 const TERMINAL_STATUSES = ['completed', 'failed', 'cancelled'];
 
-export async function publishRunStreamEvent(runId: string, event: object, options?: { expire?: boolean }) {
-  const key = `run-stream:${runId}`;
+export async function publishRunStreamEvent(runId: string, adapter: string, createdAt: string, event: object, options?: { expire?: boolean }) {
+  const key = `run-stream:${adapter}:${runId}`;
 
   // Use the event's updatedAt as the stream ID so consumer can use the same
   // clock (Node.js) to compute its starting offset — no Redis clock skew.
-  const updatedAt = (event as any).updatedAt;
-  const ms = new Date(updatedAt).getTime();
+  const ms = new Date(createdAt).getTime();
   await redis.xadd(key, `${ms}-*`, 'data', JSON.stringify(event));
 
   if (options?.expire) {
@@ -18,10 +17,11 @@ export async function publishRunStreamEvent(runId: string, event: object, option
 
 export async function* consumeRunStream(
   runId: string,
+  adapter: string,
   afterTimestamp: string,
   signal: AbortSignal,
 ) {
-  const key = `run-stream:${runId}`;
+  const key = `run-stream:${adapter}:${runId}`;
 
   // Both this offset and the stream entry IDs use the Node.js clock (updatedAt),
   // so there's no cross-clock skew.

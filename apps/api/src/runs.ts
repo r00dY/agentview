@@ -268,15 +268,18 @@ export async function applyRunPatch(
   }
 
   // Publish to Redis stream
-  const streamEvent: Record<string, any> = { updatedAt: nowIso };
-  if (body.status) streamEvent.status = body.status;
-  if (insertedItems.length > 0) streamEvent.items = insertedItems;
-  if (body.metadata) streamEvent.metadata = body.metadata;
-  if (body.failReason !== undefined) streamEvent.failReason = body.failReason;
-  if (body.state !== undefined) streamEvent.state = body.state;
-  if (body.outputItemCount !== undefined) streamEvent.outputItemCount = body.outputItemCount;
+  const streamEvent: Record<string, any> = {
+    ...body,
+    items: insertedItems
+  }
+  // if (body.status) streamEvent.status = body.status;
+  // if (insertedItems.length > 0) streamEvent.items = insertedItems;
+  // if (body.metadata) streamEvent.metadata = body.metadata;
+  // if (body.failReason !== undefined) streamEvent.failReason = body.failReason;
+  // if (body.state !== undefined) streamEvent.state = body.state;
+  // if (body.outputItemCount !== undefined) streamEvent.outputItemCount = body.outputItemCount;
 
-  await publishRunStreamEvent(runId, streamEvent, { expire: isFinished });
+  await publishRunStreamEvent(runId, 'agentview', nowIso, streamEvent, { expire: isFinished });
 
   return (await getRun(tx, runId))!;
 }

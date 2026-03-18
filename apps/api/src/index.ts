@@ -1253,7 +1253,7 @@ async function* watchSession(session: Session, signal: AbortSignal) {
     return;
   }
 
-  for await (const event of consumeRunStream(lastRun.id, lastRun.updatedAt, signal)) {
+  for await (const event of consumeRunStream(lastRun.id, 'agentview', lastRun.updatedAt, signal)) {
     yield { event: 'run.patch', data: event };
     if (['completed', 'failed', 'cancelled'].includes(event.status)) {
       return;
