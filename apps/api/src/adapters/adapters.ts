@@ -1,7 +1,6 @@
 import type { RunBody, Session } from 'agentview/apiTypes';
-import { callAgentAPI, type AgentAPIEvent } from './agentApi';
-import { callAgentAPIAISDK } from './ai-sdk/agentApi';
-import { sessionToUIMessages } from './ai-sdk/mapping';
+import { callAgentAPI, type AgentAPIEvent } from '../agentApi';
+import { aiSDKAdapter } from './ai-sdk';
 
 export interface Adapter {
   callAgent: (body: RunBody, url: string, signal?: AbortSignal) => AsyncGenerator<AgentAPIEvent, void, unknown>;
@@ -13,12 +12,7 @@ const adapters: Record<string, Adapter> = {
     callAgent: callAgentAPI,
     enrichSession: () => ({}),
   },
-  'ai-sdk': {
-    callAgent: callAgentAPIAISDK,
-    enrichSession: (session) => ({
-      messages: sessionToUIMessages(session),
-    }),
-  },
+  'ai-sdk': aiSDKAdapter,
 };
 
 const defaultAdapter = adapters.agentview;

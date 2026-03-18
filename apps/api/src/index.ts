@@ -65,7 +65,7 @@ import { randomBytes } from 'crypto';
 import { applyRunPatch, getRun, createAutoRun, createManualRun, DEFAULT_IDLE_TIME, getRunInputContent } from './runs';
 import { consumeRunStream } from './runStream';
 import { upsertAgentRef } from './agentRefs';
-import { getAdapter } from './adapters';
+import { getAdapter } from './adapters/adapters';
 import { parseMetadata } from './parseMetadata';
 import { authn, authorize, requireMemberPrincipal, type PrivatePrincipal, type Principal, type MemberPrincipal, type ApiKeyPrincipal, type UserPrincipal, authnAllowPublic } from './authMiddleware';
 

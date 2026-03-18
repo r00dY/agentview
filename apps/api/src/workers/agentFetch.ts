@@ -5,7 +5,7 @@ import { eq, and, inArray, sql, not, isNull } from 'drizzle-orm';
 import { getConfigFromEnvironment } from '../environments';
 import { fetchSession } from '../sessions';
 import { AgentAPIError } from '../agentApi';
-import { getAdapter } from '../adapters';
+import { getAdapter } from '../adapters/adapters';
 import { BaseConfigSchemaToZod, findChannelConfig, getChannelAgent } from 'agentview/configUtils';
 import { applyRunPatch } from '../runs';
 import { resolveAgentRef, upsertAgentRef } from '../agentRefs';
