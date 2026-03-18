@@ -2348,7 +2348,7 @@ describe('API', () => {
       mockAgentServer?.resetRequests();
     });
 
-    test("happy path: agent streams run.patch events", async () => {
+    test("happy path: agent streams run.patch events (validated via session stream)", async () => {
       await updateConfigWithUrl();
       const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
@@ -2371,11 +2371,27 @@ describe('API', () => {
         adapter: "agentview",
       });
 
-      // Wait for the worker to process the run
-      const completedRun = await waitForRunStatus(session.id, run.id, ["completed"]);
+      // Watch the session stream instead of polling
+      const streamEvents: Array<{ event: SessionStreamEvent; session: Session }> = [];
+      const stream = await av.getSessionStream({ id: session.id });
+      expect(stream).not.toBeNull();
+
+      for await (const e of stream!) {
+        streamEvents.push(e);
+      }
+
+      // Validate stream events
+      expect(streamEvents.length).toBeGreaterThanOrEqual(2);
+      expect(streamEvents[0].event.type).toBe("session.snapshot");
+
+      const patchEvents = streamEvents.filter(e => e.event.type === "run.patch");
+      expect(patchEvents.length).toBeGreaterThanOrEqual(1);
+
+      // Validate final session state from the stream
+      const finalSession = streamEvents[streamEvents.length - 1].session;
+      const completedRun = finalSession.runs[finalSession.runs.length - 1]!;
       expect(completedRun.status).toBe("completed");
       expect(completedRun.agentRef?.version).toBe("1.0.0");
-      // Should have 3 items: input + step + output
       expect(completedRun.sessionItems.length).toBe(3);
       expect(completedRun.sessionItems[0].content.type).toBe("message");
       expect(completedRun.sessionItems[0].content.role).toBe("user");
@@ -2420,7 +2436,8 @@ describe('API', () => {
       expect(cancelled.status).toBe("cancelled");
     }, 30000);
 
-    test("PATCH cancellation: PATCH { status: 'cancelled' } → succeeds and aborts connection", async () => {
+
+    test("cancellation → succeeds and aborts connection", async () => {
       await updateConfigWithUrl();
       const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
@@ -2525,7 +2542,7 @@ describe('API', () => {
       expect(failedRun.failReason.message).toContain("Agent stream ended without completing");
     }, 30000);
 
-    test("multiple incremental patches: items accumulate correctly", async () => {
+    test("multiple incremental patches: items accumulate correctly (validated via session stream)", async () => {
       await updateConfigWithUrl();
       const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
@@ -2538,14 +2555,28 @@ describe('API', () => {
         ]);
       });
 
-      const run = await av.createRun({
+      await av.createRun({
         sessionId: session.id,
         input: { type: "message", role: "user", content: "Hi" },
       });
 
-      const completedRun = await waitForRunStatus(session.id, run.id, ["completed"]);
+      // Watch the session stream
+      const streamEvents: Array<{ event: SessionStreamEvent; session: Session }> = [];
+      const stream = await av.getSessionStream({ id: session.id });
+      expect(stream).not.toBeNull();
+
+      for await (const e of stream!) {
+        streamEvents.push(e);
+      }
+
+      // Validate we got multiple run.patch events (one per patch from the agent)
+      const patchEvents = streamEvents.filter(e => e.event.type === "run.patch");
+      expect(patchEvents.length).toBeGreaterThanOrEqual(4); // 3 steps + 1 completion
+
+      // Validate final state from the stream
+      const finalSession = streamEvents[streamEvents.length - 1].session;
+      const completedRun = finalSession.runs[finalSession.runs.length - 1]!;
       expect(completedRun.status).toBe("completed");
-      // Should have 5 items: input + 3 steps + output
       expect(completedRun.sessionItems.length).toBe(5);
       expect(completedRun.sessionItems[1].content.content).toBe("Step 1");
       expect(completedRun.sessionItems[2].content.content).toBe("Step 2");
@@ -2599,7 +2630,7 @@ describe('API', () => {
       mockAISDKServer?.resetRequests();
     });
 
-    test("happy path: text response", async () => {
+    test("happy path: text response (validated via ai-sdk stream)", async () => {
       await updateConfigWithAiSdkUrl();
       const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
@@ -2614,17 +2645,35 @@ describe('API', () => {
         ]);
       });
 
-      const run = await av.createRun({
+      // Create run and get the native AI SDK stream
+      const chunks: any[] = [];
+      const stream = await av.createRunStream({
         sessionId: session.id,
+        adapter: 'ai-sdk',
         input: { type: "message", role: "user", content: "Hi" },
       });
 
-      expect(run.status).toBe("in_progress");
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+      }
 
-      const completedRun = await waitForRunStatus(session.id, run.id, ["completed"]);
+      // Validate we received the native AI SDK chunk types
+      const chunkTypes = chunks.map(c => c.type);
+      expect(chunkTypes).toContain("start");
+      expect(chunkTypes).toContain("text-start");
+      expect(chunkTypes).toContain("text-delta");
+      expect(chunkTypes).toContain("text-end");
+      expect(chunkTypes).toContain("finish");
+
+      // Validate text deltas
+      const textDeltas = chunks.filter(c => c.type === "text-delta");
+      expect(textDeltas.map(d => d.delta).join("")).toBe("Hello world!");
+
+      // Verify final run state via API
+      const finalSession = await av.getSession({ id: session.id });
+      const completedRun = finalSession.lastRun!;
       expect(completedRun.status).toBe("completed");
       expect(completedRun.agentRef?.version).toBe("1.0.0");
-      // Should have 2 items: input + text output
       expect(completedRun.sessionItems.length).toBe(2);
       expect(completedRun.sessionItems[0].content.type).toBe("message");
       expect(completedRun.sessionItems[0].content.role).toBe("user");
@@ -2632,7 +2681,7 @@ describe('API', () => {
       expect(completedRun.sessionItems[1].content.text).toBe("Hello world!");
     }, 30000);
 
-    test("happy path: text + reasoning", async () => {
+    test("happy path: text + reasoning (validated via ai-sdk stream)", async () => {
       await updateConfigWithAiSdkUrl();
       const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
@@ -2649,14 +2698,40 @@ describe('API', () => {
         ]);
       });
 
-      const run = await av.createRun({
+      // Create run and get the native AI SDK stream
+      const chunks: any[] = [];
+      const stream = await av.createRunStream({
         sessionId: session.id,
+        adapter: 'ai-sdk',
         input: { type: "message", role: "user", content: "What is the answer?" },
       });
 
-      const completedRun = await waitForRunStatus(session.id, run.id, ["completed"]);
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+      }
+
+      // Validate stream events include reasoning and text
+      const chunkTypes = chunks.map(c => c.type);
+      expect(chunkTypes).toContain("reasoning-start");
+      expect(chunkTypes).toContain("reasoning-delta");
+      expect(chunkTypes).toContain("reasoning-end");
+      expect(chunkTypes).toContain("text-start");
+      expect(chunkTypes).toContain("text-delta");
+      expect(chunkTypes).toContain("text-end");
+      expect(chunkTypes).toContain("finish");
+
+      // Validate reasoning deltas
+      const reasoningDeltas = chunks.filter(c => c.type === "reasoning-delta");
+      expect(reasoningDeltas.map(d => d.delta).join("")).toBe("Let me think...");
+
+      // Validate text deltas
+      const textDeltas = chunks.filter(c => c.type === "text-delta");
+      expect(textDeltas.map(d => d.delta).join("")).toBe("The answer is 42");
+
+      // Verify final run state
+      const finalSession = await av.getSession({ id: session.id });
+      const completedRun = finalSession.lastRun!;
       expect(completedRun.status).toBe("completed");
-      // Should have 3 items: input + reasoning step + text output
       expect(completedRun.sessionItems.length).toBe(3);
       expect(completedRun.sessionItems[1].content.type).toBe("reasoning");
       expect(completedRun.sessionItems[1].content.text).toBe("Let me think...");
@@ -2664,7 +2739,7 @@ describe('API', () => {
       expect(completedRun.sessionItems[2].content.text).toBe("The answer is 42");
     }, 30000);
 
-    test("happy path: tool call", async () => {
+    test("happy path: tool call (validated via ai-sdk stream)", async () => {
       // Update config with tool-call step schema
       const inputSchema = z.looseObject({ type: z.literal("message"), role: z.literal("user"), content: z.string() });
       const outputSchema = z.looseObject({ type: z.literal("text"), text: z.string() });
@@ -2704,14 +2779,35 @@ describe('API', () => {
         ]);
       });
 
-      const run = await av.createRun({
+      // Create run and get the native AI SDK stream
+      const chunks: any[] = [];
+      const stream = await av.createRunStream({
         sessionId: session.id,
+        adapter: 'ai-sdk',
         input: { type: "message", role: "user", content: "What's the weather?" },
       });
 
-      const completedRun = await waitForRunStatus(session.id, run.id, ["completed"]);
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+      }
+
+      // Validate stream includes tool call events
+      const chunkTypes = chunks.map(c => c.type);
+      expect(chunkTypes).toContain("tool-input-start");
+      expect(chunkTypes).toContain("tool-input-delta");
+      expect(chunkTypes).toContain("tool-input-available");
+      expect(chunkTypes).toContain("tool-output-available");
+      expect(chunkTypes).toContain("text-start");
+      expect(chunkTypes).toContain("finish");
+
+      // Validate tool output chunk
+      const toolOutput = chunks.find(c => c.type === "tool-output-available");
+      expect(toolOutput.output).toEqual({ temp: 72 });
+
+      // Verify final run state
+      const finalSession = await av.getSession({ id: session.id });
+      const completedRun = finalSession.lastRun!;
       expect(completedRun.status).toBe("completed");
-      // Should have 3 items: input + tool-call step + text output
       expect(completedRun.sessionItems.length).toBe(3);
       expect(completedRun.sessionItems[1].content.type).toBe("tool-call");
       expect(completedRun.sessionItems[1].content.toolName).toBe("getWeather");
@@ -2723,7 +2819,7 @@ describe('API', () => {
     }, 30000);
 
 
-    test("error event → run marked failed", async () => {
+    test("error event → run marked failed (validated via ai-sdk stream)", async () => {
       await updateConfigWithAiSdkUrl();
       const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
@@ -2733,17 +2829,30 @@ describe('API', () => {
         ]);
       });
 
-      const run = await av.createRun({
+      // Create run and consume the AI SDK stream
+      const chunks: any[] = [];
+      const stream = await av.createRunStream({
         sessionId: session.id,
+        adapter: 'ai-sdk',
         input: { type: "message", role: "user", content: "Hi" },
       });
 
-      const failedRun = await waitForRunStatus(session.id, run.id, ["failed"]);
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+      }
+
+      // The error chunk should be in the stream
+      expect(chunks.some(c => c.type === "error")).toBe(true);
+
+      // The stream ends before the worker marks the run as failed, so wait briefly
+      const midSession = await av.getSession({ id: session.id });
+      const runId = midSession.lastRun!.id;
+      const failedRun = await waitForRunStatus(session.id, runId, ["failed"]);
       expect(failedRun.status).toBe("failed");
       expect(failedRun.failReason).toBeDefined();
     }, 30000);
 
-    test("HTTP error: 500 → run marked failed", async () => {
+    test("HTTP error: 500 → run marked failed (validated via ai-sdk stream)", async () => {
       await updateConfigWithAiSdkUrl();
       const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
@@ -2752,17 +2861,30 @@ describe('API', () => {
         res.end(JSON.stringify({ message: "Internal Server Error" }));
       });
 
-      const run = await av.createRun({
+      // The stream will end without any chunks (HTTP error → no AI SDK chunks published)
+      const chunks: any[] = [];
+      const stream = await av.createRunStream({
         sessionId: session.id,
+        adapter: 'ai-sdk',
         input: { type: "message", role: "user", content: "Hi" },
       });
 
-      const failedRun = await waitForRunStatus(session.id, run.id, ["failed"]);
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+      }
+
+      // No AI SDK chunks were streamed (agent returned 500)
+      expect(chunks.length).toBe(0);
+
+      // The stream ends before the worker marks the run as failed, so wait briefly
+      const midSession = await av.getSession({ id: session.id });
+      const runId = midSession.lastRun!.id;
+      const failedRun = await waitForRunStatus(session.id, runId, ["failed"]);
       expect(failedRun.status).toBe("failed");
       expect(failedRun.failReason).toBeDefined();
     }, 30000);
 
-    test("stream ends without finish → run marked failed", async () => {
+    test("stream ends without finish → run marked failed (validated via ai-sdk stream)", async () => {
       await updateConfigWithAiSdkUrl();
       const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
@@ -2776,12 +2898,27 @@ describe('API', () => {
         ]);
       });
 
-      const run = await av.createRun({
+      // The stream will contain the partial chunks, then end
+      const chunks: any[] = [];
+      const stream = await av.createRunStream({
         sessionId: session.id,
+        adapter: 'ai-sdk',
         input: { type: "message", role: "user", content: "Hi" },
       });
 
-      const failedRun = await waitForRunStatus(session.id, run.id, ["failed"]);
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+      }
+
+      // We should see the partial chunks but no finish
+      expect(chunks.some(c => c.type === "text-delta")).toBe(true);
+      expect(chunks.some(c => c.type === "finish")).toBe(false);
+
+      // The stream ends before the worker marks the run as failed, so wait briefly
+      // Find the run ID from the session
+      const midSession = await av.getSession({ id: session.id });
+      const runId = midSession.lastRun!.id;
+      const failedRun = await waitForRunStatus(session.id, runId, ["failed"]);
       expect(failedRun.status).toBe("failed");
       expect(failedRun.failReason.message).toContain("Agent stream ended without completing");
     }, 30000);
@@ -2800,12 +2937,15 @@ describe('API', () => {
         ]);
       });
 
-      const run = await av.createRun({
+      // Use createRunStream so we wait for the stream to complete
+      const stream = await av.createRunStream({
         sessionId: session.id,
+        adapter: 'ai-sdk',
         input: { type: "message", role: "user", content: "Hello AI SDK" },
       });
 
-      await waitForRunStatus(session.id, run.id, ["completed"]);
+      // Consume the stream to completion
+      for await (const _ of stream) {}
 
       // Verify request body format
       expect(mockAISDKServer!.requests.length).toBeGreaterThanOrEqual(1);
@@ -2834,12 +2974,14 @@ describe('API', () => {
         ]);
       });
 
-      const run1 = await av.createRun({
+      const stream1 = await av.createRunStream({
         sessionId: session.id,
+        adapter: 'ai-sdk',
         input: { type: "message", role: "user", content: "Hi" },
       });
 
-      await waitForRunStatus(session.id, run1.id, ["completed"]);
+      // Consume first stream to completion
+      for await (const _ of stream1) {}
 
       // Second turn
       mockAISDKServer!.resetRequests();
@@ -2854,12 +2996,14 @@ describe('API', () => {
         ]);
       });
 
-      const run2 = await av.createRun({
+      const stream2 = await av.createRunStream({
         sessionId: session.id,
+        adapter: 'ai-sdk',
         input: { type: "message", role: "user", content: "How are you?" },
       });
 
-      await waitForRunStatus(session.id, run2.id, ["completed"]);
+      // Consume second stream to completion
+      for await (const _ of stream2) {}
 
       // Verify second request has full history
       expect(mockAISDKServer!.requests.length).toBeGreaterThanOrEqual(1);

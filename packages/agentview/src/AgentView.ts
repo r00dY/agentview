@@ -35,6 +35,7 @@ import { enhanceSession } from './sessionUtils.js'
 import type { InternalConfig } from './configTypes.js'
 import { getApiUrl } from './urls.js'
 import { parseSSE } from './parseSSE.js'
+import { parseDataStream } from './parseDataStream.js'
 
 export interface AgentViewOptions {
   apiKey?: string
@@ -163,6 +164,29 @@ export class AgentView {
   async createRun(options: RunCreate & { sessionId: string }): Promise<Run> {
     const { sessionId, ...body } = options;
     return await this.request<Run>('POST', `/api/sessions/${sessionId}/runs`, body)
+  }
+
+  /**
+   * Creates a run and returns the raw AI SDK SSE stream.
+   * Each yielded value is a parsed AI SDK chunk (the JSON from `data: <json>`).
+   * The stream ends when `data: [DONE]` is received.
+   */
+  async createRunStream(options: RunCreate & { sessionId: string, adapter: 'ai-sdk', signal?: AbortSignal }): Promise<AsyncGenerator<any, void, unknown>> {
+    const { sessionId, adapter, signal, ...body } = options;
+    const response = await fetch(`${getApiUrl()}/api/sessions/${sessionId}/runs?adapter=${adapter}`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(body),
+      signal,
+    });
+
+    if (!response.ok) {
+      const errorBody: AgentViewErrorBody = await response.json();
+      const { message, ...details } = errorBody;
+      throw new AgentViewError(message ?? "Unknown error", response.status, details);
+    }
+
+    return parseDataStream(response);
   }
 
   async createManualRun(options: ManualRunCreate & { sessionId: string }): Promise<Run> {
@@ -309,11 +333,15 @@ export class AgentView {
   }
 
 
-  async getSessionStream(options: { id: string, signal?: AbortSignal }): Promise<AsyncGenerator<{
+  async getSessionStream(options: { id: string, adapter?: 'agentview' | 'ai-sdk', signal?: AbortSignal }): Promise<AsyncGenerator<{
     event: SessionStreamEvent;
     session: Session;
   }> | null> {
-    const response = await fetch(`${getApiUrl()}/api/sessions/${options.id}/stream`, {
+    let url = `${getApiUrl()}/api/sessions/${options.id}/stream`;
+    if (options.adapter) {
+      url += `?adapter=${options.adapter}`;
+    }
+    const response = await fetch(url, {
       method: 'GET',
       headers: this.getHeaders(),
       signal: options.signal

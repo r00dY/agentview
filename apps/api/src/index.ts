@@ -1281,9 +1281,9 @@ function getAISDKStreamResponse(c: any, session: Session) {
   }
 
   return streamSSE(c, async (stream) => {
-    for await (const chunk of consumeRunStream(lastRun.id, 'ai-sdk', c.req.raw.signal)) { // we stream from the beginning
-      if (c.req.raw.signal.aborted) { return };
-      await stream.writeSSE({ data: JSON.stringify(chunk) });
+    for await (const data of consumeRunStream(lastRun.id, 'ai-sdk', c.req.raw.signal)) { // we stream from the beginning
+      if (c.req.raw.signal.aborted) { return }; // TODO: we can remove it?, consumeRunStream already does it
+      await stream.writeSSE({ data });
     }
   });
 }
@@ -1442,7 +1442,7 @@ app.openapi(runsPOSTRoute, async (c) => {
   else if (adapter === 'ai-sdk') {
     return getAISDKStreamResponse(c, updatedSession);
   }
-  
+
   throw new AgentViewError("Invalid adapter", 400);
 })
 
