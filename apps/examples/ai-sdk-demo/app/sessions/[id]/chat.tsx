@@ -16,34 +16,28 @@ export function ChatUI(props: {
 }) {
   const { session, userToken } = props;
   
-  const transport = useMemo(
-    () =>
-      new DefaultChatTransport({
-        api: `http://localhost:1990/api/sessions/${session.id}/runs`,
-        headers: {
-          "X-User-Token": userToken,
-          "Authorization": `Bearer ${process.env.NEXT_PUBLIC_AGENTVIEW_API_KEY!}`,
-          "X-Env": process.env.NEXT_PUBLIC_AGENTVIEW_ENV!,
-        },
-        prepareSendMessagesRequest: ({ messages }) => ({
-          body: {
-            adapter: "ai-sdk",
-            stream: true,
-            input: messages[messages.length - 1],
-          },
-        }),
-        prepareReconnectToStreamRequest: () => ({
-          api: `http://localhost:1990/api/sessions/${session.id}/stream?adapter=ai-sdk`,
-        }),
-      }),
-    [session.id, userToken]
-  );
-
   const { messages, sendMessage, status, error, stop } = useChat({
     id: session.id,
     messages: session.messages!,
     resume: session.resume!,
-    transport,
+    transport: new DefaultChatTransport({
+      headers: {
+        "X-User-Token": userToken,
+        "Authorization": `Bearer ${process.env.NEXT_PUBLIC_AGENTVIEW_API_KEY!}`,
+        "X-Env": process.env.NEXT_PUBLIC_AGENTVIEW_ENV!,
+      },
+      prepareSendMessagesRequest: ({ id, messages }) => ({
+        api: `http://localhost:1990/api/sessions/${id}/runs`,
+        body: {
+          adapter: "ai-sdk",
+          stream: true,
+          input: messages[messages.length - 1],
+        },
+      }),
+      prepareReconnectToStreamRequest: ({ id }) => ({
+        api: `http://localhost:1990/api/sessions/${id}/stream?adapter=ai-sdk`,
+      }),
+    }),
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
   });
   const [input, setInput] = useState("");
