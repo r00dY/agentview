@@ -1,8 +1,8 @@
 import { eq, and, desc, not, inArray } from 'drizzle-orm';
 import { runs, sessionItems, webhookJobs } from './schemas/schema';
 import type { Transaction } from './types';
-import type { Environment, Run, RunCreate, ManualRunCreate, ManualRunUpdate, Session } from 'agentview/apiTypes';
-import type { BaseAgentConfig, BaseRunConfig } from 'agentview/configTypes';
+import type { Environment, ManualRunCreate, ManualRunUpdate, Session } from 'agentview/apiTypes';
+import type { BaseRunConfig } from 'agentview/configTypes';
 import { requireRunConfig, findItemConfig, findChannelConfig, requireAgentConfig, getChannelAgent } from 'agentview/configUtils';
 import { AgentViewError } from 'agentview/AgentViewError';
 import { parseMetadata } from './parseMetadata';

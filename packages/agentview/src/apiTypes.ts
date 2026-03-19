@@ -155,7 +155,6 @@ export const SessionItemSchema = z.object({
   updatedAt: z.iso.date(),
   type: z.enum(['input', 'output', 'step']),
   content: z.any(),
-
   runId: z.string(), // potential bloat
   sessionId: z.string(), // potential bloat
 })
@@ -261,7 +260,6 @@ export const SessionSchema = SessionBaseSchema.extend({
 })
 
 export type Session = z.infer<typeof SessionSchema>
-
 
 export const SessionCreateSchema = z.object({
   agent: z.string(),
