@@ -1,12 +1,11 @@
 import { AgentViewError } from 'agentview'
 import { config } from '../config'
-import { getEnv } from '../getEnv'
 import { CachedAgentView } from './cached-agentview'
 
 export function getAuthHeaders(): HeadersInit {
   return {
     'X-Organization-Id': config.organizationId,
-    'X-Env': getEnv(),
+    'X-Env': config.env,
     'Authorization': `Bearer ${localStorage.getItem("agentview_token") || ""}`,
   }
 }

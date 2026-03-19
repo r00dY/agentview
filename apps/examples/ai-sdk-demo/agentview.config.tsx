@@ -8,7 +8,8 @@ import { z } from "zod";
 import { CustomPage } from "./components/CustomPage";
 
 export default defineConfig({
-  organizationId: import.meta.env.VITE_AGENTVIEW_ORGANIZATION_ID,
+  organizationId: process.env.NEXT_PUBLIC_AGENTVIEW_ORGANIZATION_ID!,
+  env: process.env.NEXT_PUBLIC_AGENTVIEW_ENV!,
   channels: [
     {
       type: "gmail",

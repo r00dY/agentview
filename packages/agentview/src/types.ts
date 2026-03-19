@@ -107,5 +107,6 @@ export type AgentConfig = BaseAgentConfig<RunConfig> & {
 
 export type AgentViewConfig = BaseAgentViewConfig<AgentConfig, ChannelConfig> & {
   organizationId: string;
+  env: string;
   customRoutes?: CustomRoute[],
 }

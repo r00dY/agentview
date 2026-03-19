@@ -44,7 +44,6 @@ import { UserAvatar } from "../components/internal/UserAvatar";
 import { Button } from "../components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "../components/ui/dropdown-menu";
 import { config } from "../config";
-import { getEnv } from "../getEnv";
 import { agentview } from "../lib/agentview";
 import { getSessionCached, getOrganizationCached, type User, type Member, type Organization } from "../lib/auth-client";
 import { getCurrentAgent } from "../lib/currentAgent";
@@ -67,8 +66,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   const agent = getCurrentAgent(request);
-  const env = getEnv();
-
   const envUpdate = agentview.updateEnvironment({ config });
 
   const organization = await getOrganizationCached();
