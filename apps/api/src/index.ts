@@ -572,9 +572,6 @@ async function createUser(principal: Principal, space_: Space | undefined | null
 
 app.openapi(usersPOSTRoute, async (c) => {
   const principal = await authnAllowPublic(c.req.raw.headers)
-  console.log('--------------------------------');
-  console.log('principal', principal);
-
   const body = await c.req.valid('json')
   const newUser = await createUser(principal, body.space, body.createdBy, body.externalId, body.email);
   return c.json(newUser, 201);
@@ -1041,7 +1038,6 @@ app.openapi(sessionGETRoute, async (c) => {
     const session = await requireSession(tx, session_id);
     await authorize(principal, { action: "end-user:read", user: session.user });
     const adapter = getAdapter(session.agentRef?.adapter);
-    console.log(adapter.enrichSession(session))
     return c.json({ ...session, ...adapter.enrichSession(session) }, 200);
   })
 })
@@ -2212,7 +2208,7 @@ app.openapi(environmentPATCHRoute, async (c) => {
   // validate & parse body.config
   const { data, success, error } = BaseConfigSchema.safeParse(body.config)
   if (!success) {
-    console.log(error.issues)
+    console.error(error.issues)
     return c.json({ message: "Invalid config", code: 'parse.schema', details: error.issues }, 422);
   }
 

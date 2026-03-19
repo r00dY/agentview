@@ -9,7 +9,6 @@ import {
 } from "ai";
 import { useState, useMemo } from "react";
 import type { Session } from "agentview";
-import { getUserToken } from "@/lib/agentview.client";
 
 export function ChatUI(props: {
   session: Session;
@@ -48,10 +47,6 @@ export function ChatUI(props: {
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
   });
   const [input, setInput] = useState("");
-
-  console.log('messages', messages);
-  console.log('status', status);
-  console.log('error', error);
 
   return (
     <>
