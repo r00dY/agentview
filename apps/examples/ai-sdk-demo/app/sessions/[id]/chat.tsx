@@ -22,9 +22,9 @@ export function ChatUI(props: {
     resume: session.resume!,
     transport: new DefaultChatTransport({
       headers: {
-        "X-User-Token": userToken,
         "Authorization": `Bearer ${process.env.NEXT_PUBLIC_AGENTVIEW_API_KEY!}`,
         "X-Env": process.env.NEXT_PUBLIC_AGENTVIEW_ENV!,
+        "X-User-Token": userToken,
       },
       prepareSendMessagesRequest: ({ id, messages }) => ({
         api: `http://localhost:1990/api/sessions/${id}/runs`,

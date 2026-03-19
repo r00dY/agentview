@@ -52,7 +52,6 @@ export class AgentView {
   private apiKey: string
   private userToken?: string
   private customHeaders?: HeadersInit | (() => HeadersInit)
-  private credentials?: RequestCredentials
   private env?: string
 
   constructor(options: AgentViewOptions) {
@@ -326,7 +325,6 @@ export class AgentView {
   async updateScores(options: InputTarget & { scores: ScoreCreate[] }): Promise<void> {
     return await this.request<void>('PATCH', `/api/scores`, options)
   }
-
 
   async getSessionStream(options: { id: string, signal?: AbortSignal }): Promise<AsyncGenerator<{
     event: SessionStreamEvent;

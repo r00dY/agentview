@@ -46,8 +46,6 @@ async function loader({ request }: LoaderFunctionArgs) {
       granular: true,
     });
 
-    console.log('allStats', allStats);
-
     return {
       sessions: sessionsResult?.sessions,
       pagination: sessionsResult?.pagination,

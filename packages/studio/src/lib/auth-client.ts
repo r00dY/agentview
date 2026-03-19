@@ -13,9 +13,9 @@ export function createBetterAuthClient({ baseURL }: { baseURL: string }) {
             organizationClient()
         ],
         fetchOptions: {
-            headers: {
-                "X-Organization-Id": config.organizationId
-            },
+            // headers: {
+            //     "X-Organization-Id": config.organizationId
+            // },
             auth: {
                 type: "Bearer",
                 token: () => localStorage.getItem("agentview_token") || ""
