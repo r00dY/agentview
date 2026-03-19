@@ -591,6 +591,11 @@ const userMeRoute = createRoute({
 
 app.openapi(userMeRoute, async (c) => {
   const principal = await authnAllowPublic(c.req.raw.headers)
+
+  if (principal.type !== 'user') {
+    throw new HTTPException(401, { message: "This endpoint is only available for user-scoped tokens." });
+  }
+
   const user = principal.user;
 
   if (!user) {
@@ -728,9 +733,6 @@ function getSessionListFilter(params: z.infer<typeof SessionsGetQueryParamsSchem
     if (space && userId) {
       throw new HTTPException(422, { message: "You must set either `space` or `userId`, not both." });
     }
-    if (userId && principal.user) {
-      throw new HTTPException(422, { message: "You can't set both X-User-Token and userId query param" });
-    }
 
     if (space) { // space
       filters.push(eq(endUsers.space, space));
@@ -738,10 +740,6 @@ function getSessionListFilter(params: z.infer<typeof SessionsGetQueryParamsSchem
 
     if (userId) { // explicit user
       filters.push(eq(endUsers.id, userId));
-    }
-
-    if (principal.user) { // "as a user"
-      filters.push(eq(endUsers.id, principal.user.id));
     }
 
     if (space === "playground") {
@@ -1208,7 +1206,7 @@ app.openapi(sessionsPOSTRoute, async (c) => {
         return await requireUser(tx, { id: body.userId });
       }
 
-      if (principal.user) {
+      if (principal.type === 'user') {
         return principal.user;
       }
 

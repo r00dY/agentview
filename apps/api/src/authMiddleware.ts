@@ -35,7 +35,6 @@ export type MemberPrincipal = {
   env?: string,
   role: string,
   organizationId: any,
-  user?: User
 }
 
 export type ApiKeyPrincipal = {
@@ -44,7 +43,6 @@ export type ApiKeyPrincipal = {
   apiKey: NonNullable<Awaited<ReturnType<typeof verifyAndGetKey>>>,
   role: string,
   organizationId: any,
-  user?: User
 }
 
 export type UserPrincipal = {
@@ -107,19 +105,38 @@ async function requireUserByToken(organizationId: string, userToken: string) {
 
 /** --------- AUTHENTICATION --------- */
 
-export async function getPrivatePrincipal(headers: Headers): Promise<PrivatePrincipal | undefined> {
-  const userToken = extractUserToken(headers)
+// setting x-user-token always forces either user principal or unauthorised.
+// but it's not work just on its own, you gotta be authenticated first (via api key or member cookie)
+export async function getPrincipal(headers: Headers): Promise<Principal | undefined> {
+  const env  = headers.get('x-env') ?? undefined;
+
+  // See whether it's gonna be user principal
+  let userPrincipal: UserPrincipal | undefined;
+  const userToken = extractUserToken(headers);
+  if (userToken) {
+    const user = await db__dangerous.transaction(async tx => {
+      return await findUser(tx, { token: userToken })
+    })
+    if (user) {
+      userPrincipal = { type: 'user', user, organizationId: user.organizationId, env }
+    }
+    else {
+      return; // if you gave user token it must be correct, otherwise it's unauthorised
+    }
+  }
 
   // members (cookies)
   const memberSession = await auth.api.getSession({ headers })
-  const env  = headers.get('x-env') ?? undefined;
 
   if (memberSession) {
+    if (userPrincipal) {
+      return userPrincipal;
+    }
+
     const organization = await requireOrganization(headers)
     const role = await getRole(memberSession.user.id, organization.id)
-    const user = userToken ? await requireUserByToken(organization.id, userToken) : undefined;
 
-    return { type: 'member', session: memberSession, user, role, organizationId: organization.id, env }
+    return { type: 'member', session: memberSession, role, organizationId: organization.id, env }
   }
 
   // API Keys
@@ -133,18 +150,26 @@ export async function getPrivatePrincipal(headers: Headers): Promise<PrivatePrin
     })
 
     if (valid === true && !error && key) {
+      if (userPrincipal) {
+        return userPrincipal;
+      }
+
       const organization = await requireOrganization(key.metadata?.organizationId ?? "");
       const role = await getRole(key.userId, organization.id)
-      const user = userToken ? await requireUserByToken(organization.id, userToken) : undefined;
 
-      return { type: 'apiKey', apiKey: key, user, role, organizationId: organization.id, env }
+      return { type: 'apiKey', apiKey: key, role, organizationId: organization.id, env }
     }
+  }
+
+  // TODO -> REMOVE IT!!!
+  if (userPrincipal) {
+    return userPrincipal;
   }
 }
 
 export async function authn(headers: Headers): Promise<PrivatePrincipal> {
-  const principal = await getPrivatePrincipal(headers);
-  if (!principal) {
+  const principal = await getPrincipal(headers);
+  if (!principal || principal.type === 'user') {
     throw new HTTPException(401, { message: "Unauthorized" });
   }
 
@@ -152,21 +177,9 @@ export async function authn(headers: Headers): Promise<PrivatePrincipal> {
 }
 
 export async function authnAllowPublic(headers: Headers): Promise<Principal> {
-  const principal = await getPrivatePrincipal(headers);
+  const principal = await getPrincipal(headers);
   if (principal) {
     return principal;
-  }
-
-  const userToken = extractUserToken(headers)
-  const env  = headers.get('x-env') ?? undefined;
-
-  if (userToken) {
-    const user = await db__dangerous.transaction(async tx => {
-      return await findUser(tx, { token: userToken })
-    })
-    if (user) {
-      return { type: 'user', user, organizationId: user.organizationId, env }
-    }
   }
 
   throw new HTTPException(401, { message: "Unauthorized" });
@@ -228,8 +241,6 @@ type Action = {
   action: "end-user:create",
   space: Space
 } | {
-  action: "admin"
-} | {
   action: "environment:write"
 } | {
   action: "environment:read"
@@ -260,11 +271,6 @@ export function authorize(principal: Principal, action: Action) {
         }
       }
     }
-    else if ((principal.type === 'apiKey' || principal.type === 'member') && principal.user) {
-      if ((action.action === "end-user:read" || action.action === "end-user:update") && action.user.id === principal.user.id) {
-        return true;
-      }
-    }
     else if (principal.type === 'member') {
       const memberId = principal.session.user.id
 
@@ -292,18 +298,16 @@ export function authorize(principal: Principal, action: Action) {
         return true;
       }
     }
-
   }
-  else if (action.action === "admin") {
-    if (principal.type === 'member' && (principal.role === "admin" || principal.role === "owner")) {
+  else if (action.action === "environment:read") {
+    if (principal.type === 'apiKey' || principal.type === 'member') {
       return true;
     }
   }
-  else if (action.action === "environment:read") {
-    return true;
-  }
   else if (action.action === "environment:write") {
-    return true;
+    if (principal.type === 'apiKey' || principal.type === 'member') {
+      return true;
+    }
   }
 
   throw new HTTPException(401, { message: "Unauthorized" });
