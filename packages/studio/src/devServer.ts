@@ -1,4 +1,5 @@
 import type { Plugin, ViteDevServer } from "vite";
+import fs from "node:fs";
 import path from "node:path";
 
 const VIRTUAL_ENTRY_ID = "virtual:agentview-entry.tsx";
@@ -89,9 +90,28 @@ export async function startDevServer(
   const configDir = path.dirname(configPath);
   const port = options.port ?? 1989;
 
+  // Load .env and only expose vars that the config file actually references.
+  // This avoids leaking secrets — only explicitly used vars end up in the bundle.
+  const envDefine: Record<string, string> = {};
+  const dotenvPath = path.join(configDir, ".env");
+  if (fs.existsSync(dotenvPath)) {
+    const { parse } = await import("dotenv");
+    const envVars = parse(fs.readFileSync(dotenvPath, "utf-8"));
+    const configSource = fs.readFileSync(configPath, "utf-8");
+    const referencedKeys = new Set(
+      [...configSource.matchAll(/process\.env\.(\w+)/g)].map((m) => m[1]),
+    );
+    for (const key of referencedKeys) {
+      if (key in envVars) {
+        envDefine[`process.env.${key}`] = JSON.stringify(envVars[key]);
+      }
+    }
+  }
+
   const server = await createServer({
     configFile: false,
     root: configDir,
+    define: envDefine,
     plugins: [tailwindcss(), react(), agentviewDevPlugin(configPath)],
     server: {
       port,
