@@ -1,11 +1,6 @@
-import { AgentView } from "agentview";
 import { cookies } from "next/headers";
 import { ChatUI } from "./chat";
-
-const av = new AgentView({
-  env: "dev:admin@acme.com",
-  apiKey: process.env.AGENTVIEW_API_KEY,
-});
+import { avServer } from "@/lib/agentview.server";
 
 export default async function SessionPage({
   params,
@@ -17,16 +12,10 @@ export default async function SessionPage({
   const userToken = cookieStore.get("av-user-token")?.value;
 
   if (!userToken) {
-    return (
-      <div style={{ padding: "2rem", color: "#888" }}>
-        No user token found. <a href="/" style={{ color: "#4a6cf7" }}>Go back</a>
-      </div>
-    );
+    throw new Error("No user token found");
   }
 
-  const session = await av.as(userToken).getSession({ id });
-
-  console.log('session', session);
+  const session = await avServer.as(userToken).getSession({ id });
 
   return (
     <div

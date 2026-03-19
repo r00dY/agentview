@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { startSessionAction } from "./actions";
+import { createUserToken, getUserToken, avPublic } from "@/lib/agentview.client";
+import { AgentViewError } from "agentview";
 
 export default function Home() {
   const [input, setInput] = useState("");
@@ -17,13 +18,29 @@ export default function Home() {
     setIsLoading(true);
     setError(null);
 
-    const result = await startSessionAction(input.trim());
+    let userToken = await getUserToken();
+    if (!userToken) {
+      userToken = await createUserToken();
+    }
 
-    if ("error" in result) {
-      setError(result.error);
+    try {
+      const session = await avPublic.as(userToken).createSession({
+        agent: "weather-chat",
+        input: {
+          role: "user",
+          parts: [{ type: "text", text: input.trim() }],
+        },
+      });
+
+      router.push(`/sessions/${session.id}`);
+
+    } catch (error: unknown) {
+      if (error instanceof AgentViewError) {
+        setError(error.message);
+      } else {
+        setError(error instanceof Error ? error.message : "Failed to create session");
+      }
       setIsLoading(false);
-    } else {
-      router.push(`/sessions/${result.sessionId}`);
     }
   };
 

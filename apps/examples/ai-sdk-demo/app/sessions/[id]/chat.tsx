@@ -9,23 +9,22 @@ import {
 } from "ai";
 import { useState, useMemo } from "react";
 import type { Session } from "agentview";
+import { getUserToken } from "@/lib/agentview.client";
 
-const AGENTVIEW_API_URL = "http://localhost:1990";
-
-export function ChatUI({
-  session,
-  userToken,
-}: {
+export function ChatUI(props: {
   session: Session;
   userToken: string;
 }) {
+  const { session, userToken } = props;
+  
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
-        api: `${AGENTVIEW_API_URL}/api/sessions/${session.id}/runs`,
+        api: `http://localhost:1990/api/sessions/${session.id}/runs`,
         headers: {
           "X-User-Token": userToken,
-          "X-Env": "dev:admin@acme.com",
+          "Authorization": `Bearer ${process.env.NEXT_PUBLIC_AGENTVIEW_API_KEY!}`,
+          "X-Env": process.env.NEXT_PUBLIC_AGENTVIEW_ENV!,
         },
         prepareSendMessagesRequest: ({ messages }) => ({
           body: {
@@ -35,7 +34,7 @@ export function ChatUI({
           },
         }),
         prepareReconnectToStreamRequest: () => ({
-          api: `${AGENTVIEW_API_URL}/api/sessions/${session.id}/stream?adapter=ai-sdk`,
+          api: `http://localhost:1990/api/sessions/${session.id}/stream?adapter=ai-sdk`,
         }),
       }),
     [session.id, userToken]

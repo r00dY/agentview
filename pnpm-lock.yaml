@@ -131,6 +131,9 @@ importers:
       braintrust:
         specifier: ^3.4.0
         version: 3.4.0(zod@4.1.12)
+      cookies-next:
+        specifier: ^6.1.1
+        version: 6.1.1(next@15.5.12(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react@19.2.3)
       lucide-react:
         specifier: ^0.548.0
         version: 0.548.0(react@19.2.3)
@@ -3418,6 +3421,12 @@ packages:
   cookie@1.0.2:
     resolution: {integrity: sha512-9Kr/j4O16ISv8zBBhJoi4bXOYNTkFLOqSL3UDB0njXxCXNezjeyVrJyGOWtgfs/q2km1gwBcfH8q1yEGoMYunA==}
     engines: {node: '>=18'}
+
+  cookies-next@6.1.1:
+    resolution: {integrity: sha512-8JZBc4IN2m8xqOXyG7uicth6yH3SvynAUGSeV/FQ5lcEclzNGoR0+YCjySdn8r6keZdRyGQr4YJ8qy8F+Jq5uw==}
+    peerDependencies:
+      next: '>=15.0.0'
+      react: ^19.1
 
   cors@2.8.5:
     resolution: {integrity: sha512-KIHbLJqu73RGr/hnbrO9uBeixNGuvSQjul/jdFvS/KFSIH1hWVd1ng7zOHx+YrEfInLG7q4n6GHQ9cDtxv/P6g==}
@@ -8392,6 +8401,12 @@ snapshots:
   cookie@0.7.2: {}
 
   cookie@1.0.2: {}
+
+  cookies-next@6.1.1(next@15.5.12(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react@19.2.3):
+    dependencies:
+      cookie: 1.0.2
+      next: 15.5.12(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      react: 19.2.3
 
   cors@2.8.5:
     dependencies:

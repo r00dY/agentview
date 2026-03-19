@@ -3,7 +3,6 @@ import { AgentView, configDefaults } from 'agentview'
 import type { User, Run, Session, SessionStreamEvent } from 'agentview';
 import { z } from 'zod';
 import { seedUsers } from './seedUsers';
-import { createTestAuthClient } from './authClient';
 import { createMockServer, writeSSE, writeAISDKStream } from './mockServer';
 import type { MockServer, SSEEvent } from './mockServer';
 

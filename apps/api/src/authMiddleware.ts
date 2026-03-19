@@ -258,23 +258,31 @@ type Action = {
   action: "environment:read"
 }
 
-function validateIfEndUserWriteActionAllowed(principal: PrivatePrincipal, action: Action) {
-  const endUserBelongsToProdSpace =
-    (action.action === "end-user:create" && action.space === 'production') ||
-    (action.action === "end-user:update" && action.user.space === 'production');
+// function validateIfEndUserWriteActionAllowed(principal: PrivatePrincipal, action: Action) {
+//   const endUserBelongsToProdSpace =
+//     (action.action === "end-user:create" && action.space === 'production') ||
+//     (action.action === "end-user:update" && action.user.space === 'production');
 
-  if (endUserBelongsToProdSpace && principal.env !== 'production') {
-    throw new HTTPException(401, { message: "Production data can be only accessed with production environment." });
-  }
+//   if (endUserBelongsToProdSpace && principal.env !== 'production') {
+//     throw new HTTPException(401, { message: "Production data can be only accessed with production environment." });
+//   }
 
-  return true;
-}
+//   return true;
+// }
 
 
 export function authorize(principal: Principal, action: Action) {
 
   // sessions / end-users actions
   if (action.action === "end-user:read" || action.action === "end-user:update" || action.action === "end-user:create") {
+
+    const endUserBelongsToProdSpace =
+      (action.action === "end-user:create" && action.space === 'production') ||
+      (action.action === "end-user:update" && action.user.space === 'production');
+
+    if (endUserBelongsToProdSpace && principal.env !== 'production') {
+      throw new HTTPException(401, { message: "Unauthorized. Production data can be only accessed with production environment." });
+    }
 
     if (principal.type === 'user') {
       if (action.action === "end-user:read" || action.action === "end-user:update") {
@@ -290,8 +298,6 @@ export function authorize(principal: Principal, action: Action) {
         return true;
       }
 
-      validateIfEndUserWriteActionAllowed(principal, action);
-
       if (action.action === "end-user:create") {
         return true;
       }
@@ -301,12 +307,10 @@ export function authorize(principal: Principal, action: Action) {
       }
     }
     else if (principal.type === 'apiKey') {
-
-      if (action.action === "end-user:read") {
-        return true;
-      }
-      else {
-        validateIfEndUserWriteActionAllowed(principal, action);
+      return true;
+    }
+    else if (principal.type === 'apiKeyPublic') {
+      if (action.action === "end-user:create") {
         return true;
       }
     }
