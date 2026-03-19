@@ -1040,6 +1040,7 @@ app.openapi(sessionGETRoute, async (c) => {
     const session = await requireSession(tx, session_id);
     await authorize(principal, { action: "end-user:read", user: session.user });
     const adapter = getAdapter(session.agentRef?.adapter);
+    console.log(adapter.enrichSession(session))
     return c.json({ ...session, ...adapter.enrichSession(session) }, 200);
   })
 })
@@ -1224,7 +1225,7 @@ app.openapi(sessionsPOSTRoute, async (c) => {
       organizationId: principal.organizationId,
     });
 
-    const newSession = await createSession(tx, {
+    let newSession = await createSession(tx, {
       organizationId: principal.organizationId,
       environment,
       channelRef,
@@ -1235,6 +1236,11 @@ app.openapi(sessionsPOSTRoute, async (c) => {
       agentRefId,
       initialState: body.initialState,
     });
+
+    if (body.input) {
+      await createAutoRun(tx, principal.organizationId, environment, newSession.id, { input: body.input });
+      newSession = await requireSession(tx, newSession.id);
+    }
 
     return c.json(newSession, 201);
   })
@@ -1318,7 +1324,7 @@ const sessionStreamRoute = createRoute({
 
 
 app.openapi(sessionStreamRoute, async (c) => {
-  const principal = await authn(c.req.raw.headers);
+  const principal = await authnAllowPublic(c.req.raw.headers);
 
   const { session_id } = c.req.param()
   const { adapter = 'ai-sdk' } = c.req.valid('query');

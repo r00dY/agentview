@@ -170,10 +170,14 @@ async function* callAgentAPIAISDK(
                 break; // we do not resend [DONE], it's handled in 'finally' block, so that it's ALWAYS sent last, and even if we handle internal errors. We "intercept" sending [DONE] basically.
             }
 
-            publishRunStreamEvent(currentRun.id, 'ai-sdk', new Date().toISOString(), data);
-
+            // transforms
             const chunk = JSON.parse(data) as AISDKChunk;
-            
+            if (chunk.type === 'start' && !chunk.messageId) {
+                chunk.messageId = currentRun.id + '-input';
+            }
+
+            publishRunStreamEvent(currentRun.id, 'ai-sdk', new Date().toISOString(), JSON.stringify(chunk));
+
             switch (chunk.type) {
                 case 'start': {
                     if (chunk.messageMetadata !== undefined) {
@@ -430,5 +434,8 @@ function sessionToUIMessages(session: Session): UIMessage[] {
 
 export const aiSDKAdapter: Adapter = {
     callAgent: callAgentAPIAISDK,
-    enrichSession: sessionToUIMessages,
+    enrichSession: (session: Session) => ({ 
+        messages: sessionToUIMessages(session),
+        resume: session.runs[session.runs.length - 1]?.status === 'in_progress'
+    }),
 }

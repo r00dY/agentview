@@ -1,222 +1,31 @@
 "use client";
 
-import { useChat } from "@ai-sdk/react";
-import {
-  DefaultChatTransport,
-  isToolUIPart,
-  lastAssistantMessageIsCompleteWithToolCalls,
-} from "ai";
-import { useState, useEffect, useMemo } from "react";
-import { createSessionAction } from "./actions";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { startSessionAction } from "./actions";
 
-const AGENTVIEW_API_URL = "http://localhost:1990";
-
-function ChatUI({
-  sessionId,
-  userToken,
-}: {
-  sessionId: string;
-  userToken: string;
-}) {
-  const transport = useMemo(
-    () =>
-      new DefaultChatTransport({
-        api: `${AGENTVIEW_API_URL}/api/sessions/${sessionId}/runs`,
-        headers: {
-          "X-User-Token": userToken,
-          "X-Env": "dev:admin@acme.com",
-        },
-        prepareSendMessagesRequest: ({ messages }) => ({
-          body: {
-            adapter: "ai-sdk",
-            stream: true,
-            input: messages[messages.length - 1],
-          }
-        }),
-      }),
-    [sessionId, userToken]
-  );
-
-  const { messages, sendMessage, status } = useChat({
-    transport,
-    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
-  });
+export default function Home() {
   const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
-  return (
-    <>
-      <div style={{ flex: 1, overflowY: "auto", marginBottom: "1rem" }}>
-        {messages.map((m) => (
-          <div
-            key={m.id}
-            style={{
-              marginBottom: "1rem",
-              padding: "0.75rem",
-              borderRadius: 8,
-              background: m.role === "user" ? "#222" : "#1a1a2e",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "0.75rem",
-                color: "#888",
-                marginBottom: "0.25rem",
-              }}
-            >
-              {m.role === "user" ? "You" : "Assistant"}
-            </div>
-            <div style={{ whiteSpace: "pre-wrap" }}>
-              {m.parts.map((part, i) => {
-                if (part.type === "text") {
-                  return <span key={i}>{part.text}</span>;
-                }
-                if (part.type === "reasoning") {
-                  return (
-                    <details
-                      key={i}
-                      style={{
-                        margin: "0.5rem 0",
-                        padding: "0.5rem",
-                        borderRadius: 6,
-                        background: "#2a1a3e",
-                        border: "1px solid #4a3a5e",
-                      }}
-                    >
-                      <summary
-                        style={{
-                          cursor: "pointer",
-                          fontSize: "0.8rem",
-                          color: "#b89adb",
-                        }}
-                      >
-                        Reasoning
-                      </summary>
-                      <div
-                        style={{
-                          marginTop: "0.25rem",
-                          fontSize: "0.85rem",
-                          color: "#c8b8e8",
-                        }}
-                      >
-                        {part.text}
-                      </div>
-                    </details>
-                  );
-                }
-                if (isToolUIPart(part)) {
-                  const toolName =
-                    part.type === "dynamic-tool"
-                      ? part.toolName
-                      : part.type.replace("tool-", "");
-                  return (
-                    <div
-                      key={i}
-                      style={{
-                        margin: "0.5rem 0",
-                        padding: "0.5rem",
-                        borderRadius: 6,
-                        background: "#1a2e1a",
-                        border: "1px solid #3a5e3a",
-                        fontSize: "0.85rem",
-                      }}
-                    >
-                      <div
-                        style={{ color: "#8ab88a", marginBottom: "0.25rem" }}
-                      >
-                        Tool: {toolName}
-                      </div>
-                      {(part.state === "input-available" ||
-                        part.state === "output-available") && (
-                        <div style={{ color: "#aaa", fontSize: "0.8rem" }}>
-                          Input: {JSON.stringify(part.input)}
-                        </div>
-                      )}
-                      {part.state === "output-available" && (
-                        <div
-                          style={{
-                            color: "#cdc",
-                            marginTop: "0.25rem",
-                            fontSize: "0.8rem",
-                          }}
-                        >
-                          Result: {JSON.stringify(part.output)}
-                        </div>
-                      )}
-                      {part.state === "input-streaming" && (
-                        <div style={{ color: "#888", fontSize: "0.8rem" }}>
-                          Loading...
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
-                return null;
-              })}
-            </div>
-          </div>
-        ))}
-        {(status === "submitted" || status === "streaming") && (
-          <div style={{ color: "#666", padding: "0.5rem" }}>
-            {status === "submitted" ? "Thinking..." : "Streaming..."}
-          </div>
-        )}
-      </div>
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
 
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (input.trim()) {
-            sendMessage({ text: input });
-            setInput("");
-          }
-        }}
-        style={{ display: "flex", gap: "0.5rem" }}
-      >
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          disabled={status !== "ready"}
-          placeholder="Ask about the weather..."
-          style={{
-            flex: 1,
-            padding: "0.75rem",
-            borderRadius: 8,
-            border: "1px solid #333",
-            background: "#222",
-            color: "#eee",
-            fontSize: "1rem",
-            outline: "none",
-          }}
-        />
-        <button
-          type="submit"
-          disabled={status !== "ready"}
-          style={{
-            padding: "0.75rem 1.25rem",
-            borderRadius: 8,
-            border: "none",
-            background: "#4a6cf7",
-            color: "white",
-            fontSize: "1rem",
-            cursor: "pointer",
-          }}
-        >
-          Send
-        </button>
-      </form>
-    </>
-  );
-}
+    setIsLoading(true);
+    setError(null);
 
-export default function Chat() {
-  const [sessionInfo, setSessionInfo] = useState<{
-    sessionId: string;
-    userToken: string;
-  } | null>(null);
+    const result = await startSessionAction(input.trim());
 
-  useEffect(() => {
-    createSessionAction().then(setSessionInfo);
-  }, []);
+    if ("error" in result) {
+      setError(result.error);
+      setIsLoading(false);
+    } else {
+      router.push(`/sessions/${result.sessionId}`);
+    }
+  };
 
   return (
     <div
@@ -234,16 +43,57 @@ export default function Chat() {
         AI SDK Demo
       </h1>
 
-      {sessionInfo ? (
-        <ChatUI
-          sessionId={sessionInfo.sessionId}
-          userToken={sessionInfo.userToken}
-        />
-      ) : (
-        <div style={{ color: "#888", padding: "0.5rem" }}>
-          Creating session...
+      {error && (
+        <div
+          style={{
+            color: "#f87171",
+            padding: "0.75rem",
+            marginBottom: "1rem",
+            borderRadius: 8,
+            background: "#2e1a1a",
+            border: "1px solid #5e3a3a",
+          }}
+        >
+          {error}
         </div>
       )}
+
+      <form
+        onSubmit={handleSubmit}
+        style={{ display: "flex", gap: "0.5rem" }}
+      >
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          disabled={isLoading}
+          placeholder="Ask about the weather..."
+          style={{
+            flex: 1,
+            padding: "0.75rem",
+            borderRadius: 8,
+            border: "1px solid #333",
+            background: "#222",
+            color: "#eee",
+            fontSize: "1rem",
+            outline: "none",
+          }}
+        />
+        <button
+          type="submit"
+          disabled={isLoading || !input.trim()}
+          style={{
+            padding: "0.75rem 1.25rem",
+            borderRadius: 8,
+            border: "none",
+            background: "#4a6cf7",
+            color: "white",
+            fontSize: "1rem",
+            cursor: "pointer",
+          }}
+        >
+          {isLoading ? "Creating..." : "Send"}
+        </button>
+      </form>
     </div>
   );
 }

@@ -255,7 +255,9 @@ export type UIMessage = z.infer<typeof UIMessageSchema>
 
 export const SessionSchema = SessionBaseSchema.extend({
   runs: z.array(RunSchema),
+
   messages: z.array(UIMessageSchema).optional(),
+  resume: z.boolean().optional(),
 })
 
 export type Session = z.infer<typeof SessionSchema>
@@ -272,6 +274,8 @@ export const SessionCreateSchema = z.object({
   createdBy: z.string().optional(),
 
   summary: z.string().nullish(),
+
+  input: z.any().optional(),
 })
 
 export type SessionCreate = z.infer<typeof SessionCreateSchema>
