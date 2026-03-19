@@ -41,7 +41,14 @@ export type ApiKeyPrincipal = {
   type: 'apiKey',
   env?: string,
   apiKey: NonNullable<Awaited<ReturnType<typeof verifyAndGetKey>>>,
-  role: string,
+  // role: string,
+  organizationId: any,
+}
+
+export type ApiKeyPublicPrincipal = {
+  type: 'apiKeyPublic',
+  env?: string,
+  apiKey: NonNullable<Awaited<ReturnType<typeof verifyAndGetKey>>>,
   organizationId: any,
 }
 
@@ -53,7 +60,7 @@ export type UserPrincipal = {
 }
 
 export type PrivatePrincipal = MemberPrincipal | ApiKeyPrincipal;
-export type Principal = MemberPrincipal | ApiKeyPrincipal | UserPrincipal;
+export type Principal = MemberPrincipal | ApiKeyPrincipal | UserPrincipal | ApiKeyPublicPrincipal;
 
 /** --------- INTERNAL HELPERS --------- */
 
@@ -155,21 +162,26 @@ export async function getPrincipal(headers: Headers): Promise<Principal | undefi
       }
 
       const organization = await requireOrganization(key.metadata?.organizationId ?? "");
-      const role = await getRole(key.userId, organization.id)
+      // const role = await getRole(key.userId, organization.id)
 
-      return { type: 'apiKey', apiKey: key, role, organizationId: organization.id, env }
+      if (key.prefix === 'pk_') {
+        return { type: 'apiKeyPublic', apiKey: key, organizationId: organization.id, env }
+      }
+      else {
+        return { type: 'apiKey', apiKey: key, organizationId: organization.id, env }
+      }
     }
   }
 
-  // TODO -> REMOVE IT!!!
-  if (userPrincipal) {
-    return userPrincipal;
-  }
+  // // TODO -> REMOVE IT!!!
+  // if (userPrincipal) {
+  //   return userPrincipal;
+  // }
 }
 
 export async function authn(headers: Headers): Promise<PrivatePrincipal> {
   const principal = await getPrincipal(headers);
-  if (!principal || principal.type === 'user') {
+  if (!principal || principal.type === 'user' || principal.type === 'apiKeyPublic') {
     throw new HTTPException(401, { message: "Unauthorized" });
   }
 

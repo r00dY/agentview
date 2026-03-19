@@ -38,7 +38,7 @@ import { parseSSE } from './parseSSE.js'
 import { parseAISDKDataStream } from './parseAISDKDataStream.js'
 
 export interface AgentViewOptions {
-  apiKey?: string
+  apiKey: string
   userToken?: string
   env?: string
   headers?: HeadersInit | (() => HeadersInit)
@@ -49,24 +49,14 @@ export const configDefaults: {
 } = { __internal: undefined }
 
 export class AgentView {
-  private apiKey?: string
+  private apiKey: string
   private userToken?: string
   private customHeaders?: HeadersInit | (() => HeadersInit)
   private credentials?: RequestCredentials
   private env?: string
 
-  constructor(options?: AgentViewOptions) {
-    // If custom headers are provided (browser mode), don't require apiKey
-    // if (options?.headers) {
-    //   this.customHeaders = options.headers
-    // } else {
-    //   const apiKey = options?.apiKey ?? process.env.AGENTVIEW_API_KEY
-    //   if (!apiKey) {
-    //     throw new Error("AgentView: Missing API Key. Set it either via apiKey property of AgentView constructor or via AGENTVIEW_API_KEY environment variable.")
-    //   }
-    //   this.apiKey = apiKey
-    // }
-    this.apiKey = options?.apiKey
+  constructor(options: AgentViewOptions) {
+    this.apiKey = options.apiKey
     this.userToken = options?.userToken
     this.env = options?.env
     this.customHeaders = options?.headers

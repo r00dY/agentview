@@ -66,7 +66,7 @@ export default function ApiKeys() {
         <div className="mb-6 p-4 border rounded-md bg-muted/50">
           <pre className="text-sm text-foreground font-mono">
 {`VITE_AGENTVIEW_ORGANIZATION_ID=${orgId}
-AGENTVIEW_API_KEY=dev_...`}
+AGENTVIEW_API_KEY=sk_...`}
           </pre>
         </div>
 
@@ -104,10 +104,10 @@ AGENTVIEW_API_KEY=dev_...`}
                       <div className="font-medium">{apiKey.name || "Unnamed"}</div>
                     </TableCell>
                     <TableCell>
-                      {apiKey.metadata?.env === "prod" ? (
-                        <Badge>Production</Badge>
+                      {apiKey.start?.startsWith("sk_") ? (
+                        <Badge>Secret</Badge>
                       ) : (
-                        <Badge variant="secondary">Development</Badge>
+                        <Badge variant="secondary">Public</Badge>
                       )}
                     </TableCell>
                     <TableCell>

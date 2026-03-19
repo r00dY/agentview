@@ -24,10 +24,13 @@ describe('API', () => {
 
   let av: AgentView;
   let avProd: AgentView;
+
   let orgSlug: string;
   let organization: { id: string };
   let adminUser: { id: string; email: string; name: string; }; // matches shape of adminUser returned by seedUsers
-  let apiKey: string;
+
+  let apiKeySecret: string;
+  let apiKeyPublic: string;
 
   beforeAll(async () => {
     orgSlug = "test-" + Math.random().toString(36).slice(2);
@@ -37,15 +40,16 @@ describe('API', () => {
     organization = result.organization;
     adminUser = result.adminUser;
 
-    apiKey = result.apiKeyDev.key;
+    apiKeySecret = result.apiKeySecret.key;
+    apiKeyPublic = result.apiKeyPublic.key;
 
     av = new AgentView({
-      apiKey: result.apiKeyDev.key,
+      apiKey: result.apiKeySecret.key,
       env: "dev:"+adminUser.email
     })
 
     avProd = new AgentView({
-      apiKey: result.apiKeyProd.key,
+      apiKey: result.apiKeySecret.key,
       env: "production"
     })
 
@@ -325,6 +329,7 @@ describe('API', () => {
 
         test("works for existing users", async () => {
           const avPublic1 = new AgentView({
+            apiKey: apiKeyPublic,
             userToken: initUser1.token
           })
           const user1 = await avPublic1.getMe()
@@ -332,6 +337,7 @@ describe('API', () => {
           expect(user1.externalId).toBe(EXTERNAL_ID_1)
 
           const avPublic2 = new AgentView({
+            apiKey: apiKeyPublic,
             userToken: initUser2.token
           })
           const user2 = await avPublic2.getMe()
@@ -341,6 +347,7 @@ describe('API', () => {
 
         test("fails for unknown key", async () => {
           const avPublic1 = new AgentView({
+            apiKey: apiKeyPublic,
             userToken: "xxx"
           })
 
@@ -357,6 +364,7 @@ describe('API', () => {
           const session = await av.createSession({ agent: "test", userId: initUser1.id})
 
           const avPublic1 = new AgentView({
+            apiKey: apiKeyPublic,
             userToken: initUser1.token
           })
 
@@ -369,6 +377,7 @@ describe('API', () => {
           const session = await av.createSession({ agent: "test", userId: initUser1.id})
 
           const avPublic2 = new AgentView({
+            apiKey: apiKeyPublic,
             userToken: initUser2.token
           })
 
@@ -444,8 +453,8 @@ describe('API', () => {
       // });
       // await authClient.signOut();
 
-      const avBob = new AgentView({ apiKey, env: `dev:bob@${orgSlug}.com` });
-      const avAlice = new AgentView({ apiKey, env: `dev:alice@${orgSlug}.com` });
+      const avBob = new AgentView({ apiKey: apiKeySecret, env: `dev:bob@${orgSlug}.com` });
+      const avAlice = new AgentView({ apiKey: apiKeySecret, env: `dev:alice@${orgSlug}.com` });
 
       // Bob uploads his config
       const BOB_CONFIG = { agents: [{ name: "bob-agent", version: "1.0.0" }], channels: [{ type: 'api' as const, name: "bob-agent", agent: "bob-agent" }], __internal: { disableSummaries: true } };
@@ -899,6 +908,7 @@ describe('API', () => {
 
       test("[public api] works", async () => {
         const avPublic1 = new AgentView({
+          apiKey: apiKeyPublic,
           userToken: initUser1.token
         })
 
@@ -910,6 +920,7 @@ describe('API', () => {
 
 
         const avPublic2 = new AgentView({
+          apiKey: apiKeyPublic,
           userToken: initUser2.token
         })
 
@@ -2176,8 +2187,8 @@ describe('API', () => {
       console.log("Creating orgA:", orgASlug);
       console.log("Creating orgB:", orgBSlug);
 
-      const { apiKeyDev: apiKey1 } = await seedUsers(orgASlug);
-      const { apiKeyDev: apiKey2 } = await seedUsers(orgBSlug);
+      const { apiKeySecret: apiKey1 } = await seedUsers(orgASlug);
+      const { apiKeySecret: apiKey2 } = await seedUsers(orgBSlug);
 
       orgAApiKey = apiKey1.key;
       orgBApiKey = apiKey2.key;

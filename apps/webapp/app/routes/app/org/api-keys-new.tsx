@@ -29,16 +29,13 @@ export async function clientAction({
 }: Route.ActionArgs): Promise<ActionResponse<{ apiKey: any }>> {
   const formData = await request.formData();
   const name = formData.get("name") as string;
-  const isProd = formData.get("isProd") === "true";
-
-  const env = isProd ? "prod" : "dev";
+  const isSecret = formData.get("isSecret") === "true";
 
   const response = await authClient.apiKey.create({
     name,
-    prefix: env + '_',
+    prefix: isSecret ? 'sk_' : 'pk_',
     metadata: {
-      organizationId: params.orgId,
-      env
+      organizationId: params.orgId
     },
   });
 
@@ -55,7 +52,7 @@ export default function ApiKeysNew() {
   const fetcher = useFetcher<ActionResponse<{ apiKey: any }>>();
   const navigate = useNavigate();
   const { orgId } = useParams();
-  const [isProd, setIsProd] = useState(false);
+  const [isSecret, setIsSecret] = useState(true);
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
 
   useFetcherSuccess(fetcher, (data) => {
@@ -140,17 +137,17 @@ export default function ApiKeysNew() {
 
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label htmlFor="apiKeyType">Production Key</Label>
+                <Label htmlFor="apiKeyType">Secret Key</Label>
                 <p className="text-sm text-muted-foreground">
-                  Enable for production environment
+                  Secret keys should only be used server-side
                 </p>
               </div>
               <Switch
                 id="apiKeyType"
-                checked={isProd}
-                onCheckedChange={setIsProd}
+                checked={isSecret}
+                onCheckedChange={setIsSecret}
               />
-              <input type="hidden" name="isProd" value={isProd.toString()} />
+              <input type="hidden" name="isSecret" value={isSecret.toString()} />
             </div>
           </DialogBody>
 

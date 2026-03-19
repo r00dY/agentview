@@ -166,8 +166,15 @@ async function* callAgentAPIAISDK(
         const outputTexts: string[] = [];
 
         for await (const data of parseAISDKStream(response.body)) {
+            /**
+             * WE DO NOT SEND [DONE] HERE AND IT'S IMPORTANT!!!
+             * 
+             * [done] literally closes the stream, so after the stream closes external apps assume the state of the system is already correct. We can't send [done] prematurely becasue concecutive getSession would get the old state.
+             * That's why [done] is conditionally sent in the applyRunPatch in the final phase. (it's exception)
+             * 
+             */
             if (data === '[DONE]') {
-                break; // we do not resend [DONE], it's handled in 'finally' block, so that it's ALWAYS sent last, and even if we handle internal errors. We "intercept" sending [DONE] basically.
+                break;
             }
 
             // transforms
@@ -352,7 +359,7 @@ async function* callAgentAPIAISDK(
             throw error;
         }
     } finally {
-        await publishRunStreamEvent(currentRun.id, 'ai-sdk', new Date().toISOString(), "[DONE]");
+        // await publishRunStreamEvent(currentRun.id, 'ai-sdk', new Date().toISOString(), "[DONE]");
     }
 }
 

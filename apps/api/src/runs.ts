@@ -277,6 +277,11 @@ export async function applyRunPatch(
   await publishRunStreamEvent(runId, 'agentview', nowIso, dataToStream);
   if (isFinished) {
     await publishRunStreamEvent(runId, 'agentview', nowIso, '[DONE]');
+
+    // finish external adapter stream (ai-sdk)
+    if (run.agentRef?.adapter === 'ai-sdk') {
+      await publishRunStreamEvent(runId, 'ai-sdk', nowIso, '[DONE]');
+    }
   }
 
   return (await getRun(tx, runId))!;
