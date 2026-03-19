@@ -243,25 +243,14 @@ export const SessionBaseSchema = z.object({
 
 export type SessionBase = z.infer<typeof SessionBaseSchema>
 
-export const UIMessageSchema = z.object({
-  id: z.string(),
-  role: z.enum(['user', 'assistant', 'system']),
-  parts: z.array(z.any()),
-  metadata: z.any().optional(),
-})
-
-export type UIMessage = z.infer<typeof UIMessageSchema>
-
 export const SessionSchema = SessionBaseSchema.extend({
   runs: z.array(RunSchema),
-
-  messages: z.array(UIMessageSchema).optional(),
-  resume: z.boolean().optional(),
 })
 
 export type Session = z.infer<typeof SessionSchema>
 
-export const SessionCreateSchema = z.object({
+
+export const SessionCreateBaseSchema = z.object({
   agent: z.string(),
   initialState: z.any().optional(),
   metadata: z.record(z.string(), z.any()).optional(),
@@ -271,16 +260,19 @@ export const SessionCreateSchema = z.object({
   space: SpaceSchema.optional(),
   createdBy: z.string().optional(),
 
-  summary: z.string().nullish(),
+  summary: z.string().nullish()
+})
 
+export const SessionCreateSchema = SessionCreateBaseSchema.extend({
   input: z.any().optional(),
 })
 
 export type SessionCreate = z.infer<typeof SessionCreateSchema>
 
+
 export const SessionUpdateSchema = z.object({
-  metadata: SessionCreateSchema.shape.metadata,
-  summary: SessionCreateSchema.shape.summary,
+  metadata: SessionCreateBaseSchema.shape.metadata,
+  summary: SessionCreateBaseSchema.shape.summary,
 })
 
 export type SessionUpdate = z.infer<typeof SessionUpdateSchema>
@@ -388,3 +380,46 @@ export type SessionStreamEvent = {
   type: string
   data: any
 }
+
+/**
+ * AI SDK
+ */
+
+// todo: take this type from 'ai' lib
+
+export const UIMessageSchema = z.object({ 
+  id: z.string(),
+  role: z.enum(['user', 'assistant', 'system']),
+  parts: z.array(z.any()),
+  metadata: z.any().optional(),
+})
+
+export type UIMessage = z.infer<typeof UIMessageSchema>
+
+export const UserUIMessageSchema = UIMessageSchema.extend({
+  role: z.literal("user"),
+})
+
+export type UserUIMessage = z.infer<typeof UserUIMessageSchema>
+
+
+
+export const AISDKSessionSchema = SessionBaseSchema.extend({
+  messages: z.array(UIMessageSchema),
+  resume: z.boolean(),
+})
+
+export type AISDKSession = z.infer<typeof AISDKSessionSchema>
+
+export const AISDKSessionCreateSchema = SessionCreateBaseSchema.extend({
+  input: UserUIMessageSchema.optional(),
+})
+
+export type AISDKSessionCreate = z.infer<typeof AISDKSessionCreateSchema>
+
+export const AISDKRunCreateSchema = z.object({
+  input: UserUIMessageSchema,
+});
+
+export type AISDKRunCreate = z.infer<typeof AISDKRunCreateSchema>
+
