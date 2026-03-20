@@ -3,10 +3,9 @@ import { endUsers, events, runs, sessionItems, sessions } from "./schemas/schema
 import type { Transaction } from "./types";
 import { isUUID } from "./isUUID";
 import type { ChannelRef, Environment, Session } from "agentview/apiTypes";
-import type { BaseChannelConfig } from "agentview/configTypes";
 import { updateInboxes } from "./updateInboxes";
 import { parseMetadata } from "./parseMetadata";
-import { requireChannelConfig } from "agentview/configUtils";
+import { requireChannelConfig } from "agentview/baseConfigUtils";
 import { getConfigFromEnvironment } from "./environments";
 
 export type LastRunStatus = {

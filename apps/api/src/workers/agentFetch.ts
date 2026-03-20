@@ -6,12 +6,11 @@ import { getConfigFromEnvironment } from '../environments';
 import { fetchSession } from '../sessions';
 import { AgentAPIError } from '../agentApi';
 import { getAdapter } from '../adapters/adapters';
-import { BaseConfigSchemaToZod, findChannelConfig, getChannelAgent } from 'agentview/configUtils';
+import { findChannelConfig, getChannelAgent } from 'agentview/baseConfigUtils';
 import { applyRunPatch } from '../runs';
 import { resolveAgentRef, upsertAgentRef } from '../agentRefs';
 import type { AgentRef, RunBody } from 'agentview/apiTypes';
 import { createWorker } from './utils';
-import { getLastRun } from 'agentview/sessionUtils';
 
 type Run = typeof runs.$inferSelect;
 

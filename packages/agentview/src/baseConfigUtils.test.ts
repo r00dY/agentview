@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod';
-import { type BaseAgentConfig, type BaseRunConfig, type BaseSessionItemConfig } from './configTypes.js';
-import { findItemConfig, findItemConfigById } from './configUtils.js';
-import type { Session } from './apiTypes.js';
+import { type BaseAgentConfig, type BaseRunConfig, type BaseSessionItemConfig } from './baseConfigTypes.js';
+import { findItemConfigById } from './baseConfigUtils.js';
 
 // those types here add $id on the session item config level, also tests whether our functions properly infers types :) 
 type SessionItemConfig = BaseSessionItemConfig & {

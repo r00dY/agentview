@@ -2,7 +2,7 @@ import { environments } from "./schemas/schema";
 import { eq, isNull, and } from "drizzle-orm";
 import type { Transaction } from "./types";
 import { HTTPException } from "hono/http-exception";
-import { BaseConfigSchemaToZod } from "agentview/configUtils";
+import { BaseConfigSchemaToZod } from "agentview/baseConfigTypes";
 import type { Environment } from "agentview/apiTypes";
 import { db__dangerous } from "./db";
 

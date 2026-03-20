@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import 'dotenv/config'
-import { serializeConfig } from "agentview/configUtils";
 
 import fs from "node:fs";
 import path from "node:path";

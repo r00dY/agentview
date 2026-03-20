@@ -24,9 +24,9 @@ import {
 } from './apiTypes.js'
 
 import { type AgentViewErrorBody, AgentViewError } from './AgentViewError.js'
-import { serializeConfig } from './configUtils.js'
+import { serializeConfig } from './baseConfigUtils.js'
 import { enhanceSession } from './sessionUtils.js'
-import type { InternalConfig } from './configTypes.js'
+import type { InternalConfig } from './baseConfigTypes.js'
 import { getApiUrl } from './urls.js'
 import { parseSSE } from './parseSSE.js'
 import { parseAISDKDataStream } from './parseAISDKDataStream.js'

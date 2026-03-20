@@ -51,8 +51,8 @@ import {
   AISDKRunCreateSchema,
   RunBaseSchema,
 } from 'agentview/apiTypes';
-import { type BaseAgentViewConfig } from 'agentview/configTypes';
-import { BaseConfigSchema, BaseConfigSchemaToZod, findChannelConfig, findItemConfigById, requireChannelConfig, requireRunConfig, getChannelAgent } from 'agentview/configUtils';
+import { type BaseAgentViewConfig, BaseConfigSchema, BaseConfigSchemaToZod } from 'agentview/baseConfigTypes';
+import { findChannelConfig, findItemConfigById, requireChannelConfig, requireRunConfig, getChannelAgent } from 'agentview/baseConfigUtils';
 import { getAllSessionItems, getLastRun } from 'agentview/sessionUtils';
 import packageJson from '../package.json';
 import { equalJSON } from './equalJSON';
@@ -72,7 +72,7 @@ import { consumeRunStream } from './runStream';
 import { upsertAgentRef } from './agentRefs';
 import { adapters, getAdapter } from './adapters/adapters';
 import { parseMetadata } from './parseMetadata';
-import { authn, authorize, requireMemberPrincipal, type PrivatePrincipal, type Principal, type MemberPrincipal, type ApiKeyPrincipal, type UserPrincipal, authnAllowPublic } from './authMiddleware';
+import { authn, authorize, requireMemberPrincipal, type Principal, authnAllowPublic } from './authMiddleware';
 
 import { resolveTarget, resolveTargetWithObjects, targetFilter, type RunTarget, type SessionItemTarget, type Target, type TargetWithObjects } from './target';
 
