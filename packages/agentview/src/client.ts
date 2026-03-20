@@ -36,11 +36,17 @@ import { parseSSE } from './parseSSE.js'
 import { parseAISDKDataStream } from './parseAISDKDataStream.js'
 
 export interface AgentViewOptions {
-  apiKey?: string
+  apiKey: string
   userToken?: string
   env?: string
+}
+
+export interface AgentViewOptionsWithHeaders extends AgentViewOptions {
   headers?: HeadersInit | (() => HeadersInit)
 }
+
+// headers?: HeadersInit | (() => HeadersInit)
+
 
 export const configDefaults: {
   __internal?: InternalConfig
@@ -52,7 +58,7 @@ export class AgentViewBase {
   protected customHeaders?: HeadersInit | (() => HeadersInit)
   protected env?: string
 
-  constructor(options?: AgentViewOptions) {
+  constructor(options?: AgentViewOptionsWithHeaders) {
     this.apiKey = options?.apiKey ?? ''
     this.userToken = options?.userToken
     this.env = options?.env
@@ -138,15 +144,6 @@ export class AgentViewBase {
     return await this.request<SessionsPaginatedResponse>('GET', path, undefined)
   }
 
-  async createManualRun(options: ManualRunCreate & { sessionId: string }): Promise<StandardRun> {
-    const { sessionId, ...body } = options;
-    return await this.request<StandardRun>('POST', `/api/sessions/${sessionId}/runs/manual`, body)
-  }
-
-  async updateManualRun(options: ManualRunUpdate & { id: string }): Promise<StandardRun> {
-    return await this.request<StandardRun>('PATCH', `/api/runs/${options.id}/manual`, options)
-  }
-
   async cancelRun(options: { id: string }): Promise<StandardRun> {
     return await this.request<StandardRun>('POST', `/api/runs/${options.id}/cancel`)
   }
@@ -213,69 +210,6 @@ export class AgentViewBase {
     return await this.request<Environment>('PATCH', `/api/environment`, { ...body, config: serializeConfig(config) })
   }
 
-  async getChannels(): Promise<Channel[]> {
-    return await this.request<Channel[]>('GET', `/api/channels`)
-  }
-
-  async updateChannel(channelId: string, data: { environmentId?: string | null }): Promise<Channel> {
-    return await this.request<Channel>('PATCH', `/api/channels/${channelId}`, data)
-  }
-
-  // --- Mock-email (internal/testing) ---
-
-  __internal = {
-    mock: {
-      createChannel: async (data: { address: string }): Promise<Channel> => {
-        return await this.request<Channel>('POST', `/api/channels/mock/create-channel`, data)
-      },
-      sendMessage: async (data: { address: string, sourceId: string, date: string, contact: string, contactKind: string, text: string, sourceThreadId?: string, providerData?: any }): Promise<any> => {
-        return await this.request<any>('POST', `/api/channels/mock/send-message`, data)
-      },
-      getOutbox: async (address?: string): Promise<Array<{ id: string, address: string, contact: string, contactKind: string, text: string | null, timestamp: number }>> => {
-        const params = address ? `?address=${encodeURIComponent(address)}` : ''
-        return await this.request('GET', `/api/channels/mock/outbox${params}`)
-      },
-    }
-  }
-
-  async markSeen(options: InputTarget): Promise<void> {
-    return await this.request<void>('POST', `/api/seen`, options)
-  }
-
-  async getSessionsStats(options?: SessionsStatsQueryParams): Promise<SessionsStats> {
-    let path = `/api/sessions/stats`
-    const params = new URLSearchParams()
-
-    if (options?.space) params.append('space', options.space)
-    if (options?.page) params.append('page', options.page.toString())
-    if (options?.limit) params.append('limit', options.limit.toString())
-    if (options?.userId) params.append('userId', options.userId)
-    if (options?.granular) params.append('granular', 'true')
-
-    const queryString = params.toString()
-    if (queryString) {
-      path += `?${queryString}`
-    }
-
-    return await this.request<SessionsStats>('GET', path, undefined)
-  }
-
-  async createComment(options: InputTarget & { content: string }): Promise<void> {
-    return await this.request<void>('POST', `/api/comments`, options)
-  }
-
-  async updateComment(options: { id: string, content: string }): Promise<void> {
-    const { id, ...rest } = options
-    return await this.request<void>('PUT', `/api/comments/${id}`, rest)
-  }
-
-  async deleteComment(options: { id: string }): Promise<void> {
-    return await this.request<void>('DELETE', `/api/comments/${options.id}`, undefined)
-  }
-
-  async updateScores(options: InputTarget & { scores: ScoreCreate[] }): Promise<void> {
-    return await this.request<void>('PATCH', `/api/scores`, options)
-  }
 }
 
 export class StandardAgentViewClient extends AgentViewBase {
@@ -295,6 +229,16 @@ export class StandardAgentViewClient extends AgentViewBase {
     const { sessionId, ...body } = options;
     return await this.request<StandardRun>('POST', `/api/sessions/${sessionId}/runs/standard`, body)
   }
+
+  async createManualRun(options: ManualRunCreate & { sessionId: string }): Promise<StandardRun> {
+    const { sessionId, ...body } = options;
+    return await this.request<StandardRun>('POST', `/api/sessions/${sessionId}/runs/manual`, body)
+  }
+
+  async updateManualRun(options: ManualRunUpdate & { id: string }): Promise<StandardRun> {
+    return await this.request<StandardRun>('PATCH', `/api/runs/${options.id}/manual`, options)
+  }
+
 
   async getSessionStream(options: { id: string, signal?: AbortSignal }): Promise<AsyncGenerator<{
     event: SessionStreamEvent;
@@ -380,6 +324,71 @@ export class StandardAgentViewClient extends AgentViewBase {
     })();
   }
 
+
+  async getChannels(): Promise<Channel[]> {
+    return await this.request<Channel[]>('GET', `/api/channels`)
+  }
+
+  async updateChannel(channelId: string, data: { environmentId?: string | null }): Promise<Channel> {
+    return await this.request<Channel>('PATCH', `/api/channels/${channelId}`, data)
+  }
+
+  // --- Mock-email (internal/testing) ---
+
+  __internal = {
+    mock: {
+      createChannel: async (data: { address: string }): Promise<Channel> => {
+        return await this.request<Channel>('POST', `/api/channels/mock/create-channel`, data)
+      },
+      sendMessage: async (data: { address: string, sourceId: string, date: string, contact: string, contactKind: string, text: string, sourceThreadId?: string, providerData?: any }): Promise<any> => {
+        return await this.request<any>('POST', `/api/channels/mock/send-message`, data)
+      },
+      getOutbox: async (address?: string): Promise<Array<{ id: string, address: string, contact: string, contactKind: string, text: string | null, timestamp: number }>> => {
+        const params = address ? `?address=${encodeURIComponent(address)}` : ''
+        return await this.request('GET', `/api/channels/mock/outbox${params}`)
+      },
+    }
+  }
+
+  async markSeen(options: InputTarget): Promise<void> {
+    return await this.request<void>('POST', `/api/seen`, options)
+  }
+
+  async getSessionsStats(options?: SessionsStatsQueryParams): Promise<SessionsStats> {
+    let path = `/api/sessions/stats`
+    const params = new URLSearchParams()
+
+    if (options?.space) params.append('space', options.space)
+    if (options?.page) params.append('page', options.page.toString())
+    if (options?.limit) params.append('limit', options.limit.toString())
+    if (options?.userId) params.append('userId', options.userId)
+    if (options?.granular) params.append('granular', 'true')
+
+    const queryString = params.toString()
+    if (queryString) {
+      path += `?${queryString}`
+    }
+
+    return await this.request<SessionsStats>('GET', path, undefined)
+  }
+
+  async createComment(options: InputTarget & { content: string }): Promise<void> {
+    return await this.request<void>('POST', `/api/comments`, options)
+  }
+
+  async updateComment(options: { id: string, content: string }): Promise<void> {
+    const { id, ...rest } = options
+    return await this.request<void>('PUT', `/api/comments/${id}`, rest)
+  }
+
+  async deleteComment(options: { id: string }): Promise<void> {
+    return await this.request<void>('DELETE', `/api/comments/${options.id}`, undefined)
+  }
+
+  async updateScores(options: InputTarget & { scores: ScoreCreate[] }): Promise<void> {
+    return await this.request<void>('PATCH', `/api/scores`, options)
+  }
+
   as(userOrToken: User | string): StandardAgentViewClient {
     const userToken = typeof userOrToken === 'string' ? userOrToken : userOrToken.token;
     return new StandardAgentViewClient({
@@ -446,10 +455,11 @@ export class AgentViewClient extends AgentViewBase {
   }
 }
 
-export function createStandardClient(options?: AgentViewOptions): StandardAgentViewClient {
+export function createStandardClient(options: AgentViewOptionsWithHeaders): StandardAgentViewClient {
   return new StandardAgentViewClient(options)
 }
 
-export function createClient(options?: AgentViewOptions): AgentViewClient {
+export function createClient(options: AgentViewOptions): AgentViewClient {
   return new AgentViewClient(options)
 }
+
