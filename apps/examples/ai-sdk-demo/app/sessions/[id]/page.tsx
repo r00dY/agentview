@@ -9,7 +9,7 @@ export default async function SessionPage({
 }) {
   const { id } = await params;
   const cookieStore = await cookies();
-  const userToken = cookieStore.get("av-user-token")?.value;
+  const userToken = cookieStore.get("agentview-user-token")?.value;
 
   if (!userToken) {
     throw new Error("No user token found");

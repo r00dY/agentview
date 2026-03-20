@@ -9,11 +9,11 @@ export const client = createClient({
 });
 
 export const getUserToken = () => {
-    return getCookie("av-user-token");
+    return getCookie("agentview-user-token");
 };
 
 export const setUserToken = (token: string) => {
-    setCookie("av-user-token", token, { path: "/" });
+    setCookie("agentview-user-token", token, { path: "/" });
 };
 
 export const createUserToken = async () => {
