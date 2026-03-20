@@ -318,14 +318,15 @@ async function* callAgentAPIAISDK(
                         data: {
                             status: 'completed',
                             outputItemCount: outputCount,
+                            channelReply: isChannelRun ? { text: outputTexts.filter(Boolean).join('\n\n') } : undefined,
                             ...(messageMetadata !== undefined ? { metadata: messageMetadata } : {}),
                         },
                     };
 
-                    if (isChannelRun) {
-                        const replyText = outputTexts.filter(Boolean).join('\n\n');
-                        yield { name: 'channel.reply', data: { text: replyText } };
-                    }
+                    // if (isChannelRun) {
+                    //     const replyText = outputTexts.filter(Boolean).join('\n\n');
+                    //     yield { name: 'channel.reply', data: { text: replyText } };
+                    // }
                     break;
                 }
 

@@ -8,7 +8,7 @@ export async function publishRunStreamEvent(runId: string, adapter: string, crea
   const ms = createdAt ? new Date(createdAt).getTime() : Date.now();
   await redis.xadd(key, `${ms}-*`, 'data', data);
 
-  if (data === '[DONE]') {
+  if (data === '[DONE]' || data === '[TERMINATED]') {
     await expireRunStream(runId, adapter);
   }
 }
@@ -19,16 +19,16 @@ export async function expireRunStream(runId: string, adapter: string) {
 }
 
 /**
- * Calls `onDone` when [DONE] appears on the run stream. Returns a cleanup function.
+ * Calls `onTerminated` when [TERMINATED] appears on the run stream. Returns a cleanup function.
  */
-export function onRunStreamDone(runId: string, adapter: string, onDone: () => void) {
+export function onRunTerminated(runId: string, adapter: string, onTerminated: () => void) {
   const abortController = new AbortController();
 
   (async () => {
     try {
-      for await (const data of consumeRunStream(runId, adapter, abortController.signal)) {
-        if (data === '[DONE]') {
-          onDone();
+      for await (const data of consumeRunStreamRaw(runId, adapter, abortController.signal)) {
+        if (data === '[TERMINATED]') {
+          onTerminated();
           return;
         }
       }
@@ -40,7 +40,26 @@ export function onRunStreamDone(runId: string, adapter: string, onDone: () => vo
   return abortController
 }
 
+/**
+ * Consumes the run stream, translating [TERMINATED] into [DONE] so consumers
+ * never see the internal termination signal.
+ */
 export async function* consumeRunStream(
+  runId: string,
+  adapter: string,
+  signal: AbortSignal,
+  afterTimestamp?: string,
+) {
+  for await (const data of consumeRunStreamRaw(runId, adapter, signal, afterTimestamp)) {
+    if (data === '[DONE]' || data === '[TERMINATED]') { // in this function we translate [TERMINATED] into [DONE] so consumers never see the internal termination signal
+      yield '[DONE]';
+      return;
+    }
+    yield data;
+  }
+}
+
+async function* consumeRunStreamRaw(
   runId: string,
   adapter: string,
   signal: AbortSignal,
@@ -69,10 +88,6 @@ export async function* consumeRunStream(
         lastId = id;
         const data = fields[1];
         yield data;
-
-        if (data === '[DONE]') {
-          return;
-        }
       }
     }
   }

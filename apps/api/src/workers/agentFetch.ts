@@ -7,10 +7,10 @@ import { fetchSession } from '../sessions';
 import { AgentAPIError } from '../agentApi';
 import { getAdapter } from '../adapters/adapters';
 import { findChannelConfig, getChannelAgent } from 'agentview/baseConfigUtils';
-import { applyRunPatch } from '../runs';
+import { applyRunPatch, terminateRun } from '../runs';
 import { resolveAgentRef, upsertAgentRef } from '../agentRefs';
 import type { AgentRef, RunBody } from 'agentview/apiTypes';
-import { onRunStreamDone } from '../runStream';
+import { onRunTerminated } from '../runStream';
 import { createWorker } from './utils';
 
 type Run = typeof runs.$inferSelect;
@@ -42,7 +42,7 @@ async function processAgentFetch(run: Run) {
   console.log(`[agentFetch][${run.id}] start`);
 
   const fetchAbortController = new AbortController();
-  let doneWatchAbortController: AbortController | undefined;
+  let terminationAbortController: AbortController | undefined;
 
   try {
     // Fetch session within org context
@@ -187,9 +187,9 @@ async function processAgentFetch(run: Run) {
       });
     }
 
-    // Abort fetch immediately when [DONE] appears on the stream (e.g. external cancellation) -> this is for speed instead of waiting for the next event + DB poll.
-    doneWatchAbortController = onRunStreamDone(run.id, 'agentview', () => {
-      console.log(`[agentFetch][${run.id}] cancelled, aborting [DONE]`);
+    // Abort fetch immediately when run is terminated (e.g. external cancellation).
+    terminationAbortController = onRunTerminated(run.id, 'agentview', () => {
+      console.log(`[agentFetch][${run.id}] terminated, aborting`);
       fetchAbortController.abort()
     });
 
@@ -248,33 +248,33 @@ async function processAgentFetch(run: Run) {
           event.data
         );
       }
-      else if (event.name === 'channel.reply') {
-        try {
-          await withOrg(run.organizationId, async (tx) => {
-            const sessionRow = await tx.query.sessions.findFirst({
-              where: eq(sessions.id, run.sessionId),
-              columns: { channelThreadId: true },
-            });
-            if (!sessionRow?.channelThreadId) return;
+      // else if (event.name === 'channel.reply') {
+      //   try {
+      //     await withOrg(run.organizationId, async (tx) => {
+      //       const sessionRow = await tx.query.sessions.findFirst({
+      //         where: eq(sessions.id, run.sessionId),
+      //         columns: { channelThreadId: true },
+      //       });
+      //       if (!sessionRow?.channelThreadId) return;
 
-            console.log(`[agentFetch][${run.id}] creating outgoing channel message`);
+      //       console.log(`[agentFetch][${run.id}] creating outgoing channel message`);
 
-            await tx.insert(channelMessages).values({
-              organizationId: run.organizationId,
-              channelThreadId: sessionRow.channelThreadId,
-              direction: 'outgoing',
-              status: 'pending',
-              date: new Date().toISOString(),
-              text: event.data.text,
-              runId: run.id,
-            });
+      //       await tx.insert(channelMessages).values({
+      //         organizationId: run.organizationId,
+      //         channelThreadId: sessionRow.channelThreadId,
+      //         direction: 'outgoing',
+      //         status: 'pending',
+      //         date: new Date().toISOString(),
+      //         text: event.data.text,
+      //         runId: run.id,
+      //       });
 
-            console.log(`[agentFetch][${run.id}] created outgoing channel message`);
-          });
-        } catch (e) {
-          console.error(`[agentFetch][${run.id}] failed to create outgoing channel message:`, e);
-        }
-      }
+      //       console.log(`[agentFetch][${run.id}] created outgoing channel message`);
+      //     });
+      //   } catch (e) {
+      //     console.error(`[agentFetch][${run.id}] failed to create outgoing channel message:`, e);
+      //   }
+      // }
     }
 
     // Automatically fail the run if it is not in progress after stream is finished
@@ -297,13 +297,13 @@ async function processAgentFetch(run: Run) {
 
     console.log(`[agentFetch][${run.id}] error: ${errorMessage}`);
 
-    await applyRunPatch(run.id, run.organizationId, null, {
+    await terminateRun(run.id, run.organizationId, {
       status: 'failed',
       failReason: { message: errorMessage },
     });
 
   } finally {
-    doneWatchAbortController?.abort();
+    terminationAbortController?.abort();
     console.log(`[agentFetch][${run.id}] finished`);
 
     // Always clear fetchStatus when done (if not already cleared)

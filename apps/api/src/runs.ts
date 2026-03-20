@@ -1,7 +1,7 @@
 import { eq, and, desc, not, inArray } from 'drizzle-orm';
-import { runs, sessionItems, webhookJobs } from './schemas/schema';
+import { runs, sessionItems, sessions, webhookJobs, channelMessages } from './schemas/schema';
 import type { Transaction } from './types';
-import type { Environment, ManualRunCreate, ManualRunUpdate } from 'agentview/apiTypes';
+import type { Environment, ManualRunCreate, ManualRunUpdate, Run } from 'agentview/apiTypes';
 import type { BaseRunConfig } from 'agentview/baseConfigTypes';
 import { requireRunConfig, findItemConfig, findChannelConfig, requireAgentConfig, getChannelAgent } from 'agentview/baseConfigUtils';
 import { AgentViewError } from 'agentview/AgentViewError';
@@ -55,6 +55,45 @@ export function validateItems(runConfig: BaseRunConfig, previousRunItems: any[],
   return parsedItems;
 }
 
+export async function handleChannelReply(
+  tx: Transaction,
+  runId: string,
+  sessionId: string,
+  organizationId: string,
+  channelReply?: { text: string },
+) {
+  const sessionRow = await tx.query.sessions.findFirst({
+    where: eq(sessions.id, sessionId),
+    columns: { channelThreadId: true },
+  });
+
+  if (!sessionRow) {
+    throw new AgentViewError("Unexpected error", 500);
+  }
+
+  if (sessionRow.channelThreadId && channelReply) {
+    await tx.insert(channelMessages).values({
+      organizationId,
+      channelThreadId: sessionRow.channelThreadId,
+      direction: 'outgoing',
+      status: 'pending',
+      date: new Date().toISOString(),
+      text: channelReply.text,
+      runId,
+    });
+  }
+  else if (!sessionRow.channelThreadId && channelReply) {
+    throw new AgentViewError("You can't set channel reply for a session that doesn't have a channel thread.", 400);
+  }
+  else if (sessionRow.channelThreadId && !channelReply) {
+    throw new AgentViewError("No channel reply for a session that has a channel thread.", 400);
+  }
+  else if (!sessionRow.channelThreadId && !channelReply) {
+    // no-op
+  }
+}
+
+
 /**
  * Marks the last N non-input, non-state items as 'output' on run completion.
  * Validates each item against the output schema before marking.
@@ -82,35 +121,12 @@ export async function markOutputItems(
     throw new AgentViewError("Run set as 'completed' must have at least one output item, but no non-input items found.", 422);
   }
 
-  // // Get the full run items for validation context
-  // const runItems = await tx.query.sessionItems.findMany({
-  //   where: and(
-  //     eq(sessionItems.runId, runId),
-  //     eq(sessionItems.isState, false),
-  //   ),
-  //   orderBy: (si, { asc }) => [asc(si.sortOrder)],
-  // });
-
-  // const allContents = runItems.map(i => i.content);
-
   for (const outputItem of outputItems) {
     const outputConfig = findItemConfig(runConfig, [], outputItem.content as Record<string, any>, [], "output");
     if (!outputConfig) {
       throw new AgentViewError("Item does not match output schema.", 422, { item: outputItem.content });
     }
   }
-
-  // // Validate each candidate output item against the output schema
-  // for (const item of allItems) {
-  //   const itemIndex = runItems.findIndex(i => i.id === item.id);
-  //   const itemsBefore = allContents.slice(0, itemIndex);
-  //   const itemsAfter = allContents.slice(itemIndex + 1);
-
-  //   const outputConfig = findItemConfig(runConfig, itemsBefore, item.content as Record<string, any>, itemsAfter, "output");
-  //   if (!outputConfig) {
-  //     throw new AgentViewError("Item does not match output schema.", 422, { item: item.content });
-  //   }
-  // }
 
   // Update their type to 'output'
   const itemIds = outputItems.map(i => i.id);
@@ -164,6 +180,9 @@ export async function applyRunPatch(
   /** Reject outputItemCount if status is not being set to 'completed' */
   if (body.outputItemCount !== undefined && body.status !== 'completed') {
     throw new AgentViewError("outputItemCount can only be set when status is 'completed'.", 422);
+  }
+  if (body.channelReply !== undefined && body.status !== 'completed') {
+    throw new AgentViewError("channelReply can only be set when status is 'completed'.", 422);
   }
 
   let runConfig: BaseRunConfig | undefined;
@@ -271,6 +290,7 @@ export async function applyRunPatch(
     if (status === 'completed' && runConfig) {
       const outputItemCount = body.outputItemCount ?? 1;
       await markOutputItems(tx, run.id, outputItemCount, runConfig);
+      await handleChannelReply(tx, run.id, run.sessionId, organizationId, body.channelReply);
     }
 
   });
@@ -285,17 +305,62 @@ export async function applyRunPatch(
   await publishRunStreamEvent(runId, 'agentview', nowIso, dataToStream);
 
   if (isFinished) {
-    await publishRunStreamEvent(runId, 'agentview', null, '[DONE]');
-
-    if (run.agentRef?.adapter === 'ai-sdk') { // finish external adapter stream (ai-sdk)
-      await publishRunStreamEvent(runId, 'ai-sdk', null, '[DONE]');
-    }
+    finishRunStreams(run, '[DONE]');
   }
 
   return (await withOrg(organizationId, async (tx) => {
     return await getRun(tx, runId);
   }))!;
 }
+
+/**
+ * Simplified run termination that doesn't reply on applyRunPatch logic.
+ * apply patch logic is that it comes from "external source", like agent call or manual run patch.
+ * when run is finished with apply patch it's essentially "correct" system state that doesn't need anything extra.
+ * however, sometimes we need to terminate run where:
+ * - it must be 100% certain that run is terminated, must be simplified
+ * - it should be able to notify agent API call to abort.
+ * 
+ * If termination was done by apply patch:
+ * - there's risk we introduce a bug which incorrectly terminates run.
+ * - when we listened to [done] event on redis streams in agent API call, even if integration called apply patch with "complete" / "failed" correctly. In that case we should not abort agent API call. That's why termination is different "path" in our system.
+ */
+export async function terminateRun(runId: string, organizationId: string, body: { status: 'cancelled' } | { status: 'failed', failReason: any }) {
+  await withOrg(organizationId, async (tx) => {
+    const run = await getRun(tx, runId);
+
+    if (!run) {
+      throw new AgentViewError("Can't find run to terminate.", 404);
+    }
+    if (run.status !== 'in_progress') {
+      throw new AgentViewError("Cannot terminate a run that is not in progress.", 422);
+    }
+
+    const nowIso = new Date().toISOString();
+    await tx.update(runs).set({
+      ...body,
+      finishedAt: nowIso,
+      updatedAt: nowIso,
+      expiresAt: null,
+    }).where(eq(runs.id, runId));
+
+    await publishRunStreamEvent(runId, 'agentview', nowIso, JSON.stringify({ // this is important, we must send the last run patch event to the stream
+      ...body,
+      updatedAt: nowIso,
+    }));
+
+    finishRunStreams(run, '[TERMINATED]');
+  });
+}
+
+async function finishRunStreams(run: NonNullable<Awaited<ReturnType<typeof getRun>>>, text: '[DONE]' | '[TERMINATED]') {
+  await publishRunStreamEvent(run.id, 'agentview', null, text);
+  if (run.agentRef?.adapter === 'ai-sdk') { // finish external adapter stream (ai-sdk)
+    await publishRunStreamEvent(run.id, 'ai-sdk', null, text);
+  }
+}
+
+
 
 // async function cancelRun(runId: string, organizationId: string) {
 //   const nowIso = new Date().toISOString();

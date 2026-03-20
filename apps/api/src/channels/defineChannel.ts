@@ -5,7 +5,7 @@ import { channels, channelThreads, channelMessages, endUsers, sessions } from '.
 import { withOrg } from '../withOrg';
 import { db__dangerous } from '../db';
 import type { Transaction } from '../types';
-import { applyRunPatch, createAutoRun } from '../runs';
+import { applyRunPatch, createAutoRun, terminateRun } from '../runs';
 import { randomBytes } from 'crypto';
 import { createSession } from '../sessions';
 import type { ChannelRef } from 'agentview';
@@ -240,7 +240,7 @@ export function channelProvider(type: string) {
         console.log('[ingestMessage] cancelling last run');
 
         // this is not inside of transaction!
-        await applyRunPatch(lastRun.id, thread.organizationId, environment, { status: 'cancelled' });
+        await terminateRun(lastRun.id, thread.organizationId, { status: 'cancelled' });
       }
       else {
         console.log('[ingestMessage] last run is not in progress');
@@ -455,5 +455,4 @@ async function getOrCreateMessage(tx: Transaction, channel: Channel, thread: Cha
 
   return { message: existing!, isNew: false };
 }
-
 

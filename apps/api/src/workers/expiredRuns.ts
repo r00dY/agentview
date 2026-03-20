@@ -1,9 +1,8 @@
 import { db__dangerous } from '../db';
 import { runs } from '../schemas/schema';
-import { eq, and, lt, inArray, sql } from 'drizzle-orm';
+import { inArray, sql } from 'drizzle-orm';
 import { createWorker } from './utils';
-import { withOrg } from '../withOrg';
-import { applyRunPatch } from '../runs';
+import { terminateRun } from '../runs';
 
 type Run = typeof runs.$inferSelect;
 
@@ -25,10 +24,9 @@ export const expiredRunsWorker = createWorker<Run>({
       .returning();
   },
   async process(run) {
-    await applyRunPatch(
+    await terminateRun(
       run.id,
       run.organizationId,
-      null,
       {
         status: 'failed',
         failReason: { message: 'Timeout' },

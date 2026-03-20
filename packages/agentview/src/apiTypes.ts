@@ -217,6 +217,7 @@ export const ManualRunUpdateSchema = z.object({
   state: z.any().optional(),
   failReason: z.any().nullable().optional(),
   outputItemCount: z.number().int().min(0).optional(),
+  channelReply: z.object({ text: z.string() }).optional(),
 });
 
 export type ManualRunUpdate = z.infer<typeof ManualRunUpdateSchema>

@@ -68,7 +68,7 @@ import type { Transaction } from './types';
 import { updateInboxes } from './updateInboxes';
 import { findUser } from './users';
 import { randomBytes } from 'crypto';
-import { applyRunPatch, getRun, createAutoRun, createManualRun, DEFAULT_IDLE_TIME, getRunInputContent } from './runs';
+import { applyRunPatch, getRun, createAutoRun, createManualRun, DEFAULT_IDLE_TIME, getRunInputContent, terminateRun } from './runs';
 import { consumeRunStream } from './runStream';
 import { upsertAgentRef } from './agentRefs';
 import { adapters, getAdapter } from './adapters/adapters';
@@ -1622,7 +1622,7 @@ async function sessionStandardCancelHandler(c: Parameters<RouteHandler<typeof se
     return { lastRun, environment };
   });
 
-  await applyRunPatch(lastRun.id, principal.organizationId, environment, { status: 'cancelled' });
+  await terminateRun(lastRun.id, principal.organizationId, { status: 'cancelled' });
 
   return withOrg(principal.organizationId, async (tx) => {
     return await requireSession(tx, session_id);
@@ -2297,5 +2297,3 @@ serve({
   fetch: app.fetch,
   port
 })
-
-console.log("Agent View API running on port " + port)

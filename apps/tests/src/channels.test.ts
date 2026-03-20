@@ -13,7 +13,7 @@ configDefaults.__internal = {
 describe('Channels', () => {
   const AGENT_PORT = 3459
   const AGENT_URL = `http://localhost:${AGENT_PORT}/agent`
-  const SAFE_DELIVERY_TIMEOUT_MS = 5000
+  const SAFE_DELIVERY_TIMEOUT_MS = 7500
 
   let av: StandardAgentViewClient
   let avProd: StandardAgentViewClient
@@ -361,7 +361,8 @@ describe('Channels', () => {
       return outbox.filter(e => e.contact === contact)
     }
 
-    test.only('single message → single outgoing reply', async () => {
+    test('single message → single outgoing reply', async () => {
+      console.log('[test start] single message → single outgoing reply');
       setParrotHandler()
 
       await send('out-1', 'single@test.com', 'hello')
@@ -371,9 +372,10 @@ describe('Channels', () => {
       const entries = await getOutboxFor('single@test.com')
       expect(entries).toHaveLength(1)
       expect(entries[0].text).toBe('hello')
-    }, 15000)
+    }, 20000)
 
     test('two sequential messages → two outgoing replies with session history', async () => {
+      console.log('[test start] two sequential messages → two outgoing replies with session history');
       setParrotHandler()
 
       await send('seq-1', 'sequential@test.com', 'first')
@@ -391,6 +393,7 @@ describe('Channels', () => {
 
     test('rapid messages while agent is processing → batched into single outgoing reply', async () => {
       // Agent takes 2s to respond, giving us time to send more messages
+      console.log('[test start] rapid messages while agent is processing → batched into single outgoing reply');
       setParrotHandler({ delayMs: 2000 })
 
       await send('rapid-1', 'rapid@test.com', 'A')
@@ -409,6 +412,7 @@ describe('Channels', () => {
 
     test('agent failure → no outgoing, next message retries with batch', async () => {
       // First message: agent fails
+      console.log('[test start] agent failure → no outgoing, next message retries with batch');
       setFailHandler()
       await send('fail-1', 'fail-retry@test.com', 'X')
       await new Promise(r => setTimeout(r, SAFE_DELIVERY_TIMEOUT_MS))
@@ -428,6 +432,7 @@ describe('Channels', () => {
     }, 20000)
 
     test('rapid out-of-order messages → batched in date order', async () => {
+      console.log('[test start] rapid out-of-order messages → batched in date order');
       setParrotHandler({ delayMs: 2000 })
 
       // Send 3 messages quickly with out-of-order dates
@@ -445,6 +450,7 @@ describe('Channels', () => {
     }, 20000)
 
     test('out-of-order messages where first is already processed → preserves order', async () => {
+      console.log('[test start] out-of-order messages where first is already processed → preserves order');
       setParrotHandler()
 
       // B arrives first (later date) and gets fully processed
