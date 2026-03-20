@@ -28,7 +28,8 @@ describe('Channels', () => {
 
     const result = await seedUsers(orgSlug)
     av = new AgentView({ apiKey: result.apiKeySecret.key, env: `dev:bob@${orgSlug}.com` })
-    avProd = new AgentView({ apiKey: result.apiKeyPublic.key, env: 'production' })
+    avProd = new AgentView({ apiKey: result.apiKeySecret.key, env: 'production' })
+
 
     const env = await avProd.updateEnvironment({
       config: {
