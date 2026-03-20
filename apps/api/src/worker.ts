@@ -16,10 +16,9 @@ await initDb();
  *   to enforce RLS as defense-in-depth
  */
 
+agentFetchWorker.start();
 expiredRunsWorker.start();
 webhookWorker.start();
-agentFetchWorker.start();
-// channelThreadWorker.start();
 outgoingChannelMessageWorker.start();
 for (const channel of channelApps) {
   for (const worker of channel.workers) {

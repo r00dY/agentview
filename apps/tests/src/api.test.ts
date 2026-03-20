@@ -150,19 +150,6 @@ describe('API', () => {
     return await av.createSession({ agent: "test", userId: initUser1.id })
   }
 
-  async function waitForRunStatus(sessionId: string, runId: string, statuses: string[], timeoutMs: number = 15000): Promise<StandardRun> {
-    const startTime = Date.now();
-    while (Date.now() - startTime < timeoutMs) {
-      const session = await av.getSession({ id: sessionId });
-      const run = session.runs.find(r => r.id === runId);
-      if (run && statuses.includes(run.status)) {
-        return run;
-      }
-      await new Promise(r => setTimeout(r, 500));
-    }
-    throw new Error(`Timed out waiting for run ${runId} to reach status ${statuses.join('|')}`);
-  }
-
   describe("users", () => {
     test("creating another user with the same external id should fail", async () => {
       await expect(av.createUser({ externalId: EXTERNAL_ID_1 })).rejects.toThrowError(expect.objectContaining({
@@ -2547,7 +2534,7 @@ describe('API', () => {
       expect(finalRun.failReason).toBeDefined();
     }, 30000);
 
-    test("bad HTTP response: agent returns 500 → run marked failed", async () => {
+    test.only("bad HTTP response: agent returns 500 → run marked failed", async () => {
       await updateConfigWithUrl();
       const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
@@ -2561,9 +2548,12 @@ describe('API', () => {
         input: { type: "message", role: "user", content: "Hi" },
       });
 
-      const failedRun = await waitForRunStatus(session.id, run.id, ["failed"]);
-      expect(failedRun.status).toBe("failed");
-      expect(failedRun.failReason).toBeDefined();
+      const stream = await av.getSessionStream({ id: session.id });
+      expect(stream).not.toBeNull();
+      const { finalRun } = await collectSessionStream(stream)
+
+      expect(finalRun.status).toBe("failed");
+      expect(finalRun.failReason).toBeDefined();
     }, 30000);
 
     test("stream ends without completion → run fails", async () => {
@@ -2582,9 +2572,12 @@ describe('API', () => {
         input: { type: "message", role: "user", content: "Hi" },
       });
 
-      const failedRun = await waitForRunStatus(session.id, run.id, ["failed"]);
-      expect(failedRun.status).toBe("failed");
-      expect(failedRun.failReason.message).toContain("Agent stream ended without completing");
+      const stream = await av.getSessionStream({ id: session.id });
+      expect(stream).not.toBeNull();
+      const { finalRun } = await collectSessionStream(stream)
+
+      expect(finalRun.status).toBe("failed");
+      expect(finalRun.failReason.message).toContain("Agent stream ended without completing");
     }, 30000);
 
     test("multiple incremental patches: items accumulate correctly (validated via session stream)", async () => {
