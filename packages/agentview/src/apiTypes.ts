@@ -171,7 +171,7 @@ export const AgentRefSchema = z.object({
 
 export type AgentRef = z.infer<typeof AgentRefSchema>
 
-export const RunSchema = z.object({
+export const RunBaseSchema = z.object({
   id: z.string(),
   createdAt: z.iso.date(),
   updatedAt: z.iso.date(),
@@ -180,10 +180,15 @@ export const RunSchema = z.object({
   failReason: z.any().nullable(),
   agentRef: AgentRefSchema.nullable(),
   metadata: z.record(z.string(), z.any()).nullable(),
-  sessionItems: z.array(SessionItemSchema),
-  channelMessages: z.array(ChannelMessageSchema),
   sessionId: z.string(), // potential bloat
 })
+
+export type RunBase = z.infer<typeof RunBaseSchema>
+
+export const RunSchema = RunBaseSchema.extend({
+  sessionItems: z.array(SessionItemSchema),
+  channelMessages: z.array(ChannelMessageSchema),
+});
 
 // Auto-fetch run creation: just send the input
 export const RunCreateSchema = z.object({
@@ -389,6 +394,7 @@ export type SessionStreamEvent = {
 
 export const UIMessageSchema = z.object({ 
   id: z.string(),
+  type: z.literal("message").optional(),
   role: z.enum(['user', 'assistant', 'system']),
   parts: z.array(z.any()),
   metadata: z.any().optional(),
@@ -397,6 +403,7 @@ export const UIMessageSchema = z.object({
 export type UIMessage = z.infer<typeof UIMessageSchema>
 
 export const UserUIMessageSchema = UIMessageSchema.extend({
+  id: z.string().optional(),
   role: z.literal("user"),
 })
 

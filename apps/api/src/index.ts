@@ -48,6 +48,8 @@ import {
   AISDKSessionSchema,
   AISDKSessionCreateSchema,
   type AISDKSession,
+  AISDKRunCreateSchema,
+  RunBaseSchema,
 } from 'agentview/apiTypes';
 import { type BaseAgentViewConfig } from 'agentview/configTypes';
 import { BaseConfigSchema, BaseConfigSchemaToZod, findChannelConfig, findItemConfigById, requireChannelConfig, requireRunConfig, getChannelAgent } from 'agentview/configUtils';
@@ -1357,16 +1359,13 @@ function getAISDKStreamResponse(c: any, session: Session) {
 
 const sessionStreamRoute = createRoute({
   method: 'get',
-  path: '/api/sessions/{session_id}/stream',
+  path: '/api/sessions/{session_id}/stream/canonical',
   summary: 'Stream updates',
-  tags: ['Sessions and Runs'],
+  tags: ['Canonical'],
   request: {
     params: z.object({
       session_id: z.string(),
-    }),
-    query: z.object({
-      adapter: z.enum(['agentview', 'ai-sdk']).optional(),
-    }),
+    })
   },
   responses: {
     200: {
@@ -1383,28 +1382,57 @@ const sessionStreamRoute = createRoute({
   },
 });
 
-
-app.openapi(sessionStreamRoute, async (c) => {
+const sessionStreamHandler = async (c: Parameters<RouteHandler<typeof sessionStreamRoute>>[0]) => {
   const principal = await authnAllowPublic(c.req.raw.headers);
 
   const { session_id } = c.req.param()
-  const { adapter = 'ai-sdk' } = c.req.valid('query');
 
   const session = await withOrg(principal.organizationId, async (tx) => requireSession(tx, session_id))
 
   authorize(principal, { action: "end-user:read", user: session.user });
+  
+  return session;
+}
 
-  if (adapter === 'agentview') {
-    return getSessionStreamResponse(c, session);
-  }
-  else if (adapter === 'ai-sdk') {
-    return getAISDKStreamResponse(c, session);
-  }
-  else {
-    throw new AgentViewError("Invalid adapter", 400);
-  }
-
+app.openapi(sessionStreamRoute, async (c) => {
+  const session = await sessionStreamHandler(c);
+  return getSessionStreamResponse(c, session);
 });
+
+const sessionAISDKStreamRoute = createRoute({
+  method: 'get',
+  path: '/api/sessions/{session_id}/stream',
+  summary: 'Stream updates',
+  tags: ['Sessions and Runs'],
+  request: {
+    params: z.object({
+      session_id: z.string(),
+    })
+  },
+  responses: {
+    200: {
+      content: {
+        'text/event-stream': {
+          schema: z.string(),
+        },
+      },
+      description: "Streams items from the run",
+    },
+    204: response_no_content(),
+    400: response_error(),
+    404: response_error()
+  },
+});
+
+app.openapi(sessionAISDKStreamRoute, async (c) => {
+  const session = await sessionStreamHandler(c);
+  return getAISDKStreamResponse(c, session);
+});
+
+
+
+
+
 
 
 const seenRoute = createRoute({
@@ -1448,45 +1476,44 @@ app.openapi(seenRoute, async (c) => {
 /* --------- RUNS --------- */
 
 
-
-
 const runsPOSTRoute = createRoute({
   method: 'post',
-  path: '/api/sessions/{session_id}/runs',
+  path: '/api/sessions/{session_id}/runs/canonical',
   summary: 'Create a run (auto-fetch)',
-  tags: ['Sessions and Runs'],
+  tags: ['Canonical'],
   request: {
     params: z.object({
       session_id: z.string(),
     }),
     body: body(RunCreateSchema.extend({
-      adapter: z.enum(['agentview', 'ai-sdk']).optional(),
       stream: z.boolean().optional(),
     }))
   },
   responses: {
-    200: {
+    201: {
       content: {
         'text/event-stream': {
           schema: z.string(),
         },
+        'application/json': {
+          schema: RunSchema,
+        },
       },
       description: "Streams native AI SDK events",
     },
-    201: response_data(RunSchema),
     400: response_error(),
     404: response_error()
   },
 })
 
-app.openapi(runsPOSTRoute, async (c) => {
+async function createRunHandler(c: Parameters<RouteHandler<typeof runsPOSTRoute>>[0]) {
   const principal = await authnAllowPublic(c.req.raw.headers)
   const body = await c.req.valid('json')
   const params = await c.req.param();
 
-  const { adapter = 'agentview', stream = false } = body;
+  const { stream = false } = body;
 
-  const { updatedSession, newRun } = await withOrg(principal.organizationId, async (tx) => {
+  return await withOrg(principal.organizationId, async (tx) => {
     const session = await requireSession(tx, params.session_id);
 
     authorize(principal, { action: "end-user:update", user: session.user });
@@ -1499,22 +1526,62 @@ app.openapi(runsPOSTRoute, async (c) => {
     const updatedSession = await requireSession(tx, params.session_id);
     const newRun = getLastRun(updatedSession)!;
 
-    return { newRun, updatedSession };
+    return { run: newRun, session: updatedSession, stream };
   });
+}
+
+app.openapi(runsPOSTRoute, async (c) => {
+  const { run, session, stream } = await createRunHandler(c);
 
   if (stream) {
-    if (adapter === 'agentview') {
-      return getSessionStreamResponse(c, updatedSession);
-    }
-    else if (adapter === 'ai-sdk') {
-      return getAISDKStreamResponse(c, updatedSession);
-    }
-  }
-  else {
-    return c.json(newRun, 201);
+    c.status(201);
+    return getSessionStreamResponse(c, session);
   }
 
-  throw new AgentViewError("Invalid adapter", 400);
+  return c.json(run, 201);
+})
+
+const runsAISDKPOSTRoute = createRoute({
+  method: 'post',
+  path: '/api/sessions/{session_id}/runs',
+  summary: 'Create a run (auto-fetch)',
+  tags: ['Sessions and Runs'],
+  request: {
+    params: z.object({
+      session_id: z.string(),
+    }),
+    body: body(AISDKRunCreateSchema.extend({
+      stream: z.boolean().optional(),
+    }))
+  },
+  responses: {
+    201: {
+      content: {
+        'text/event-stream': {
+          schema: z.string(),
+        },
+        'application/json': {
+          schema: RunBaseSchema,
+        },
+      },
+      description: "Streams native AI SDK events",
+    },
+    400: response_error(),
+    404: response_error()
+  },
+})
+
+app.openapi(runsAISDKPOSTRoute, async (c) => {
+  const { run, session, stream } = await createRunHandler(c);
+
+  if (stream) {
+    c.status(201);
+    return getAISDKStreamResponse(c, session);
+  }
+
+  const { sessionItems, channelMessages, ...runBase } = run;
+
+  return c.json(runBase, 201);
 })
 
 

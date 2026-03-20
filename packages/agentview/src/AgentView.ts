@@ -152,7 +152,7 @@ export class AgentView {
 
   async createRun(options: RunCreate & { sessionId: string }): Promise<Run> {
     const { sessionId, ...body } = options;
-    return await this.request<Run>('POST', `/api/sessions/${sessionId}/runs`, body)
+    return await this.request<Run>('POST', `/api/sessions/${sessionId}/runs/canonical`, body)
   }
 
   /**
@@ -167,7 +167,6 @@ export class AgentView {
       headers: this.getHeaders(),
       body: JSON.stringify({
         ...body,
-        adapter: 'ai-sdk',
         stream: true,
       }),
       signal,
@@ -330,7 +329,7 @@ export class AgentView {
     event: SessionStreamEvent;
     session: Session;
   }> | null> {
-    let url = `${getApiUrl()}/api/sessions/${options.id}/stream?adapter=agentview`;
+    let url = `${getApiUrl()}/api/sessions/${options.id}/stream/canonical`;
 
     const response = await fetch(url, {
       method: 'GET',

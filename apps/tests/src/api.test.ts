@@ -2627,7 +2627,7 @@ describe('API', () => {
     let mockAISDKServer: MockServer | null = null;
 
     const updateConfigWithAiSdkUrl = async () => {
-      const inputSchema = z.looseObject({ type: z.literal("message"), role: z.literal("user"), content: z.string() });
+      const inputSchema = z.looseObject({ role: z.literal("user"), parts: z.array(z.any()) });
       const outputSchema = z.looseObject({ type: z.literal("text"), text: z.string() });
       const stepSchema = z.looseObject({ type: z.literal("reasoning"), text: z.string() });
 
@@ -2683,7 +2683,7 @@ describe('API', () => {
       const chunks: any[] = [];
       const stream = await av.createRunStreamAISDK({
         sessionId: session.id,
-        input: { type: "message", role: "user", content: "Hi" },
+        input: { type: "message", role: "user", parts: [{ type: "text", text: "Hi" }] },
       });
 
       for await (const chunk of stream) {
@@ -2735,7 +2735,7 @@ describe('API', () => {
       const chunks: any[] = [];
       const stream = await av.createRunStreamAISDK({
         sessionId: session.id,
-        input: { type: "message", role: "user", content: "What is the answer?" },
+        input: { type: "message", role: "user", parts: [{ type: "text", text: "What is the answer?" }] },
       });
 
       for await (const chunk of stream) {
@@ -2773,7 +2773,7 @@ describe('API', () => {
 
     test("happy path: tool call (validated via ai-sdk stream)", async () => {
       // Update config with tool-call step schema
-      const inputSchema = z.looseObject({ type: z.literal("message"), role: z.literal("user"), content: z.string() });
+      const inputSchema = z.looseObject({ role: z.literal("user"), parts: z.array(z.any()) });
       const outputSchema = z.looseObject({ type: z.literal("text"), text: z.string() });
       const reasoningSchema = z.looseObject({ type: z.literal("reasoning"), text: z.string() });
       const toolCallSchema = z.looseObject({ type: z.literal("tool-call"), toolCallId: z.string(), toolName: z.string(), state: z.string() });
@@ -2815,7 +2815,7 @@ describe('API', () => {
       const chunks: any[] = [];
       const stream = await av.createRunStreamAISDK({
         sessionId: session.id,
-        input: { type: "message", role: "user", content: "What's the weather?" },
+        input: { type: "message", role: "user", parts: [{ type: "text", text: "What's the weather?" }] },
       });
 
       for await (const chunk of stream) {
@@ -2864,7 +2864,7 @@ describe('API', () => {
       const chunks: any[] = [];
       const stream = await av.createRunStreamAISDK({
         sessionId: session.id,
-        input: { type: "message", role: "user", content: "Hi" },
+        input: { type: "message", role: "user", parts: [{ type: "text", text: "Hi" }] },
       });
 
       for await (const chunk of stream) {
@@ -2893,7 +2893,7 @@ describe('API', () => {
       const chunks: any[] = [];
       const stream = await av.createRunStreamAISDK({
         sessionId: session.id,
-        input: { type: "message", role: "user", content: "Hi" },
+        input: { type: "message", role: "user", parts: [{ type: "text", text: "Hi" }] },
       });
 
       for await (const chunk of stream) {
@@ -2927,7 +2927,7 @@ describe('API', () => {
       const chunks: any[] = [];
       const stream = await av.createRunStreamAISDK({
         sessionId: session.id,
-        input: { type: "message", role: "user", content: "Hi" },
+        input: { type: "message", role: "user", parts: [{ type: "text", text: "Hi" }] },
       });
 
       for await (const chunk of stream) {
@@ -2960,7 +2960,7 @@ describe('API', () => {
       // Use createRunStream so we wait for the stream to complete
       const stream = await av.createRunStreamAISDK({
         sessionId: session.id,
-        input: { type: "message", role: "user", content: "Hello AI SDK" },
+        input: { type: "message", role: "user", parts: [{ type: "text", text: "Hello AI SDK" }] },
       });
 
       // Consume the stream to completion
@@ -2995,7 +2995,7 @@ describe('API', () => {
 
       const stream1 = await av.createRunStreamAISDK({
         sessionId: session.id,
-        input: { type: "message", role: "user", content: "Hi" },
+        input: { type: "message", role: "user", parts: [{ type: "text", text: "Hi" }] },
       });
 
       // Consume first stream to completion
@@ -3016,7 +3016,7 @@ describe('API', () => {
 
       const stream2 = await av.createRunStreamAISDK({
         sessionId: session.id,
-        input: { type: "message", role: "user", content: "How are you?" },
+        input: { type: "message", role: "user", parts: [{ type: "text", text: "How are you?" }] },
       });
 
       // Consume second stream to completion
