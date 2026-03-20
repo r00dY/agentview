@@ -1,11 +1,11 @@
 import { redis } from './redis';
 
-export async function publishRunStreamEvent(runId: string, adapter: string, createdAt: string, data: string) {
+export async function publishRunStreamEvent(runId: string, adapter: string, createdAt: string | null, data: string) {
   const key = `run-stream:${adapter}:${runId}`;
 
   // Use the event's updatedAt as the stream ID so consumer can use the same
   // clock (Node.js) to compute its starting offset — no Redis clock skew.
-  const ms = new Date(createdAt).getTime();
+  const ms = createdAt ? new Date(createdAt).getTime() : Date.now();
   await redis.xadd(key, `${ms}-*`, 'data', data);
 
   if (data === '[DONE]') {

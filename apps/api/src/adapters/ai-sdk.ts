@@ -165,6 +165,8 @@ async function* callAgentAPIAISDK(
         const emittedItemTypes: string[] = [];
         const outputTexts: string[] = [];
 
+        console.log('[ai-sdk] Starting stream');
+
         for await (const data of parseAISDKStream(response.body)) {
             /**
              * WE DO NOT SEND [DONE] HERE AND IT'S IMPORTANT!!!
@@ -344,13 +346,17 @@ async function* callAgentAPIAISDK(
                             },
                         };
                     }
+                    console.log('[ai-sdk] Ignored chunk: ', chunk.type);
                     break;
             }
         }
     } catch (error: unknown) {
+        console.log('[ai-sdk] Error: ', (error as any)?.message ?? 'Unknown error');
+
         if (error instanceof AgentAPIError) {
             throw error;
         } else if (error instanceof Error) {
+            
             throw new AgentAPIError({
                 message: 'Agent API connection error: ' + error.message,
                 cause: error.cause,
@@ -359,6 +365,7 @@ async function* callAgentAPIAISDK(
             throw error;
         }
     } finally {
+        console.log('[ai-sdk] Stream finished');
         // await publishRunStreamEvent(currentRun.id, 'ai-sdk', new Date().toISOString(), "[DONE]");
     }
 }
