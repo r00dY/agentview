@@ -5,9 +5,8 @@ import {
   DefaultChatTransport,
   isToolUIPart,
   lastAssistantMessageIsCompleteWithToolCalls,
-  type UIMessage,
 } from "ai";
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import type { Session } from "agentview";
 
 export function ChatUI(props: {
