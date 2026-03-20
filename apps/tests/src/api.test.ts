@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'vitest'
-import { AgentView, configDefaults } from 'agentview'
+import { createStandardClient, createClient, type StandardAgentViewClient, type AgentViewClient, configDefaults } from 'agentview'
 import type { User, StandardRun, StandardSession, SessionStreamEvent } from 'agentview';
 import { z } from 'zod';
 import { seedUsers } from './seedUsers';
@@ -21,8 +21,9 @@ describe('API', () => {
   const EXTERNAL_ID_2 = 'external-id-2'
   const EXTERNAL_PROD_ID_1 = 'external-prod-id-1'
 
-  let av: AgentView;
-  let avProd: AgentView;
+  let av: StandardAgentViewClient;
+  let avAISDK: AgentViewClient;
+  let avProd: StandardAgentViewClient;
 
   let orgSlug: string;
   let organization: { id: string };
@@ -42,12 +43,17 @@ describe('API', () => {
     apiKeySecret = result.apiKeySecret.key;
     apiKeyPublic = result.apiKeyPublic.key;
 
-    av = new AgentView({
+    av = createStandardClient({
       apiKey: result.apiKeySecret.key,
       env: "dev:"+adminUser.email
     })
 
-    avProd = new AgentView({
+    avAISDK = createClient({
+      apiKey: result.apiKeySecret.key,
+      env: "dev:"+adminUser.email
+    })
+
+    avProd = createStandardClient({
       apiKey: result.apiKeySecret.key,
       env: "production"
     })
@@ -327,7 +333,7 @@ describe('API', () => {
       describe("get me", () => {
 
         test("works for existing users", async () => {
-          const avPublic1 = new AgentView({
+          const avPublic1 = createStandardClient({
             apiKey: apiKeyPublic,
             userToken: initUser1.token
           })
@@ -335,7 +341,7 @@ describe('API', () => {
           expect(user1).toBeDefined()
           expect(user1.externalId).toBe(EXTERNAL_ID_1)
 
-          const avPublic2 = new AgentView({
+          const avPublic2 = createStandardClient({
             apiKey: apiKeyPublic,
             userToken: initUser2.token
           })
@@ -345,7 +351,7 @@ describe('API', () => {
         })
 
         test("fails for unknown key", async () => {
-          const avPublic1 = new AgentView({
+          const avPublic1 = createStandardClient({
             apiKey: apiKeyPublic,
             userToken: "xxx"
           })
@@ -362,7 +368,7 @@ describe('API', () => {
           await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
           const session = await av.createSession({ agent: "test", userId: initUser1.id})
 
-          const avPublic1 = new AgentView({
+          const avPublic1 = createStandardClient({
             apiKey: apiKeyPublic,
             userToken: initUser1.token
           })
@@ -375,7 +381,7 @@ describe('API', () => {
           await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
           const session = await av.createSession({ agent: "test", userId: initUser1.id})
 
-          const avPublic2 = new AgentView({
+          const avPublic2 = createStandardClient({
             apiKey: apiKeyPublic,
             userToken: initUser2.token
           })
@@ -452,8 +458,8 @@ describe('API', () => {
       // });
       // await authClient.signOut();
 
-      const avBob = new AgentView({ apiKey: apiKeySecret, env: `dev:bob@${orgSlug}.com` });
-      const avAlice = new AgentView({ apiKey: apiKeySecret, env: `dev:alice@${orgSlug}.com` });
+      const avBob = createStandardClient({ apiKey: apiKeySecret, env: `dev:bob@${orgSlug}.com` });
+      const avAlice = createStandardClient({ apiKey: apiKeySecret, env: `dev:alice@${orgSlug}.com` });
 
       // Bob uploads his config
       const BOB_CONFIG = { agents: [{ name: "bob-agent", version: "1.0.0" }], channels: [{ type: 'api' as const, name: "bob-agent", agent: "bob-agent" }], __internal: { disableSummaries: true } };
@@ -906,7 +912,7 @@ describe('API', () => {
       })
 
       test("[public api] works", async () => {
-        const avPublic1 = new AgentView({
+        const avPublic1 = createStandardClient({
           apiKey: apiKeyPublic,
           userToken: initUser1.token
         })
@@ -918,7 +924,7 @@ describe('API', () => {
         expect(user1FetchedSessions.pagination.totalCount).toBeGreaterThanOrEqual(USER_1_SESSIONS_COUNT)
 
 
-        const avPublic2 = new AgentView({
+        const avPublic2 = createStandardClient({
           apiKey: apiKeyPublic,
           userToken: initUser2.token
         })
@@ -2175,8 +2181,8 @@ describe('API', () => {
   describe('Multi-Tenancy isolation', () => {
     let orgAApiKey: string;
     let orgBApiKey: string;
-    let av_a: AgentView;
-    let av_b: AgentView;
+    let av_a: StandardAgentViewClient;
+    let av_b: StandardAgentViewClient;
 
     beforeAll(async () => {
       // Create two separate organizations
@@ -2192,8 +2198,8 @@ describe('API', () => {
       orgAApiKey = apiKey1.key;
       orgBApiKey = apiKey2.key;
 
-      av_a = new AgentView({ apiKey: orgAApiKey, env: 'production' });
-      av_b = new AgentView({ apiKey: orgBApiKey, env: 'production' });
+      av_a = createStandardClient({ apiKey: orgAApiKey, env: 'production' });
+      av_b = createStandardClient({ apiKey: orgBApiKey, env: 'production' });
 
       const config = {
         agents: [{
@@ -2681,7 +2687,7 @@ describe('API', () => {
 
       // Create run and get the native AI SDK stream
       const chunks: any[] = [];
-      const stream = await av.createRunStreamAISDK({
+      const stream = await avAISDK.createRunStream({
         sessionId: session.id,
         input: { type: "message", role: "user", parts: [{ type: "text", text: "Hi" }] },
       });
@@ -2733,7 +2739,7 @@ describe('API', () => {
 
       // Create run and get the native AI SDK stream
       const chunks: any[] = [];
-      const stream = await av.createRunStreamAISDK({
+      const stream = await avAISDK.createRunStream({
         sessionId: session.id,
         input: { type: "message", role: "user", parts: [{ type: "text", text: "What is the answer?" }] },
       });
@@ -2813,7 +2819,7 @@ describe('API', () => {
 
       // Create run and get the native AI SDK stream
       const chunks: any[] = [];
-      const stream = await av.createRunStreamAISDK({
+      const stream = await avAISDK.createRunStream({
         sessionId: session.id,
         input: { type: "message", role: "user", parts: [{ type: "text", text: "What's the weather?" }] },
       });
@@ -2862,7 +2868,7 @@ describe('API', () => {
 
       // Create run and consume the AI SDK stream
       const chunks: any[] = [];
-      const stream = await av.createRunStreamAISDK({
+      const stream = await avAISDK.createRunStream({
         sessionId: session.id,
         input: { type: "message", role: "user", parts: [{ type: "text", text: "Hi" }] },
       });
@@ -2891,7 +2897,7 @@ describe('API', () => {
 
       // The stream will end without any chunks (HTTP error → no AI SDK chunks published)
       const chunks: any[] = [];
-      const stream = await av.createRunStreamAISDK({
+      const stream = await avAISDK.createRunStream({
         sessionId: session.id,
         input: { type: "message", role: "user", parts: [{ type: "text", text: "Hi" }] },
       });
@@ -2925,7 +2931,7 @@ describe('API', () => {
 
       // The stream will contain the partial chunks, then end
       const chunks: any[] = [];
-      const stream = await av.createRunStreamAISDK({
+      const stream = await avAISDK.createRunStream({
         sessionId: session.id,
         input: { type: "message", role: "user", parts: [{ type: "text", text: "Hi" }] },
       });
@@ -2958,7 +2964,7 @@ describe('API', () => {
       });
 
       // Use createRunStream so we wait for the stream to complete
-      const stream = await av.createRunStreamAISDK({
+      const stream = await avAISDK.createRunStream({
         sessionId: session.id,
         input: { type: "message", role: "user", parts: [{ type: "text", text: "Hello AI SDK" }] },
       });
@@ -2993,7 +2999,7 @@ describe('API', () => {
         ]);
       });
 
-      const stream1 = await av.createRunStreamAISDK({
+      const stream1 = await avAISDK.createRunStream({
         sessionId: session.id,
         input: { type: "message", role: "user", parts: [{ type: "text", text: "Hi" }] },
       });
@@ -3014,7 +3020,7 @@ describe('API', () => {
         ]);
       });
 
-      const stream2 = await av.createRunStreamAISDK({
+      const stream2 = await avAISDK.createRunStream({
         sessionId: session.id,
         input: { type: "message", role: "user", parts: [{ type: "text", text: "How are you?" }] },
       });

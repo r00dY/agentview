@@ -6,7 +6,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import type { AgentViewConfig } from "agentview/types";
-import { AgentView } from "agentview/AgentView";
+import { createStandardClient } from "agentview/AgentView";
 import { AgentViewError } from "agentview/AgentViewError";
 import { startDevServer } from "../devServer.js";
 
@@ -172,7 +172,7 @@ async function pushConfig(configPath: string) {
 
   const apiKey = getAPIKey();
 
-  const av = new AgentView({
+  const av = createStandardClient({
     apiKey,
   });
 

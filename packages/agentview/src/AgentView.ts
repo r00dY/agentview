@@ -21,6 +21,10 @@ import {
   type SessionStreamEvent,
   type Channel,
   type InputTarget,
+  type Session,
+  type SessionCreate,
+  type Run,
+  type RunCreate,
 } from './apiTypes.js'
 
 import { type AgentViewErrorBody, AgentViewError } from './AgentViewError.js'
@@ -32,7 +36,7 @@ import { parseSSE } from './parseSSE.js'
 import { parseAISDKDataStream } from './parseAISDKDataStream.js'
 
 export interface AgentViewOptions {
-  apiKey: string
+  apiKey?: string
   userToken?: string
   env?: string
   headers?: HeadersInit | (() => HeadersInit)
@@ -42,20 +46,20 @@ export const configDefaults: {
   __internal?: InternalConfig
 } = { __internal: undefined }
 
-export class AgentView {
-  private apiKey: string
-  private userToken?: string
-  private customHeaders?: HeadersInit | (() => HeadersInit)
-  private env?: string
+export class AgentViewBase {
+  protected apiKey: string
+  protected userToken?: string
+  protected customHeaders?: HeadersInit | (() => HeadersInit)
+  protected env?: string
 
-  constructor(options: AgentViewOptions) {
-    this.apiKey = options.apiKey
+  constructor(options?: AgentViewOptions) {
+    this.apiKey = options?.apiKey ?? ''
     this.userToken = options?.userToken
     this.env = options?.env
     this.customHeaders = options?.headers
   }
 
-  private getHeaders(): Record<string, string> {
+  protected getHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     }
@@ -78,7 +82,7 @@ export class AgentView {
     return headers
   }
 
-  private async request<T>(
+  protected async request<T>(
     method: string,
     path: string,
     body?: any
@@ -107,13 +111,7 @@ export class AgentView {
     return await response.json()
   }
 
-  async createSession(options: StandardSessionCreate) {
-    return enhanceSession(await this.request<StandardSession>('POST', `/api/sessions/standard`, options))
-  }
-
-  async getSession(options: { id: string }) {
-    return enhanceSession(await this.request<StandardSession>('GET', `/api/sessions/${options.id}/standard`, undefined))
-  }
+  // --- Shared methods ---
 
   async getSessionComments(options: { id: string }) {
     return await this.request<CommentMessage[]>('GET', `/api/sessions/${options.id}/comments`, undefined)
@@ -138,41 +136,6 @@ export class AgentView {
     }
 
     return await this.request<SessionsPaginatedResponse>('GET', path, undefined)
-  }
-
-  async updateSession(options: { id: string } & SessionUpdate) {
-    return enhanceSession(await this.request<StandardSession>('PATCH', `/api/sessions/${options.id}`, options))
-  }
-
-  async createRun(options: StandardRunCreate & { sessionId: string }): Promise<StandardRun> {
-    const { sessionId, ...body } = options;
-    return await this.request<StandardRun>('POST', `/api/sessions/${sessionId}/runs/standard`, body)
-  }
-
-  /**
-   * Creates a run and returns the raw AI SDK SSE stream.
-   * Each yielded value is a parsed AI SDK chunk (the JSON from `data: <json>`).
-   * The stream ends when `data: [DONE]` is received.
-   */
-  async createRunStreamAISDK(options: StandardRunCreate & { sessionId: string, signal?: AbortSignal }): Promise<AsyncGenerator<any, void, unknown>> {
-    const { sessionId, signal, ...body } = options;
-    const response = await fetch(`${getApiUrl()}/api/sessions/${sessionId}/runs`, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify({
-        ...body,
-        stream: true,
-      }),
-      signal,
-    });
-
-    if (!response.ok) {
-      const errorBody: AgentViewErrorBody = await response.json();
-      const { message, ...details } = errorBody;
-      throw new AgentViewError(message ?? "Unknown error", response.status, details);
-    }
-
-    return parseAISDKDataStream(response);
   }
 
   async createManualRun(options: ManualRunCreate & { sessionId: string }): Promise<StandardRun> {
@@ -208,7 +171,13 @@ export class AgentView {
       if (this.userToken && this.userToken !== options.token) {
         throw new Error('Cannot get user with token when scoped with another user\'s token')
       }
-      return await this.as(options.token).request<User>('GET', `/api/users/me`)
+      const scoped = new AgentViewBase({
+        apiKey: this.apiKey,
+        userToken: options.token,
+        env: this.env,
+        headers: this.customHeaders,
+      })
+      return await scoped.request<User>('GET', `/api/users/me`)
     }
     if ('externalId' in options) {
       return await this.request<User>('GET', `/api/users/by-external-id/${options.externalId}`)
@@ -269,17 +238,6 @@ export class AgentView {
     }
   }
 
-  as(userOrToken: User | string) {
-    const userToken = typeof userOrToken === 'string' ? userOrToken : userOrToken.token;
-
-    return new AgentView({
-      apiKey: this.apiKey,
-      userToken,
-      env: this.env,
-      headers: this.customHeaders,
-    })
-  }
-
   async markSeen(options: InputTarget): Promise<void> {
     return await this.request<void>('POST', `/api/seen`, options)
   }
@@ -317,6 +275,25 @@ export class AgentView {
 
   async updateScores(options: InputTarget & { scores: ScoreCreate[] }): Promise<void> {
     return await this.request<void>('PATCH', `/api/scores`, options)
+  }
+}
+
+export class StandardAgentViewClient extends AgentViewBase {
+  async createSession(options: StandardSessionCreate) {
+    return enhanceSession(await this.request<StandardSession>('POST', `/api/sessions/standard`, options))
+  }
+
+  async getSession(options: { id: string }) {
+    return enhanceSession(await this.request<StandardSession>('GET', `/api/sessions/${options.id}/standard`, undefined))
+  }
+
+  async updateSession(options: { id: string } & SessionUpdate) {
+    return enhanceSession(await this.request<StandardSession>('PATCH', `/api/sessions/${options.id}`, options))
+  }
+
+  async createRun(options: StandardRunCreate & { sessionId: string }): Promise<StandardRun> {
+    const { sessionId, ...body } = options;
+    return await this.request<StandardRun>('POST', `/api/sessions/${sessionId}/runs/standard`, body)
   }
 
   async getSessionStream(options: { id: string, signal?: AbortSignal }): Promise<AsyncGenerator<{
@@ -402,5 +379,80 @@ export class AgentView {
       }
     })();
   }
+
+  as(userOrToken: User | string): StandardAgentViewClient {
+    const userToken = typeof userOrToken === 'string' ? userOrToken : userOrToken.token;
+    return new StandardAgentViewClient({
+      apiKey: this.apiKey,
+      userToken,
+      env: this.env,
+      headers: this.customHeaders,
+    })
+  }
 }
 
+export class AgentViewClient extends AgentViewBase {
+  async createSession(options: SessionCreate) {
+    return await this.request<Session>('POST', `/api/sessions`, options)
+  }
+
+  async getSession(options: { id: string }) {
+    return await this.request<Session>('GET', `/api/sessions/${options.id}`)
+  }
+
+  async updateSession(options: { id: string } & SessionUpdate) {
+    return await this.request<Session>('PATCH', `/api/sessions/${options.id}`, options)
+  }
+
+  async createRun(options: RunCreate & { sessionId: string }): Promise<Run> {
+    const { sessionId, ...body } = options;
+    return await this.request<Run>('POST', `/api/sessions/${sessionId}/runs`, body)
+  }
+
+  /**
+   * Creates a run and returns the raw AI SDK SSE stream.
+   * Each yielded value is a parsed AI SDK chunk (the JSON from `data: <json>`).
+   * The stream ends when `data: [DONE]` is received.
+   */
+  async createRunStream(options: RunCreate & { sessionId: string, signal?: AbortSignal }): Promise<AsyncGenerator<any, void, unknown>> {
+    const { sessionId, signal, ...body } = options;
+    const response = await fetch(`${getApiUrl()}/api/sessions/${sessionId}/runs`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({
+        ...body,
+        stream: true,
+      }),
+      signal,
+    });
+
+    if (!response.ok) {
+      const errorBody: AgentViewErrorBody = await response.json();
+      const { message, ...details } = errorBody;
+      throw new AgentViewError(message ?? "Unknown error", response.status, details);
+    }
+
+    return parseAISDKDataStream(response);
+  }
+
+  as(userOrToken: User | string): AgentViewClient {
+    const userToken = typeof userOrToken === 'string' ? userOrToken : userOrToken.token;
+    return new AgentViewClient({
+      apiKey: this.apiKey,
+      userToken,
+      env: this.env,
+      headers: this.customHeaders,
+    })
+  }
+}
+
+export function createStandardClient(options?: AgentViewOptions): StandardAgentViewClient {
+  return new StandardAgentViewClient(options)
+}
+
+export function createClient(options?: AgentViewOptions): AgentViewClient {
+  return new AgentViewClient(options)
+}
+
+// Backward compatibility
+export { StandardAgentViewClient as AgentView }

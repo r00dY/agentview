@@ -1,14 +1,14 @@
 import 'dotenv/config'
 import { Hono } from 'hono'
 import { serve } from '@hono/node-server'
-import { AgentView, AgentViewError } from "agentview";
+import { createStandardClient, AgentViewError } from "agentview";
 import { OpenAI } from 'openai';
 import { cors } from 'hono/cors';
 
 const app = new Hono();
 const client = new OpenAI()
 
-const av = new AgentView()
+const av = createStandardClient()
 
 app.use('*', cors({
   origin: ['http://localhost:1989'],

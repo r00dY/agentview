@@ -1,6 +1,6 @@
 import { serve } from '@hono/node-server';
 import { Runner } from "@openai/agents";
-import { AgentView, AgentViewError } from "agentview";
+import { createStandardClient, AgentViewError } from "agentview";
 import 'dotenv/config';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
@@ -8,7 +8,7 @@ import { streamSSE } from 'hono/streaming';
 import { weatherAgent } from './src/weatherAgent';
 
 const app = new Hono();
-const av = new AgentView()
+const av = createStandardClient()
 
 app.use('*', cors({
   origin: ['http://localhost:1989', 'http://127.0.0.1:1989'],

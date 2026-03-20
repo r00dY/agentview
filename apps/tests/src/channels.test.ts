@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, afterAll } from 'vitest'
-import { AgentView, configDefaults } from 'agentview'
+import { createStandardClient, type StandardAgentViewClient, configDefaults } from 'agentview'
 import type { Channel } from 'agentview'
 import { z } from 'zod'
 import { seedUsers } from './seedUsers'
@@ -15,8 +15,8 @@ describe('Channels', () => {
   const AGENT_URL = `http://localhost:${AGENT_PORT}/agent`
   const SAFE_DELIVERY_TIMEOUT_MS = 5000
 
-  let av: AgentView
-  let avProd: AgentView
+  let av: StandardAgentViewClient
+  let avProd: StandardAgentViewClient
   let environmentId: string
   let channel: Channel
   let mockServer: MockServer | null = null
@@ -27,8 +27,8 @@ describe('Channels', () => {
     mockServer = await createMockServer(AGENT_PORT)
 
     const result = await seedUsers(orgSlug)
-    av = new AgentView({ apiKey: result.apiKeySecret.key, env: `dev:bob@${orgSlug}.com` })
-    avProd = new AgentView({ apiKey: result.apiKeySecret.key, env: 'production' })
+    av = createStandardClient({ apiKey: result.apiKeySecret.key, env: `dev:bob@${orgSlug}.com` })
+    avProd = createStandardClient({ apiKey: result.apiKeySecret.key, env: 'production' })
 
 
     const env = await avProd.updateEnvironment({

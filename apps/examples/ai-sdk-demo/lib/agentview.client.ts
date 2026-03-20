@@ -1,9 +1,9 @@
 'use client';
 
-import { AgentView } from "agentview";
+import { createClient } from "agentview";
 import { getCookie, setCookie } from 'cookies-next/client';
 
-export const avPublic = new AgentView({
+export const avPublic = createClient({
     apiKey: process.env.NEXT_PUBLIC_AGENTVIEW_API_KEY!,
     env: process.env.NEXT_PUBLIC_AGENTVIEW_ENV!,
 });
