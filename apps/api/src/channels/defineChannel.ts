@@ -5,11 +5,10 @@ import { channels, channelThreads, channelMessages, endUsers, sessions } from '.
 import { withOrg } from '../withOrg';
 import { db__dangerous } from '../db';
 import type { Transaction } from '../types';
-import { applyRunPatch, createAutoRun, terminateRun } from '../runs';
+import { createAutoRun, terminateRun } from '../runs';
 import { randomBytes } from 'crypto';
 import { createSession } from '../sessions';
 import type { ChannelRef } from 'agentview';
-import { getConfigFromEnvironment } from '../environments';
 
 export type Channel = typeof channels.$inferSelect;
 type ChannelThread = typeof channelThreads.$inferSelect;

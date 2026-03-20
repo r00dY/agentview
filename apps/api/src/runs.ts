@@ -162,99 +162,98 @@ export async function applyRunPatch(
   environment: Environment | null,
   body: ManualRunUpdate
 ) {
-  const run = await withOrg(organizationId, async (tx) => {
-    return await getRun(tx, runId);
-  });
+  const { insertedItems, nowIso, isFinished, run } = await withOrg(organizationId, async (tx) => {
+    const run = await getRun(tx, runId);
 
-  if (!run) {
-    throw new AgentViewError("Run not found.", 404);
-  }
-
-  /** Find matching run config **/
-  const inputItem = getRunInputContent(run.sessionItems);
-
-  let parsedItems: any[] = [];
-  let metadata: Record<string, any> | undefined = undefined;
-  let idleTimeout: number | undefined;
-
-  /** Reject outputItemCount if status is not being set to 'completed' */
-  if (body.outputItemCount !== undefined && body.status !== 'completed') {
-    throw new AgentViewError("outputItemCount can only be set when status is 'completed'.", 422);
-  }
-  if (body.channelReply !== undefined && body.status !== 'completed') {
-    throw new AgentViewError("channelReply can only be set when status is 'completed'.", 422);
-  }
-
-  let runConfig: BaseRunConfig | undefined;
-
-  if (body.items || body.metadata || body.state || body.status === 'completed') { // operations requiring run config
-    if (!environment) {
-      throw new AgentViewError("Environment is required for this operation.", 422);
-    }
-    const config = getConfigFromEnvironment(environment);
-
-    const agentName = run.agentRef?.agent;
-    if (!agentName) {
-      throw new AgentViewError("You're trying to update run items, metadata or state, but the run doesn't have an agent assigned yet.", 422);
+    if (!run) {
+      throw new AgentViewError("Run not found.", 404);
     }
 
-    const agentConfig = requireAgentConfig(config, agentName);
-    runConfig = requireRunConfig(agentConfig, inputItem);
+    /** Find matching run config **/
+    const inputItem = getRunInputContent(run.sessionItems);
 
-    /** Validate items */
-    const items = body.items ?? [];
+    let parsedItems: any[] = [];
+    let metadata: Record<string, any> | undefined = undefined;
+    let idleTimeout: number | undefined;
 
-    if (items.length > 0 && run.status !== 'in_progress') {
-      throw new AgentViewError("Cannot add items to a finished run.", 422);
+    /** Reject outputItemCount if status is not being set to 'completed' */
+    if (body.outputItemCount !== undefined && body.status !== 'completed') {
+      throw new AgentViewError("outputItemCount can only be set when status is 'completed'.", 422);
+    }
+    if (body.channelReply !== undefined && body.status !== 'completed') {
+      throw new AgentViewError("channelReply can only be set when status is 'completed'.", 422);
     }
 
-    parsedItems = validateItems(runConfig, run.sessionItems.map(si => si.content), items);
+    let runConfig: BaseRunConfig | undefined;
 
-    /** State */
-    if (body.state !== undefined && run.status !== 'in_progress') {
-      throw new AgentViewError("Cannot set state to a finished run.", 422);
+    if (body.items || body.metadata || body.state || body.status === 'completed') { // operations requiring run config
+      if (!environment) {
+        throw new AgentViewError("Environment is required for this operation.", 422);
+      }
+      const config = getConfigFromEnvironment(environment);
+
+      const agentName = run.agentRef?.agent;
+      if (!agentName) {
+        throw new AgentViewError("You're trying to update run items, metadata or state, but the run doesn't have an agent assigned yet.", 422);
+      }
+
+      const agentConfig = requireAgentConfig(config, agentName);
+      runConfig = requireRunConfig(agentConfig, inputItem);
+
+      /** Validate items */
+      const items = body.items ?? [];
+
+      if (items.length > 0 && run.status !== 'in_progress') {
+        throw new AgentViewError("Cannot add items to a finished run.", 422);
+      }
+
+      parsedItems = validateItems(runConfig, run.sessionItems.map(si => si.content), items);
+
+      /** State */
+      if (body.state !== undefined && run.status !== 'in_progress') {
+        throw new AgentViewError("Cannot set state to a finished run.", 422);
+      }
+
+      /** Metadata **/
+      metadata = parseMetadata(runConfig.metadata, runConfig.allowUnknownMetadata ?? true, body.metadata ?? {}, run.metadata ?? {});
+
+      idleTimeout = runConfig.idleTimeout ?? DEFAULT_IDLE_TIME;
     }
 
-    /** Metadata **/
-    metadata = parseMetadata(runConfig.metadata, runConfig.allowUnknownMetadata ?? true, body.metadata ?? {}, run.metadata ?? {});
-
-    idleTimeout = runConfig.idleTimeout ?? DEFAULT_IDLE_TIME;
-  }
-
-  /** Status, finished at, failReason */
-  if (run.status !== 'in_progress' && body.status && body.status !== run.status) {
-    throw new AgentViewError("Cannot change the status of a finished run.", 422);
-  }
-
-  const status = body.status ?? 'in_progress';
-  const failReason = body.failReason ?? null;
-
-  if (failReason) {
-    if (run.status !== 'in_progress') {
-      throw new AgentViewError("failReason cannot be set for a finished run.", 422);
+    /** Status, finished at, failReason */
+    if (run.status !== 'in_progress' && body.status && body.status !== run.status) {
+      throw new AgentViewError("Cannot change the status of a finished run.", 422);
     }
-    else if (status !== 'failed') {
-      throw new AgentViewError("failReason can only be set when changing status to 'failed'.", 422);
+
+    const status = body.status ?? 'in_progress';
+    const failReason = body.failReason ?? null;
+
+    if (failReason) {
+      if (run.status !== 'in_progress') {
+        throw new AgentViewError("failReason cannot be set for a finished run.", 422);
+      }
+      else if (status !== 'failed') {
+        throw new AgentViewError("failReason can only be set when changing status to 'failed'.", 422);
+      }
     }
-  }
 
-  const now = new Date();
-  const nowIso = now.toISOString();
+    const now = new Date();
+    const nowIso = now.toISOString();
 
-  const isFinished = status === 'completed' || status === 'failed' || status === 'cancelled';
-  const finishedAt = run.finishedAt ?? (isFinished ? nowIso : null);
+    const isFinished = status === 'completed' || status === 'failed' || status === 'cancelled';
+    const finishedAt = run.finishedAt ?? (isFinished ? nowIso : null);
 
-  let expiresAt: string | null = null;
-  if (!isFinished) {
-    if (!idleTimeout) { // if not finished, then idleTimeout must be set
-      throw new AgentViewError("idleTimeout must be set when run is not finished.", 422);
+    let expiresAt: string | null = null;
+    if (!isFinished) {
+      if (!idleTimeout) { // if not finished, then idleTimeout must be set
+        throw new AgentViewError("idleTimeout must be set when run is not finished.", 422);
+      }
+      expiresAt = new Date(now.getTime() + idleTimeout).toISOString();
     }
-    expiresAt = new Date(now.getTime() + idleTimeout).toISOString();
-  }
 
-  let insertedItems: any[] = [];
+    let insertedItems: any[] = [];
 
-  await withOrg(organizationId, async (tx) => {
+    // await withOrg(organizationId, async (tx) => {
     if (parsedItems.length > 0) {
       insertedItems = await tx.insert(sessionItems).values(
         parsedItems.map(item => ({
@@ -293,6 +292,7 @@ export async function applyRunPatch(
       await handleChannelReply(tx, run.id, run.sessionId, organizationId, body.channelReply);
     }
 
+    return { insertedItems, nowIso, isFinished, run };
   });
 
   // Publish to Redis stream only after transaction finished successfully in DB
@@ -308,9 +308,6 @@ export async function applyRunPatch(
     finishRunStreams(run, '[DONE]');
   }
 
-  return (await withOrg(organizationId, async (tx) => {
-    return await getRun(tx, runId);
-  }))!;
 }
 
 /**
