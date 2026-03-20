@@ -189,7 +189,7 @@ async function processAgentFetch(run: Run) {
 
     // Abort fetch immediately when [DONE] appears on the stream (e.g. external cancellation) -> this is for speed instead of waiting for the next event + DB poll.
     doneWatchAbortController = onRunStreamDone(run.id, 'agentview', () => {
-      console.log(`[agentFetch][${run.id}] [DONE] received on stream, aborting fetch`);
+      console.log(`[agentFetch][${run.id}] cancelled, aborting [DONE]`);
       fetchAbortController.abort()
     });
 
@@ -197,10 +197,12 @@ async function processAgentFetch(run: Run) {
 
     for await (const event of adapter.callAgent(body, agentUrl, fetchAbortController.signal)) {
       console.log(`[agentFetch][${run.id}] event: ${event.name}`);
+
       // Check for external cancellation after each event received.
+      // this is sanity check, listetning to [DONE] above is faster and should be enough
       const runStatus = await getCurrentRunStatus();
       if (runStatus === 'cancelled') {
-        console.log(`[agentFetch][${run.id}] cancelled, aborting`);
+        console.log(`[agentFetch][${run.id}] cancelled, aborting [not in progress]`);
         fetchAbortController.abort();
         break;
       }
