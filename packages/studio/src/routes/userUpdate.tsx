@@ -7,7 +7,7 @@ async function action({ request, params }: ActionFunctionArgs) {
 
   const space = formData.get("space") as Space;
 
-  return await withErrorHandling(() => agentview.updateUser({ id: params.userId!, space }));
+  return await withErrorHandling(() => agentview().updateUser({ id: params.userId!, space }));
 }
 
 export const userUpdateRoute: RouteObject = {

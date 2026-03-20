@@ -66,7 +66,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   const agent = getCurrentAgent(request);
-  const envUpdate = agentview.updateEnvironment({ config });
+  const envUpdate = agentview().updateEnvironment({ config });
 
   const organization = await getOrganizationCached();
   const member = organization.members.find(m => m.userId === session.user.id);
@@ -82,7 +82,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (config.agents) {
     const statsPromises = config.agents.flatMap(agentConfig =>
       spaceAllowedValues.map(space =>
-        agentview.getSessionsStats({ space })
+        agentview().getSessionsStats({ space })
           .then(stats => ({ space, data: stats }))
       )
     );

@@ -30,17 +30,17 @@ async function loader({ request }: LoaderFunctionArgs) {
 
     // Sessions: sync on first load, async on revalidation
     const sessionsResult = shouldLoadImmediately
-      ? agentview.getSessionsSync({
+      ? agentview().getSessionsSync({
           space: listParams.space as Space,
           page: listParams.page,
         })
-      : await agentview.getSessions({
+      : await agentview().getSessions({
           space: listParams.space as Space,
           page: listParams.page,
         });
 
     // Stats: always sync, never blocking
-    const allStats = agentview.getSessionsStatsSync({
+    const allStats = agentview().getSessionsStatsSync({
       space: listParams.space as Space,
       page: listParams.page,
       granular: true,

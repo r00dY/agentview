@@ -36,7 +36,7 @@ export function useSession(
         try {
             console.log("[useSession] starting watch for session", externalSession.id);
 
-            const stream = await agentview.getSessionStream({
+            const stream = await agentview().getSessionStream({
                 id: externalSession.id,
                 signal: abortControllerRef.current!.signal,
             });
@@ -84,7 +84,7 @@ export function useSession(
     const createRun = async (input: any) => {
         try {
             setIsRunBeingCreated(true);
-            await agentview.createRun({ sessionId: externalSession.id, input });
+            await agentview().createRun({ sessionId: externalSession.id, input });
             startWatching();
 
         } finally {
@@ -94,7 +94,7 @@ export function useSession(
 
     const cancelRun = async () => {
         if (lastRun?.status === 'in_progress') {
-            await agentview.cancelRun({ sessionId: activeSession.id });
+            await agentview().cancelRun({ sessionId: activeSession.id });
         }
     };
 

@@ -86,11 +86,6 @@ const ZodToJsonSchema = z.any()
 
 
 function baseConfigSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
-    // const ExtendedSchema = z.union([
-    //     jsonSchemaSchema,
-    //     z.record(z.string(), z.union([jsonSchemaSchema, z.string()]))
-    // ]);
-
     const BaseSessionItemConfigSchema = z.object({
         schema: jsonSchemaSchema,
         scores: z.array(z.object({

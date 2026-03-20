@@ -36,7 +36,9 @@ function Component() {
     }
 
     const channelConfig = findChannelConfig(config, session.channel);
-    const agentConfig = findAgentConfig(config, channelConfig?.agent);
+
+    const agentName = typeof channelConfig?.agent === 'string' ? channelConfig.agent : channelConfig?.agent?.name;
+    const agentConfig = findAgentConfig(config, agentName);
 
     let runConfig: RunConfig | undefined = undefined;
     let error: string | undefined = undefined;

@@ -5,7 +5,7 @@ import { agentview, AgentViewError } from "../lib/agentview";
 import { getListParams, toQueryParams } from "../lib/listParams";
 import { type ActionResponse } from "../lib/errors";
 import { config } from "../config";
-import { requireAgentConfig, requireChannelConfig } from "agentview/configUtils";
+import { requireAgentConfig, requireChannelConfig } from "agentview/baseConfigUtils";
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { AlertCircleIcon } from "lucide-react";
 import { getSessionCached } from "../lib/auth-client";
@@ -56,8 +56,8 @@ async function action({ request, params }: ActionFunctionArgs): Promise<ActionRe
   }
 
   try {
-    const user = await agentview.createUser();
-    const session = await agentview.createSession({
+    const user = await agentview().createUser();
+    const session = await agentview().createSession({
       agent: agentName,
       userId: user.id,
       metadata: payload?.metadata

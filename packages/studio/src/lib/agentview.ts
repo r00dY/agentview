@@ -2,15 +2,23 @@ import { AgentViewError } from 'agentview'
 import { config } from '../config'
 import { CachedAgentView } from './cached-agentview'
 
-export function getAuthHeaders(): HeadersInit {
-  return {
-    'X-Organization-Id': config.organizationId,
-    'X-Env': config.env,
-    'Authorization': `Bearer ${localStorage.getItem("agentview_token") || ""}`,
-  }
-}
+let cachedClient : CachedAgentView | undefined = undefined
 
-export const agentview = new CachedAgentView()
+export function agentview() {
+  if (!cachedClient) {
+    const token = localStorage.getItem("agentview_token");
+    if (!token) {
+      throw new Error("No token found");
+    }
+
+    cachedClient = new CachedAgentView({
+      apiKey: token,
+      env: config.env,
+      organizationId: config.organizationId,
+    })
+  }
+  return cachedClient
+}
 
 // Re-export AgentViewError for error handling
 export { AgentViewError }

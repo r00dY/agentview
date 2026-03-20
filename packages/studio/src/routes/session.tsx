@@ -41,8 +41,8 @@ async function loader({ request, params, context }: LoaderFunctionArgs) {
         const shouldLoadImmediately = !window.location.pathname.includes(`/sessions/${sessionId}`);
 
         const [session, comments, scores] = shouldLoadImmediately ?
-            [agentview.getSessionSync({ id: sessionId }), agentview.getSessionCommentsSync({ id: sessionId }), agentview.getSessionScoresSync({ id: sessionId })] :
-            await Promise.all([agentview.getSession({ id: sessionId }), agentview.getSessionComments({ id: sessionId }), agentview.getSessionScores({ id: sessionId })] as const);
+            [agentview().getSessionSync({ id: sessionId }), agentview().getSessionCommentsSync({ id: sessionId }), agentview().getSessionScoresSync({ id: sessionId })] :
+            await Promise.all([agentview().getSession({ id: sessionId }), agentview().getSessionComments({ id: sessionId }), agentview().getSessionScores({ id: sessionId })] as const);
 
         return {
             session,
@@ -183,11 +183,11 @@ function SessionPage(props: { session: StandardSession, comments: CommentMessage
         // Session-level inbox items: no runId, sessionItemId, or channelMessageId
         const sessionLevelUnreads = sessionStats?.inboxItems?.some(i => !i.runId && !i.sessionItemId && !i.channelMessageId && i.unseenEvents.length > 0);
         if (sessionLevelUnreads) {
-            agentview.markSeen({ sessionId: session.id }) // only mark as seen if there are unseen events (do not overload backend and clean cache unnecessarily)
+            agentview().markSeen({ sessionId: session.id }) // only mark as seen if there are unseen events (do not overload backend and clean cache unnecessarily)
                 .then(() => revalidator.revalidate())
                 .catch((error) => console.error(error))
         };
-
+        
     }, [])
 
     const bodyRef = useRef<HTMLDivElement>(null);

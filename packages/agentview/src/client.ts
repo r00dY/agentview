@@ -35,18 +35,12 @@ import { getApiUrl } from './urls.js'
 import { parseSSE } from './parseSSE.js'
 import { parseAISDKDataStream } from './parseAISDKDataStream.js'
 
-export interface AgentViewOptions {
+export interface AgentViewClientOptions {
   apiKey: string
   userToken?: string
   env?: string
+  organizationId?: string
 }
-
-export interface AgentViewOptionsWithHeaders extends AgentViewOptions {
-  headers?: HeadersInit | (() => HeadersInit)
-}
-
-// headers?: HeadersInit | (() => HeadersInit)
-
 
 export const configDefaults: {
   __internal?: InternalConfig
@@ -57,12 +51,13 @@ export class AgentViewBase {
   protected userToken?: string
   protected customHeaders?: HeadersInit | (() => HeadersInit)
   protected env?: string
+  protected organizationId?: string
 
-  constructor(options?: AgentViewOptionsWithHeaders) {
-    this.apiKey = options?.apiKey ?? ''
-    this.userToken = options?.userToken
-    this.env = options?.env
-    this.customHeaders = options?.headers
+  constructor(options: AgentViewClientOptions) {
+    this.apiKey = options.apiKey
+    this.userToken = options.userToken
+    this.env = options.env
+    this.organizationId = options.organizationId
   }
 
   protected getHeaders(): Record<string, string> {
@@ -80,9 +75,8 @@ export class AgentViewBase {
       headers['X-User-Token'] = this.userToken
     }
 
-    if (this.customHeaders) {
-      const customHeaders = typeof this.customHeaders === 'function' ? this.customHeaders() : this.customHeaders
-      Object.assign(headers, customHeaders)
+    if (this.organizationId) {
+      headers['X-Organization-Id'] = this.organizationId
     }
 
     return headers
@@ -163,8 +157,7 @@ export class AgentViewBase {
       const scoped = new AgentViewBase({
         apiKey: this.apiKey,
         userToken: options.token,
-        env: this.env,
-        headers: this.customHeaders,
+        env: this.env
       })
       return await scoped.request<User>('GET', `/api/users/me`)
     }
@@ -395,7 +388,7 @@ export class StandardAgentViewClient extends AgentViewBase {
       apiKey: this.apiKey,
       userToken,
       env: this.env,
-      headers: this.customHeaders,
+      organizationId: this.organizationId,
     })
   }
 }
@@ -454,16 +447,16 @@ export class AgentViewClient extends AgentViewBase {
       apiKey: this.apiKey,
       userToken,
       env: this.env,
-      headers: this.customHeaders,
+      organizationId: this.organizationId,
     })
   }
 }
 
-export function createStandardClient(options: AgentViewOptionsWithHeaders): StandardAgentViewClient {
+export function createStandardClient(options: AgentViewClientOptions): StandardAgentViewClient {
   return new StandardAgentViewClient(options)
 }
 
-export function createClient(options: AgentViewOptions): AgentViewClient {
+export function createClient(options: AgentViewClientOptions): AgentViewClient {
   return new AgentViewClient(options)
 }
 

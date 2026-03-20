@@ -1,5 +1,4 @@
-import { StandardAgentViewClient, type InputTarget } from 'agentview'
-import { getAuthHeaders } from './agentview'
+import { StandardAgentViewClient, type AgentViewClientOptions, type InputTarget } from 'agentview'
 import { invalidateByPrefix, invalidateCache, swr, getCachedValue, revalidate, swrSync } from './swr-cache'
 
 // Cache key helpers
@@ -14,8 +13,8 @@ export const cacheKeys = {
 }
 
 export class CachedAgentView extends StandardAgentViewClient {
-  constructor() {
-    super({ headers: getAuthHeaders })
+  constructor(options: AgentViewClientOptions) {
+    super(options)
   }
 
   // === CACHED READS ===

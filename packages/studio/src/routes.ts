@@ -6,7 +6,6 @@ import { sessionsRoute } from "./routes/sessions";
 import { sessionsIndexRoute } from "./routes/sessionsIndex";
 import { sessionNewRoute } from "./routes/sessionNew";
 import { sessionRoute } from "./routes/session";
-import { sessionItemRoute } from "./routes/sessionItem";
 import { commentsRoute } from "./routes/comments";
 import { commentRoute } from "./routes/comment";
 import { scoresRoute } from "./routes/scores";
@@ -60,10 +59,6 @@ export function routes(customRoutes: AgentViewConfig["customRoutes"]): RouteObje
                   path: ":id",
                   ...sessionRoute,
                   children: [
-                    {
-                      path: "items/:itemId",
-                      ...sessionItemRoute,
-                    },
                     {
                       path: "runs/:runId",
                       ...sessionRunRoute,
