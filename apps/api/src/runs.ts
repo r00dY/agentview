@@ -283,6 +283,7 @@ export async function applyRunPatch(
   });
 
   await publishRunStreamEvent(runId, 'agentview', nowIso, dataToStream);
+
   if (isFinished) {
     await publishRunStreamEvent(runId, 'agentview', null, '[DONE]');
 
@@ -295,6 +296,29 @@ export async function applyRunPatch(
     return await getRun(tx, runId);
   }))!;
 }
+
+// async function cancelRun(runId: string, organizationId: string) {
+//   const nowIso = new Date().toISOString();
+
+//   await withOrg(organizationId, async (tx) => {
+//     await tx.update(runs).set({
+//       status: 'cancelled',
+//       finishedAt: nowIso,
+//       updatedAt: nowIso,
+//       expiresAt: null,
+//     }).where(eq(runs.id, runId));
+//   });
+// }
+
+// function endRedisStreams
+
+
+
+
+
+
+
+
 
 /**
  * Shared run-creation core. Receives pre-validated params, inserts run + items, queues webhooks.
