@@ -89,10 +89,9 @@ export class CachedAgentView extends StandardAgentViewClient {
     return result
   }
 
-  override async cancelRun(options_: Parameters<StandardAgentViewClient['cancelRun']>[0] & { sessionId: string }) {
-    const { sessionId, ...options } = options_;
+  override async cancelRun(options: Parameters<StandardAgentViewClient['cancelRun']>[0]) {
     const result = await super.cancelRun(options)
-    invalidateCache(cacheKeys.session(sessionId))
+    invalidateCache(cacheKeys.session(options.sessionId))
     return result
   }
 

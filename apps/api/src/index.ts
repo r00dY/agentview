@@ -1586,56 +1586,81 @@ app.openapi(runsAISDKPOSTRoute, async (c) => {
 })
 
 
-const runCancelRoute = createRoute({
+const sessionStandardCancelRoute = createRoute({
   method: 'post',
-  path: '/api/runs/{run_id}/cancel',
+  path: '/api/sessions/{session_id}/cancel/standard',
   summary: 'Cancels a run',
-  tags: ['Sessions and Runs'],
+  tags: ['Standard'],
   request: {
     params: z.object({
-      run_id: z.string(),
+      session_id: z.string(),
     })
   },
   responses: {
-    201: response_data(StandardRunSchema),
+    200: response_data(StandardSessionSchema),
     400: response_error(),
     404: response_error()
   },
 })
 
-app.openapi(runCancelRoute, async (c) => {
+async function sessionStandardCancelHandler(c: Parameters<RouteHandler<typeof sessionCancelRoute>>[0]) {
   const principal = await authn(c.req.raw.headers)
 
-  const { run_id } = c.req.param()
-  requireUUID(run_id);
+  const { session_id } = c.req.param()
 
   return withOrg(principal.organizationId, async (tx) => {
-    const run = await requireRun(tx, run_id);
-    const session = await requireSession(tx, run.sessionId);
+    const session = await requireSession(tx, session_id);
+    const lastRun = getLastRun(session);
 
     authorize(principal, { action: "end-user:update", user: session.user });
 
     const environment = await requireEnvironment(tx, principal.env);
 
-    if (run.status !== 'in_progress') {
+    if (lastRun?.status !== 'in_progress') {
       throw new AgentViewError("Cannot cancel a run that is not in progress.", 422);
     }
 
-    await applyRunPatch(tx, run.id, environment, { status: 'cancelled' });
+    await applyRunPatch(tx, lastRun.id, environment, { status: 'cancelled' });
 
-    const updatedSession = await requireSession(tx, session.id);
-    const newRun = getLastRun(updatedSession)!;
+    return await requireSession(tx, session.id);
+  });
+}
 
-    return c.json(newRun, 201);
-  })
+app.openapi(sessionStandardCancelRoute, async (c) => {
+  const session = await sessionStandardCancelHandler(c);
+  return c.json(session, 200);
 })
+
+const sessionCancelRoute = createRoute({
+  method: 'post',
+  path: '/api/sessions/{session_id}/cancel',
+  summary: 'Cancels a run',
+  tags: ['Sessions and Runs'],
+  request: {
+    params: z.object({
+      session_id: z.string(),
+    })
+  },
+  responses: {
+    200: response_data(SessionSchema),
+    400: response_error(),
+    404: response_error()
+  },
+})
+
+app.openapi(sessionCancelRoute, async (c) => {
+  const session = await sessionStandardCancelHandler(c);
+  return c.json(standardToDefaultSession(session), 200);
+})
+
+
 
 
 const runKeepAliveRoute = createRoute({
   method: 'post',
   path: '/api/runs/{run_id}/keep-alive',
   summary: 'Keep alive',
-  tags: ['Sessions and Runs'],
+  tags: ['Standard'],
   responses: {
     200: response_data(z.object({ expiresAt: z.string().nullable() })),
     400: response_error(),
@@ -1683,7 +1708,7 @@ const runsManualPOSTRoute = createRoute({
   method: 'post',
   path: '/api/sessions/{session_id}/runs/manual',
   summary: 'Create a manual run',
-  tags: ['Sessions and Runs'],
+  tags: ['Standard'],
   request: {
     params: z.object({
       session_id: z.string(),
@@ -1724,7 +1749,7 @@ const runManualPATCHRoute = createRoute({
   method: 'patch',
   path: '/api/runs/{run_id}/manual',
   summary: 'Update a run',
-  tags: ['Sessions and Runs'],
+  tags: ['Standard'],
   request: {
     params: z.object({
       run_id: z.string(),

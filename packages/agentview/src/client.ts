@@ -144,14 +144,6 @@ export class AgentViewBase {
     return await this.request<SessionsPaginatedResponse>('GET', path, undefined)
   }
 
-  async cancelRun(options: { id: string }): Promise<StandardRun> {
-    return await this.request<StandardRun>('POST', `/api/runs/${options.id}/cancel`)
-  }
-
-  async keepAliveRun(options: { id: string }): Promise<{ expiresAt: string | null }> {
-    return await this.request<{ expiresAt: string | null }>('POST', `/api/runs/${options.id}/keep-alive`, undefined)
-  }
-
   async createUser(options?: UserCreate): Promise<User> {
     return await this.request<User>('POST', `/api/users`, options ?? {})
   }
@@ -225,18 +217,26 @@ export class StandardAgentViewClient extends AgentViewBase {
     return enhanceSession(await this.request<StandardSession>('PATCH', `/api/sessions/${options.id}`, options))
   }
 
-  async createRun(options: StandardRunCreate & { sessionId: string }): Promise<StandardRun> {
+  async createRun(options: StandardRunCreate & { sessionId: string }) {
     const { sessionId, ...body } = options;
     return await this.request<StandardRun>('POST', `/api/sessions/${sessionId}/runs/standard`, body)
   }
 
-  async createManualRun(options: ManualRunCreate & { sessionId: string }): Promise<StandardRun> {
+  async createManualRun(options: ManualRunCreate & { sessionId: string }) {
     const { sessionId, ...body } = options;
     return await this.request<StandardRun>('POST', `/api/sessions/${sessionId}/runs/manual`, body)
   }
 
-  async updateManualRun(options: ManualRunUpdate & { id: string }): Promise<StandardRun> {
+  async updateManualRun(options: ManualRunUpdate & { id: string }) {
     return await this.request<StandardRun>('PATCH', `/api/runs/${options.id}/manual`, options)
+  }
+
+  async cancelRun(options: { sessionId: string }){
+    return enhanceSession(await this.request<StandardSession>('POST', `/api/sessions/${options.sessionId}/cancel/standard`))
+  }
+
+  async keepAliveRun(options: { id: string }): Promise<{ expiresAt: string | null }> {
+    return await this.request<{ expiresAt: string | null }>('POST', `/api/runs/${options.id}/keep-alive`, undefined)
   }
 
 
@@ -413,9 +413,13 @@ export class AgentViewClient extends AgentViewBase {
     return await this.request<Session>('PATCH', `/api/sessions/${options.id}`, options)
   }
 
-  async createRun(options: RunCreate & { sessionId: string }): Promise<Run> {
+  async createRun(options: RunCreate & { sessionId: string }) {
     const { sessionId, ...body } = options;
     return await this.request<Run>('POST', `/api/sessions/${sessionId}/runs`, body)
+  }
+
+  async cancelRun(options: { sessionId: string }) {
+    return await this.request<Session>('POST', `/api/sessions/${options.sessionId}/cancel`)
   }
 
   /**

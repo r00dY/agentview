@@ -2474,8 +2474,8 @@ describe('API', () => {
       }), 422);
 
       // Cancel the run to clean up
-      const cancelled = await av.cancelRun({ id: run.id });
-      expect(cancelled.status).toBe("cancelled");
+      const cancelled = await av.cancelRun({ sessionId: session.id });
+      expect(cancelled.lastRun?.status).toBe("cancelled");
     }, 30000);
 
 
@@ -2515,9 +2515,9 @@ describe('API', () => {
       await connectionEstablishedPromise;
 
       // Cancel the run
-      const cancelled = await av.cancelRun({ id: run.id });
-      expect(cancelled.status).toBe("cancelled");
-      expect(cancelled.finishedAt).toBeDefined();
+      const cancelled = await av.cancelRun({ sessionId: session.id });
+      expect(cancelled.lastRun?.status).toBe("cancelled");
+      expect(cancelled.lastRun?.finishedAt).toBeDefined();
 
       // Wait for the worker to detect cancellation on the next event and abort
       await new Promise(r => setTimeout(r, 3000));
