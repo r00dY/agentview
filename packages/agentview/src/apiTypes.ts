@@ -410,6 +410,8 @@ export const UserUIMessageSchema = UIMessageSchema.extend({
 export type UserUIMessage = z.infer<typeof UserUIMessageSchema>
 
 
+export const AISDKRunSchema = RunSchema;
+export type AISDKRun = z.infer<typeof AISDKRunSchema>
 
 export const AISDKSessionSchema = SessionBaseSchema.extend({
   messages: z.array(UIMessageSchema),

@@ -50,6 +50,7 @@ import {
   type AISDKSession,
   AISDKRunCreateSchema,
   RunBaseSchema,
+  AISDKRunSchema,
 } from 'agentview/apiTypes';
 import { type BaseAgentViewConfig, BaseConfigSchema, BaseConfigSchemaToZod } from 'agentview/baseConfigTypes';
 import { findChannelConfig, findItemConfigById, requireChannelConfig, requireRunConfig, getChannelAgent } from 'agentview/baseConfigUtils';
@@ -1561,7 +1562,7 @@ const runsAISDKPOSTRoute = createRoute({
           schema: z.string(),
         },
         'application/json': {
-          schema: RunBaseSchema,
+          schema: AISDKRunSchema,
         },
       },
       description: "Streams native AI SDK events",
