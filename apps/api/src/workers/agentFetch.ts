@@ -17,7 +17,7 @@ type Run = typeof runs.$inferSelect;
 
 export const agentFetchWorker = createWorker<Run>({
   name: 'agent-fetch',
-  pollIntervalMs: 1000,
+  pollIntervalMs: 100,
   maxConcurrency: 1000, // those are high priority events, so maxConcurrency is high
   async claim(limit) {
     // Atomic claim: FOR UPDATE SKIP LOCKED prevents concurrent workers from double-claiming
