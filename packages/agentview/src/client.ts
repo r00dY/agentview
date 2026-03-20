@@ -453,6 +453,3 @@ export function createStandardClient(options?: AgentViewOptions): StandardAgentV
 export function createClient(options?: AgentViewOptions): AgentViewClient {
   return new AgentViewClient(options)
 }
-
-// Backward compatibility
-export { StandardAgentViewClient as AgentView }

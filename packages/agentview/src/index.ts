@@ -5,4 +5,4 @@ export * from "./apiTypes.js";
 export * from "./urls.js";
 
 export * from "./AgentViewError.js";
-export * from "./AgentView.js";
+export * from "./client.js";
