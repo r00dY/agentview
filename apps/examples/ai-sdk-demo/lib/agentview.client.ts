@@ -15,9 +15,3 @@ export const getUserToken = () => {
 export const setUserToken = (token: string) => {
     setCookie("agentview-user-token", token, { path: "/" });
 };
-
-export const createUserToken = async () => {
-    const user = await client.createUser();
-    setUserToken(user.token);
-    return user.token;
-};

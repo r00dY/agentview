@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createUserToken, getUserToken, client } from "@/lib/agentview.client";
+import { setUserToken, getUserToken, client } from "@/lib/agentview.client";
 import { AgentViewError } from "agentview";
 
 export default function Home() {
@@ -20,7 +20,9 @@ export default function Home() {
 
     let userToken = await getUserToken();
     if (!userToken) {
-      userToken = await createUserToken();
+      const user = await client.createUser();
+      userToken = user.token;
+      setUserToken(user.token);
     }
 
     try {
