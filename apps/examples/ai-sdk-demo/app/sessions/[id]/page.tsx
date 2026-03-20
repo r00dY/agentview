@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { ChatUI } from "./chat";
-import { avServer } from "@/lib/agentview.server";
+import { client } from "@/lib/agentview.client";
 
 export default async function SessionPage({
   params,
@@ -15,7 +15,7 @@ export default async function SessionPage({
     throw new Error("No user token found");
   }
 
-  const session = await avServer.as(userToken).getSession({ id });
+  const session = await client.as(userToken).getSession({ id });
 
   return (
     <div

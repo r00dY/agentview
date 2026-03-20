@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createUserToken, getUserToken, avPublic } from "@/lib/agentview.client";
+import { createUserToken, getUserToken, client } from "@/lib/agentview.client";
 import { AgentViewError } from "agentview";
 
 export default function Home() {
@@ -24,7 +24,7 @@ export default function Home() {
     }
 
     try {
-      const session = await avPublic.as(userToken).createSession({
+      const session = await client.as(userToken).createSession({
         agent: "weather-chat",
         input: {
           role: "user",

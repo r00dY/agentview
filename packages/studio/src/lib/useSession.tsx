@@ -94,7 +94,7 @@ export function useSession(
 
     const cancelRun = async () => {
         if (lastRun?.status === 'in_progress') {
-            await agentview.cancelRun({ id: lastRun.id, sessionId: activeSession.id });
+            await agentview.cancelRun({ sessionId: activeSession.id });
         }
     };
 

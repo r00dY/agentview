@@ -3,7 +3,7 @@
 import { createClient } from "agentview";
 import { getCookie, setCookie } from 'cookies-next/client';
 
-export const avPublic = createClient({
+export const client = createClient({
     apiKey: process.env.NEXT_PUBLIC_AGENTVIEW_API_KEY!,
     env: process.env.NEXT_PUBLIC_AGENTVIEW_ENV!,
 });
@@ -17,7 +17,7 @@ export const setUserToken = (token: string) => {
 };
 
 export const createUserToken = async () => {
-    const user = await avPublic.createUser();
+    const user = await client.createUser();
     setUserToken(user.token);
     return user.token;
 };
