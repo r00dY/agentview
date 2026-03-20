@@ -1604,8 +1604,8 @@ const sessionStandardCancelRoute = createRoute({
 })
 
 async function sessionStandardCancelHandler(c: Parameters<RouteHandler<typeof sessionCancelRoute>>[0]) {
-  const principal = await authn(c.req.raw.headers)
-
+  const principal = await authnAllowPublic(c.req.raw.headers)
+  
   const { session_id } = c.req.param()
 
   return withOrg(principal.organizationId, async (tx) => {

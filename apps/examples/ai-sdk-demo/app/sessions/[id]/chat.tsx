@@ -8,6 +8,7 @@ import {
 } from "ai";
 import { useState } from "react";
 import type { Session } from "agentview";
+import { client } from "@/lib/agentview.client";
 
 export function ChatUI(props: {
   session: Session;
@@ -190,9 +191,9 @@ export function ChatUI(props: {
             outline: "none",
           }}
         />
-        {status === "ready" && <button
+        {(status === "ready" || status === "submitted" || status === "error") && <button
           type="submit"
-          disabled={status !== "ready"}
+          disabled={status === "submitted"}
           style={{
             padding: "0.75rem 1.25rem",
             borderRadius: 8,
@@ -206,7 +207,26 @@ export function ChatUI(props: {
           Send
         </button>}
 
-        { status === "streaming" && <button onClick={stop} disabled={!(status === 'streaming' || status === 'submitted')}>Stop</button> }
+        {status === "streaming" && <button
+          type="submit"
+          style={{
+            padding: "0.75rem 1.25rem",
+            borderRadius: 8,
+            border: "none",
+            background: "#4a6cf7",
+            color: "white",
+            fontSize: "1rem",
+            cursor: "pointer",
+          }}
+          onClick={() => {
+            client.as(userToken).cancelRun({ sessionId: session.id });
+          }}
+        >
+          Cancel
+        </button>}
+
+
+        {/* { status === "streaming" && <button onClick={stop} disabled={!(status === 'streaming' || status === 'submitted')}>Stop</button> } */}
 
       </form>
     </>
