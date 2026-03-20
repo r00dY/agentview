@@ -114,11 +114,11 @@ export class AgentView {
   }
 
   async createSession(options: SessionCreate) {
-    return enhanceSession(await this.request<Session>('POST', `/api/sessions`, options))
+    return enhanceSession(await this.request<Session>('POST', `/api/sessions/canonical`, options))
   }
 
   async getSession(options: { id: string }) {
-    return enhanceSession(await this.request<Session>('GET', `/api/sessions/${options.id}`, undefined))
+    return enhanceSession(await this.request<Session>('GET', `/api/sessions/${options.id}/canonical`, undefined))
   }
 
   async getSessionComments(options: { id: string }) {

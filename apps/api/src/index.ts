@@ -7,7 +7,7 @@ import { cors } from 'hono/cors';
 import { streamSSE } from 'hono/streaming';
 
 import { swaggerUI } from '@hono/swagger-ui';
-import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { createRoute, OpenAPIHono, z, type RouteHandler } from '@hono/zod-openapi';
 import { and, countDistinct, desc, DrizzleQueryError, eq, inArray, isNull, or, sql, type InferSelectModel } from 'drizzle-orm';
 import { auth } from './auth';
 import { db__dangerous } from './db';
@@ -45,6 +45,9 @@ import {
   InputTargetSchema,
   type ChannelRef,
   type Environment,
+  AISDKSessionSchema,
+  AISDKSessionCreateSchema,
+  type AISDKSession,
 } from 'agentview/apiTypes';
 import { type BaseAgentViewConfig } from 'agentview/configTypes';
 import { BaseConfigSchema, BaseConfigSchemaToZod, findChannelConfig, findItemConfigById, requireChannelConfig, requireRunConfig, getChannelAgent } from 'agentview/configUtils';
@@ -65,7 +68,7 @@ import { randomBytes } from 'crypto';
 import { applyRunPatch, getRun, createAutoRun, createManualRun, DEFAULT_IDLE_TIME, getRunInputContent } from './runs';
 import { consumeRunStream } from './runStream';
 import { upsertAgentRef } from './agentRefs';
-import { getAdapter } from './adapters/adapters';
+import { adapters, getAdapter } from './adapters/adapters';
 import { parseMetadata } from './parseMetadata';
 import { authn, authorize, requireMemberPrincipal, type PrivatePrincipal, type Principal, type MemberPrincipal, type ApiKeyPrincipal, type UserPrincipal, authnAllowPublic } from './authMiddleware';
 
@@ -1013,12 +1016,15 @@ app.openapi(sessionsGETStatsRoute, async (c) => {
   })
 })
 
+/**
+ * SESSION GET BY ID
+ */
 
 const sessionGETRoute = createRoute({
   method: 'get',
-  path: '/api/sessions/{session_id}',
+  path: '/api/sessions/{session_id}/canonical',
   summary: 'Retrieve a session',
-  tags: ['Sessions and Runs'],
+  tags: ['Canonical'],
   request: {
     params: z.object({
       session_id: z.string(),
@@ -1030,17 +1036,43 @@ const sessionGETRoute = createRoute({
   },
 })
 
-app.openapi(sessionGETRoute, async (c) => {
+async function sessionGETHandler(c: Parameters<RouteHandler<typeof sessionGETRoute>>[0]) {
   const principal = await authnAllowPublic(c.req.raw.headers)
   const { session_id } = c.req.param()
 
   return withOrg(principal.organizationId, async (tx) => {
     const session = await requireSession(tx, session_id);
     await authorize(principal, { action: "end-user:read", user: session.user });
-    const adapter = getAdapter(session.agentRef?.adapter);
-    return c.json({ ...session, ...adapter.enrichSession(session) }, 200);
+    return session;
   })
+}
+
+app.openapi(sessionGETRoute, async (c) => {
+  return c.json(await sessionGETHandler(c), 200);
 })
+
+const sessionAISDKGETRoute = createRoute({
+  method: 'get',
+  path: '/api/sessions/{session_id}',
+  summary: 'Retrieve a session',
+  tags: ['Sessions and Runs'],
+  request: {
+    params: z.object({
+      session_id: z.string(),
+    }),
+  },
+  responses: {
+    200: response_data(AISDKSessionSchema),
+    404: response_error()
+  },
+})
+
+app.openapi(sessionAISDKGETRoute, async (c) => {
+  const session = await sessionGETHandler(c);
+  return c.json(sessionToAISDKSession(session), 200);
+})
+
+
 
 const sessionPATCHRoute = createRoute({
   method: 'patch',
@@ -1166,14 +1198,16 @@ app.openapi(sessionScoresGETRoute, async (c) => {
 
 
 
-
+/**
+ * Session Create
+ */
 
 
 const sessionsPOSTRoute = createRoute({
   method: 'post',
-  path: '/api/sessions',
+  path: '/api/sessions/canonical',
   summary: 'Create a session',
-  tags: ['Sessions and Runs'],
+  tags: ['Canonical'],
   request: {
     body: body(SessionCreateSchema)
   },
@@ -1183,7 +1217,7 @@ const sessionsPOSTRoute = createRoute({
   },
 })
 
-app.openapi(sessionsPOSTRoute, async (c) => {
+export async function createSessionHandler(c: Parameters<RouteHandler<typeof sessionsPOSTRoute>>[0]) {
   const principal = await authnAllowPublic(c.req.raw.headers)
   const body = await c.req.valid('json')
 
@@ -1238,8 +1272,39 @@ app.openapi(sessionsPOSTRoute, async (c) => {
       newSession = await requireSession(tx, newSession.id);
     }
 
-    return c.json(newSession, 201);
+    return newSession;
   })
+}
+
+app.openapi(sessionsPOSTRoute, async (c) => {
+  const newSession = await createSessionHandler(c);
+  return c.json(newSession, 201);
+})
+
+function sessionToAISDKSession(session: Session) : AISDKSession {
+  const adapter = adapters["ai-sdk"];
+  const aisdkFields = adapter.enrichSession(session);
+  const { runs, ...sessionBase } = session;
+  return { ...sessionBase, ...aisdkFields };
+}
+
+const sessionsAISDKPOSTRoute = createRoute({
+  method: 'post',
+  path: '/api/sessions',
+  summary: 'Create a session',
+  tags: ['Sessions and Runs'],
+  request: {
+    body: body(AISDKSessionCreateSchema)
+  },
+  responses: {
+    201: response_data(AISDKSessionSchema),
+    422: response_error()
+  },
+})
+
+app.openapi(sessionsAISDKPOSTRoute, async (c) => {
+  const newSession = await createSessionHandler(c);
+  return c.json(sessionToAISDKSession(newSession), 201);
 })
 
 

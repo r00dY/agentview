@@ -382,6 +382,10 @@ function sessionToUIMessages(session: Session): UIMessage[] {
     const messages: UIMessage[] = [];
 
     for (const run of session.runs) {
+        if (run.agentRef?.adapter !== "ai-sdk") {
+            throw new Error("[sessionToUIMessages] Run is not an AI SDK run");
+        }
+
         const items = run.sessionItems;
         if (items.length === 0) continue;
 
@@ -439,10 +443,10 @@ function sessionToUIMessages(session: Session): UIMessage[] {
     return messages;
 }
 
-export const aiSDKAdapter: Adapter = {
+export const aiSDKAdapter = {
     callAgent: callAgentAPIAISDK,
     enrichSession: (session: Session) => ({ 
         messages: sessionToUIMessages(session),
         resume: session.runs[session.runs.length - 1]?.status === 'in_progress'
     }),
-}
+} satisfies Adapter;
