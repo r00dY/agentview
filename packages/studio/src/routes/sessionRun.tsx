@@ -1,7 +1,7 @@
 import { data, useLoaderData, useNavigate, useOutletContext, useParams, useRevalidator } from "react-router";
 import type { LoaderFunctionArgs, RouteObject } from "react-router";
 import { Header, HeaderTitle } from "../components/header";
-import type { Session } from "agentview/apiTypes";
+import type { StandardSession } from "agentview/apiTypes";
 import { getAllSessionItems } from "agentview/sessionUtils";
 import { useEffect } from "react";
 import { Button } from "../components/ui/button";
@@ -27,7 +27,7 @@ function loader({ request, params }: LoaderFunctionArgs) {
 function Component() {
     const navigate = useNavigate();
     const params = useParams();
-    const { session } = useOutletContext<{ session: Session }>();
+    const { session } = useOutletContext<{ session: StandardSession }>();
     const { listParams } = useLoaderData<typeof loader>();
     const run = session.runs.find((run) => run.id === params.runId);
 

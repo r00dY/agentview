@@ -185,17 +185,17 @@ export const RunBaseSchema = z.object({
 
 export type RunBase = z.infer<typeof RunBaseSchema>
 
-export const RunSchema = RunBaseSchema.extend({
+export const StandardRunSchema = RunBaseSchema.extend({
   sessionItems: z.array(SessionItemSchema),
   channelMessages: z.array(ChannelMessageSchema),
 });
 
 // Auto-fetch run creation: just send the input
-export const RunCreateSchema = z.object({
+export const StandardRunCreateSchema = z.object({
   input: z.record(z.string(), z.any()),
 });
 
-export type RunCreate = z.infer<typeof RunCreateSchema>
+export type StandardRunCreate = z.infer<typeof StandardRunCreateSchema>
 
 // Manual run creation: full control over items, status, state, etc.
 export const ManualRunCreateSchema = z.object({
@@ -221,7 +221,7 @@ export const ManualRunUpdateSchema = z.object({
 
 export type ManualRunUpdate = z.infer<typeof ManualRunUpdateSchema>
 
-export type Run = z.infer<typeof RunSchema>
+export type StandardRun = z.infer<typeof StandardRunSchema>
 
 export const ChannelRefSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('api'), name: z.string() }),
@@ -248,11 +248,11 @@ export const SessionBaseSchema = z.object({
 
 export type SessionBase = z.infer<typeof SessionBaseSchema>
 
-export const SessionSchema = SessionBaseSchema.extend({
-  runs: z.array(RunSchema),
+export const StandardSessionSchema = SessionBaseSchema.extend({
+  runs: z.array(StandardRunSchema),
 })
 
-export type Session = z.infer<typeof SessionSchema>
+export type StandardSession = z.infer<typeof StandardSessionSchema>
 
 
 export const SessionCreateBaseSchema = z.object({
@@ -268,11 +268,11 @@ export const SessionCreateBaseSchema = z.object({
   summary: z.string().nullish()
 })
 
-export const SessionCreateSchema = SessionCreateBaseSchema.extend({
+export const StandardSessionCreateSchema = SessionCreateBaseSchema.extend({
   input: z.any().optional(),
 })
 
-export type SessionCreate = z.infer<typeof SessionCreateSchema>
+export type StandardSessionCreate = z.infer<typeof StandardSessionCreateSchema>
 
 
 export const SessionUpdateSchema = z.object({
@@ -344,7 +344,7 @@ export type SessionsPaginatedResponse = z.infer<typeof SessionsPaginatedResponse
 
 // run webhook / agent endpoint body
 export const RunBodySchema = z.object({
-  session: SessionSchema,
+  session: StandardSessionSchema,
 })
 
 export type RunBody = z.infer<typeof RunBodySchema>
@@ -387,7 +387,7 @@ export type SessionStreamEvent = {
 }
 
 /**
- * AI SDK
+ * AI SDK (default format)
  */
 
 // todo: take this type from 'ai' lib
@@ -410,25 +410,25 @@ export const UserUIMessageSchema = UIMessageSchema.extend({
 export type UserUIMessage = z.infer<typeof UserUIMessageSchema>
 
 
-export const AISDKRunSchema = RunSchema;
-export type AISDKRun = z.infer<typeof AISDKRunSchema>
+export const RunSchema = StandardRunSchema;
+export type Run = z.infer<typeof RunSchema>
 
-export const AISDKSessionSchema = SessionBaseSchema.extend({
+export const SessionSchema = SessionBaseSchema.extend({
   messages: z.array(UIMessageSchema),
   resume: z.boolean(),
 })
 
-export type AISDKSession = z.infer<typeof AISDKSessionSchema>
+export type Session = z.infer<typeof SessionSchema>
 
-export const AISDKSessionCreateSchema = SessionCreateBaseSchema.extend({
+export const SessionCreateSchema = SessionCreateBaseSchema.extend({
   input: UserUIMessageSchema.optional(),
 })
 
-export type AISDKSessionCreate = z.infer<typeof AISDKSessionCreateSchema>
+export type SessionCreate = z.infer<typeof SessionCreateSchema>
 
-export const AISDKRunCreateSchema = z.object({
+export const RunCreateSchema = z.object({
   input: UserUIMessageSchema,
 });
 
-export type AISDKRunCreate = z.infer<typeof AISDKRunCreateSchema>
+export type RunCreate = z.infer<typeof RunCreateSchema>
 

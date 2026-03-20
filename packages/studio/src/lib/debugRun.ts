@@ -1,8 +1,8 @@
-import type { Run } from "agentview/apiTypes"
+import type { StandardRun } from "agentview/apiTypes"
 import { agentview } from "./agentview";
 import { toast } from "sonner";
 
-export async function debugRun(run: Run) {
+export async function debugRun(run: StandardRun) {
     // toast.info("Check console for error details.")
 
     // try {

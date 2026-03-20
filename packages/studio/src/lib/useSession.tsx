@@ -2,14 +2,14 @@ import { getLastRun } from "agentview/sessionUtils";
 import { useEffect, useRef, useState } from "react";
 import { agentview } from "./agentview";
 import { invalidateCache } from "./swr-cache";
-import type { Session } from "agentview/apiTypes";
+import type { StandardSession } from "agentview/apiTypes";
 import { useRerender } from "../hooks/useRerender";
 
 
 export function useSession(
-    externalSession: Session,
-): { session: Session, createRun: (input: any) => Promise<void>, cancelRun: () => Promise<void>, isRunning: boolean } {
-    const [localSession, setLocalSession] = useState<Session | undefined>(undefined);
+    externalSession: StandardSession,
+): { session: StandardSession, createRun: (input: any) => Promise<void>, cancelRun: () => Promise<void>, isRunning: boolean } {
+    const [localSession, setLocalSession] = useState<StandardSession | undefined>(undefined);
 
     const activeSession = localSession ?? externalSession; // localSession overrides externalSession EVEN IF isWatching is false! This is by design.
     const lastRun = getLastRun(activeSession);
@@ -45,7 +45,7 @@ export function useSession(
                 console.log("[useSession] stream started for session", externalSession.id);
                 for await (const { session, event } of stream) {
                     console.log("[useSession] event", event.type, event.data);
-                    setLocalSession(session as Session);
+                    setLocalSession(session as StandardSession);
                     invalidateCache(`session:${session.id}`) // this could be direct *update* of cache.
                 }
             }
@@ -102,7 +102,7 @@ export function useSession(
 }
 
 
-function getLastActivityAt(session: Session): Date {
+function getLastActivityAt(session: StandardSession): Date {
     let lastUpdatedAt = new Date(session.updatedAt);
 
     const lastRun = getLastRun(session);

@@ -1,12 +1,12 @@
 import {
-  type Session,
+  type StandardSession,
   type User,
   type UserCreate,
-  type Run,
-  type RunCreate,
+  type StandardRun,
+  type StandardRunCreate,
   type ManualRunCreate,
   type ManualRunUpdate,
-  type SessionCreate,
+  type StandardSessionCreate,
   type SessionUpdate,
   type EnvironmentBase,
   type Environment,
@@ -107,12 +107,12 @@ export class AgentView {
     return await response.json()
   }
 
-  async createSession(options: SessionCreate) {
-    return enhanceSession(await this.request<Session>('POST', `/api/sessions/canonical`, options))
+  async createSession(options: StandardSessionCreate) {
+    return enhanceSession(await this.request<StandardSession>('POST', `/api/sessions/standard`, options))
   }
 
   async getSession(options: { id: string }) {
-    return enhanceSession(await this.request<Session>('GET', `/api/sessions/${options.id}/canonical`, undefined))
+    return enhanceSession(await this.request<StandardSession>('GET', `/api/sessions/${options.id}/standard`, undefined))
   }
 
   async getSessionComments(options: { id: string }) {
@@ -141,12 +141,12 @@ export class AgentView {
   }
 
   async updateSession(options: { id: string } & SessionUpdate) {
-    return enhanceSession(await this.request<Session>('PATCH', `/api/sessions/${options.id}`, options))
+    return enhanceSession(await this.request<StandardSession>('PATCH', `/api/sessions/${options.id}`, options))
   }
 
-  async createRun(options: RunCreate & { sessionId: string }): Promise<Run> {
+  async createRun(options: StandardRunCreate & { sessionId: string }): Promise<StandardRun> {
     const { sessionId, ...body } = options;
-    return await this.request<Run>('POST', `/api/sessions/${sessionId}/runs/canonical`, body)
+    return await this.request<StandardRun>('POST', `/api/sessions/${sessionId}/runs/standard`, body)
   }
 
   /**
@@ -154,7 +154,7 @@ export class AgentView {
    * Each yielded value is a parsed AI SDK chunk (the JSON from `data: <json>`).
    * The stream ends when `data: [DONE]` is received.
    */
-  async createRunStreamAISDK(options: RunCreate & { sessionId: string, signal?: AbortSignal }): Promise<AsyncGenerator<any, void, unknown>> {
+  async createRunStreamAISDK(options: StandardRunCreate & { sessionId: string, signal?: AbortSignal }): Promise<AsyncGenerator<any, void, unknown>> {
     const { sessionId, signal, ...body } = options;
     const response = await fetch(`${getApiUrl()}/api/sessions/${sessionId}/runs`, {
       method: 'POST',
@@ -175,17 +175,17 @@ export class AgentView {
     return parseAISDKDataStream(response);
   }
 
-  async createManualRun(options: ManualRunCreate & { sessionId: string }): Promise<Run> {
+  async createManualRun(options: ManualRunCreate & { sessionId: string }): Promise<StandardRun> {
     const { sessionId, ...body } = options;
-    return await this.request<Run>('POST', `/api/sessions/${sessionId}/runs/manual`, body)
+    return await this.request<StandardRun>('POST', `/api/sessions/${sessionId}/runs/manual`, body)
   }
 
-  async updateManualRun(options: ManualRunUpdate & { id: string }): Promise<Run> {
-    return await this.request<Run>('PATCH', `/api/runs/${options.id}/manual`, options)
+  async updateManualRun(options: ManualRunUpdate & { id: string }): Promise<StandardRun> {
+    return await this.request<StandardRun>('PATCH', `/api/runs/${options.id}/manual`, options)
   }
 
-  async cancelRun(options: { id: string }): Promise<Run> {
-    return await this.request<Run>('POST', `/api/runs/${options.id}/cancel`)
+  async cancelRun(options: { id: string }): Promise<StandardRun> {
+    return await this.request<StandardRun>('POST', `/api/runs/${options.id}/cancel`)
   }
 
   async keepAliveRun(options: { id: string }): Promise<{ expiresAt: string | null }> {
@@ -321,9 +321,9 @@ export class AgentView {
 
   async getSessionStream(options: { id: string, signal?: AbortSignal }): Promise<AsyncGenerator<{
     event: SessionStreamEvent;
-    session: Session;
+    session: StandardSession;
   }> | null> {
-    let url = `${getApiUrl()}/api/sessions/${options.id}/stream/canonical`;
+    let url = `${getApiUrl()}/api/sessions/${options.id}/stream/standard`;
 
     const response = await fetch(url, {
       method: 'GET',
@@ -342,7 +342,7 @@ export class AgentView {
       return null;
     }
 
-    let session: Session | undefined
+    let session: StandardSession | undefined
 
     return (async function* () {
       for await (const rawEvent of parseSSE(response)) {

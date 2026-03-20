@@ -1,10 +1,10 @@
-import type { RunBody, Session } from 'agentview/apiTypes';
+import type { RunBody, StandardSession } from 'agentview/apiTypes';
 import { callAgentAPI, type AgentAPIEvent } from '../agentApi';
 import { aiSDKAdapter } from './ai-sdk';
 
 export interface Adapter {
   callAgent: (body: RunBody, url: string, signal?: AbortSignal) => AsyncGenerator<AgentAPIEvent, void, unknown>;
-  enrichSession: (session: Session) => Record<string, any>;
+  enrichSession: (session: StandardSession) => Record<string, any>;
 }
 
 const agentviewAdapter = {

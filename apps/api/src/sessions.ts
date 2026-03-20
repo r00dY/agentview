@@ -2,7 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { endUsers, events, runs, sessionItems, sessions } from "./schemas/schema"
 import type { Transaction } from "./types";
 import { isUUID } from "./isUUID";
-import type { ChannelRef, Environment, Session } from "agentview/apiTypes";
+import type { ChannelRef, Environment, StandardSession } from "agentview/apiTypes";
 import { updateInboxes } from "./updateInboxes";
 import { parseMetadata } from "./parseMetadata";
 import { requireChannelConfig } from "agentview/baseConfigUtils";
@@ -36,7 +36,7 @@ export async function fetchLastRunStatus(
 }
 
 
-export async function fetchSession(tx: Transaction, session_id: string): Promise<Session | undefined> {
+export async function fetchSession(tx: Transaction, session_id: string): Promise<StandardSession | undefined> {
   let where : ReturnType<typeof eq> | undefined;
 
   if (isUUID(session_id)) { // id
@@ -117,7 +117,7 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
     state: state ?? row.initialState ?? null,
     agentRef: row.agentRef ?? null,
     agentRefs: row.agentRefs ?? []
-  } as Session;
+  } as StandardSession;
 }
 
 export async function createSession(tx: Transaction, params: {
@@ -131,7 +131,7 @@ export async function createSession(tx: Transaction, params: {
   authorId?: string | null;
   agentRefId?: string | null;
   initialState?: any;
-}): Promise<Session> {
+}): Promise<StandardSession> {
   const config = getConfigFromEnvironment(params.environment);
   const channelConfig = requireChannelConfig(config, params.channelRef);
 

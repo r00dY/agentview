@@ -12,11 +12,16 @@ const schemasToExport: Record<string, z.ZodTypeAny> = {
   User: schemas.UserSchema,
   UserCreate: schemas.UserCreateSchema,
 
-  Session: schemas.SessionSchema,
+  StandardSession: schemas.StandardSessionSchema,
   SessionBase: schemas.SessionBaseSchema,
-  SessionCreate: schemas.SessionCreateSchema,
+  StandardSessionCreate: schemas.StandardSessionCreateSchema,
   SessionUpdate: schemas.SessionUpdateSchema,
 
+  StandardRun: schemas.StandardRunSchema,
+  StandardRunCreate: schemas.StandardRunCreateSchema,
+
+  Session: schemas.SessionSchema,
+  SessionCreate: schemas.SessionCreateSchema,
   Run: schemas.RunSchema,
   RunCreate: schemas.RunCreateSchema,
   ManualRunCreate: schemas.ManualRunCreateSchema,

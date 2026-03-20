@@ -1,7 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { channelMessages, runs, sessionItems } from "./schemas/schema";
 import type { Transaction } from "./types";
-import { AgentViewError, type ChannelMessage, type SessionItem, type Run, type Session, type InputTarget } from "agentview";
+import { AgentViewError, type ChannelMessage, type SessionItem, type StandardRun, type StandardSession, type InputTarget } from "agentview";
 import { fetchSession } from "./sessions";
 
 export type SessionTarget = {
@@ -176,23 +176,23 @@ export async function resolveTarget(tx: Transaction, target: InputTarget): Promi
 // ids 
 
 export type SessionTargetWithObjects = SessionTarget & {
-    session: Session;
+    session: StandardSession;
 }
 
 export type RunTargetWithObjects = RunTarget & {
-    session: Session;
-    run: Run;
+    session: StandardSession;
+    run: StandardRun;
 }
 
 export type ChannelMessageTargetWithObjects = ChannelMessageTarget & {
-    session: Session;
-    run: Run;
+    session: StandardSession;
+    run: StandardRun;
     channelMessage: ChannelMessage;
 }
 
 export type SessionItemTargetWithObjects = SessionItemTarget & {
-    session: Session;
-    run: Run;
+    session: StandardSession;
+    run: StandardRun;
     sessionItem: SessionItem;
 }
 

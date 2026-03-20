@@ -23,12 +23,12 @@ import {
   EnvironmentSchema,
   SpaceSchema,
   PublicSessionsGetQueryParamsSchema,
-  RunCreateSchema,
+  StandardRunCreateSchema,
   ManualRunCreateSchema,
-  RunSchema,
+  StandardRunSchema,
   ManualRunUpdateSchema,
-  SessionCreateSchema,
-  SessionSchema,
+  StandardSessionCreateSchema,
+  StandardSessionSchema,
   SessionsGetQueryParamsSchema,
   SessionsPaginatedResponseSchema,
   SessionUpdateSchema,
@@ -36,7 +36,7 @@ import {
   ScoreSchema,
   UserCreateSchema,
   UserSchema,
-  type Session, type SessionItem,
+  type StandardSession, type SessionItem,
   type SessionsGetQueryParams,
   type User,
   type Space,
@@ -45,12 +45,12 @@ import {
   InputTargetSchema,
   type ChannelRef,
   type Environment,
-  AISDKSessionSchema,
-  AISDKSessionCreateSchema,
-  type AISDKSession,
-  AISDKRunCreateSchema,
+  SessionSchema,
+  SessionCreateSchema,
+  type Session,
+  RunCreateSchema,
   RunBaseSchema,
-  AISDKRunSchema,
+  RunSchema,
 } from 'agentview/apiTypes';
 import { type BaseAgentViewConfig, BaseConfigSchema, BaseConfigSchemaToZod } from 'agentview/baseConfigTypes';
 import { findChannelConfig, findItemConfigById, requireChannelConfig, requireRunConfig, getChannelAgent } from 'agentview/baseConfigUtils';
@@ -1025,16 +1025,16 @@ app.openapi(sessionsGETStatsRoute, async (c) => {
 
 const sessionGETRoute = createRoute({
   method: 'get',
-  path: '/api/sessions/{session_id}/canonical',
+  path: '/api/sessions/{session_id}/standard',
   summary: 'Retrieve a session',
-  tags: ['Canonical'],
+  tags: ['Standard'],
   request: {
     params: z.object({
       session_id: z.string(),
     }),
   },
   responses: {
-    200: response_data(SessionSchema),
+    200: response_data(StandardSessionSchema),
     404: response_error()
   },
 })
@@ -1065,14 +1065,14 @@ const sessionAISDKGETRoute = createRoute({
     }),
   },
   responses: {
-    200: response_data(AISDKSessionSchema),
+    200: response_data(SessionSchema),
     404: response_error()
   },
 })
 
 app.openapi(sessionAISDKGETRoute, async (c) => {
   const session = await sessionGETHandler(c);
-  return c.json(sessionToAISDKSession(session), 200);
+  return c.json(standardToDefaultSession(session), 200);
 })
 
 
@@ -1089,7 +1089,7 @@ const sessionPATCHRoute = createRoute({
     body: body(SessionUpdateSchema),
   },
   responses: {
-    200: response_data(SessionSchema),
+    200: response_data(StandardSessionSchema),
     401: response_error(),
     404: response_error(),
     422: response_error(),
@@ -1208,14 +1208,14 @@ app.openapi(sessionScoresGETRoute, async (c) => {
 
 const sessionsPOSTRoute = createRoute({
   method: 'post',
-  path: '/api/sessions/canonical',
+  path: '/api/sessions/standard',
   summary: 'Create a session',
-  tags: ['Canonical'],
+  tags: ['Standard'],
   request: {
-    body: body(SessionCreateSchema)
+    body: body(StandardSessionCreateSchema)
   },
   responses: {
-    201: response_data(SessionSchema),
+    201: response_data(StandardSessionSchema),
     422: response_error()
   },
 })
@@ -1284,7 +1284,7 @@ app.openapi(sessionsPOSTRoute, async (c) => {
   return c.json(newSession, 201);
 })
 
-function sessionToAISDKSession(session: Session) : AISDKSession {
+function standardToDefaultSession(session: StandardSession) : Session {
   const adapter = adapters["ai-sdk"];
   const aisdkFields = adapter.enrichSession(session);
   const { runs, ...sessionBase } = session;
@@ -1297,22 +1297,22 @@ const sessionsAISDKPOSTRoute = createRoute({
   summary: 'Create a session',
   tags: ['Sessions and Runs'],
   request: {
-    body: body(AISDKSessionCreateSchema)
+    body: body(SessionCreateSchema)
   },
   responses: {
-    201: response_data(AISDKSessionSchema),
+    201: response_data(SessionSchema),
     422: response_error()
   },
 })
 
 app.openapi(sessionsAISDKPOSTRoute, async (c) => {
   const newSession = await createSessionHandler(c);
-  return c.json(sessionToAISDKSession(newSession), 201);
+  return c.json(standardToDefaultSession(newSession), 201);
 })
 
 
 // watches session and its last run changes
-function getSessionStreamResponse(c: any, session: Session) {
+function getSessionStreamResponse(c: any, session: StandardSession) {
   const lastRun = getLastRun(session);
 
   if (!lastRun || lastRun.status !== 'in_progress') {
@@ -1343,7 +1343,7 @@ function getSessionStreamResponse(c: any, session: Session) {
   });
 }
 
-function getAISDKStreamResponse(c: any, session: Session) {
+function getAISDKStreamResponse(c: any, session: StandardSession) {
   const lastRun = getLastRun(session);
 
   if (lastRun?.status !== 'in_progress') {
@@ -1360,9 +1360,9 @@ function getAISDKStreamResponse(c: any, session: Session) {
 
 const sessionStreamRoute = createRoute({
   method: 'get',
-  path: '/api/sessions/{session_id}/stream/canonical',
+  path: '/api/sessions/{session_id}/stream/standard',
   summary: 'Stream updates',
-  tags: ['Canonical'],
+  tags: ['Standard'],
   request: {
     params: z.object({
       session_id: z.string(),
@@ -1479,14 +1479,14 @@ app.openapi(seenRoute, async (c) => {
 
 const runsPOSTRoute = createRoute({
   method: 'post',
-  path: '/api/sessions/{session_id}/runs/canonical',
+  path: '/api/sessions/{session_id}/runs/standard',
   summary: 'Create a run (auto-fetch)',
-  tags: ['Canonical'],
+  tags: ['Standard'],
   request: {
     params: z.object({
       session_id: z.string(),
     }),
-    body: body(RunCreateSchema.extend({
+    body: body(StandardRunCreateSchema.extend({
       stream: z.boolean().optional(),
     }))
   },
@@ -1497,7 +1497,7 @@ const runsPOSTRoute = createRoute({
           schema: z.string(),
         },
         'application/json': {
-          schema: RunSchema,
+          schema: StandardRunSchema,
         },
       },
       description: "Streams native AI SDK events",
@@ -1551,7 +1551,7 @@ const runsAISDKPOSTRoute = createRoute({
     params: z.object({
       session_id: z.string(),
     }),
-    body: body(AISDKRunCreateSchema.extend({
+    body: body(RunCreateSchema.extend({
       stream: z.boolean().optional(),
     }))
   },
@@ -1562,7 +1562,7 @@ const runsAISDKPOSTRoute = createRoute({
           schema: z.string(),
         },
         'application/json': {
-          schema: AISDKRunSchema,
+          schema: RunSchema,
         },
       },
       description: "Streams native AI SDK events",
@@ -1597,7 +1597,7 @@ const runCancelRoute = createRoute({
     })
   },
   responses: {
-    201: response_data(RunSchema),
+    201: response_data(StandardRunSchema),
     400: response_error(),
     404: response_error()
   },
@@ -1691,7 +1691,7 @@ const runsManualPOSTRoute = createRoute({
     body: body(ManualRunCreateSchema)
   },
   responses: {
-    201: response_data(RunSchema),
+    201: response_data(StandardRunSchema),
     400: response_error(),
     404: response_error()
   },
@@ -1732,7 +1732,7 @@ const runManualPATCHRoute = createRoute({
     body: body(ManualRunUpdateSchema)
   },
   responses: {
-    201: response_data(RunSchema),
+    201: response_data(StandardRunSchema),
     400: response_error(),
     404: response_error()
   },

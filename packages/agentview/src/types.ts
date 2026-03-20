@@ -1,6 +1,6 @@
 import type { RouteObject } from "react-router";
 import type { BaseScoreConfig, BaseSessionItemConfig, BaseAgentConfig, BaseAgentViewConfig, BaseRunConfig, BaseChannelConfig } from "./baseConfigTypes.js";
-import type { Run, Session, SessionBase, SessionItem } from "./apiTypes.js";
+import type { StandardRun, StandardSession, SessionBase, SessionItem } from "./apiTypes.js";
 import { enhanceSession } from "./sessionUtils.js";
 import { z } from "zod";
 
@@ -56,8 +56,8 @@ export type SessionItemDisplayComponentProps<TItemSchema extends z.ZodTypeAny = 
   item: z.infer<TItemSchema>,
   resultItem?: any, // fixme
   sessionItem: SessionItem;
-  run: Run;
-  session: Session;
+  run: StandardRun;
+  session: StandardSession;
 }
 
 export type SessionItemConfig = BaseSessionItemConfig<ScoreConfig> & {
@@ -68,7 +68,7 @@ export type SessionItemConfig = BaseSessionItemConfig<ScoreConfig> & {
 
 export type RunConfig = BaseRunConfig<SessionItemConfig, SessionItemConfig> & {
   title?: string;
-  displayProperties?: DisplayProperty<{ session: Session, run: Run }>[];
+  displayProperties?: DisplayProperty<{ session: StandardSession, run: StandardRun }>[];
   disableLike?: boolean;
 };
 

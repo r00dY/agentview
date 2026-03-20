@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { AgentView, configDefaults } from 'agentview'
-import type { User, Run, Session, SessionStreamEvent } from 'agentview';
+import type { User, StandardRun, StandardSession, SessionStreamEvent } from 'agentview';
 import { z } from 'zod';
 import { seedUsers } from './seedUsers';
 import { createMockServer, writeSSE, writeAISDKStream } from './mockServer';
@@ -144,7 +144,7 @@ describe('API', () => {
     return await av.createSession({ agent: "test", userId: initUser1.id })
   }
 
-  async function waitForRunStatus(sessionId: string, runId: string, statuses: string[], timeoutMs: number = 15000): Promise<Run> {
+  async function waitForRunStatus(sessionId: string, runId: string, statuses: string[], timeoutMs: number = 15000): Promise<StandardRun> {
     const startTime = Date.now();
     while (Date.now() - startTime < timeoutMs) {
       const session = await av.getSession({ id: sessionId });
@@ -367,7 +367,7 @@ describe('API', () => {
             userToken: initUser1.token
           })
 
-          const fetchedSession = await avPublic1.getSession({ id: session.id })as Session;
+          const fetchedSession = await avPublic1.getSession({ id: session.id })as StandardSession;
           expect(fetchedSession).toMatchObject(session)
         })
 
@@ -773,9 +773,9 @@ describe('API', () => {
       const PROD_USER_SESSIONS_COUNT = 20
       const TOTAL_SESSIONS_COUNT = USER_1_SESSIONS_COUNT + USER_2_SESSIONS_COUNT
 
-      let user1Sessions: Session[] = []
-      let user2Sessions: Session[] = []
-      let prodUserSessions: Session[] = []
+      let user1Sessions: StandardSession[] = []
+      let user2Sessions: StandardSession[] = []
+      let prodUserSessions: StandardSession[] = []
 
       let agentName = 'agent-for-testing-lists'
 
@@ -1186,7 +1186,7 @@ describe('API', () => {
 
               const session = await createSession()
 
-              let run: Run | undefined;
+              let run: StandardRun | undefined;
               let expected_history: any[] = [];
 
               for (const iteration of scenario) {
@@ -1229,7 +1229,7 @@ describe('API', () => {
                   }
                 }
                 else {
-                  run = await promise! as Run;
+                  run = await promise! as StandardRun;
                   expect(run.status).toBe(expectedStatus)
 
                   if (expectedHasFinishedAt) {
@@ -2029,7 +2029,7 @@ describe('API', () => {
         expect(stream).toBeNull();
 
 
-        // const events: Array<{ event: SessionStreamEvent; session: Session }> = [];
+        // const events: Array<{ event: SessionStreamEvent; session: StandardSession }> = [];
         // for await (const e of av.watchSession({ id: session.id })) {
         //   events.push(e);
         // }
@@ -2064,7 +2064,7 @@ describe('API', () => {
         expect(run.status).toBe("in_progress");
 
         // Collect events in background
-        const events: Array<{ event: SessionStreamEvent; session: Session }> = [];
+        const events: Array<{ event: SessionStreamEvent; session: StandardSession }> = [];
         const abortController = new AbortController();
 
         const watchPromise = (async () => {
@@ -2135,7 +2135,7 @@ describe('API', () => {
         });
 
         const abortController = new AbortController();
-        const events: Array<{ event: SessionStreamEvent; session: Session }> = [];
+        const events: Array<{ event: SessionStreamEvent; session: StandardSession }> = [];
 
         const watchPromise = (async () => {
           try {
@@ -2358,7 +2358,7 @@ describe('API', () => {
 
     
     async function collectSessionStream(stream: Awaited<ReturnType<typeof av.getSessionStream>>) {
-      const streamEvents: Array<{ event: SessionStreamEvent; session: Session }> = [];
+      const streamEvents: Array<{ event: SessionStreamEvent; session: StandardSession }> = [];
       for await (const e of stream!) {
         streamEvents.push(e);
       }

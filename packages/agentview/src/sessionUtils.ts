@@ -1,14 +1,14 @@
-import { type Run, type Session } from "./apiTypes.js"
+import { type StandardRun, type StandardSession } from "./apiTypes.js"
 
-export function getLastRun<SessionT extends Session>(session: SessionT): SessionT["runs"][number] | undefined {
+export function getLastRun<SessionT extends StandardSession>(session: SessionT): SessionT["runs"][number] | undefined {
   return session.runs.length > 0 ? session.runs[session.runs.length - 1] : undefined
 }
 
-export function getActiveRuns<SessionT extends Session>(session: SessionT): SessionT["runs"][number][] {
+export function getActiveRuns<SessionT extends StandardSession>(session: SessionT): SessionT["runs"][number][] {
   return session.runs.filter((run, index) => run.status !== 'failed' || index === session.runs.length - 1)
 }
 
-export function getAllSessionItems<SessionT extends Session>(session: SessionT, options?: { activeOnly?: boolean }): SessionT["runs"][number]["sessionItems"][number][] {
+export function getAllSessionItems<SessionT extends StandardSession>(session: SessionT, options?: { activeOnly?: boolean }): SessionT["runs"][number]["sessionItems"][number][] {
   const items: SessionT["runs"][number]["sessionItems"][number][] = []
   const activeRuns = options?.activeOnly ? getActiveRuns(session) : session.runs
   activeRuns.map((run, index) => {
@@ -17,7 +17,7 @@ export function getAllSessionItems<SessionT extends Session>(session: SessionT, 
   return items
 }
 
-export function getVersions(session: Session) {
+export function getVersions(session: StandardSession) {
   const versions: string[] = [];
   for (const run of session.runs) {
     if (run.agentRef?.version && !versions.includes(run.agentRef.version)) {
@@ -27,14 +27,14 @@ export function getVersions(session: Session) {
   return versions;
 }
 
-function enhanceRun(run: Run) {
+function enhanceRun(run: StandardRun) {
   return {
     ...run,
     items: run.sessionItems.map((sessionItem) => sessionItem.content),
   };
 }
 
-export function enhanceSession(session: Session) {
+export function enhanceSession(session: StandardSession) {
   const lastRun = getLastRun(session);
 
   return {

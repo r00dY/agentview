@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { type ChannelMessage, type CommentMessage, type InputTarget, type Run, type Score, type Session, type SessionBase, type SessionItem, type SessionsStats, type SessionStats } from "agentview/apiTypes";
+import { type ChannelMessage, type CommentMessage, type InputTarget, type StandardRun, type Score, type StandardSession, type SessionBase, type SessionItem, type SessionsStats, type SessionStats } from "agentview/apiTypes";
 import { findAgentConfig, findItemConfigById, findRunConfig, requireAgentConfig, requireChannelConfig } from "agentview/configUtils";
 import { enhanceSession, getActiveRuns, getAllSessionItems, getLastRun } from "agentview/sessionUtils";
 import type { AgentConfig, ChannelConfig, ScoreConfig, SessionItemConfig, SessionItemDisplayComponentProps } from "agentview/types";
@@ -124,7 +124,7 @@ function SessionPageSkeleton({ sessionBase }: { sessionBase: SessionBase }) {
     );
 }
 
-function SessionPage(props: { session: Session, comments: CommentMessage[], scores: Score[], sessionStats?: SessionStats }) {
+function SessionPage(props: { session: StandardSession, comments: CommentMessage[], scores: Score[], sessionStats?: SessionStats }) {
     // console.log('[SessionPage]');
     const loaderData = useLoaderData<typeof loader>();
     const revalidator = useRevalidator();
@@ -570,7 +570,7 @@ function SessionDetails({ sessionBase, channelConfig }: { sessionBase: SessionBa
     );
 }
 
-function ShareForm({ session }: { session: Session }) {
+function ShareForm({ session }: { session: StandardSession }) {
     const fetcher = useFetcher();
     const isProcessing = fetcher.state !== 'idle';
     return <fetcher.Form method="put" action={`/users/${session.user.id}/update`}>
@@ -611,7 +611,7 @@ function DefaultToolComponent({ item, resultItem }: SessionItemDisplayComponentP
     </Step>
 }
 
-function InputForm({ session, channelConfig, styles, createRun, cancelRun, isRunning }: { session: Session, channelConfig: ChannelConfig, styles: Record<string, number>, createRun: (input: any) => Promise<void>, cancelRun: () => Promise<void>, isRunning: boolean }) {
+function InputForm({ session, channelConfig, styles, createRun, cancelRun, isRunning }: { session: StandardSession, channelConfig: ChannelConfig, styles: Record<string, number>, createRun: (input: any) => Promise<void>, cancelRun: () => Promise<void>, isRunning: boolean }) {
     const lastRun = getLastRun(session)
 
     const submit2 = async (items: any[]) => {
@@ -654,11 +654,11 @@ export const sessionRoute: RouteObject = {
 }
 
 type MessageFooterProps = {
-    session: Session,
+    session: StandardSession,
     target: InputTarget,
     comments: CommentMessage[],
     scores: Score[],
-    run: Run,
+    run: StandardRun,
     listParams: ReturnType<typeof getListParams>,
     scoreConfigs: ScoreConfig[],
     onSelect: () => void,

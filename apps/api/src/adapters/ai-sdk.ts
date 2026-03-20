@@ -1,7 +1,7 @@
 import type { RunBody } from 'agentview/apiTypes';
 import { AgentAPIError, type AgentAPIEvent } from '../agentApi';
 import { expireRunStream, publishRunStreamEvent } from '../runStream';
-import type { Session, UIMessage } from 'agentview/apiTypes';
+import type { StandardSession, UIMessage } from 'agentview/apiTypes';
 import { type Adapter } from './adapters';
 
 interface AISDKChunk {
@@ -378,7 +378,7 @@ function getErrorObject(input: any): { message: string;[key: string]: any } {
     return { message: 'Unknown error', details: input };
 }
 
-function sessionToUIMessages(session: Session): UIMessage[] {
+function sessionToUIMessages(session: StandardSession): UIMessage[] {
     const messages: UIMessage[] = [];
 
     for (const run of session.runs) {
@@ -445,7 +445,7 @@ function sessionToUIMessages(session: Session): UIMessage[] {
 
 export const aiSDKAdapter = {
     callAgent: callAgentAPIAISDK,
-    enrichSession: (session: Session) => ({ 
+    enrichSession: (session: StandardSession) => ({ 
         messages: sessionToUIMessages(session),
         resume: session.runs[session.runs.length - 1]?.status === 'in_progress'
     }),
