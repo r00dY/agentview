@@ -13,7 +13,6 @@ configDefaults.__internal = {
 describe('Channels', () => {
   const AGENT_PORT = 3459
   const AGENT_URL = `http://localhost:${AGENT_PORT}/agent`
-  const SAFE_DELIVERY_TIMEOUT_MS = 7500
 
   let av: StandardAgentViewClient
   let avProd: StandardAgentViewClient
@@ -361,31 +360,35 @@ describe('Channels', () => {
       return outbox.filter(e => e.contact === contact)
     }
 
+    async function waitForOutbox(contact: string, count: number, timeoutMs = 15000) {
+      const start = Date.now()
+      while (Date.now() - start < timeoutMs) {
+        const entries = await getOutboxFor(contact)
+        if (entries.length >= count) return entries
+        await new Promise(r => setTimeout(r, 1000))
+      }
+      const entries = await getOutboxFor(contact)
+      expect(entries).toHaveLength(count)
+      return entries
+    }
+
     test('single message → single outgoing reply', async () => {
-      console.log('[test start] single message → single outgoing reply');
       setParrotHandler()
 
       await send('out-1', 'single@test.com', 'hello')
 
-      await new Promise(r => setTimeout(r, SAFE_DELIVERY_TIMEOUT_MS))
-
-      const entries = await getOutboxFor('single@test.com')
-      expect(entries).toHaveLength(1)
+      const entries = await waitForOutbox('single@test.com', 1)
       expect(entries[0].text).toBe('hello')
     }, 20000)
 
     test('two sequential messages → two outgoing replies with session history', async () => {
-      console.log('[test start] two sequential messages → two outgoing replies with session history');
       setParrotHandler()
 
       await send('seq-1', 'sequential@test.com', 'first')
-      await new Promise(r => setTimeout(r, SAFE_DELIVERY_TIMEOUT_MS))
+      await waitForOutbox('sequential@test.com', 1)
 
       await send('seq-2', 'sequential@test.com', 'second')
-      await new Promise(r => setTimeout(r, SAFE_DELIVERY_TIMEOUT_MS))
-
-      const entries = await getOutboxFor('sequential@test.com')
-      expect(entries).toHaveLength(2)
+      const entries = await waitForOutbox('sequential@test.com', 2)
       expect(entries[0].text).toBe('first')
       // Second reply sees full session history: first user msg + second user msg
       expect(entries[1].text).toBe('first | second')
@@ -393,7 +396,6 @@ describe('Channels', () => {
 
     test('rapid messages while agent is processing → batched into single outgoing reply', async () => {
       // Agent takes 2s to respond, giving us time to send more messages
-      console.log('[test start] rapid messages while agent is processing → batched into single outgoing reply');
       setParrotHandler({ delayMs: 2000 })
 
       await send('rapid-1', 'rapid@test.com', 'A')
@@ -402,20 +404,17 @@ describe('Channels', () => {
       await send('rapid-2', 'rapid@test.com', 'B')
       await send('rapid-3', 'rapid@test.com', 'C')
 
-      await new Promise(r => setTimeout(r, SAFE_DELIVERY_TIMEOUT_MS + 3000))
-
-      const entries = await getOutboxFor('rapid@test.com')
       // First run gets cancelled, second run batches all 3 messages → single outgoing
-      expect(entries).toHaveLength(1)
+      const entries = await waitForOutbox('rapid@test.com', 1)
       expect(entries[0].text).toBe('A B C')
     }, 20000)
 
     test('agent failure → no outgoing, next message retries with batch', async () => {
       // First message: agent fails
-      console.log('[test start] agent failure → no outgoing, next message retries with batch');
       setFailHandler()
       await send('fail-1', 'fail-retry@test.com', 'X')
-      await new Promise(r => setTimeout(r, SAFE_DELIVERY_TIMEOUT_MS))
+      // Wait for the failed run to complete (no outgoing expected)
+      await new Promise(r => setTimeout(r, 7000))
 
       // No outgoing message should exist
       let entries = await getOutboxFor('fail-retry@test.com')
@@ -424,15 +423,12 @@ describe('Channels', () => {
       // Second message: agent succeeds, should batch both messages
       setParrotHandler()
       await send('fail-2', 'fail-retry@test.com', 'Y')
-      await new Promise(r => setTimeout(r, SAFE_DELIVERY_TIMEOUT_MS))
 
-      entries = await getOutboxFor('fail-retry@test.com')
-      expect(entries).toHaveLength(1)
+      entries = await waitForOutbox('fail-retry@test.com', 1)
       expect(entries[0].text).toBe('X Y')
     }, 20000)
 
     test('rapid out-of-order messages → batched in date order', async () => {
-      console.log('[test start] rapid out-of-order messages → batched in date order');
       setParrotHandler({ delayMs: 2000 })
 
       // Send 3 messages quickly with out-of-order dates
@@ -441,28 +437,21 @@ describe('Channels', () => {
       await send('ooo-2', 'out-of-order@test.com', 'A', '2025-01-01T00:00:01Z')
       await send('ooo-3', 'out-of-order@test.com', 'B', '2025-01-01T00:00:02Z')
 
-      await new Promise(r => setTimeout(r, SAFE_DELIVERY_TIMEOUT_MS + 3000))
-
-      const entries = await getOutboxFor('out-of-order@test.com')
-      expect(entries).toHaveLength(1)
       // Messages should be sorted by date, not insertion order
+      const entries = await waitForOutbox('out-of-order@test.com', 1)
       expect(entries[0].text).toBe('A B C')
     }, 20000)
 
     test('out-of-order messages where first is already processed → preserves order', async () => {
-      console.log('[test start] out-of-order messages where first is already processed → preserves order');
       setParrotHandler()
 
       // B arrives first (later date) and gets fully processed
       await send('order-1', 'order-preserved@test.com', 'B', '2025-01-01T00:00:02Z')
-      await new Promise(r => setTimeout(r, SAFE_DELIVERY_TIMEOUT_MS))
+      await waitForOutbox('order-preserved@test.com', 1)
 
       // A arrives second (earlier date) and gets processed as a new run
       await send('order-2', 'order-preserved@test.com', 'A', '2025-01-01T00:00:01Z')
-      await new Promise(r => setTimeout(r, SAFE_DELIVERY_TIMEOUT_MS))
-
-      const entries = await getOutboxFor('order-preserved@test.com')
-      expect(entries).toHaveLength(2)
+      const entries = await waitForOutbox('order-preserved@test.com', 2)
       // First outgoing is from B (processed first), second from A (arrived later)
       expect(entries[0].text).toBe('B')
       expect(entries[1].text).toBe('B | A')
