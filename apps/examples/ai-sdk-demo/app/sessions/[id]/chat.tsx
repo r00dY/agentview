@@ -29,13 +29,12 @@ export function ChatUI(props: {
       prepareSendMessagesRequest: ({ id, messages }) => ({
         api: `http://localhost:1990/api/sessions/${id}/runs`,
         body: {
-          adapter: "ai-sdk",
-          stream: true,
           input: messages[messages.length - 1],
+          stream: true
         },
       }),
       prepareReconnectToStreamRequest: ({ id }) => ({
-        api: `http://localhost:1990/api/sessions/${id}/stream?adapter=ai-sdk`,
+        api: `http://localhost:1990/api/sessions/${id}/stream`,
       }),
     }),
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
