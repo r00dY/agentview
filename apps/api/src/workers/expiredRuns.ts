@@ -25,11 +25,14 @@ export const expiredRunsWorker = createWorker<Run>({
       .returning();
   },
   async process(run) {
-    await withOrg(run.organizationId, async (tx) => {
-      await applyRunPatch(tx, run.id, null, {
+    await applyRunPatch(
+      run.id,
+      run.organizationId,
+      null,
+      {
         status: 'failed',
         failReason: { message: 'Timeout' },
-      });
-    });
+      }
+    );
   },
 });

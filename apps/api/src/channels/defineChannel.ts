@@ -239,7 +239,8 @@ export function channelProvider(type: string) {
       if (lastRun?.status === 'in_progress') {
         console.log('[ingestMessage] cancelling last run');
 
-        await applyRunPatch(tx, lastRun.id, environment, { status: 'cancelled' });
+        // this is not inside of transaction!
+        await applyRunPatch(lastRun.id, thread.organizationId, environment, { status: 'cancelled' });
       }
       else {
         console.log('[ingestMessage] last run is not in progress');

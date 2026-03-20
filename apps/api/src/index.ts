@@ -1284,7 +1284,7 @@ app.openapi(sessionsPOSTRoute, async (c) => {
   return c.json(newSession, 201);
 })
 
-function standardToDefaultSession(session: StandardSession) : Session {
+function standardToDefaultSession(session: StandardSession): Session {
   const adapter = adapters["ai-sdk"];
   const aisdkFields = adapter.enrichSession(session);
   const { runs, ...sessionBase } = session;
@@ -1391,7 +1391,7 @@ const sessionStreamHandler = async (c: Parameters<RouteHandler<typeof sessionStr
   const session = await withOrg(principal.organizationId, async (tx) => requireSession(tx, session_id))
 
   authorize(principal, { action: "end-user:read", user: session.user });
-  
+
   return session;
 }
 
@@ -1605,10 +1605,10 @@ const sessionStandardCancelRoute = createRoute({
 
 async function sessionStandardCancelHandler(c: Parameters<RouteHandler<typeof sessionCancelRoute>>[0]) {
   const principal = await authnAllowPublic(c.req.raw.headers)
-  
+
   const { session_id } = c.req.param()
 
-  return withOrg(principal.organizationId, async (tx) => {
+  const { lastRun, environment } = await withOrg(principal.organizationId, async (tx) => {
     const session = await requireSession(tx, session_id);
     const lastRun = getLastRun(session);
 
@@ -1620,9 +1620,13 @@ async function sessionStandardCancelHandler(c: Parameters<RouteHandler<typeof se
       throw new AgentViewError("Cannot cancel a run that is not in progress.", 422);
     }
 
-    await applyRunPatch(tx, lastRun.id, environment, { status: 'cancelled' });
+    return { lastRun, environment };
+  });
 
-    return await requireSession(tx, session.id);
+  await applyRunPatch(lastRun.id, principal.organizationId, environment, { status: 'cancelled' });
+
+  return withOrg(principal.organizationId, async (tx) => {
+    return await requireSession(tx, session_id);
   });
 }
 
@@ -1771,7 +1775,7 @@ app.openapi(runManualPATCHRoute, async (c) => {
 
   const body = await c.req.valid('json')
 
-  return withOrg(principal.organizationId, async (tx) => {
+  const { run, environment, session } = await withOrg(principal.organizationId, async (tx) => {
     const run = await requireRun(tx, run_id);
     const session = await requireSession(tx, run.sessionId);
 
@@ -1784,15 +1788,18 @@ app.openapi(runManualPATCHRoute, async (c) => {
 
     const environment = await requireEnvironment(tx, principal.env);
 
-    await applyRunPatch(tx, run.id, environment, body);
+    return { run, environment, session };
+  })
 
+
+  await applyRunPatch(run.id, principal.organizationId, environment, body);
+
+  return withOrg(principal.organizationId, async (tx) => {
     const updatedSession = await requireSession(tx, session.id);
     const newRun = getLastRun(updatedSession)!;
-
     return c.json(newRun, 201);
   })
-})
-
+});
 
 /* --------- FLAT COMMENTS API --------- */
 

@@ -231,14 +231,12 @@ async function processAgentFetch(run: Run) {
         });
       }
       else if (event.name === 'run.patch') {
-        await withOrg(run.organizationId, async (tx) => {
-          await applyRunPatch(
-            tx,
-            run.id,
-            environment,
-            event.data
-          );
-        });
+        await applyRunPatch(
+          run.id,
+          run.organizationId,
+          environment,
+          event.data
+        );
       }
       else if (event.name === 'channel.reply') {
         try {
@@ -289,12 +287,11 @@ async function processAgentFetch(run: Run) {
 
     console.log(`[agentFetch][${run.id}] error: ${errorMessage}`);
 
-    await withOrg(run.organizationId, async (tx) => {
-      await applyRunPatch(tx, run.id, null, {
-        status: 'failed',
-        failReason: { message: errorMessage },
-      });
+    await applyRunPatch(run.id, run.organizationId, null, {
+      status: 'failed',
+      failReason: { message: errorMessage },
     });
+
   } finally {
     console.log(`[agentFetch][${run.id}] finished`);
 

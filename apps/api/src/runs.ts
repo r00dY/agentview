@@ -11,6 +11,7 @@ import { getLastRun } from 'agentview/sessionUtils';
 import { fetchSession } from './sessions';
 import { getConfigFromEnvironment } from './environments';
 import { publishRunStreamEvent } from './runStream';
+import { withOrg } from './withOrg';
 
 export const DEFAULT_IDLE_TIME = 1000 * 60; // 60 seconds
 
@@ -140,12 +141,15 @@ export async function getRun(tx: Transaction, runId: string) {
  * Validates items, metadata, status transitions, inserts items, and updates the run.
  */
 export async function applyRunPatch(
-  tx: Transaction,
   runId: string,
+  organizationId: string,
   environment: Environment | null,
   body: ManualRunUpdate
 ) {
-  const run = await getRun(tx, runId);
+  const run = await withOrg(organizationId, async (tx) => {
+    return await getRun(tx, runId);
+  });
+
   if (!run) {
     throw new AgentViewError("Run not found.", 404);
   }
@@ -230,44 +234,48 @@ export async function applyRunPatch(
   }
 
   let insertedItems: any[] = [];
-  if (parsedItems.length > 0) {
-    insertedItems = await tx.insert(sessionItems).values(
-      parsedItems.map(item => ({
+
+  await withOrg(organizationId, async (tx) => {
+    if (parsedItems.length > 0) {
+      insertedItems = await tx.insert(sessionItems).values(
+        parsedItems.map(item => ({
+          organizationId: run.organizationId,
+          sessionId: run.sessionId,
+          content: item,
+          runId: run.id,
+          type: 'step' as const,
+        }))
+      ).returning();
+    }
+
+    await tx.update(runs).set({
+      status,
+      metadata,
+      failReason,
+      finishedAt,
+      expiresAt,
+      updatedAt: nowIso,
+    }).where(eq(runs.id, run.id));
+
+    if (body.state !== undefined) {
+      await tx.insert(sessionItems).values({
         organizationId: run.organizationId,
         sessionId: run.sessionId,
-        content: item,
+        content: body.state,
         runId: run.id,
-        type: 'step' as const,
-      }))
-    ).returning();
-  }
+        isState: true,
+      });
+    }
 
-  await tx.update(runs).set({
-    status,
-    metadata,
-    failReason,
-    finishedAt,
-    expiresAt,
-    updatedAt: nowIso,
-  }).where(eq(runs.id, run.id));
+    /** Mark output items on completion */
+    if (status === 'completed' && runConfig) {
+      const outputItemCount = body.outputItemCount ?? 1;
+      await markOutputItems(tx, run.id, outputItemCount, runConfig);
+    }
 
-  if (body.state !== undefined) {
-    await tx.insert(sessionItems).values({
-      organizationId: run.organizationId,
-      sessionId: run.sessionId,
-      content: body.state,
-      runId: run.id,
-      isState: true,
-    });
-  }
+  });
 
-  /** Mark output items on completion */
-  if (status === 'completed' && runConfig) {
-    const outputItemCount = body.outputItemCount ?? 1;
-    await markOutputItems(tx, run.id, outputItemCount, runConfig);
-  }
-
-  // Publish to Redis stream
+  // Publish to Redis stream only after transaction finished successfully in DB
   const dataToStream = JSON.stringify({
     ...body,
     items: insertedItems,
@@ -278,13 +286,14 @@ export async function applyRunPatch(
   if (isFinished) {
     await publishRunStreamEvent(runId, 'agentview', null, '[DONE]');
 
-    // finish external adapter stream (ai-sdk)
-    if (run.agentRef?.adapter === 'ai-sdk') {
+    if (run.agentRef?.adapter === 'ai-sdk') { // finish external adapter stream (ai-sdk)
       await publishRunStreamEvent(runId, 'ai-sdk', null, '[DONE]');
     }
   }
 
-  return (await getRun(tx, runId))!;
+  return (await withOrg(organizationId, async (tx) => {
+    return await getRun(tx, runId);
+  }))!;
 }
 
 /**
