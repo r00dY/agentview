@@ -10,6 +10,7 @@ import { findChannelConfig, getChannelAgent } from 'agentview/baseConfigUtils';
 import { applyRunPatch } from '../runs';
 import { resolveAgentRef, upsertAgentRef } from '../agentRefs';
 import type { AgentRef, RunBody } from 'agentview/apiTypes';
+import { onRunStreamDone } from '../runStream';
 import { createWorker } from './utils';
 
 type Run = typeof runs.$inferSelect;
@@ -40,7 +41,8 @@ export const agentFetchWorker = createWorker<Run>({
 async function processAgentFetch(run: Run) {
   console.log(`[agentFetch][${run.id}] start`);
 
-  const abortController = new AbortController();
+  const fetchAbortController = new AbortController();
+  let doneWatchAbortController: AbortController | undefined;
 
   try {
     // Fetch session within org context
@@ -185,15 +187,21 @@ async function processAgentFetch(run: Run) {
       });
     }
 
+    // Abort fetch immediately when [DONE] appears on the stream (e.g. external cancellation) -> this is for speed instead of waiting for the next event + DB poll.
+    doneWatchAbortController = onRunStreamDone(run.id, 'agentview', () => {
+      console.log(`[agentFetch][${run.id}] [DONE] received on stream, aborting fetch`);
+      fetchAbortController.abort()
+    });
+
     console.log(`[agentFetch][${run.id}] calling agent API`);
 
-    for await (const event of adapter.callAgent(body, agentUrl, abortController.signal)) {
+    for await (const event of adapter.callAgent(body, agentUrl, fetchAbortController.signal)) {
       console.log(`[agentFetch][${run.id}] event: ${event.name}`);
       // Check for external cancellation after each event received.
       const runStatus = await getCurrentRunStatus();
       if (runStatus === 'cancelled') {
         console.log(`[agentFetch][${run.id}] cancelled, aborting`);
-        abortController.abort();
+        fetchAbortController.abort();
         break;
       }
 
@@ -293,6 +301,7 @@ async function processAgentFetch(run: Run) {
     });
 
   } finally {
+    doneWatchAbortController?.abort();
     console.log(`[agentFetch][${run.id}] finished`);
 
     // Always clear fetchStatus when done (if not already cleared)

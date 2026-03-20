@@ -350,22 +350,26 @@ async function* callAgentAPIAISDK(
                     break;
             }
         }
-    } catch (error: unknown) {
-        console.log('[ai-sdk] Error: ', (error as any)?.message ?? 'Unknown error');
 
-        if (error instanceof AgentAPIError) {
-            throw error;
-        } else if (error instanceof Error) {
-            
-            throw new AgentAPIError({
-                message: 'Agent API connection error: ' + error.message,
-                cause: error.cause,
-            });
-        } else {
-            throw error;
-        }
-    } finally {
         console.log('[ai-sdk] Stream finished');
+    } catch (error: unknown) {
+        console.error('[ai-sdk] Stream error: ', (error as any)?.message ?? 'Unknown error');
+
+        throw error;
+
+        // if (error instanceof AgentAPIError) {
+        //     throw error;
+        // } else if (error instanceof Error) {
+            
+        //     throw new AgentAPIError({
+        //         message: 'Agent API connection error: ' + error.message,
+        //         cause: error.cause,
+        //     });
+        // } else {
+        //     throw error;
+        // }
+    } finally {
+        // console.log('[ai-sdk] Stream finished');
         // await publishRunStreamEvent(currentRun.id, 'ai-sdk', new Date().toISOString(), "[DONE]");
     }
 }

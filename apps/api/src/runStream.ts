@@ -18,6 +18,28 @@ export async function expireRunStream(runId: string, adapter: string) {
   await redis.expire(key, 60);
 }
 
+/**
+ * Calls `onDone` when [DONE] appears on the run stream. Returns a cleanup function.
+ */
+export function onRunStreamDone(runId: string, adapter: string, onDone: () => void) {
+  const abortController = new AbortController();
+
+  (async () => {
+    try {
+      for await (const data of consumeRunStream(runId, adapter, abortController.signal)) {
+        if (data === '[DONE]') {
+          onDone();
+          return;
+        }
+      }
+    } catch {
+      // Expected on cleanup
+    }
+  })();
+
+  return abortController
+}
+
 export async function* consumeRunStream(
   runId: string,
   adapter: string,

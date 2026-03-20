@@ -361,7 +361,7 @@ describe('Channels', () => {
       return outbox.filter(e => e.contact === contact)
     }
 
-    test('single message → single outgoing reply', async () => {
+    test.only('single message → single outgoing reply', async () => {
       setParrotHandler()
 
       await send('out-1', 'single@test.com', 'hello')

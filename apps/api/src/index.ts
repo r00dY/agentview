@@ -1352,7 +1352,6 @@ function getAISDKStreamResponse(c: any, session: StandardSession) {
 
   return streamSSE(c, async (stream) => {
     for await (const data of consumeRunStream(lastRun.id, 'ai-sdk', c.req.raw.signal)) { // we stream from the beginning
-      if (c.req.raw.signal.aborted) { return }; // TODO: we can remove it?, consumeRunStream already does it
       await stream.writeSSE({ data });
     }
   });
