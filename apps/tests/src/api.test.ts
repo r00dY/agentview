@@ -2534,7 +2534,7 @@ describe('API', () => {
       expect(finalRun.failReason).toBeDefined();
     }, 30000);
 
-    test.only("bad HTTP response: agent returns 500 → run marked failed", async () => {
+    test("bad HTTP response: agent returns 500 → run marked failed", async () => {
       await updateConfigWithUrl();
       const session = await av.createSession({ agent: "test", userId: initUser1.id});
 
