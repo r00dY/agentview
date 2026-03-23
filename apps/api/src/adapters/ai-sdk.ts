@@ -3,6 +3,7 @@ import { AgentAPIError, type AgentAPIEvent } from '../agentApi';
 import { expireRunStream, publishRunStreamEvent } from '../runStream';
 import type { StandardSession, UIMessage } from 'agentview/apiTypes';
 import { type Adapter } from './adapters';
+import { redis } from '../redis';
 
 interface AISDKChunk {
     type: string;
@@ -124,38 +125,36 @@ async function* callAgentAPIAISDK(
             signal,
         });
 
-        // Yield response_data (same as callAgentAPI)
-        const responseData: any = {
-            request: {
-                url,
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: { messages },
-            },
-            response: {
-                status: response.status,
-                statusText: response.statusText,
-                headers: Object.fromEntries(response.headers.entries()),
-            },
-        };
-
-        yield { name: 'response_data', data: responseData };
-
+        // Let's see whether Response is successful and has body.
+        let error : string | undefined = undefined;
         if (!response.ok) {
-            const content = tryParseJSON(await response.text());
-            responseData.response.body = content;
-            yield { name: 'response_data', data: responseData };
-
-            const error = getErrorObject(content);
-            throw new AgentAPIError({
-                ...error,
-                message: `HTTP error response (${response.status}): ${error.message}`,
-            });
+            error = await response.text();
+        }
+        else if (!response.body) {
+            error = 'No response body';
         }
 
-        if (!response.body) {
-            throw new AgentAPIError({ message: 'No response body' });
+        // Close run on error
+        if (error) {
+            yield {
+                name: 'run.patch',
+                data: {
+                    status: 'failed',
+                    failReason: {
+                        message: error
+                    },
+                },
+            };
         }
+
+        // Publish the response to Redis!
+        await publishRunStreamEvent(currentRun.id, 'ai-sdk', null, JSON.stringify({
+            type: '__response__',
+            status: response.status,
+            statusText: response.statusText,
+            headers: Object.fromEntries(response.headers.entries()),
+            stream: !error
+        }));
 
         // Parse AI SDK stream and convert to run.patch events
         const textBuffers = new Map<string, string>();
@@ -171,7 +170,7 @@ async function* callAgentAPIAISDK(
          * 1. We first send event to "our system" (yield), and it's blocking
          * 2. Only then we send event to stream. 
          */
-        for await (const data of parseAISDKStream(response.body)) {
+        for await (const data of parseAISDKStream(response.body!)) {
             if (data === '[DONE]') { // done is end of stream. We send it ourselves in the finally block.
                 break;
             }
@@ -358,7 +357,7 @@ async function* callAgentAPIAISDK(
 
             // we just mirror native chunks to the stream.
             console.log('[ai-sdk] STREAM EVENT', chunk)
-            publishRunStreamEvent(currentRun.id, 'ai-sdk', null, JSON.stringify(chunk));
+            await publishRunStreamEvent(currentRun.id, 'ai-sdk', null, JSON.stringify(chunk));
         }
 
         console.log('[ai-sdk] Stream success');
@@ -462,6 +461,7 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
 
     return messages;
 }
+
 
 export const aiSDKAdapter = {
     callAgent: callAgentAPIAISDK,
