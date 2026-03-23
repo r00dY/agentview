@@ -167,15 +167,12 @@ async function* callAgentAPIAISDK(
 
         console.log('[ai-sdk] Starting stream');
 
+        /**
+         * 1. We first send event to "our system" (yield), and it's blocking
+         * 2. Only then we send event to stream. 
+         */
         for await (const data of parseAISDKStream(response.body)) {
-            /**
-             * WE DO NOT SEND [DONE] HERE AND IT'S IMPORTANT!!!
-             * 
-             * [done] literally closes the stream, so after the stream closes external apps assume the state of the system is already correct. We can't send [done] prematurely becasue concecutive getSession would get the old state.
-             * That's why [done] is conditionally sent in the applyRunPatch in the final phase. (it's exception)
-             * 
-             */
-            if (data === '[DONE]') {
+            if (data === '[DONE]') { // done is end of stream. We send it ourselves in the finally block.
                 break;
             }
 
@@ -184,8 +181,6 @@ async function* callAgentAPIAISDK(
             if (chunk.type === 'start' && !chunk.messageId) {
                 chunk.messageId = currentRun.id + '-input';
             }
-
-            publishRunStreamEvent(currentRun.id, 'ai-sdk', new Date().toISOString(), JSON.stringify(chunk));
 
             switch (chunk.type) {
                 case 'start': {
@@ -233,6 +228,8 @@ async function* callAgentAPIAISDK(
                     const text = reasoningBuffers.get(chunk.id) ?? '';
                     reasoningBuffers.delete(chunk.id);
                     emittedItemTypes.push('reasoning');
+
+                    console.log('[ai-sdk] yield run.patch for', chunk)
                     yield {
                         name: 'run.patch',
                         data: { items: [{ type: 'reasoning', text }] },
@@ -268,6 +265,7 @@ async function* callAgentAPIAISDK(
                     const state = toolStates.get(chunk.toolCallId);
                     if (state) {
                         emittedItemTypes.push('tool-call');
+                        console.log('[ai-sdk] yield run.patch for', chunk)
                         yield {
                             name: 'run.patch',
                             data: {
@@ -290,6 +288,7 @@ async function* callAgentAPIAISDK(
                     const state = toolStates.get(chunk.toolCallId);
                     if (state) {
                         emittedItemTypes.push('tool-call');
+                        console.log('[ai-sdk] yield run.patch for', chunk)
                         yield {
                             name: 'run.patch',
                             data: {
@@ -313,6 +312,8 @@ async function* callAgentAPIAISDK(
                         messageMetadata = chunk.messageMetadata;
                     }
                     const outputCount = computeOutputItemCount(emittedItemTypes);
+                    console.log('[ai-sdk] yield run.patch COMPLETED for', chunk)
+
                     yield {
                         name: 'run.patch',
                         data: {
@@ -322,18 +323,22 @@ async function* callAgentAPIAISDK(
                             ...(messageMetadata !== undefined ? { metadata: messageMetadata } : {}),
                         },
                     };
-
-                    // if (isChannelRun) {
-                    //     const replyText = outputTexts.filter(Boolean).join('\n\n');
-                    //     yield { name: 'channel.reply', data: { text: replyText } };
-                    // }
                     break;
                 }
 
                 case 'error': {
-                    throw new AgentAPIError({
-                        message: chunk.errorText ?? 'Unknown error from AI SDK stream',
-                    });
+                    console.log('[ai-sdk] yield run.patch ERROR for', chunk)
+
+                    yield {
+                        name: 'run.patch',
+                        data: {
+                            status: 'failed',
+                            failReason: {
+                                message: chunk.errorText ?? 'Unknown error from AI SDK stream',
+                            },
+                        },
+                    };
+                    break;
                 }
 
                 // Ignore other events: start-step, finish-step, source-url, file, etc.
@@ -350,12 +355,15 @@ async function* callAgentAPIAISDK(
                     console.log('[ai-sdk] Ignored chunk: ', chunk.type);
                     break;
             }
+
+            // we just mirror native chunks to the stream.
+            console.log('[ai-sdk] STREAM EVENT', chunk)
+            publishRunStreamEvent(currentRun.id, 'ai-sdk', null, JSON.stringify(chunk));
         }
 
-        console.log('[ai-sdk] Stream finished');
+        console.log('[ai-sdk] Stream success');
     } catch (error: unknown) {
-        console.error('[ai-sdk] Stream error: ', (error as any)?.message ?? 'Unknown error');
-
+        console.error('[ai-sdk] Internal stream error: ', (error as any)?.message ?? 'Unknown error');
         throw error;
 
         // if (error instanceof AgentAPIError) {
@@ -370,8 +378,8 @@ async function* callAgentAPIAISDK(
         //     throw error;
         // }
     } finally {
-        // console.log('[ai-sdk] Stream finished');
-        // await publishRunStreamEvent(currentRun.id, 'ai-sdk', new Date().toISOString(), "[DONE]");
+        console.log('[ai-sdk] Stream cleanup, sending [DONE]');
+        await publishRunStreamEvent(currentRun.id, 'ai-sdk', null, "[DONE]");
     }
 }
 

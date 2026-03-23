@@ -21,12 +21,12 @@ export async function expireRunStream(runId: string, adapter: string) {
 /**
  * Calls `onTerminated` when [TERMINATED] appears on the run stream. Returns a cleanup function.
  */
-export function onRunTerminated(runId: string, adapter: string, onTerminated: () => void) {
+export function onRunTerminated(runId: string, onTerminated: () => void) {
   const abortController = new AbortController();
 
   (async () => {
     try {
-      for await (const data of consumeRunStreamRaw(runId, adapter, abortController.signal)) {
+      for await (const data of consumeRunStreamRaw(runId, 'agentview', abortController.signal)) {
         if (data === '[TERMINATED]') {
           onTerminated();
           return;

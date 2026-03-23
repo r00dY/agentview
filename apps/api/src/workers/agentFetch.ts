@@ -188,7 +188,7 @@ async function processAgentFetch(run: Run) {
     }
 
     // Abort fetch immediately when run is terminated (e.g. external cancellation).
-    terminationAbortController = onRunTerminated(run.id, 'agentview', () => {
+    terminationAbortController = onRunTerminated(run.id, () => {
       console.log(`[agentFetch][${run.id}] terminated, aborting`);
       fetchAbortController.abort()
     });

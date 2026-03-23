@@ -305,9 +305,8 @@ export async function applyRunPatch(
   await publishRunStreamEvent(runId, 'agentview', nowIso, dataToStream);
 
   if (isFinished) {
-    finishRunStreams(run, '[DONE]');
+    await publishRunStreamEvent(runId, 'agentview', null, '[DONE]');
   }
-
 }
 
 /**
@@ -323,6 +322,8 @@ export async function applyRunPatch(
  * - when we listened to [done] event on redis streams in agent API call, even if integration called apply patch with "complete" / "failed" correctly. In that case we should not abort agent API call. That's why termination is different "path" in our system.
  */
 export async function terminateRun(runId: string, organizationId: string, body: { status: 'cancelled' } | { status: 'failed', failReason: any }) {
+  const nowIso = new Date().toISOString();
+
   await withOrg(organizationId, async (tx) => {
     const run = await getRun(tx, runId);
 
@@ -333,29 +334,29 @@ export async function terminateRun(runId: string, organizationId: string, body: 
       throw new AgentViewError("Cannot terminate a run that is not in progress.", 422);
     }
 
-    const nowIso = new Date().toISOString();
     await tx.update(runs).set({
       ...body,
       finishedAt: nowIso,
       updatedAt: nowIso,
       expiresAt: null,
     }).where(eq(runs.id, runId));
-
-    await publishRunStreamEvent(runId, 'agentview', nowIso, JSON.stringify({ // this is important, we must send the last run patch event to the stream
-      ...body,
-      updatedAt: nowIso,
-    }));
-
-    finishRunStreams(run, '[TERMINATED]');
   });
+
+  await publishRunStreamEvent(runId, 'agentview', nowIso, JSON.stringify({ // this is important, we must send the last run patch event to the stream
+    ...body,
+    updatedAt: nowIso,
+  }));
+
+  await publishRunStreamEvent(runId, 'agentview', null, '[TERMINATED]');
 }
 
-async function finishRunStreams(run: NonNullable<Awaited<ReturnType<typeof getRun>>>, text: '[DONE]' | '[TERMINATED]') {
-  await publishRunStreamEvent(run.id, 'agentview', null, text);
-  if (run.agentRef?.adapter === 'ai-sdk') { // finish external adapter stream (ai-sdk)
-    await publishRunStreamEvent(run.id, 'ai-sdk', null, text);
-  }
-}
+
+// async function finishRunStreams(run: NonNullable<Awaited<ReturnType<typeof getRun>>>, text: '[DONE]' | '[TERMINATED]') {
+//   await publishRunStreamEvent(run.id, 'agentview', null, text);
+//   if (run.agentRef?.adapter === 'ai-sdk') { // finish external adapter stream (ai-sdk)
+//     await publishRunStreamEvent(run.id, 'ai-sdk', null, text);
+//   }
+// }
 
 
 
