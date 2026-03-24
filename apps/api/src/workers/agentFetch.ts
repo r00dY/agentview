@@ -41,7 +41,7 @@ export const agentFetchWorker = createWorker<Run>({
 async function processAgentFetch(run: Run) {
   console.log(`[agentFetch][${run.id}] start`);
 
-  const fetchAbortController = new AbortController();
+  const abortController = new AbortController();
   let terminationAbortController: AbortController | undefined;
 
   try {
@@ -100,22 +100,22 @@ async function processAgentFetch(run: Run) {
         if (!session) {
           throw new Error(`Session ${run.sessionId} not found`);
         }
-        
+
         let sessionAgentRef: AgentRef;
-  
+
         // First set session ref if necessary (new sessions from channel don't have agentRef assigned yet)
         if (!session.agentRef) {
           const result = await upsertAgentRef(tx, {
             agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
             organizationId: run.organizationId,
           });
-  
+
           sessionAgentRef = {
             agent: result.agent,
             version: result.version,
             adapter: result.adapter
           };
-  
+
           await tx.update(sessions).set({
             agentRefId: result.agentRefId,
           }).where(eq(sessions.id, run.sessionId));
@@ -123,18 +123,18 @@ async function processAgentFetch(run: Run) {
         else {
           sessionAgentRef = session.agentRef;
         }
-  
+
         // Assign agentRef to a run
         const lastCompletedRunAgentRef = session.runs.reverse().find(r => r.status === 'completed')?.agentRef;
         const previousAgentRef = lastCompletedRunAgentRef ?? sessionAgentRef;
-  
+
         const { agentRefId } = await resolveAgentRef(tx, {
           agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
           previousAgentRef,
           organizationId: run.organizationId,
           sessionId: run.sessionId,
         });
-  
+
         await tx.update(runs).set({
           agentRefId,
           updatedAt: new Date().toISOString(),
@@ -143,7 +143,7 @@ async function processAgentFetch(run: Run) {
 
     }
 
-    
+
 
     // Refetch session after agentRef assignment
     session = await withOrg(run.organizationId, async (tx) => {
@@ -173,45 +173,48 @@ async function processAgentFetch(run: Run) {
 
     // Call the agent endpoint
     const body: RunBody = { session };
-
     const adapter = getAdapter(agentConfig.adapter);
 
-    const getCurrentRunStatus = async () => {
-      return await withOrg(run.organizationId, async (tx) => {
-        const [currentRun] = await tx
-          .select({ status: runs.status })
-          .from(runs)
-          .where(eq(runs.id, run.id))
-          .limit(1);
-        return currentRun.status;
-      });
-    }
+    // const getCurrentRunStatus = async () => {
+    //   return await withOrg(run.organizationId, async (tx) => {
+    //     const [currentRun] = await tx
+    //       .select({ status: runs.status })
+    //       .from(runs)
+    //       .where(eq(runs.id, run.id))
+    //       .limit(1);
+    //     return currentRun.status;
+    //   });
+    // }
 
     // Abort fetch immediately when run is terminated (e.g. external cancellation).
     terminationAbortController = onRunTerminated(run.id, () => {
       console.log(`[agentFetch][${run.id}] terminated, aborting`);
-      fetchAbortController.abort()
+      abortController.abort()
     });
 
     console.log(`[agentFetch][${run.id}] calling agent API`);
 
-    let isDone = false;
+    // let isDone = false;
 
-    for await (const event of adapter.callAgent(body, agentUrl, fetchAbortController.signal)) {
+    for await (const event of adapter.callAgent(body, agentUrl, abortController.signal)) {
+      if (abortController.signal.aborted) {
+        break;
+      }
+
       console.log(`[agentFetch][${run.id}] event: ${event.name}`);
 
-      if (isDone) {
-        throw new Error('INTERNAL ERROR: "done" event received more than once');
-      }
+      // if (isDone) {
+      //   throw new Error('INTERNAL ERROR: "done" event received more than once');
+      // }
 
       // Check for external cancellation after each event received.
       // this is sanity check, listetning to [DONE] above is faster and should be enough
-      const runStatus = await getCurrentRunStatus();
-      if (runStatus === 'cancelled') {
-        console.log(`[agentFetch][${run.id}] cancelled, aborting [not in progress]`);
-        fetchAbortController.abort();
-        break;
-      }
+      // const runStatus = await getCurrentRunStatus();
+      // if (runStatus === 'cancelled') {
+      //   console.log(`[agentFetch][${run.id}] cancelled, aborting [not in progress]`);
+      //   abortController.abort();
+      //   break;
+      // }
 
       if (event.name === 'run.set_input') {
         await withOrg(run.organizationId, async (tx) => {
@@ -254,28 +257,28 @@ async function processAgentFetch(run: Run) {
           event.data
         );
       }
-      else if (event.name === 'done') { // Automatically fail the run if it is not in progress after stream is finished
-        isDone = true;
-        const finalRunStatus = await getCurrentRunStatus();
+      // else if (event.name === 'done') { // Automatically fail the run if it is not in progress after stream is finished
+      //   isDone = true;
+      //   const finalRunStatus = await getCurrentRunStatus();
 
-        if (finalRunStatus === 'in_progress') {
-          await applyRunPatch(
-            run.id,
-            run.organizationId,
-            environment,
-            {
-              status: 'failed',
-              failReason: { message: 'Agent stream ended without completing' },
-            }
-          );
-          console.log(`[agentFetch][${run.id}] failed, stream ended without completing`);
-        }
-      }
+      //   if (finalRunStatus === 'in_progress') {
+      //     await applyRunPatch(
+      //       run.id,
+      //       run.organizationId,
+      //       environment,
+      //       {
+      //         status: 'failed',
+      //         failReason: { message: 'Agent stream ended without completing' },
+      //       }
+      //     );
+      //     console.log(`[agentFetch][${run.id}] failed, stream ended without completing`);
+      //   }
+      // }
     }
 
-    if (!isDone) {
-      throw new Error('INTERNAL ERROR: "done" event not received.');
-    }
+    // if (!isDone) {
+    //   throw new Error('INTERNAL ERROR: "done" event not received.');
+    // }
 
     // // Automatically fail the run if it is not in progress after stream is finished
     // const finalRunStatus = await getCurrentRunStatus();
@@ -283,7 +286,7 @@ async function processAgentFetch(run: Run) {
     //   throw new Error('Agent stream ended without completing');
     // }
 
-    console.log(`[agentFetch][${run.id}] success`);
+    console.log(`[agentFetch][${run.id}] agent API call finished`);
 
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {

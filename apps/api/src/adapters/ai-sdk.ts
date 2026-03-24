@@ -91,7 +91,6 @@ async function* callAgentAPIAISDK(
     signal?: AbortSignal
 ): AsyncGenerator<AgentAPIEvent, void, unknown> {
     const currentRun = body.session.runs[body.session.runs.length - 1];
-
     console.log(`[ai-sdk][${currentRun.id}] start`);
 
     /**
@@ -121,7 +120,6 @@ async function* callAgentAPIAISDK(
      * Fetch the agent API response
      */
     let response: Response | undefined = undefined;
-
     console.log(`[ai-sdk][${currentRun.id}] fetching`);
 
     try {
@@ -135,6 +133,10 @@ async function* callAgentAPIAISDK(
         });
 
     } catch (error: unknown) { // Here we only handle fetch errors, other errors will be handled later
+        if (error instanceof Error && error.name === 'AbortError') {
+            return; // abort doesn't require action since it means the run is already properly terminated
+        }
+
         let message: string;
 
         if (error instanceof TypeError) { // node fetch error
@@ -153,11 +155,6 @@ async function* callAgentAPIAISDK(
                 },
             },
         };
-
-        yield {
-            name: 'done',
-            data: null
-        }
 
         await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({
             status: 400,
@@ -195,11 +192,6 @@ async function* callAgentAPIAISDK(
             },
         };
 
-        yield {
-            name: 'done',
-            data: null
-        }
-
         await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({
             status: response.status,
             headers: Object.fromEntries(response.headers.entries()),
@@ -214,274 +206,256 @@ async function* callAgentAPIAISDK(
      */
 
     // send response first
-    await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({
-        status: response.status,
-        headers: Object.fromEntries(response.headers.entries()),
-    }));
+
+    let isComplete = false;
 
     try {
+        console.log(`[ai-sdk][${currentRun.id}] streaming`);
 
-        // response = await fetch(url, {
-        //     method: 'POST',
-        //     headers: {
-        //         'Content-Type': 'application/json',
-        //     },
-        //     body: JSON.stringify({ messages, session: body.session }),
-        //     signal,
-        // });
+        await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({
+            status: response.status,
+            headers: Object.fromEntries(response.headers.entries()),
+            // no error -> app expects stream
+        }));
 
-        // // Let's see whether Response is successful and has body.
-        // let error: string | undefined = undefined;
-        // if (!response.ok) {
-        //     error = await response.text();
-        // }
-        // else if (!response.body) {
-        //     error = 'No response body';
-        // }
+        // Parse AI SDK stream and convert to run.patch events
+        const textBuffers = new Map<string, string>();
+        const reasoningBuffers = new Map<string, string>();
+        const toolStates = new Map<string, { toolName: string; inputText: string; input?: any }>();
+        let messageMetadata: any = undefined;
+        const emittedItemTypes: string[] = [];
+        const outputTexts: string[] = [];
 
-        // // Close run on error
-        // if (error) {
-        //     console.log(`[ai-sdk][${currentRun.id}] error response:`, error);
-        //     yield {
-        //         name: 'run.patch',
-        //         data: {
-        //             status: 'failed',
-        //             failReason: {
-        //                 message: error
-        //             },
-        //         },
-        //     };
-        // }
+        /**
+         * 1. We first send event to "our system" (yield), and it's blocking
+         * 2. Only then we send event to stream. 
+         */
+        for await (const data of parseAISDKStream(response.body!)) {
+            if (data === '[DONE]') { // done is end of stream. We send it ourselves in the finally block.
+                console.log(`[ai-sdk][${currentRun.id}] [DONE]`);
+                break;
+            }
 
-        // Publish the response as first event in the stream for the run. Must be after the condition above, because it closes the connection and state must be changed already.
-        // await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({
-        //     status: response.status,
-        //     headers: Object.fromEntries(response.headers.entries()),
-        //     error
-        // }));
+            // transforms
+            const chunk = JSON.parse(data) as AISDKChunk;
+            if (chunk.type === 'start' && !chunk.messageId) {
+                chunk.messageId = currentRun.id + '-input';
+            }
 
-        // If no error keep streaming
-        // if (!error) {
-            console.log(`[ai-sdk][${currentRun.id}] streaming`);
-
-            // Parse AI SDK stream and convert to run.patch events
-            const textBuffers = new Map<string, string>();
-            const reasoningBuffers = new Map<string, string>();
-            const toolStates = new Map<string, { toolName: string; inputText: string; input?: any }>();
-            let messageMetadata: any = undefined;
-            const emittedItemTypes: string[] = [];
-            const outputTexts: string[] = [];
-
-            /**
-             * 1. We first send event to "our system" (yield), and it's blocking
-             * 2. Only then we send event to stream. 
-             */
-            for await (const data of parseAISDKStream(response.body!)) {
-                if (data === '[DONE]') { // done is end of stream. We send it ourselves in the finally block.
-                    console.log(`[ai-sdk][${currentRun.id}] [DONE]`);
+            switch (chunk.type) {
+                case 'start': {
+                    if (chunk.messageMetadata !== undefined) {
+                        messageMetadata = chunk.messageMetadata;
+                    }
                     break;
                 }
 
-                // transforms
-                const chunk = JSON.parse(data) as AISDKChunk;
-                if (chunk.type === 'start' && !chunk.messageId) {
-                    chunk.messageId = currentRun.id + '-input';
+                case 'text-start': {
+                    textBuffers.set(chunk.id, '');
+                    break;
                 }
 
-                switch (chunk.type) {
-                    case 'start': {
-                        if (chunk.messageMetadata !== undefined) {
-                            messageMetadata = chunk.messageMetadata;
-                        }
-                        break;
+                case 'text-delta': {
+                    const current = textBuffers.get(chunk.id) ?? '';
+                    textBuffers.set(chunk.id, current + chunk.delta);
+                    break;
+                }
+
+                case 'text-end': {
+                    const text = textBuffers.get(chunk.id) ?? '';
+                    textBuffers.delete(chunk.id);
+                    emittedItemTypes.push('text');
+                    outputTexts.push(text);
+                    yield {
+                        name: 'run.patch',
+                        data: { items: [{ type: 'text', text }] },
+                    };
+                    break;
+                }
+
+                case 'reasoning-start': {
+                    reasoningBuffers.set(chunk.id, '');
+                    break;
+                }
+
+                case 'reasoning-delta': {
+                    const current = reasoningBuffers.get(chunk.id) ?? '';
+                    reasoningBuffers.set(chunk.id, current + chunk.delta);
+                    break;
+                }
+
+                case 'reasoning-end': {
+                    const text = reasoningBuffers.get(chunk.id) ?? '';
+                    reasoningBuffers.delete(chunk.id);
+                    emittedItemTypes.push('reasoning');
+
+                    console.log(`[ai-sdk][${currentRun.id}] yield run.patch for`, chunk)
+                    yield {
+                        name: 'run.patch',
+                        data: { items: [{ type: 'reasoning', text }] },
+                    };
+                    break;
+                }
+
+                case 'tool-input-start': {
+                    toolStates.set(chunk.toolCallId, {
+                        toolName: chunk.toolName,
+                        inputText: '',
+                    });
+                    break;
+                }
+
+                case 'tool-input-delta': {
+                    const state = toolStates.get(chunk.toolCallId);
+                    if (state) {
+                        state.inputText += chunk.inputTextDelta;
                     }
+                    break;
+                }
 
-                    case 'text-start': {
-                        textBuffers.set(chunk.id, '');
-                        break;
+                case 'tool-input-available': {
+                    const state = toolStates.get(chunk.toolCallId);
+                    if (state) {
+                        state.input = chunk.input;
                     }
+                    break;
+                }
 
-                    case 'text-delta': {
-                        const current = textBuffers.get(chunk.id) ?? '';
-                        textBuffers.set(chunk.id, current + chunk.delta);
-                        break;
-                    }
-
-                    case 'text-end': {
-                        const text = textBuffers.get(chunk.id) ?? '';
-                        textBuffers.delete(chunk.id);
-                        emittedItemTypes.push('text');
-                        outputTexts.push(text);
-                        yield {
-                            name: 'run.patch',
-                            data: { items: [{ type: 'text', text }] },
-                        };
-                        break;
-                    }
-
-                    case 'reasoning-start': {
-                        reasoningBuffers.set(chunk.id, '');
-                        break;
-                    }
-
-                    case 'reasoning-delta': {
-                        const current = reasoningBuffers.get(chunk.id) ?? '';
-                        reasoningBuffers.set(chunk.id, current + chunk.delta);
-                        break;
-                    }
-
-                    case 'reasoning-end': {
-                        const text = reasoningBuffers.get(chunk.id) ?? '';
-                        reasoningBuffers.delete(chunk.id);
-                        emittedItemTypes.push('reasoning');
-
+                case 'tool-output-available': {
+                    const state = toolStates.get(chunk.toolCallId);
+                    if (state) {
+                        emittedItemTypes.push('tool-call');
                         console.log(`[ai-sdk][${currentRun.id}] yield run.patch for`, chunk)
                         yield {
                             name: 'run.patch',
-                            data: { items: [{ type: 'reasoning', text }] },
-                        };
-                        break;
-                    }
-
-                    case 'tool-input-start': {
-                        toolStates.set(chunk.toolCallId, {
-                            toolName: chunk.toolName,
-                            inputText: '',
-                        });
-                        break;
-                    }
-
-                    case 'tool-input-delta': {
-                        const state = toolStates.get(chunk.toolCallId);
-                        if (state) {
-                            state.inputText += chunk.inputTextDelta;
-                        }
-                        break;
-                    }
-
-                    case 'tool-input-available': {
-                        const state = toolStates.get(chunk.toolCallId);
-                        if (state) {
-                            state.input = chunk.input;
-                        }
-                        break;
-                    }
-
-                    case 'tool-output-available': {
-                        const state = toolStates.get(chunk.toolCallId);
-                        if (state) {
-                            emittedItemTypes.push('tool-call');
-                            console.log(`[ai-sdk][${currentRun.id}] yield run.patch for`, chunk)
-                            yield {
-                                name: 'run.patch',
-                                data: {
-                                    items: [{
-                                        type: 'tool-call',
-                                        toolCallId: chunk.toolCallId,
-                                        toolName: state.toolName,
-                                        state: 'output-available',
-                                        input: state.input,
-                                        output: chunk.output,
-                                    }],
-                                },
-                            };
-                            toolStates.delete(chunk.toolCallId);
-                        }
-                        break;
-                    }
-
-                    case 'tool-output-error': {
-                        const state = toolStates.get(chunk.toolCallId);
-                        if (state) {
-                            emittedItemTypes.push('tool-call');
-                            console.log(`[ai-sdk][${currentRun.id}] yield run.patch for`, chunk)
-                            yield {
-                                name: 'run.patch',
-                                data: {
-                                    items: [{
-                                        type: 'tool-call',
-                                        toolCallId: chunk.toolCallId,
-                                        toolName: state.toolName,
-                                        state: 'output-error',
-                                        input: state.input,
-                                        errorText: chunk.errorText,
-                                    }],
-                                },
-                            };
-                            toolStates.delete(chunk.toolCallId);
-                        }
-                        break;
-                    }
-
-                    case 'finish': {
-                        if (chunk.messageMetadata !== undefined) {
-                            messageMetadata = chunk.messageMetadata;
-                        }
-                        const outputCount = computeOutputItemCount(emittedItemTypes);
-                        console.log(`[ai-sdk][${currentRun.id}] yield run.patch COMPLETED for`, chunk)
-
-                        yield {
-                            name: 'run.patch',
                             data: {
-                                status: 'completed',
-                                outputItemCount: outputCount,
-                                channelReply: isChannelRun ? { text: outputTexts.filter(Boolean).join('\n\n') } : undefined,
-                                ...(messageMetadata !== undefined ? { metadata: messageMetadata } : {}),
+                                items: [{
+                                    type: 'tool-call',
+                                    toolCallId: chunk.toolCallId,
+                                    toolName: state.toolName,
+                                    state: 'output-available',
+                                    input: state.input,
+                                    output: chunk.output,
+                                }],
                             },
                         };
-                        break;
+                        toolStates.delete(chunk.toolCallId);
                     }
-
-                    case 'error': {
-                        console.log(`[ai-sdk][${currentRun.id}] yield run.patch ERROR for`, chunk)
-
-                        yield {
-                            name: 'run.patch',
-                            data: {
-                                status: 'failed',
-                                failReason: {
-                                    message: chunk.errorText ?? 'Unknown error from AI SDK stream',
-                                },
-                            },
-                        };
-                        break;
-                    }
-
-                    // Ignore other events: start-step, finish-step, source-url, file, etc.
-                    default:
-                        if (chunk.type.startsWith('data-')) {
-                            emittedItemTypes.push('data');
-                            yield {
-                                name: 'run.patch',
-                                data: {
-                                    items: [{ type: chunk.type, data: chunk.data }],
-                                },
-                            };
-                        }
-                        console.log(`[ai-sdk][${currentRun.id}] Ignored chunk: `, chunk.type);
-                        break;
+                    break;
                 }
 
-                // we just mirror native chunks to the stream.
-                console.log(`[ai-sdk][${currentRun.id}] stream event`, chunk)
-                await publishAISDKStreamEvent(currentRun.id, JSON.stringify(chunk));
+                case 'tool-output-error': {
+                    const state = toolStates.get(chunk.toolCallId);
+                    if (state) {
+                        emittedItemTypes.push('tool-call');
+                        console.log(`[ai-sdk][${currentRun.id}] yield run.patch for`, chunk)
+                        yield {
+                            name: 'run.patch',
+                            data: {
+                                items: [{
+                                    type: 'tool-call',
+                                    toolCallId: chunk.toolCallId,
+                                    toolName: state.toolName,
+                                    state: 'output-error',
+                                    input: state.input,
+                                    errorText: chunk.errorText,
+                                }],
+                            },
+                        };
+                        toolStates.delete(chunk.toolCallId);
+                    }
+                    break;
+                }
+
+                case 'finish': {
+                    if (chunk.messageMetadata !== undefined) {
+                        messageMetadata = chunk.messageMetadata;
+                    }
+                    const outputCount = computeOutputItemCount(emittedItemTypes);
+                    console.log(`[ai-sdk][${currentRun.id}] yield run.patch COMPLETED for`, chunk)
+
+                    isComplete = true;
+                    yield {
+                        name: 'run.patch',
+                        data: {
+                            status: 'completed',
+                            outputItemCount: outputCount,
+                            channelReply: isChannelRun ? { text: outputTexts.filter(Boolean).join('\n\n') } : undefined,
+                            ...(messageMetadata !== undefined ? { metadata: messageMetadata } : {}),
+                        },
+                    };
+                    break;
+                }
+
+                case 'error': {
+                    console.log(`[ai-sdk][${currentRun.id}] yield run.patch ERROR for`, chunk)
+
+                    isComplete = true;
+                    yield {
+                        name: 'run.patch',
+                        data: {
+                            status: 'failed',
+                            failReason: {
+                                message: chunk.errorText ?? 'Unknown error from AI SDK stream',
+                            },
+                        },
+                    };
+                    break;
+                }
+
+                // Ignore other events: start-step, finish-step, source-url, file, etc.
+                default:
+                    if (chunk.type.startsWith('data-')) {
+                        emittedItemTypes.push('data');
+                        yield {
+                            name: 'run.patch',
+                            data: {
+                                items: [{ type: chunk.type, data: chunk.data }],
+                            },
+                        };
+                    }
+                    console.log(`[ai-sdk][${currentRun.id}] Ignored chunk: `, chunk.type);
+                    break;
             }
 
-            console.log(`[ai-sdk][${currentRun.id}] stream ended`);
-        // }
-
-    } catch (error: unknown) {
-        console.log(`[ai-sdk][${currentRun.id}] error in stream: ${error instanceof Error ? error.message : String(error)}`);
-        throw error;
-
-    } finally {
-        console.log(`[ai-sdk][${currentRun.id}] sending 'done' event`);
-
-        yield {
-            name: 'done',
-            data: null
+            // we just mirror native chunks to the stream.
+            console.log(`[ai-sdk][${currentRun.id}] stream event`, chunk)
+            await publishAISDKStreamEvent(currentRun.id, JSON.stringify(chunk));
         }
 
+        if (!isComplete) {
+            console.log(`[ai-sdk][${currentRun.id}] stream ended INCOMPLETE`);
+            yield {
+                name: 'run.patch',
+                data: {
+                    status: 'failed',
+                    failReason: {
+                        message: 'Agent stream ended without completing',
+                    },
+                },
+            };
+        }
+        else {
+            console.log(`[ai-sdk][${currentRun.id}] stream ended complete`);
+        }
+
+    } catch (error: unknown) {
+        if (error instanceof Error && error.name === 'AbortError') {
+            return; // abort doesn't require action since it means the run is already properly terminated
+        }
+
+        // This is for severe errors.
+        yield {
+            name: 'run.patch',
+            data: {
+                status: 'failed',
+                failReason: {
+                    message: error instanceof Error ? error.message : String(error),
+                },
+            },
+        };
+
+    } finally {
         console.log(`[ai-sdk][${currentRun.id}] stream cleanup`);
         await publishAISDKStreamEvent(currentRun.id, "[DONE]");
         await expireAISDKStream(currentRun.id);

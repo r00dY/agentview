@@ -15,7 +15,6 @@ import type {
 
 import { type AgentViewErrorBody, AgentViewError } from './AgentViewError.js'
 import { getApiUrl } from './urls.js'
-import { parseAISDKDataStream } from './parseAISDKDataStream.js'
 import { DefaultChatTransport } from 'ai'
 
 export interface AgentViewClientOptions {
@@ -193,32 +192,6 @@ export class AgentViewClient extends AgentViewBase {
         api: `${baseUrl}/api/sessions/${id}/stream`,
       })
     })
-  }
-
-  /**
-   * Creates a run and returns the raw AI SDK SSE stream.
-   * Each yielded value is a parsed AI SDK chunk (the JSON from `data: <json>`).
-   * The stream ends when `data: [DONE]` is received.
-   */
-  async createRunStream(options: RunCreate & { sessionId: string, signal?: AbortSignal }): Promise<AsyncGenerator<any, void, unknown>> {
-    const { sessionId, signal, ...body } = options;
-    const response = await fetch(`${getApiUrl()}/api/sessions/${sessionId}/runs`, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify({
-        ...body,
-        stream: true,
-      }),
-      signal,
-    });
-
-    if (!response.ok) {
-      const errorBody: AgentViewErrorBody = await response.json();
-      const { message, ...details } = errorBody;
-      throw new AgentViewError(message ?? "Unknown error", response.status, details);
-    }
-
-    return parseAISDKDataStream(response);
   }
 
   as(userOrToken: User | string): AgentViewClient {

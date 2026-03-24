@@ -2626,7 +2626,7 @@ describe('API', () => {
 
   });
 
-  describe("agent endpoint auto-fetch (ai-sdk adapter)", () => {
+  describe.only("agent endpoint auto-fetch (ai-sdk adapter)", () => {
     const AI_SDK_AGENT_PORT = 3458;
     const AI_SDK_AGENT_URL = `http://localhost:${AI_SDK_AGENT_PORT}/agent`;
 
@@ -2919,7 +2919,7 @@ describe('API', () => {
       expect(updatedSession.lastRun!.failReason).toBeDefined();
     }, 30000);
 
-    test.only("stream ends without finish → run marked failed (validated via ai-sdk stream)", async () => {
+    test("stream ends without finish → run marked failed (validated via ai-sdk stream)", async () => {
       await updateConfigWithAiSdkUrl();
       const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
@@ -2941,18 +2941,6 @@ describe('API', () => {
 
       const chunks = await consumeChunksFromTransportStream(stream);
 
-
-      // // The stream will contain the partial chunks, then end
-      // const chunks: any[] = [];
-      // const stream = await avAISDK.createRunStream({
-      //   sessionId: session.id,
-      //   input: { type: "message", role: "user", parts: [{ type: "text", text: "Hi" }] },
-      // });
-
-      // for await (const chunk of stream) {
-      //   chunks.push(chunk);
-      // }
-
       // We should see the partial chunks but no finish
       expect(chunks.some(c => c.type === "text-delta")).toBe(true);
       expect(chunks.some(c => c.type === "finish")).toBe(false);
@@ -2961,6 +2949,7 @@ describe('API', () => {
       expect(updatedSession.lastRun!.status).toBe("failed");
       expect(updatedSession.lastRun!.failReason.message).toContain("Agent stream ended without completing");
     }, 30000);
+
 
     test("request body format: sends UIMessage[] with correct history", async () => {
       await updateConfigWithAiSdkUrl();
@@ -2977,13 +2966,13 @@ describe('API', () => {
       });
 
       // Use createRunStream so we wait for the stream to complete
-      const stream = await avAISDK.createRunStream({
-        sessionId: session.id,
-        input: { type: "message", role: "user", parts: [{ type: "text", text: "Hello AI SDK" }] },
-      });
+      const stream = await sendMessageViaTransport(
+        avAISDK.createTransport(), 
+        session.id, 
+        { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hello AI SDK" }] }
+      );
 
-      // Consume the stream to completion
-      for await (const _ of stream) {}
+      await consumeChunksFromTransportStream(stream);
 
       // Verify request body format
       expect(mockAISDKServer!.requests.length).toBeGreaterThanOrEqual(1);
@@ -2997,7 +2986,7 @@ describe('API', () => {
       expect(reqBody.messages[0].parts[0].text).toBe("Hello AI SDK");
     }, 30000);
 
-    test("multi-turn: second request has full conversation history", async () => {
+    test.only("multi-turn: second request has full conversation history", async () => {
       await updateConfigWithAiSdkUrl();
       const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
@@ -3012,13 +3001,13 @@ describe('API', () => {
         ]);
       });
 
-      const stream1 = await avAISDK.createRunStream({
-        sessionId: session.id,
-        input: { type: "message", role: "user", parts: [{ type: "text", text: "Hi" }] },
-      });
+      const stream = await sendMessageViaTransport(
+        avAISDK.createTransport(), 
+        session.id, 
+        { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
+      );
 
-      // Consume first stream to completion
-      for await (const _ of stream1) {}
+      await consumeChunksFromTransportStream(stream);
 
       // Second turn
       mockAISDKServer!.resetRequests();
@@ -3033,13 +3022,13 @@ describe('API', () => {
         ]);
       });
 
-      const stream2 = await avAISDK.createRunStream({
-        sessionId: session.id,
-        input: { type: "message", role: "user", parts: [{ type: "text", text: "How are you?" }] },
-      });
+      const stream2 = await sendMessageViaTransport(
+        avAISDK.createTransport(), 
+        session.id, 
+        { id: "msg_1", role: "user", parts: [{ type: "text", text: "How are you?" }] }
+      );
 
-      // Consume second stream to completion
-      for await (const _ of stream2) {}
+      await consumeChunksFromTransportStream(stream2);
 
       // Verify second request has full history
       expect(mockAISDKServer!.requests.length).toBeGreaterThanOrEqual(1);
