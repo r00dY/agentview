@@ -67,7 +67,9 @@ export async function* consumeAISDKStream(
 ): AsyncGenerator<string> {
   for await (const data of consumeRaw(runId, signal)) {
     if (data.startsWith('[RESPONSE]')) continue;
-    if (data === '[DONE]') return;
     yield data;
+    if (data === '[DONE]') {
+      return;
+    };
   }
 }

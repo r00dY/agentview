@@ -1333,10 +1333,7 @@ function getSessionStreamResponse(c: any, session: StandardSession) {
     });
 
     // stream run events from last updatedAt
-    for await (const data of consumeRunStream(lastRun.id, 'agentview', c.req.raw.signal, lastRun.updatedAt)) {
-      if (data === '[DONE]') {
-        return;
-      }
+    for await (const data of consumeRunStream(lastRun.id, c.req.raw.signal, lastRun.updatedAt)) {
       await stream.writeSSE({
         event: 'run.patch',
         data

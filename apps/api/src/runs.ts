@@ -302,10 +302,10 @@ export async function applyRunPatch(
     updatedAt: nowIso
   });
 
-  await publishRunStreamEvent(runId, 'agentview', nowIso, dataToStream);
+  await publishRunStreamEvent(runId, nowIso, dataToStream);
 
   if (isFinished) {
-    await publishRunStreamEvent(runId, 'agentview', null, '[DONE]');
+    await publishRunStreamEvent(runId, null, '[DONE]');
   }
 }
 
@@ -342,12 +342,12 @@ export async function terminateRun(runId: string, organizationId: string, body: 
     }).where(eq(runs.id, runId));
   });
 
-  await publishRunStreamEvent(runId, 'agentview', nowIso, JSON.stringify({ // this is important, we must send the last run patch event to the stream
+  await publishRunStreamEvent(runId, nowIso, JSON.stringify({ // this is important, we must send the last run patch event to the stream
     ...body,
     updatedAt: nowIso,
   }));
 
-  await publishRunStreamEvent(runId, 'agentview', null, '[TERMINATED]');
+  await publishRunStreamEvent(runId, null, '[TERMINATED]');
 }
 
 

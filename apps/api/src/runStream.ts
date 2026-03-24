@@ -1,7 +1,7 @@
 import { redis } from './redis';
 
-export async function publishRunStreamEvent(runId: string, adapter: string, createdAt: string | null, data: string) {
-  const key = `run-stream:${adapter}:${runId}`;
+export async function publishRunStreamEvent(runId: string, createdAt: string | null, data: string) {
+  const key = `run-stream:agentview:${runId}`;
 
   // Use the event's updatedAt as the stream ID so consumer can use the same
   // clock (Node.js) to compute its starting offset — no Redis clock skew.
@@ -9,13 +9,8 @@ export async function publishRunStreamEvent(runId: string, adapter: string, crea
   await redis.xadd(key, `${ms}-*`, 'data', data);
 
   if (data === '[DONE]' || data === '[TERMINATED]') {
-    await expireRunStream(runId, adapter);
+    await redis.expire(key, 60);
   }
-}
-
-export async function expireRunStream(runId: string, adapter: string) {
-  const key = `run-stream:${adapter}:${runId}`;
-  await redis.expire(key, 60);
 }
 
 /**
@@ -26,7 +21,7 @@ export function onRunTerminated(runId: string, onTerminated: () => void) {
 
   (async () => {
     try {
-      for await (const data of consumeRunStreamRaw(runId, 'agentview', abortController.signal)) {
+      for await (const data of consumeRunStreamRaw(runId, abortController.signal)) {
         if (data === '[TERMINATED]') {
           onTerminated();
           return;
@@ -46,13 +41,11 @@ export function onRunTerminated(runId: string, onTerminated: () => void) {
  */
 export async function* consumeRunStream(
   runId: string,
-  adapter: string,
   signal: AbortSignal,
   afterTimestamp?: string,
 ) {
-  for await (const data of consumeRunStreamRaw(runId, adapter, signal, afterTimestamp)) {
-    if (data === '[DONE]' || data === '[TERMINATED]') { // in this function we translate [TERMINATED] into [DONE] so consumers never see the internal termination signal
-      yield '[DONE]';
+  for await (const data of consumeRunStreamRaw(runId, signal, afterTimestamp)) {
+    if (data === '[DONE]' || data === '[TERMINATED]') {
       return;
     }
     yield data;
@@ -61,11 +54,10 @@ export async function* consumeRunStream(
 
 async function* consumeRunStreamRaw(
   runId: string,
-  adapter: string,
   signal: AbortSignal,
   afterTimestamp?: string,
 ) {
-  const key = `run-stream:${adapter}:${runId}`;
+  const key = `run-stream:agentview:${runId}`;
 
   // Both this offset and the stream entry IDs use the Node.js clock (updatedAt),
   // so there's no cross-clock skew.

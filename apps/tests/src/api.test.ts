@@ -10,6 +10,9 @@ import { seedUsers } from './seedUsers';
 import { createMockServer, writeSSE, writeAISDKStream } from './mockServer';
 import type { MockServer, SSEEvent } from './mockServer';
 
+import { readUIMessageStream, DefaultChatTransport, type ChatTransport, type UIMessageChunk, type UIDataTypes, type UIMessage } from 'ai';
+import { tr } from 'zod/locales';
+
 // globally disable summaries for all tests
 configDefaults.__internal = {
   disableSummaries: true,
@@ -2667,6 +2670,24 @@ describe('API', () => {
       mockAISDKServer?.resetRequests();
     });
 
+    function sendMessageViaTransport(transport: ReturnType<typeof avAISDK.createTransport>, sessionId: string, input: UIMessage) {
+      return transport.sendMessages({
+        chatId: sessionId,
+        messages: [input],
+        trigger: "submit-message",
+        messageId: undefined,
+        abortSignal: undefined,
+      })
+    }
+    async function consumeChunksFromTransportStream(stream: ReadableStream<UIMessageChunk<unknown, UIDataTypes>>) {
+      let chunks : UIMessageChunk[] = []
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+      }
+      return chunks;
+    }
+
+
     test("happy path: text response (validated via ai-sdk stream)", async () => {
       await updateConfigWithAiSdkUrl();
       const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
@@ -2683,15 +2704,13 @@ describe('API', () => {
       });
 
       // Create run and get the native AI SDK stream
-      const chunks: any[] = [];
-      const stream = await avAISDK.createRunStream({
-        sessionId: session.id,
-        input: { type: "message", role: "user", parts: [{ type: "text", text: "Hi" }] },
-      });
+      const stream = await sendMessageViaTransport(
+        avAISDK.createTransport(), 
+        session.id, 
+        { id: "msg_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] }
+      );
 
-      for await (const chunk of stream) {
-        chunks.push(chunk);
-      }
+      const chunks = await consumeChunksFromTransportStream(stream);
 
       // Validate we received the native AI SDK chunk types
       const chunkTypes = chunks.map(c => c.type);
@@ -2711,7 +2730,6 @@ describe('API', () => {
       expect(completedRun.status).toBe("completed");
       expect(completedRun.agentRef?.version).toBe("1.0.0");
       expect(completedRun.sessionItems.length).toBe(2);
-      expect(completedRun.sessionItems[0].content.type).toBe("message");
       expect(completedRun.sessionItems[0].content.role).toBe("user");
       expect(completedRun.sessionItems[1].content.type).toBe("text");
       expect(completedRun.sessionItems[1].content.text).toBe("Hello world!");
@@ -2734,18 +2752,14 @@ describe('API', () => {
         ]);
       });
 
-      // Create run and get the native AI SDK stream
-      const chunks: any[] = [];
-      const stream = await avAISDK.createRunStream({
-        sessionId: session.id,
-        input: { type: "message", role: "user", parts: [{ type: "text", text: "What is the answer?" }] },
-      });
+      const stream = await sendMessageViaTransport(
+        avAISDK.createTransport(), 
+        session.id, 
+        { id: "msg_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] }
+      );
 
-      for await (const chunk of stream) {
-        chunks.push(chunk);
-      }
+      const chunks = await consumeChunksFromTransportStream(stream);
 
-      // Validate stream events include reasoning and text
       const chunkTypes = chunks.map(c => c.type);
       expect(chunkTypes).toContain("reasoning-start");
       expect(chunkTypes).toContain("reasoning-delta");
@@ -2815,15 +2829,14 @@ describe('API', () => {
       });
 
       // Create run and get the native AI SDK stream
-      const chunks: any[] = [];
-      const stream = await avAISDK.createRunStream({
-        sessionId: session.id,
-        input: { type: "message", role: "user", parts: [{ type: "text", text: "What's the weather?" }] },
-      });
 
-      for await (const chunk of stream) {
-        chunks.push(chunk);
-      }
+      const stream = await sendMessageViaTransport(
+        avAISDK.createTransport(), 
+        session.id, 
+        { id: "msg_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] }
+      );
+
+      const chunks = await consumeChunksFromTransportStream(stream);
 
       // Validate stream includes tool call events
       const chunkTypes = chunks.map(c => c.type);
@@ -2836,7 +2849,7 @@ describe('API', () => {
 
       // Validate tool output chunk
       const toolOutput = chunks.find(c => c.type === "tool-output-available");
-      expect(toolOutput.output).toEqual({ temp: 72 });
+      expect(toolOutput?.output).toEqual({ temp: 72 });
 
       // Verify final run state
       const finalSession = await av.getSession({ id: session.id });
@@ -2864,15 +2877,13 @@ describe('API', () => {
       });
 
       // Create run and consume the AI SDK stream
-      const chunks: any[] = [];
-      const stream = await avAISDK.createRunStream({
-        sessionId: session.id,
-        input: { type: "message", role: "user", parts: [{ type: "text", text: "Hi" }] },
-      });
+      const stream = await sendMessageViaTransport(
+        avAISDK.createTransport(), 
+        session.id, 
+        { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
+      );
 
-      for await (const chunk of stream) {
-        chunks.push(chunk);
-      }
+      const chunks = await consumeChunksFromTransportStream(stream);
 
       // The error chunk should be in the stream
       expect(chunks.some(c => c.type === "error")).toBe(true);
@@ -2883,7 +2894,7 @@ describe('API', () => {
       expect(updatedSession.lastRun!.failReason).toBeDefined();
     }, 30000);
 
-    test.only("HTTP error: 500 → run marked failed (validated via ai-sdk stream)", async () => {
+    test("HTTP error: 500 → run marked failed (validated via ai-sdk stream)", async () => {
       await updateConfigWithAiSdkUrl();
       const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
@@ -2892,38 +2903,15 @@ describe('API', () => {
         res.end(JSON.stringify({ message: "This is an error from test suite." }));
       });
 
-      // The stream will end without any chunks (HTTP error → no AI SDK chunks published)
-      // const chunks: any[] = [];
+      const stream = sendMessageViaTransport(
+        avAISDK.createTransport(), 
+        session.id, 
+        { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
+      );
 
-      const transport = avAISDK.createTransport();
-      expect(transport.sendMessages({
-        chatId: session.id,
-        messages: [{ id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }],
-        trigger: "submit-message",
-        messageId: undefined,
-        abortSignal: undefined,
-      })).rejects.toThrowError(expect.objectContaining({
+      await expect(stream).rejects.toThrowError(expect.objectContaining({
         message: expect.stringContaining("This is an error from test suite.")
       }))
-
-      // expect(promise).rejects.toThrowError(expect.objectContaining({
-      //   statusCode,
-      //   message: expect.any(String),
-      // }))
-
-
-
-      // const stream = await avAISDK.createRunStream({
-      //   sessionId: session.id,
-      //   input: { type: "message", role: "user", parts: [{ type: "text", text: "Hi" }] },
-      // });
-
-      // for await (const chunk of stream) {
-      //   chunks.push(chunk);
-      // }
-
-      // // No AI SDK chunks were streamed (agent returned 500)
-      // expect(chunks.length).toBe(0);
 
       // The stream ends before the worker marks the run as failed, so wait briefly
       const updatedSession = await av.getSession({ id: session.id });
@@ -2931,7 +2919,7 @@ describe('API', () => {
       expect(updatedSession.lastRun!.failReason).toBeDefined();
     }, 30000);
 
-    test("stream ends without finish → run marked failed (validated via ai-sdk stream)", async () => {
+    test.only("stream ends without finish → run marked failed (validated via ai-sdk stream)", async () => {
       await updateConfigWithAiSdkUrl();
       const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
@@ -2945,16 +2933,25 @@ describe('API', () => {
         ], { endWithDone: false });
       });
 
-      // The stream will contain the partial chunks, then end
-      const chunks: any[] = [];
-      const stream = await avAISDK.createRunStream({
-        sessionId: session.id,
-        input: { type: "message", role: "user", parts: [{ type: "text", text: "Hi" }] },
-      });
+      const stream = await sendMessageViaTransport(
+        avAISDK.createTransport(), 
+        session.id, 
+        { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
+      );
 
-      for await (const chunk of stream) {
-        chunks.push(chunk);
-      }
+      const chunks = await consumeChunksFromTransportStream(stream);
+
+
+      // // The stream will contain the partial chunks, then end
+      // const chunks: any[] = [];
+      // const stream = await avAISDK.createRunStream({
+      //   sessionId: session.id,
+      //   input: { type: "message", role: "user", parts: [{ type: "text", text: "Hi" }] },
+      // });
+
+      // for await (const chunk of stream) {
+      //   chunks.push(chunk);
+      // }
 
       // We should see the partial chunks but no finish
       expect(chunks.some(c => c.type === "text-delta")).toBe(true);

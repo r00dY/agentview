@@ -195,8 +195,14 @@ async function processAgentFetch(run: Run) {
 
     console.log(`[agentFetch][${run.id}] calling agent API`);
 
+    let isDone = false;
+
     for await (const event of adapter.callAgent(body, agentUrl, fetchAbortController.signal)) {
       console.log(`[agentFetch][${run.id}] event: ${event.name}`);
+
+      if (isDone) {
+        throw new Error('INTERNAL ERROR: "done" event received more than once');
+      }
 
       // Check for external cancellation after each event received.
       // this is sanity check, listetning to [DONE] above is faster and should be enough
@@ -248,13 +254,34 @@ async function processAgentFetch(run: Run) {
           event.data
         );
       }
+      else if (event.name === 'done') { // Automatically fail the run if it is not in progress after stream is finished
+        isDone = true;
+        const finalRunStatus = await getCurrentRunStatus();
+
+        if (finalRunStatus === 'in_progress') {
+          await applyRunPatch(
+            run.id,
+            run.organizationId,
+            environment,
+            {
+              status: 'failed',
+              failReason: { message: 'Agent stream ended without completing' },
+            }
+          );
+          console.log(`[agentFetch][${run.id}] failed, stream ended without completing`);
+        }
+      }
     }
 
-    // Automatically fail the run if it is not in progress after stream is finished
-    const finalRunStatus = await getCurrentRunStatus();
-    if (finalRunStatus === 'in_progress') {
-      throw new Error('Agent stream ended without completing');
+    if (!isDone) {
+      throw new Error('INTERNAL ERROR: "done" event not received.');
     }
+
+    // // Automatically fail the run if it is not in progress after stream is finished
+    // const finalRunStatus = await getCurrentRunStatus();
+    // if (finalRunStatus === 'in_progress') {
+    //   throw new Error('Agent stream ended without completing');
+    // }
 
     console.log(`[agentFetch][${run.id}] success`);
 

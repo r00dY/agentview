@@ -90,35 +90,41 @@ async function* callAgentAPIAISDK(
     url: string,
     signal?: AbortSignal
 ): AsyncGenerator<AgentAPIEvent, void, unknown> {
-    let response: Response;
     const currentRun = body.session.runs[body.session.runs.length - 1];
 
     console.log(`[ai-sdk][${currentRun.id}] start`);
 
+    /**
+     * Build AI SDK request body
+     */
+    const messages = sessionToUIMessages(body.session);
+
+    // For channel-based runs: create input from incoming channel messages
+    const incomingMessages = currentRun.channelMessages.filter(cm => cm.direction === 'incoming');
+    const hasInput = currentRun.sessionItems.some(si => si.type === 'input');
+    const isChannelRun = incomingMessages.length > 0 && !hasInput;
+
+    if (isChannelRun) {
+        const inputContent = {
+            role: 'user',
+            parts: incomingMessages.map(cm => ({ type: 'text', text: cm.text ?? '' })),
+        };
+        yield { name: 'run.set_input', data: inputContent };
+        messages.push({
+            id: currentRun.id + '-input',
+            role: 'user',
+            parts: inputContent.parts,
+        });
+    }
+
+    /**
+     * Fetch the agent API response
+     */
+    let response: Response | undefined = undefined;
+
+    console.log(`[ai-sdk][${currentRun.id}] fetching`);
+
     try {
-        // Build AI SDK request body
-        const messages = sessionToUIMessages(body.session);
-
-        // For channel-based runs: create input from incoming channel messages
-        const incomingMessages = currentRun.channelMessages.filter(cm => cm.direction === 'incoming');
-        const hasInput = currentRun.sessionItems.some(si => si.type === 'input');
-        const isChannelRun = incomingMessages.length > 0 && !hasInput;
-
-        if (isChannelRun) {
-            const inputContent = {
-                role: 'user',
-                parts: incomingMessages.map(cm => ({ type: 'text', text: cm.text ?? '' })),
-            };
-            yield { name: 'run.set_input', data: inputContent };
-            messages.push({
-                id: currentRun.id + '-input',
-                role: 'user',
-                parts: inputContent.parts,
-            });
-        }
-
-        console.log(`[ai-sdk][${currentRun.id}] fetching`);
-
         response = await fetch(url, {
             method: 'POST',
             headers: {
@@ -128,38 +134,134 @@ async function* callAgentAPIAISDK(
             signal,
         });
 
-        // Let's see whether Response is successful and has body.
-        let error: string | undefined = undefined;
-        if (!response.ok) {
-            error = await response.text();
+    } catch (error: unknown) { // Here we only handle fetch errors, other errors will be handled later
+        let message: string;
+
+        if (error instanceof TypeError) { // node fetch error
+            message = (error as any).cause?.message ?? error.message ?? 'Fetch error';
         }
-        else if (!response.body) {
-            error = 'No response body';
+        else {
+            message = (error as any)?.message ?? 'Unknown error';
         }
 
-        // Close run on error
-        if (error) {
-            console.log(`[ai-sdk][${currentRun.id}] error response:`, error);
-            yield {
-                name: 'run.patch',
-                data: {
-                    status: 'failed',
-                    failReason: {
-                        message: error
-                    },
+        yield {
+            name: 'run.patch',
+            data: {
+                status: 'failed',
+                failReason: {
+                    message
                 },
-            };
+            },
+        };
+
+        yield {
+            name: 'done',
+            data: null
         }
 
-        // Publish the response as first event in the stream for the run. Must be after the condition above, because it closes the connection and state must be changed already.
+        await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({
+            status: 400,
+            headers: {},
+            error: message
+        }));
+
+        return;
+    }
+
+    /**
+     * Response is there.
+     * Let's check for error responses or no response body
+     */
+    let error: string | undefined = undefined;
+    if (!response.body) {
+        error = 'No response body';
+    }
+    else if (!response.ok) {
+        try {
+            error = await response.text();
+        } catch (error: unknown) {
+            error = 'Error reading response body';
+        }
+    }
+
+    if (error) {
+        yield {
+            name: 'run.patch',
+            data: {
+                status: 'failed',
+                failReason: {
+                    message: error
+                },
+            },
+        };
+
+        yield {
+            name: 'done',
+            data: null
+        }
+
         await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({
             status: response.status,
             headers: Object.fromEntries(response.headers.entries()),
             error
         }));
 
+        return;
+    }
+
+    /**
+     * Let's read the response body SSE stream
+     */
+
+    // send response first
+    await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({
+        status: response.status,
+        headers: Object.fromEntries(response.headers.entries()),
+    }));
+
+    try {
+
+        // response = await fetch(url, {
+        //     method: 'POST',
+        //     headers: {
+        //         'Content-Type': 'application/json',
+        //     },
+        //     body: JSON.stringify({ messages, session: body.session }),
+        //     signal,
+        // });
+
+        // // Let's see whether Response is successful and has body.
+        // let error: string | undefined = undefined;
+        // if (!response.ok) {
+        //     error = await response.text();
+        // }
+        // else if (!response.body) {
+        //     error = 'No response body';
+        // }
+
+        // // Close run on error
+        // if (error) {
+        //     console.log(`[ai-sdk][${currentRun.id}] error response:`, error);
+        //     yield {
+        //         name: 'run.patch',
+        //         data: {
+        //             status: 'failed',
+        //             failReason: {
+        //                 message: error
+        //             },
+        //         },
+        //     };
+        // }
+
+        // Publish the response as first event in the stream for the run. Must be after the condition above, because it closes the connection and state must be changed already.
+        // await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({
+        //     status: response.status,
+        //     headers: Object.fromEntries(response.headers.entries()),
+        //     error
+        // }));
+
         // If no error keep streaming
-        if (!error) {
+        // if (!error) {
             console.log(`[ai-sdk][${currentRun.id}] streaming`);
 
             // Parse AI SDK stream and convert to run.patch events
@@ -176,6 +278,7 @@ async function* callAgentAPIAISDK(
              */
             for await (const data of parseAISDKStream(response.body!)) {
                 if (data === '[DONE]') { // done is end of stream. We send it ourselves in the finally block.
+                    console.log(`[ai-sdk][${currentRun.id}] [DONE]`);
                     break;
                 }
 
@@ -364,39 +467,21 @@ async function* callAgentAPIAISDK(
                 await publishAISDKStreamEvent(currentRun.id, JSON.stringify(chunk));
             }
 
-            console.log(`[ai-sdk][${currentRun.id}] stream successfully finished`);
-        }
+            console.log(`[ai-sdk][${currentRun.id}] stream ended`);
+        // }
 
     } catch (error: unknown) {
-        let message: string;
-
-        if (error instanceof TypeError) { // node fetch error
-            message = (error as any).cause?.message ?? error.message ?? 'Fetch error';
-        }
-        else {
-            message = (error as any)?.message ?? 'Unknown error';
-        }
-
-        console.log(`[ai-sdk][${currentRun.id}] error thrown: ${message}`);
-
-        yield {
-            name: 'run.patch',
-            data: {
-                status: 'failed',
-                failReason: {
-                    message
-                },
-            },
-        };
-
-        // Publish the response as first event in the stream for the run. Must be after the condition above, because it closes the connection and state must be changed already.
-        await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({
-            status: 400,
-            headers: {},
-            error: message
-        }));
+        console.log(`[ai-sdk][${currentRun.id}] error in stream: ${error instanceof Error ? error.message : String(error)}`);
+        throw error;
 
     } finally {
+        console.log(`[ai-sdk][${currentRun.id}] sending 'done' event`);
+
+        yield {
+            name: 'done',
+            data: null
+        }
+
         console.log(`[ai-sdk][${currentRun.id}] stream cleanup`);
         await publishAISDKStreamEvent(currentRun.id, "[DONE]");
         await expireAISDKStream(currentRun.id);
