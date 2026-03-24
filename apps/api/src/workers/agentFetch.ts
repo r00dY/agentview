@@ -143,8 +143,6 @@ async function processAgentFetch(run: Run) {
 
     }
 
-
-
     // Refetch session after agentRef assignment
     session = await withOrg(run.organizationId, async (tx) => {
       return fetchSession(tx, run.sessionId);
@@ -171,20 +169,23 @@ async function processAgentFetch(run: Run) {
       }
     }
 
-    // Call the agent endpoint
+
+    /**
+     * CALLING AGNET ENDPOINT
+     * 
+     * The algorithm here is pretty simple:
+     * - we call adapter.callAgent which is async generator
+     * - we're in the 'fetching' state until it returns
+     * - it can, during processing, send patches to the run
+     * - TERMINATION:
+     *    - it gets signal to abort. We listen for abortion thanks to 'onRunTerminated' (which sets [TERMINATED] event on the 'agentview' native stream).
+     *    - there are 2 sources of termination: timeouts and user cancellation. First results in "failed", second in "cancelled" states.
+     * - ALL THE RESPONSIBILITY FOR CLEANUP IS ON THE ADAPTER SIDE. It means that if adapter ends while the run is in_progress, it won't finish. It will just timeout.
+     */
+
+
     const body: RunBody = { session };
     const adapter = getAdapter(agentConfig.adapter);
-
-    // const getCurrentRunStatus = async () => {
-    //   return await withOrg(run.organizationId, async (tx) => {
-    //     const [currentRun] = await tx
-    //       .select({ status: runs.status })
-    //       .from(runs)
-    //       .where(eq(runs.id, run.id))
-    //       .limit(1);
-    //     return currentRun.status;
-    //   });
-    // }
 
     // Abort fetch immediately when run is terminated (e.g. external cancellation).
     terminationAbortController = onRunTerminated(run.id, () => {
@@ -194,27 +195,12 @@ async function processAgentFetch(run: Run) {
 
     console.log(`[agentFetch][${run.id}] calling agent API`);
 
-    // let isDone = false;
-
     for await (const event of adapter.callAgent(body, agentUrl, abortController.signal)) {
       if (abortController.signal.aborted) {
         break;
       }
 
       console.log(`[agentFetch][${run.id}] event: ${event.name}`);
-
-      // if (isDone) {
-      //   throw new Error('INTERNAL ERROR: "done" event received more than once');
-      // }
-
-      // Check for external cancellation after each event received.
-      // this is sanity check, listetning to [DONE] above is faster and should be enough
-      // const runStatus = await getCurrentRunStatus();
-      // if (runStatus === 'cancelled') {
-      //   console.log(`[agentFetch][${run.id}] cancelled, aborting [not in progress]`);
-      //   abortController.abort();
-      //   break;
-      // }
 
       if (event.name === 'run.set_input') {
         await withOrg(run.organizationId, async (tx) => {
@@ -257,40 +243,12 @@ async function processAgentFetch(run: Run) {
           event.data
         );
       }
-      // else if (event.name === 'done') { // Automatically fail the run if it is not in progress after stream is finished
-      //   isDone = true;
-      //   const finalRunStatus = await getCurrentRunStatus();
-
-      //   if (finalRunStatus === 'in_progress') {
-      //     await applyRunPatch(
-      //       run.id,
-      //       run.organizationId,
-      //       environment,
-      //       {
-      //         status: 'failed',
-      //         failReason: { message: 'Agent stream ended without completing' },
-      //       }
-      //     );
-      //     console.log(`[agentFetch][${run.id}] failed, stream ended without completing`);
-      //   }
-      // }
     }
-
-    // if (!isDone) {
-    //   throw new Error('INTERNAL ERROR: "done" event not received.');
-    // }
-
-    // // Automatically fail the run if it is not in progress after stream is finished
-    // const finalRunStatus = await getCurrentRunStatus();
-    // if (finalRunStatus === 'in_progress') {
-    //   throw new Error('Agent stream ended without completing');
-    // }
 
     console.log(`[agentFetch][${run.id}] agent API call finished`);
 
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      // This is OK since abort is only than on the condition of the run being *not* in progress
+    if (error instanceof Error && error.name === 'AbortError') { // This is OK since abort is only than on the condition of the run being *not* in progress
       return;
     }
 
