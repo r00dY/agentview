@@ -145,17 +145,6 @@ app.on(["POST", "GET"], "/api/auth/*", (c) => {
 
 // CONFIG HELPERS
 
-
-// async function getEnvironmentByPrincipal(tx: Transaction, principal: PrivatePrincipal): Promise<Awaited<ReturnType<typeof getEnvironment>> | undefined> {
-//   const environment = await getEnvironment(tx, getEnv(principal));
-
-//   if (!environment) {
-//     return undefined;
-//   }
-
-//   return environment;
-// }
-
 async function requireConfig(tx: Transaction, principal: Principal): Promise<BaseAgentViewConfig> {
   const environment = await requireEnvironment(tx, principal.env);
   if (environment.config === null) {
@@ -191,24 +180,6 @@ function requireScoreConfig(scores: { name: string; schema: any }[] | undefined,
   return scoreConfig
 }
 
-// function commentTargetFromRecord(comment: { sessionItemId: string | null; runId: string | null; channelMessageId: string | null }): CommentTarget {
-//   if (comment.sessionItemId) return { sessionItemId: comment.sessionItemId };
-//   if (comment.runId) return { runId: comment.runId };
-//   if (comment.channelMessageId) return { channelMessageId: comment.channelMessageId };
-//   throw new Error("Comment has no target");
-// }
-
-/** Get the acting user object (id) from any private principal (member or dev API key) */
-// function requireActingUser(principal: PrivatePrincipal): BetterAuthUser {
-//   const memberId = requireMemberId(principal);
-//   // For member principal, we have the full user object
-//   if (principal.type === 'member') {
-//     return principal.session.user;
-//   }
-//   // For API key principal, construct a minimal user-like object
-//   return { id: memberId } as BetterAuthUser;
-// }
-
 // DATA HELPERS
 
 function requireUUID(id: string) {
@@ -233,15 +204,6 @@ async function requireRun(tx: Transaction, runId: string) {
   }
   return run
 }
-
-async function requireSessionItem(session: Awaited<ReturnType<typeof requireSession>>, itemId: string): Promise<SessionItem> {
-  const item = getAllSessionItems(session).find((a) => a.id === itemId)
-  if (!item) {
-    throw new HTTPException(404, { message: "Session item not found" });
-  }
-  return item as SessionItem
-}
-
 
 async function requireUser(tx: Transaction, arg: Parameters<typeof findUser>[1]) {
   const user = await findUser(tx, arg)
@@ -442,72 +404,6 @@ async function deleteComment(
 
 /* --------- END USERS --------- */
 
-// // End user authentication endpoint (disabled for now)
-// const clientAuthRoute = createRoute({
-//   method: 'post',
-//   path: '/api/end-users/auth',
-//   request: {
-//     body: body(z.object({
-//       id_token: z.string().optional(),
-//     })),
-//   },
-//   responses: {
-//     200: response_data(z.object({
-//       token: z.string(),
-//       endUserId: z.string(),
-//       expiresAt: z.iso.date(),
-//     })),
-//     401: response_error(),
-//     404: response_error(),
-//   },
-// })
-
-// app.openapi(clientAuthRoute, async (c) => {
-//   const endUserSession = await getEndUserAuthSession({ headers: c.req.raw.headers })
-
-//   if (endUserSession) {
-//     return c.json({
-//       endUserId: endUserSession.endUserId,
-//       token: endUserSession.token,
-//       expiresAt: endUserSession.expiresAt,
-//     }, 200)
-//   }
-
-//   const endUser = await (async () => {
-//     const body = await c.req.valid('json')
-
-//     if (body.id_token) {
-//       const jwtPayload = verifyJWT(body.id_token)
-
-//       if (!jwtPayload) {
-//         throw new HTTPException(401, { message: "Can't verify this ID token." });
-//       }
-
-//       const existingClient = await  (jwtPayload.external_id)
-
-//       if (existingClient) {
-//         return existingClient
-//       } else {
-//         return await createEndUser(jwtPayload.external_id)
-//       }
-//     }
-
-//     return await createEndUser()
-//   })()
-
-//   const newendUsersession = await createEndUserAuthSession(endUser.id, {
-//     ipAddress: c.req.header('x-forwarded-for') || c.req.header('x-real-ip'),
-//     userAgent: c.req.header('user-agent'),
-//   })
-
-//   return c.json({
-//     endUserId: client.id,
-//     token: newendUsersession.token,
-//     expiresAt: newendUsersession.expiresAt,
-//   }, 200)
-// })
-
-
 const usersPOSTRoute = createRoute({
   method: 'post',
   path: '/api/users',
@@ -539,7 +435,7 @@ function getDefaultSpaceFromEnvironment(environment: Environment): { space: Spac
   }
 }
 
-async function createUser(principal: Principal, space_: Space | undefined | null, createdBy_: string | null | undefined, externalId?: string | null, email?: string | null) {
+async function createUser(tx: Transaction, principal: Principal, space_: Space | undefined | null, createdBy_: string | null | undefined, externalId?: string | null, email?: string | null) {
   const environment = await withOrg(principal.organizationId, async (tx) => { return await requireEnvironment(tx, principal.env) })
 
   if (space_ && space_ === 'playground' && createdBy_ !== null) {
@@ -550,39 +446,40 @@ async function createUser(principal: Principal, space_: Space | undefined | null
 
   await authorize(principal, { action: "end-user:create", space })
 
-  return await withOrg(principal.organizationId, async (tx) => {
-    if (externalId) {
-      const existingUserWithExternalId = await findUser(tx, { externalId, organizationId: principal.organizationId })
-      if (existingUserWithExternalId) {
-        throw new AgentViewError('User with this external ID already exists', 422)
-      }
+  if (externalId) {
+    const existingUserWithExternalId = await findUser(tx, { externalId, organizationId: principal.organizationId })
+    if (existingUserWithExternalId) {
+      throw new AgentViewError('User with this external ID already exists', 422)
     }
+  }
 
-    if (space === 'production' && createdBy !== null) { // sanity check
-      throw new AgentViewError('Users in production space can be created only with production api key.', 401)
-    }
-    if ((space === 'playground' || space === 'shared-playground') && createdBy === null) {
-      throw new AgentViewError(`Users in '${space}' space can't be created with production api key, only via member login.`, 401)
-    }
+  if (space === 'production' && createdBy !== null) { // sanity check
+    throw new AgentViewError('Users in production space can be created only with production api key.', 401)
+  }
+  if ((space === 'playground' || space === 'shared-playground') && createdBy === null) {
+    throw new AgentViewError(`Users in '${space}' space can't be created with production api key, only via member login.`, 401)
+  }
 
-    const [newEndUser] = await tx.insert(endUsers).values({
-      organizationId: principal.organizationId,
-      externalId,
-      email,
-      createdBy,
-      space,
-      token: randomBytes(32).toString('hex'),
-    }).returning()
+  const [newEndUser] = await tx.insert(endUsers).values({
+    organizationId: principal.organizationId,
+    externalId,
+    email,
+    createdBy,
+    space,
+    token: randomBytes(32).toString('hex'),
+  }).returning()
 
-    return newEndUser
-  })
+  return newEndUser
 }
 
 app.openapi(usersPOSTRoute, async (c) => {
   const principal = await authnAllowPublic(c.req.raw.headers)
   const body = await c.req.valid('json')
-  const newUser = await createUser(principal, body.space, body.createdBy, body.externalId, body.email);
-  return c.json(newUser, 201);
+
+  return withOrg(principal.organizationId, async (tx) => {
+    const newUser = await createUser(tx, principal, body.space, body.createdBy, body.externalId, body.email);
+    return c.json(newUser, 201);
+  })
 })
 
 
@@ -613,25 +510,6 @@ app.openapi(userMeRoute, async (c) => {
   await authorize(principal, { action: "end-user:read", user })
   return c.json(user, 200);
 })
-
-// const publicMeRoute = createRoute({
-//   method: 'get',
-//   path: '/api/public/me',
-//   summary: 'Retrieve the current user',
-//   tags: ['Public'],
-//   responses: {
-//     200: response_data(UserSchema),
-//     404: response_error()
-//   },
-// })
-
-// app.openapi(publicMeRoute, async (c) => {
-//   const principal = await authnUser(c.req.raw.headers)
-//   const user = principal.user;
-
-//   await authorize(principal, { action: "end-user:read", user })
-//   return c.json(user, 200);
-// })
 
 const userGETRoute = createRoute({
   method: 'get',
@@ -758,9 +636,6 @@ function getSessionListFilter(params: z.infer<typeof SessionsGetQueryParamsSchem
       else if (principal.type === 'apiKey') {
         filters.push(eq(endUsers.createdBy, principal.apiKey.userId));
       }
-      // else {
-      //   throw new HTTPException(401, { message: "`playground` can only be used with provided logged in user id." });
-      // }
     }
   }
   else if (principal.type === 'user') {
@@ -835,29 +710,11 @@ async function getSessions(tx: Transaction, params: SessionsGetQueryParams, prin
   const offset = (page - 1) * limit;
   const baseFilter = getSessionListFilter(params, principal);
 
-  // // Handle starred filter - requires joining with starredSessions table
-  // const isStarred = params.starred === true || params.starred === 'true';
-  // const starredJoin = (() => {
-  //   if (!isStarred) return null;
-  //   if (principal.type === 'user') {
-  //     throw new HTTPException(422, { message: "starred filter is only available for staff users" });
-  //   }
-  //   const memberId = requireMemberId(principal);
-  //   return and(
-  //     eq(starredSessions.sessionId, sessions.id),
-  //     eq(starredSessions.userId, memberId)
-  //   );
-  // })();
-
   // Build count query
   const countQuery = tx
     .select({ count: sql<number>`cast(count(*) as integer)` })
     .from(sessions)
     .$dynamic();
-
-  // if (starredJoin) {
-  //   countQuery.innerJoin(starredSessions, starredJoin);
-  // }
 
   const totalCountResult = await countQuery
     .leftJoin(endUsers, eq(sessions.userId, endUsers.id))
@@ -870,10 +727,6 @@ async function getSessions(tx: Transaction, params: SessionsGetQueryParams, prin
     .select({ sessions, end_users: endUsers })
     .from(sessions)
     .$dynamic();
-
-  // if (starredJoin) {
-  //   sessionsQuery.innerJoin(starredSessions, starredJoin);
-  // }
 
   const result = await sessionsQuery
     .leftJoin(endUsers, eq(sessions.userId, endUsers.id))
@@ -1247,7 +1100,7 @@ export async function createSessionHandler(c: Parameters<RouteHandler<typeof ses
         return principal.user;
       }
 
-      return await createUser(principal, body.space, body.createdBy, undefined);
+      return await createUser(tx, principal, body.space, body.createdBy, undefined);
     })()
 
     authorize(principal, { action: "end-user:update", user });
