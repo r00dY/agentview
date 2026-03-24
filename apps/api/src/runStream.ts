@@ -16,8 +16,6 @@ import { createRedisStreamConsumer } from './redisStreamConsumer';
  * consumer share the same time source — no Redis clock skew.
  */
 
-const POLL_INTERVAL_MS = 50;
-
 const streamKey = (runId: string) => `run-stream:agentview:${runId}`;
 
 // --- Publishing (shared connection) ---
@@ -32,12 +30,11 @@ export async function publishRunStreamEvent(runId: string, createdAt: string | n
   }
 }
 
-// --- Consuming (HTTP handlers — dedicated connection) ---
+// --- Consuming (dedicated connection per consumer) ---
 
 /**
  * Yields run patch events. Stops on [DONE] or [TERMINATED] (neither is
- * forwarded to the caller). Uses a dedicated Redis connection via
- * RedisStreamConsumer.
+ * forwarded to the caller).
  *
  * The caller MUST call close() when done (use try/finally).
  */
@@ -58,21 +55,17 @@ export function createRunStreamConsumer(runId: string, signal: AbortSignal, afte
   return { entries, close: consumer.close };
 }
 
-// --- Termination listener (worker — shared connection, lightweight) ---
-
 /**
  * Calls `onTerminated` when [TERMINATED] appears on the run stream.
  * Returns an AbortController — call .abort() to stop listening.
- *
- * Uses non-blocking polling on the shared connection since this runs inside
- * the worker — one dedicated connection per run would be wasteful here.
  */
 export function onRunTerminated(runId: string, onTerminated: () => void) {
   const abortController = new AbortController();
+  const consumer = createRedisStreamConsumer(streamKey(runId), abortController.signal);
 
   (async () => {
     try {
-      for await (const data of pollRunStream(runId, abortController.signal)) {
+      for await (const data of consumer.entries()) {
         if (data === '[TERMINATED]') {
           onTerminated();
           return;
@@ -80,31 +73,10 @@ export function onRunTerminated(runId: string, onTerminated: () => void) {
       }
     } catch {
       // Expected on cleanup
+    } finally {
+      consumer.close();
     }
   })();
 
   return abortController;
-}
-
-// Non-blocking poll loop on the shared connection — only used by onRunTerminated.
-async function* pollRunStream(runId: string, signal: AbortSignal) {
-  const key = streamKey(runId);
-  let lastId = '0-0';
-
-  while (!signal.aborted) {
-    const results = await redis.xread('STREAMS', key, lastId);
-    if (signal.aborted) return;
-
-    if (!results) {
-      await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
-      continue;
-    }
-
-    for (const [, entries] of results) {
-      for (const [id, fields] of entries) {
-        lastId = id;
-        yield fields[1];
-      }
-    }
-  }
 }
