@@ -29,9 +29,11 @@
       }
     }
   },
-  "dependencies": {
+  "peerDependencies": {
+    "ai": "^6.0.0"
   },
   "devDependencies": {
+    "ai": "^6.0.0",
     "zod": "^4.1.11",
     "@agentview/zod-from-json-schema": "workspace:*",
     "tsx": "^4.20.3",

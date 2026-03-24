@@ -567,6 +567,9 @@ importers:
       '@types/react':
         specifier: ^19.1.2
         version: 19.1.13
+      ai:
+        specifier: ^6.0.0
+        version: 6.0.79(zod@4.1.12)
       concurrently:
         specifier: ^9.2.1
         version: 9.2.1
