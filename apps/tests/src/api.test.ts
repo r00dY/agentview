@@ -2893,18 +2893,37 @@ describe('API', () => {
       });
 
       // The stream will end without any chunks (HTTP error → no AI SDK chunks published)
-      const chunks: any[] = [];
-      const stream = await avAISDK.createRunStream({
-        sessionId: session.id,
-        input: { type: "message", role: "user", parts: [{ type: "text", text: "Hi" }] },
-      });
+      // const chunks: any[] = [];
 
-      for await (const chunk of stream) {
-        chunks.push(chunk);
-      }
+      const transport = avAISDK.createTransport();
+      expect(transport.sendMessages({
+        chatId: session.id,
+        messages: [{ id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }],
+        trigger: "submit-message",
+        messageId: undefined,
+        abortSignal: undefined,
+      })).rejects.toThrowError(expect.objectContaining({
+        message: expect.stringContaining("This is an error from test suite.")
+      }))
 
-      // No AI SDK chunks were streamed (agent returned 500)
-      expect(chunks.length).toBe(0);
+      // expect(promise).rejects.toThrowError(expect.objectContaining({
+      //   statusCode,
+      //   message: expect.any(String),
+      // }))
+
+
+
+      // const stream = await avAISDK.createRunStream({
+      //   sessionId: session.id,
+      //   input: { type: "message", role: "user", parts: [{ type: "text", text: "Hi" }] },
+      // });
+
+      // for await (const chunk of stream) {
+      //   chunks.push(chunk);
+      // }
+
+      // // No AI SDK chunks were streamed (agent returned 500)
+      // expect(chunks.length).toBe(0);
 
       // The stream ends before the worker marks the run as failed, so wait briefly
       const updatedSession = await av.getSession({ id: session.id });

@@ -16,6 +16,7 @@ import type {
 import { type AgentViewErrorBody, AgentViewError } from './AgentViewError.js'
 import { getApiUrl } from './urls.js'
 import { parseAISDKDataStream } from './parseAISDKDataStream.js'
+import { DefaultChatTransport } from 'ai'
 
 export interface AgentViewClientOptions {
   apiKey: string
@@ -152,7 +153,7 @@ export class AgentViewBase {
   async getEnvironment(): Promise<Environment> {
     return await this.request<Environment>('GET', `/api/environment`)
   }
-  
+
 }
 
 export class AgentViewClient extends AgentViewBase {
@@ -175,6 +176,23 @@ export class AgentViewClient extends AgentViewBase {
 
   async cancelRun(options: { sessionId: string }) {
     return await this.request<Session>('POST', `/api/sessions/${options.sessionId}/cancel`)
+  }
+
+  createTransport() {
+    const baseUrl = getApiUrl();
+    return new DefaultChatTransport({
+      headers: this.getHeaders(),
+      prepareSendMessagesRequest: ({ id, messages }) => ({
+        api: `${baseUrl}/api/sessions/${id}/runs`,
+        body: {
+          input: messages[messages.length - 1],
+          stream: true
+        },
+      }),
+      prepareReconnectToStreamRequest: ({ id }) => ({
+        api: `${baseUrl}/api/sessions/${id}/stream`,
+      })
+    })
   }
 
   /**
