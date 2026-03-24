@@ -4,7 +4,6 @@ import { runs, sessions, channelMessages, environments, sessionItems } from '../
 import { eq, and, inArray, sql, not, isNull } from 'drizzle-orm';
 import { getConfigFromEnvironment } from '../environments';
 import { fetchSession } from '../sessions';
-import { AgentAPIError } from '../agentApi';
 import { getAdapter } from '../adapters/adapters';
 import { findChannelConfig, getChannelAgent } from 'agentview/baseConfigUtils';
 import { applyRunPatch, terminateRun } from '../runs';
@@ -252,15 +251,15 @@ async function processAgentFetch(run: Run) {
       return;
     }
 
-    const errorMessage = error instanceof AgentAPIError
-      ? error.message
-      : (error instanceof Error ? error.message : String(error));
+    const errorMessage = error instanceof Error ? error.message : String(error);
 
     console.log(`[agentFetch][${run.id}] error: ${errorMessage}`);
 
-    await terminateRun(run.id, run.organizationId, {
-      status: 'failed',
-      failReason: { message: errorMessage },
+    await withOrg(run.organizationId, async (tx) => {
+      await terminateRun(tx, run.id, {
+        status: 'failed',
+        failReason: { message: errorMessage },
+      });
     });
 
   } finally {

@@ -3,6 +3,7 @@ import { runs } from '../schemas/schema';
 import { inArray, sql } from 'drizzle-orm';
 import { createWorker } from './utils';
 import { terminateRun } from '../runs';
+import { withOrg } from 'src/withOrg';
 
 type Run = typeof runs.$inferSelect;
 
@@ -24,13 +25,15 @@ export const expiredRunsWorker = createWorker<Run>({
       .returning();
   },
   async process(run) {
-    await terminateRun(
-      run.id,
-      run.organizationId,
-      {
-        status: 'failed',
-        failReason: { message: 'Timeout' },
-      }
-    );
+    await withOrg(run.organizationId, async (tx) => {
+      await terminateRun(
+        tx,
+        run.id,
+        {
+          status: 'failed',
+          failReason: { message: 'Timeout' },
+        }
+      );
+    });
   },
 });

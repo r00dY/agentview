@@ -8,7 +8,7 @@ import type { Transaction } from '../types';
 import { createAutoRun, terminateRun } from '../runs';
 import { randomBytes } from 'crypto';
 import { createSession } from '../sessions';
-import type { ChannelRef } from 'agentview';
+import type { ChannelRef } from 'agentview/apiTypes';
 
 export type Channel = typeof channels.$inferSelect;
 type ChannelThread = typeof channelThreads.$inferSelect;
@@ -239,7 +239,7 @@ export function channelProvider(type: string) {
         console.log('[ingestMessage] cancelling last run');
 
         // this is not inside of transaction!
-        await terminateRun(lastRun.id, thread.organizationId, { status: 'cancelled' });
+        await terminateRun(tx, lastRun.id, { status: 'cancelled' });
       }
       else {
         console.log('[ingestMessage] last run is not in progress');

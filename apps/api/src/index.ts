@@ -1490,27 +1490,21 @@ async function sessionStandardCancelHandler(c: Parameters<RouteHandler<typeof se
 
   const { session_id } = c.req.param()
 
-  const { lastRun, environment } = await withOrg(principal.organizationId, async (tx) => {
+  return await withOrg(principal.organizationId, async (tx) => {
     const session = await requireSession(tx, session_id);
     const lastRun = getLastRun(session);
 
     authorize(principal, { action: "end-user:update", user: session.user });
 
-    const environment = await requireEnvironment(tx, principal.env);
-
     if (lastRun?.status !== 'in_progress') {
       throw new AgentViewError("Cannot cancel a run that is not in progress.", 422);
     }
 
-    return { lastRun, environment };
-  });
+    await terminateRun(tx, lastRun.id, { status: 'cancelled' });
 
-  await terminateRun(lastRun.id, principal.organizationId, { status: 'cancelled' });
-
-  return withOrg(principal.organizationId, async (tx) => {
     return await requireSession(tx, session_id);
   });
-}
+};
 
 app.openapi(sessionStandardCancelRoute, async (c) => {
   const session = await sessionStandardCancelHandler(c);

@@ -2329,10 +2329,7 @@ describe('API', () => {
    * gets called automatically by the worker upon run creation.
    */
 
-  /**
-   * WE DO NOT USE IT ANYMORE. WE'RE AI SDK FIRST.
-   */
-  // describe("agent endpoint auto-fetch", () => {
+  // describe.only("agent endpoint auto-fetch", () => {
   //   const AGENT_PORT = 3457;
   //   const AGENT_URL = `http://localhost:${AGENT_PORT}/agent`;
 
@@ -2360,7 +2357,7 @@ describe('API', () => {
   //     });
   //   };
 
-    
+
   //   async function collectSessionStream(stream: Awaited<ReturnType<typeof av.getSessionStream>>) {
   //     const streamEvents: Array<{ event: SessionStreamEvent; session: StandardSession }> = [];
   //     for await (const e of stream!) {

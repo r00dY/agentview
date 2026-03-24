@@ -11,7 +11,7 @@ import { getLastRun } from 'agentview/sessionUtils';
 import { fetchSession } from './sessions';
 import { getConfigFromEnvironment } from './environments';
 import { publishRunStreamEvent } from './runStream';
-import { withOrg } from './withOrg';
+import { withOrg, type OrgTransaction } from './withOrg';
 
 export const DEFAULT_IDLE_TIME = 1000 * 60; // 60 seconds
 
@@ -321,33 +321,32 @@ export async function applyRunPatch(
  * - there's risk we introduce a bug which incorrectly terminates run.
  * - when we listened to [done] event on redis streams in agent API call, even if integration called apply patch with "complete" / "failed" correctly. In that case we should not abort agent API call. That's why termination is different "path" in our system.
  */
-export async function terminateRun(runId: string, organizationId: string, body: { status: 'cancelled' } | { status: 'failed', failReason: any }) {
+export async function terminateRun(tx: OrgTransaction, runId: string, body: { status: 'cancelled' } | { status: 'failed', failReason: any }) {
   const nowIso = new Date().toISOString();
 
-  await withOrg(organizationId, async (tx) => {
-    const run = await getRun(tx, runId);
+  const run = await getRun(tx, runId);
 
-    if (!run) {
-      throw new AgentViewError("Can't find run to terminate.", 404);
-    }
-    if (run.status !== 'in_progress') {
-      throw new AgentViewError("Cannot terminate a run that is not in progress.", 422);
-    }
+  if (!run) {
+    throw new AgentViewError("Can't find run to terminate.", 404);
+  }
+  if (run.status !== 'in_progress') {
+    throw new AgentViewError("Cannot terminate a run that is not in progress.", 422);
+  }
 
-    await tx.update(runs).set({
-      ...body,
-      finishedAt: nowIso,
-      updatedAt: nowIso,
-      expiresAt: null,
-    }).where(eq(runs.id, runId));
-  });
-
-  await publishRunStreamEvent(runId, nowIso, JSON.stringify({ // this is important, we must send the last run patch event to the stream
+  await tx.update(runs).set({
     ...body,
+    finishedAt: nowIso,
     updatedAt: nowIso,
-  }));
+    expiresAt: null,
+  }).where(eq(runs.id, runId));
 
-  await publishRunStreamEvent(runId, null, '[TERMINATED]');
+  tx.afterCommit(async () => {
+    await publishRunStreamEvent(runId, nowIso, JSON.stringify({ // this is important, we must send the last run patch event to the stream
+      ...body,
+      updatedAt: nowIso,
+    }));
+    await publishRunStreamEvent(runId, null, '[TERMINATED]');
+  });
 }
 
 

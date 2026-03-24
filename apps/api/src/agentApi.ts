@@ -5,7 +5,7 @@ export interface AgentErrorResponse {
   [key: string]: any
 }
 
-export class AgentAPIError extends Error {
+class AgentAPIError extends Error {
   object: { message: string; [key: string]: any }
 
   constructor(object: { message: string; [key: string]: any }) {
@@ -128,19 +128,42 @@ export async function* callAgentAPI(body: RunBody, url: string, signal?: AbortSi
 
   }
   catch(error: unknown) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      return; // abort doesn't require action since it means the run is already properly terminated
+    }
+
+    let errorObject: {
+      message: string
+      [key: string]: any
+    }
+
     if (error instanceof AgentAPIError) { // our internal errors should be rethrown
-      throw error
+      errorObject = error.object
     }
     // the only errors that are left are network errors
     else if (error instanceof Error) {
-      throw new AgentAPIError({
+      errorObject = {
         message: "Agent API connection error: " + error.message,
-        cause: error.cause
-      })
+        cause: error.cause,
+      }
+      // throw new AgentAPIError({
+      //   message: "Agent API connection error: " + error.message,
+      //   cause: error.cause
+      // })
     }
     // we rethrow unknown errors
     else {
-      throw error;
+      errorObject = {
+        message: String(error),
+      }
+    }
+
+    yield {
+      name: "run.patch",
+      data: {
+        status: "failed",
+        failReason: errorObject,
+      },
     }
   }
 }
