@@ -2,7 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { type ChannelMessage, type CommentMessage, type InputTarget, type StandardRun, type Score, type StandardSession, type SessionBase, type SessionItem, type SessionsStats, type SessionStats } from "agentview/apiTypes";
 import { findAgentConfig, findItemConfigById, findRunConfig, requireAgentConfig, requireChannelConfig } from "agentview/baseConfigUtils";
 import { enhanceSession, getActiveRuns, getAllSessionItems, getLastRun } from "agentview/sessionUtils";
-import type { AgentConfig, ChannelConfig, ScoreConfig, SessionItemConfig, SessionItemDisplayComponentProps } from "agentview/types";
+import type { AgentConfig, ChannelConfig, ScoreConfig, SessionItemConfig, SessionItemDisplayComponentProps } from "../types";
 import { AlertCircleIcon, ChevronDown, CircleGauge, InfoIcon, Loader2, Lock, MessageCirclePlus, UsersIcon } from "lucide-react";
 import { useEffect, useLayoutEffect, useOptimistic, useRef, useState } from "react";
 import { useForm } from "react-hook-form";

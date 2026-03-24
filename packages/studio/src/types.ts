@@ -1,7 +1,7 @@
 import type { RouteObject } from "react-router";
-import type { BaseScoreConfig, BaseSessionItemConfig, BaseAgentConfig, BaseAgentViewConfig, BaseRunConfig, BaseChannelConfig } from "./baseConfigTypes.js";
-import type { StandardRun, StandardSession, SessionBase, SessionItem } from "./apiTypes.js";
-import { enhanceSession } from "./sessionUtils.js";
+import type { BaseScoreConfig, BaseSessionItemConfig, BaseAgentConfig, BaseAgentViewConfig, BaseRunConfig, BaseChannelConfig } from "agentview/baseConfigTypes";
+import type { StandardRun, StandardSession, SessionBase, SessionItem } from "agentview/apiTypes";
+import { enhanceSession } from "agentview/sessionUtils";
 import { z } from "zod";
 
 export type RootCustomRoute = {

@@ -1,4 +1,4 @@
-import type { AgentConfig, AgentViewConfig } from "agentview/types";
+import type { AgentConfig, AgentViewConfig } from "./types";
 import { like } from "./scores";
 
 export function loadConfig(): AgentViewConfig {

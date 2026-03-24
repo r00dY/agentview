@@ -60,10 +60,6 @@ export type BaseAgentViewConfig<TAgentConfig extends BaseAgentConfig = BaseAgent
     __internal?: InternalConfig,
 }
 
-
-
-
-
 const JsonSchema = z.record(z.string(), z.any()).refine((value) => isJSONSchema(value), {
     message: "Invalid JSON Schema format",
 });
@@ -97,7 +93,6 @@ function baseConfigSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
     const BaseSessionItemConfigSchemaWithTools = BaseSessionItemConfigSchema.extend({
         callResult: BaseSessionItemConfigSchema.optional(),
     });
-
 
     const apiChannelSchema = z.object({
         type: z.literal('api'),
@@ -146,7 +141,6 @@ function baseConfigSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
 export const BaseConfigSchema = baseConfigSchema(JsonSchema)
 export const BaseConfigSchemaToZod = baseConfigSchema(JsonSchemaToZod)
 export const BaseConfigSchemaZodToJsonSchema = baseConfigSchema(ZodToJsonSchema)
-
 
 function isJSONSchema(value: any): boolean { // temporarily simple check
     return typeof value === 'object' && value !== null && '$schema' in value;

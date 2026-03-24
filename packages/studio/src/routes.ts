@@ -15,7 +15,7 @@ import { loginRoute } from "./routes/login";
 import { rootRoute } from "./root";
 import { sessionRunRoute } from "./routes/sessionRun";
 import { settingsRoute } from "./routes/settings";
-import type { AgentViewConfig } from "agentview/types";
+import type { AgentViewConfig } from "./types";
 import { uiRoute } from "./routes/ui";
 
 export function routes(customRoutes: AgentViewConfig["customRoutes"]): RouteObject[] {

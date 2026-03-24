@@ -13,7 +13,8 @@ import { requireRunConfig, requireAgentConfig, requireChannelConfig, findChannel
 import { config } from "../config";
 import { DisplayProperties } from "../components/DisplayProperties";
 import type { ActionResponse } from "../lib/errors";
-import type { AgentViewError, RunConfig } from "agentview";
+import type { RunConfig } from "../types";
+import { type AgentViewError } from "agentview";
 import { Alert, AlertDescription } from "../components/ui/alert";
 
 function loader({ request, params }: LoaderFunctionArgs) {

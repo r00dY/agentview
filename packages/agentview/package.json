@@ -30,13 +30,8 @@
     }
   },
   "dependencies": {
-    "better-auth": "^1.2.12",
-    "chokidar-cli": "^3.0.0",
-    "react": "^19.1.0",
-    "react-router": "^7.5.3",
     "zod": "^4.1.11",
-    "@agentview/zod-from-json-schema": "workspace:*",
-    "dotenv": "^17.1.0"
+    "@agentview/zod-from-json-schema": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.20.3",

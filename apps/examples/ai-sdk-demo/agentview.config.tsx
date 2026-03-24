@@ -1,7 +1,7 @@
 import { AssistantMessage, Colors, Step, StepContent, StepTitle, UserMessage, UserMessageInput, multiSelect, select } from "@agentview/studio";
 import { Button } from "@agentview/studio/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@agentview/studio/components/ui/select";
-import { defineConfig } from "agentview";
+import { defineConfig } from "@agentview/studio";
 import { Book, Brain } from "lucide-react";
 import * as React from "react";
 import { z } from "zod";

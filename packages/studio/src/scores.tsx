@@ -2,7 +2,7 @@ import { z } from "zod";
 import { ToggleGroupControl } from "./components/ToggleGroup";
 import { OptionDisplay } from "./components/OptionDisplay";
 import { ThumbsDown, ThumbsUp } from "lucide-react";
-import type { ScoreConfig } from "agentview/types";
+import type { ScoreConfig } from "./types";
 import type { Option } from "./components/Option";
 import { PillSelect } from "./components/PillSelect";
 import { PillMultiSelect } from "./components/PillMultiSelect";

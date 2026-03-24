@@ -4,7 +4,7 @@ import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react"
 import { cn } from "../lib/utils"
 import { Button } from "./ui/button"
 import { Pill } from "./Pill"
-import type { ControlComponentProps } from "agentview/types"
+import type { ControlComponentProps } from "../types"
 import { optionStringToValue, optionValueToString, type Option } from "./Option"
 
 function Select({

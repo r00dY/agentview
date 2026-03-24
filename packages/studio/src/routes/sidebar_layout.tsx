@@ -37,7 +37,7 @@ import {
 // Removed Framework Mode type import
 import { spaceAllowedValues, type Space } from "agentview/apiTypes";
 import type { ApiChannelConfig } from "agentview/baseConfigTypes";
-import type { AgentCustomRoute } from "agentview/types";
+import type { AgentCustomRoute } from "../types";
 import { getWebAppUrl } from "agentview/urls";
 import { matchPath } from "react-router";
 import { UserAvatar } from "../components/internal/UserAvatar";

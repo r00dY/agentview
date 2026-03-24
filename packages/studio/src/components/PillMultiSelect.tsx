@@ -4,7 +4,7 @@ import { XIcon } from "lucide-react"
 import { cn } from "../lib/utils"
 import { Button } from "./ui/button"
 import { Pill } from "./Pill"
-import type { ControlComponentProps } from "agentview/types"
+import type { ControlComponentProps } from "../types"
 import { optionValueToString, type Option } from "./Option"
 
 export function PillMultiSelect<T extends string | number | boolean>(props: ControlComponentProps<T[]> & { options: Option<T>[], placeholder?: string, className?: string }) {

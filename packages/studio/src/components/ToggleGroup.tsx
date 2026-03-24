@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { ControlComponentProps } from "agentview/types";
+import type { ControlComponentProps } from "../types";
 import { Button } from "./ui/button";
 import { type Option, optionValueToString } from "./Option";
 

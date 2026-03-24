@@ -15,7 +15,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form } from "../ui/form";
 import React from "react";
-import type { ScoreConfig } from "agentview/types";
+import type { ScoreConfig } from "../../types";
 import { UserAvatar } from "./UserAvatar";
 import { type Member } from "../../lib/auth-client";
 

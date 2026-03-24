@@ -1,5 +1,5 @@
 import { createBrowserRouter, RouterProvider } from "react-router";
-import type { AgentViewConfig } from "agentview/types";
+import type { AgentViewConfig } from "./types";
 import { createRoot } from "react-dom/client";
 
 export async function renderStudio(rootElement: HTMLElement | null, config: AgentViewConfig) {

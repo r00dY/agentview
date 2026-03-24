@@ -5,7 +5,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { type AgentViewConfig, createStandardClient, AgentViewError } from "agentview";
+import { type AgentViewConfig } from "../types";
+import { createStandardClient, AgentViewError } from "agentview";
 import { startDevServer } from "../devServer.js";
 
 const DEFAULT_CONFIG_FILES = [

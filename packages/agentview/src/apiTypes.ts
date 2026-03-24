@@ -146,7 +146,6 @@ export const ChannelMessageSchema = z.object({
 
 export type ChannelMessage = z.infer<typeof ChannelMessageSchema>
 
-
 // Session
 
 export const SessionItemSchema = z.object({
