@@ -73,7 +73,7 @@ import { applyRunPatch, getRun, createAutoRun, createManualRun, DEFAULT_IDLE_TIM
 import { consumeRunStream } from './runStream';
 import { upsertAgentRef } from './agentRefs';
 import { adapters, getAdapter } from './adapters/adapters';
-import { waitForAISDKResponse, consumeAISDKStream } from './adapters/ai-sdk-stream';
+import { createAISDKStreamConsumer, type AISDKStreamConsumer } from './adapters/ai-sdk-stream';
 import { parseMetadata } from './parseMetadata';
 import { authn, authorize, requireMemberPrincipal, type Principal, authnAllowPublic } from './authMiddleware';
 
@@ -1327,7 +1327,7 @@ function getSessionStreamResponse(c: any, session: StandardSession) {
     };
 
     // session snapshot first
-  await stream.writeSSE({
+    await stream.writeSSE({
       event: 'session.snapshot',
       data: JSON.stringify(session),
     });
@@ -1342,10 +1342,14 @@ function getSessionStreamResponse(c: any, session: StandardSession) {
   });
 }
 
-function streamAISDKEvents(c: any, runId: string) {
+function streamAISDKEvents(c: any, consumer: AISDKStreamConsumer) {
   return streamSSE(c, async (stream) => {
-    for await (const data of consumeAISDKStream(runId, c.req.raw.signal)) {
-      await stream.writeSSE({ data });
+    try {
+      for await (const data of consumer.stream()) {
+        await stream.writeSSE({ data });
+      }
+    } finally {
+      consumer.close();
     }
   });
 }
@@ -1425,7 +1429,8 @@ app.openapi(sessionAISDKStreamRoute, async (c) => {
     return c.body(null, 204);
   }
 
-  return streamAISDKEvents(c, lastRun.id);
+  const consumer = createAISDKStreamConsumer(lastRun.id, c.req.raw.signal);
+  return streamAISDKEvents(c, consumer);
 });
 
 
@@ -1574,19 +1579,26 @@ app.openapi(runsAISDKPOSTRoute, async (c) => {
   const { run, session, stream } = await createRunHandler(c);
 
   if (stream) {
-    const { status, headers, error } = await waitForAISDKResponse(run.id, c.req.raw.signal);
+    const consumer = createAISDKStreamConsumer(run.id, c.req.raw.signal);
 
-    // Set status, headers and body (in case of error)
-    c.status(status as StatusCode);
-    for (const [key, value] of Object.entries(headers)) {
-      c.header(key, value);
-    }
+    try {
+      const { status, headers, error } = await consumer.waitForResponse();
 
-    if (error) {
-      return c.body(error);
-    }
-    else {
-      return streamAISDKEvents(c, run.id);
+      c.status(status as StatusCode);
+      for (const [key, value] of Object.entries(headers)) {
+        c.header(key, value);
+      }
+
+      if (error) {
+        consumer.close();
+        return c.body(error);
+      }
+
+      // consumer.close() is called inside streamAISDKEvents when streaming ends
+      return streamAISDKEvents(c, consumer);
+    } catch (e) {
+      consumer.close();
+      throw e;
     }
   }
 

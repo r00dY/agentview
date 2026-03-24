@@ -1,22 +1,21 @@
 import { redis } from '../redis';
+import { createRedisStreamConsumer, type RedisStreamConsumer } from '../redisStreamConsumer';
 
 /**
- * Redis Stream-based bridge between the agent-fetch worker (producer) and
- * the HTTP response (consumer).
+ * AI SDK streaming bridge between the agent-fetch worker and HTTP response.
  *
- * The worker calls publishAISDKStreamEvent() to push chunks into a Redis
- * Stream keyed by run ID. The HTTP handler reads them back via
- * waitForAISDKResponse() + consumeAISDKStream().
+ * Protocol (entries in the Redis Stream keyed by run ID):
+ *   1.  [RESPONSE]{json}   — HTTP status + headers (always first)
+ *   2.  {json}              — native AI SDK chunks (N entries)
+ *   3.  [DONE]              — end of stream
  *
- * Protocol:
- *   1. First entry is always  [RESPONSE]{json}  — HTTP status + headers
- *   2. Then N data entries    {json}             — native AI SDK chunks
- *   3. Last entry is          [DONE]             — signals end of stream
+ * Publishing uses the shared `redis` connection (instant XADD).
+ * Consuming uses a dedicated connection via RedisStreamConsumer.
  */
 
-const POLL_INTERVAL_MS = 50;
-
 const streamKey = (runId: string) => `run-stream:ai-sdk:${runId}`;
+
+// --- Publishing (shared connection) ---
 
 export async function publishAISDKStreamEvent(runId: string, data: string) {
   await redis.xadd(streamKey(runId), `${Date.now()}-*`, 'data', data);
@@ -26,65 +25,54 @@ export async function expireAISDKStream(runId: string) {
   await redis.expire(streamKey(runId), 60);
 }
 
-// Polls the Redis Stream for new entries.
-// Uses non-blocking XREAD so we don't monopolise the shared Redis connection
-// (XREAD BLOCK would prevent other commands on the same connection).
-async function* consumeRaw(
-  runId: string,
-  signal: AbortSignal,
-): AsyncGenerator<string> {
-  const key = streamKey(runId);
-  let lastId = '0-0';
-
-  while (!signal.aborted) {
-    const results = await redis.xread('STREAMS', key, lastId);
-
-    if (signal.aborted) return;
-
-    if (!results) {
-      await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
-      continue;
-    }
-
-    for (const [, entries] of results) {
-      for (const [id, fields] of entries) {
-        lastId = id;
-        yield fields[1];
-      }
-    }
-  }
-}
+// --- Consuming (dedicated connection per consumer) ---
 
 export interface AISDKResponseMeta {
   status: number;
   headers: Record<string, string>;
-  error?: string
+  error?: string;
 }
 
-// Reads the first entry from the stream — must be the [RESPONSE] meta-event.
-// Returns the parsed HTTP status/headers so the caller can set them before streaming.
-export async function waitForAISDKResponse(
-  runId: string,
-  signal: AbortSignal,
-): Promise<AISDKResponseMeta> {
-  for await (const data of consumeRaw(runId, signal)) {
-    if (!data.startsWith('[RESPONSE]')) {
-      throw new Error('[ai-sdk-stream] first event received and it is not [RESPONSE]');
-    }
-    return JSON.parse(data.slice('[RESPONSE]'.length));
-  }
-
-  throw new Error('[ai-sdk-stream] [RESPONSE] event not received');
+export interface AISDKStreamConsumer {
+  /** Reads the [RESPONSE] meta-event. Must be called first. */
+  waitForResponse(): Promise<AISDKResponseMeta>;
+  /** Yields AI SDK chunk strings. Stops on [DONE]. */
+  stream(): AsyncGenerator<string>;
+  /** Closes the underlying Redis connection. Safe to call multiple times. */
+  close(): void;
 }
 
-// Yields AI SDK chunk strings. Skips the [RESPONSE] meta-event, stops on [DONE].
-export async function* consumeAISDKStream(
-  runId: string,
-  signal: AbortSignal,
-): AsyncGenerator<string> {
-  for await (const data of consumeRaw(runId, signal)) {
-    if (data.startsWith('[RESPONSE]')) continue;
-    yield data;
-    if (data === '[DONE]') return;
-  }
+/**
+ * Creates an AI SDK stream consumer for a given run.
+ *
+ * waitForResponse() and stream() share a cursor — call them in sequence
+ * and the stream picks up exactly where the response left off.
+ *
+ * The caller MUST call close() when done (use try/finally).
+ * The AbortSignal also triggers close() as a safety net.
+ */
+export function createAISDKStreamConsumer(runId: string, signal: AbortSignal): AISDKStreamConsumer {
+  const consumer = createRedisStreamConsumer(streamKey(runId), signal);
+
+  return {
+    async waitForResponse() {
+      for await (const data of consumer.entries()) {
+        if (!data.startsWith('[RESPONSE]')) {
+          throw new Error('[ai-sdk-stream] first event is not [RESPONSE]');
+        }
+        return JSON.parse(data.slice('[RESPONSE]'.length));
+      }
+      throw new Error('[ai-sdk-stream] [RESPONSE] not received');
+    },
+
+    async *stream() {
+      for await (const data of consumer.entries()) {
+        if (data.startsWith('[RESPONSE]')) continue;
+        yield data;
+        if (data === '[DONE]') return;
+      }
+    },
+
+    close: consumer.close,
+  };
 }
