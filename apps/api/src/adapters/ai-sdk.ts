@@ -1,9 +1,8 @@
 import type { RunBody } from 'agentview/apiTypes';
-import { AgentAPIError, type AgentAPIEvent } from '../agentApi';
+import { type AgentAPIEvent } from '../agentApi';
 import { expireAISDKStream, publishAISDKStreamEvent } from './ai-sdk-stream';
 import type { StandardSession, UIMessage } from 'agentview/apiTypes';
 import { type Adapter } from './adapters';
-import { redis } from '../redis';
 
 interface AISDKChunk {
     type: string;
