@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeAll, afterAll } from 'vitest'
-import { createStandardClient, type StandardAgentViewClient, configDefaults } from 'agentview'
-import type { Channel } from 'agentview'
+import { createStandardClient, configDefaults, type StandardAgentViewClient } from 'agentview/clientStandard'
+import type { Channel } from 'agentview/apiTypes'
 import { z } from 'zod'
 import { seedUsers } from './seedUsers'
 import { createMockServer, writeAISDKStream } from './mockServer'

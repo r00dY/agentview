@@ -1,6 +1,10 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'vitest'
-import { createStandardClient, createClient, type StandardAgentViewClient, type AgentViewClient, configDefaults } from 'agentview'
-import type { User, StandardRun, StandardSession, SessionStreamEvent } from 'agentview';
+
+import { createStandardClient, configDefaults, type StandardAgentViewClient } from 'agentview/clientStandard'
+import type { StandardRun, StandardSession, SessionStreamEvent } from 'agentview/apiTypes';
+import { createClient, type AgentViewClient, type User } from 'agentview';
+
+
 import { z } from 'zod';
 import { seedUsers } from './seedUsers';
 import { createMockServer, writeSSE, writeAISDKStream } from './mockServer';
