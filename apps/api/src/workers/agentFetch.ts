@@ -248,33 +248,6 @@ async function processAgentFetch(run: Run) {
           event.data
         );
       }
-      // else if (event.name === 'channel.reply') {
-      //   try {
-      //     await withOrg(run.organizationId, async (tx) => {
-      //       const sessionRow = await tx.query.sessions.findFirst({
-      //         where: eq(sessions.id, run.sessionId),
-      //         columns: { channelThreadId: true },
-      //       });
-      //       if (!sessionRow?.channelThreadId) return;
-
-      //       console.log(`[agentFetch][${run.id}] creating outgoing channel message`);
-
-      //       await tx.insert(channelMessages).values({
-      //         organizationId: run.organizationId,
-      //         channelThreadId: sessionRow.channelThreadId,
-      //         direction: 'outgoing',
-      //         status: 'pending',
-      //         date: new Date().toISOString(),
-      //         text: event.data.text,
-      //         runId: run.id,
-      //       });
-
-      //       console.log(`[agentFetch][${run.id}] created outgoing channel message`);
-      //     });
-      //   } catch (e) {
-      //     console.error(`[agentFetch][${run.id}] failed to create outgoing channel message:`, e);
-      //   }
-      // }
     }
 
     // Automatically fail the run if it is not in progress after stream is finished

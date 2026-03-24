@@ -232,7 +232,6 @@ export class StandardAgentViewClient extends AgentViewBase {
     return await this.request<{ expiresAt: string | null }>('POST', `/api/runs/${options.id}/keep-alive`, undefined)
   }
 
-
   async getSessionStream(options: { id: string, signal?: AbortSignal }): Promise<AsyncGenerator<{
     event: SessionStreamEvent;
     session: StandardSession;

@@ -5,6 +5,7 @@ import type { User as BetterAuthUser } from "better-auth";
 import { APIError as BetterAuthAPIError } from "better-auth/api";
 import { cors } from 'hono/cors';
 import { streamSSE } from 'hono/streaming';
+import type { StatusCode } from 'hono/utils/http-status';
 
 import { swaggerUI } from '@hono/swagger-ui';
 import { createRoute, OpenAPIHono, z, type RouteHandler } from '@hono/zod-openapi';
@@ -72,6 +73,7 @@ import { applyRunPatch, getRun, createAutoRun, createManualRun, DEFAULT_IDLE_TIM
 import { consumeRunStream } from './runStream';
 import { upsertAgentRef } from './agentRefs';
 import { adapters, getAdapter } from './adapters/adapters';
+import { waitForAISDKResponse, consumeAISDKStream } from './adapters/ai-sdk-stream';
 import { parseMetadata } from './parseMetadata';
 import { authn, authorize, requireMemberPrincipal, type Principal, authnAllowPublic } from './authMiddleware';
 
@@ -1343,15 +1345,9 @@ function getSessionStreamResponse(c: any, session: StandardSession) {
   });
 }
 
-function getAISDKStreamResponse(c: any, session: StandardSession) {
-  const lastRun = getLastRun(session);
-
-  if (lastRun?.status !== 'in_progress') {
-    return c.body(null, 204); // 204 when no stream in ai-sdk
-  }
-
+function streamAISDKEvents(c: any, runId: string) {
   return streamSSE(c, async (stream) => {
-    for await (const data of consumeRunStream(lastRun.id, 'ai-sdk', c.req.raw.signal)) { // we stream from the beginning
+    for await (const data of consumeAISDKStream(runId, c.req.raw.signal)) {
       await stream.writeSSE({ data });
     }
   });
@@ -1426,7 +1422,13 @@ const sessionAISDKStreamRoute = createRoute({
 
 app.openapi(sessionAISDKStreamRoute, async (c) => {
   const session = await sessionStreamHandler(c);
-  return getAISDKStreamResponse(c, session);
+  const lastRun = getLastRun(session);
+
+  if (lastRun?.status !== 'in_progress') {
+    return c.body(null, 204);
+  }
+
+  return streamAISDKEvents(c, lastRun.id);
 });
 
 
@@ -1561,7 +1563,7 @@ const runsAISDKPOSTRoute = createRoute({
           schema: z.string(),
         },
         'application/json': {
-          schema: RunSchema,
+          schema: RunSchema, // Session schema???
         },
       },
       description: "Streams native AI SDK events",
@@ -1575,8 +1577,20 @@ app.openapi(runsAISDKPOSTRoute, async (c) => {
   const { run, session, stream } = await createRunHandler(c);
 
   if (stream) {
-    c.status(201);
-    return getAISDKStreamResponse(c, session);
+    const { status, headers, error } = await waitForAISDKResponse(run.id, c.req.raw.signal);
+
+    // Set status, headers and body (in case of error)
+    c.status(status as StatusCode);
+    for (const [key, value] of Object.entries(headers)) {
+      c.header(key, value);
+    }
+
+    if (error) {
+      return c.body(error);
+    }
+    else {
+      return streamAISDKEvents(c, run.id);
+    }
   }
 
   const { sessionItems, channelMessages, ...runBase } = run;

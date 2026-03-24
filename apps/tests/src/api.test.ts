@@ -2885,7 +2885,7 @@ describe('API', () => {
 
       mockAISDKServer!.setHandler((_body, res) => {
         res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ message: "Internal Server Error" }));
+        res.end(JSON.stringify({ message: "This is a sever test error." }));
       });
 
       // The stream will end without any chunks (HTTP error → no AI SDK chunks published)
