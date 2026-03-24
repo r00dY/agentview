@@ -70,7 +70,7 @@ import { updateInboxes } from './updateInboxes';
 import { findUser } from './users';
 import { randomBytes } from 'crypto';
 import { applyRunPatch, getRun, createAutoRun, createManualRun, DEFAULT_IDLE_TIME, getRunInputContent, terminateRun } from './runs';
-import { consumeRunStream } from './runStream';
+import { createRunStreamConsumer } from './runStream';
 import { upsertAgentRef } from './agentRefs';
 import { adapters, getAdapter } from './adapters/adapters';
 import { createAISDKStreamConsumer, type AISDKStreamConsumer } from './adapters/ai-sdk-stream';
@@ -1321,23 +1321,30 @@ function getSessionStreamResponse(c: any, session: StandardSession) {
     return c.body(null, 204); // 204 when no stream in our internal protocol
   }
 
+  const consumer = createRunStreamConsumer(lastRun.id, c.req.raw.signal, lastRun.updatedAt);
+
   return streamSSE(c, async (stream) => {
     if (c.req.raw.signal.aborted) {
+      consumer.close();
       return;
     };
 
-    // session snapshot first
-    await stream.writeSSE({
-      event: 'session.snapshot',
-      data: JSON.stringify(session),
-    });
-
-    // stream run events from last updatedAt
-    for await (const data of consumeRunStream(lastRun.id, c.req.raw.signal, lastRun.updatedAt)) {
+    try {
+      // session snapshot first
       await stream.writeSSE({
-        event: 'run.patch',
-        data
+        event: 'session.snapshot',
+        data: JSON.stringify(session),
       });
+
+      // stream run events from last updatedAt
+      for await (const data of consumer.entries()) {
+        await stream.writeSSE({
+          event: 'run.patch',
+          data
+        });
+      }
+    } finally {
+      consumer.close();
     }
   });
 }

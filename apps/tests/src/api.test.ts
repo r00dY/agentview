@@ -2626,7 +2626,7 @@ describe('API', () => {
 
   });
 
-  describe("agent endpoint auto-fetch (ai-sdk adapter)", () => {
+  describe.only("agent endpoint auto-fetch (ai-sdk adapter)", () => {
     const AI_SDK_AGENT_PORT = 3458;
     const AI_SDK_AGENT_URL = `http://localhost:${AI_SDK_AGENT_PORT}/agent`;
 
@@ -2687,7 +2687,7 @@ describe('API', () => {
       return chunks;
     }
 
-    test.only("happy path: text response (validated via ai-sdk stream)", async () => {
+    test("happy path: text response (validated via ai-sdk stream)", async () => {
       await updateConfigWithAiSdkUrl();
       const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 

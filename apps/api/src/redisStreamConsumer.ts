@@ -25,9 +25,9 @@ export interface RedisStreamConsumer {
   close(): void;
 }
 
-export function createRedisStreamConsumer(key: string, signal: AbortSignal): RedisStreamConsumer {
+export function createRedisStreamConsumer(key: string, signal: AbortSignal, options?: { startId?: string }): RedisStreamConsumer {
   const conn = new Redis(REDIS_URL);
-  let lastId = '0-0';
+  let lastId = options?.startId ?? '0-0';
   let closed = false;
 
   function close() {
