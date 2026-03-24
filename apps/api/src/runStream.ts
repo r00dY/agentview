@@ -1,10 +1,30 @@
 import { redis } from './redis';
 
+/**
+ * Redis Stream-based bridge for the "standard" (non-AI-SDK) run protocol.
+ *
+ * The worker publishes run patches via publishRunStreamEvent(). HTTP handlers
+ * consume them via consumeRunStream() to stream updates to the client.
+ *
+ * Protocol:
+ *   - N data entries  {json}        — run patch events
+ *   - [DONE]                        — run finished normally
+ *   - [TERMINATED]                  — run was cancelled externally
+ *
+ * Stream IDs use the Node.js clock (Date.now()) so both publisher and
+ * consumer share the same time source — no Redis clock skew.
+ *
+ * IMPORTANT: All reads use non-blocking XREAD + sleep polling.
+ * We share a single Redis connection across the whole process (HTTP server +
+ * workers). XREAD BLOCK would monopolise that connection, preventing any
+ * other command (XADD, GET, SET, …) from being processed until the block
+ * times out. This caused a ~500ms per-chunk delay in streaming responses.
+ */
+
+const POLL_INTERVAL_MS = 50;
+
 export async function publishRunStreamEvent(runId: string, createdAt: string | null, data: string) {
   const key = `run-stream:agentview:${runId}`;
-
-  // Use the event's updatedAt as the stream ID so consumer can use the same
-  // clock (Node.js) to compute its starting offset — no Redis clock skew.
   const ms = createdAt ? new Date(createdAt).getTime() : Date.now();
   await redis.xadd(key, `${ms}-*`, 'data', data);
 
@@ -14,7 +34,8 @@ export async function publishRunStreamEvent(runId: string, createdAt: string | n
 }
 
 /**
- * Calls `onTerminated` when [TERMINATED] appears on the run stream. Returns a cleanup function.
+ * Calls `onTerminated` when [TERMINATED] appears on the run stream.
+ * Returns an AbortController — call .abort() to stop listening.
  */
 export function onRunTerminated(runId: string, onTerminated: () => void) {
   const abortController = new AbortController();
@@ -36,8 +57,8 @@ export function onRunTerminated(runId: string, onTerminated: () => void) {
 }
 
 /**
- * Consumes the run stream, translating [TERMINATED] into [DONE] so consumers
- * never see the internal termination signal.
+ * Yields run patch events. Stops on [DONE] or [TERMINATED] (neither is
+ * forwarded to the caller).
  */
 export async function* consumeRunStream(
   runId: string,
@@ -58,28 +79,26 @@ async function* consumeRunStreamRaw(
   afterTimestamp?: string,
 ) {
   const key = `run-stream:agentview:${runId}`;
-
-  // Both this offset and the stream entry IDs use the Node.js clock (updatedAt),
-  // so there's no cross-clock skew.
   let lastId = '0-0';
 
   if (afterTimestamp) {
-    const startMs = new Date(afterTimestamp).getTime();
-    lastId = `${startMs}-0`;
+    lastId = `${new Date(afterTimestamp).getTime()}-0`;
   }
 
   while (!signal.aborted) {
-    const results = await redis.xread('COUNT', 100, 'BLOCK', 500, 'STREAMS', key, lastId);
+    const results = await redis.xread('STREAMS', key, lastId);
 
     if (signal.aborted) return;
 
-    if (!results) continue;
+    if (!results) {
+      await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+      continue;
+    }
 
-    for (const [_streamKey, entries] of results) {
+    for (const [, entries] of results) {
       for (const [id, fields] of entries) {
         lastId = id;
-        const data = fields[1];
-        yield data;
+        yield fields[1];
       }
     }
   }

@@ -1327,7 +1327,7 @@ function getSessionStreamResponse(c: any, session: StandardSession) {
     };
 
     // session snapshot first
-    await stream.writeSSE({
+  await stream.writeSSE({
       event: 'session.snapshot',
       data: JSON.stringify(session),
     });
