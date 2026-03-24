@@ -3044,6 +3044,75 @@ describe('API', () => {
       expect(reqBody.messages[2].role).toBe("user");
       expect(reqBody.messages[2].parts[0].text).toBe("How are you?");
     }, 30000);
+
+    test.only("cancellation → run cancelled and agent connection aborted", async () => {
+      await updateConfigWithAiSdkUrl();
+      const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
+
+      // Track connection state
+      let connectionClosed = false;
+      let connectionEstablished: () => void;
+      const connectionEstablishedPromise = new Promise<void>(r => { connectionEstablished = r; });
+
+      mockAISDKServer!.setHandler((_body, res) => {
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        });
+
+        // Send start event so the stream is established
+        res.write(`data: ${JSON.stringify({ type: "start", messageId: "msg_1" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: "text-start", id: "t1" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: "text-delta", id: "t1", delta: "First chunk" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: "text-end", id: "t1" })}\n\n`);
+
+        connectionEstablished();
+
+        res.write(`data: ${JSON.stringify({ type: "text-start", id: "t2" })}\n\n`);
+
+        // Send periodic deltas to keep the stream alive
+        const interval = setInterval(() => {
+          if (!res.closed) {
+            res.write(`data: ${JSON.stringify({ type: "text-delta", id: "t2", delta: "." })}\n\n`);
+          }
+        }, 200);
+
+        res.on('close', () => {
+          clearInterval(interval);
+          connectionClosed = true;
+        });
+      });
+
+      // Start consuming the stream in background (don't await - it'll hang until stream ends)
+      const streamPromise = sendMessageViaTransport(
+        avAISDK.createTransport(),
+        session.id,
+        { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hello" }] }
+      )
+
+      // Wait for the agent connection to be established
+      await connectionEstablishedPromise;
+
+      // Cancel the run
+      // TODO: - make those AI SDK calls, not av!!! (we must have 'cancel' status available)
+      const cancelled = await av.cancelRun({ sessionId: session.id });
+      expect(cancelled.lastRun?.status).toBe("cancelled");
+      expect(cancelled.lastRun?.finishedAt).toBeDefined();
+
+      const updatedSession = await av.getSession({ id: session.id });
+      expect(updatedSession.lastRun?.status).toBe("cancelled");
+      expect(updatedSession.lastRun?.finishedAt).toBeDefined();
+      expect(updatedSession.lastRun?.sessionItems.length).toBe(2);
+      expect(updatedSession.lastRun?.sessionItems[1].content.type).toBe("text");
+      expect(updatedSession.lastRun?.sessionItems[1].content.text).toBe("First chunk");
+
+      // Wait for the worker to detect cancellation and abort the connection
+      await new Promise(r => setTimeout(r, 3000));
+      expect(connectionClosed).toBe(true);
+
+      // Ensure stream promise settles
+      await streamPromise;
+    }, 15000);
   });
 
   describe("comments and scores (flat API)", () => {
