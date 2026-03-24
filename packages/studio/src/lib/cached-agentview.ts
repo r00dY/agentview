@@ -1,5 +1,7 @@
-import { StandardAgentViewClient, type AgentViewClientOptions, type InputTarget } from 'agentview'
-import { invalidateByPrefix, invalidateCache, swr, getCachedValue, revalidate, swrSync } from './swr-cache'
+import { type AgentViewClientOptions } from 'agentview'
+import { StandardAgentViewClient } from 'agentview/clientStandard'
+import type { InputTarget } from 'agentview/apiTypes'
+import { invalidateByPrefix, invalidateCache, swr, swrSync } from './swr-cache'
 
 // Cache key helpers
 export const cacheKeys = {
