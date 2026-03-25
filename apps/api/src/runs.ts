@@ -137,10 +137,10 @@ export async function markOutputItems(
 }
 
 /**
- * Fetches a run with its agentRef and (optionally) session items.
- *
- * @param forUpdate — acquires a row-level lock on the run row (SELECT ... FOR UPDATE).
- *   Use when the caller will modify the run inside the same transaction (applyRunPatch, terminateRun).
+ * IMPORTANT:
+ * 
+ * Most modifications of a run, especially run patch or terminate can be concurrent. Apply patch logic takes non-obvious amount of time to complete, so we must start with a lock for safety of concurrent writes.
+ * That's why we use SELECT FOR UPDATE here on row and this function should be always called with a lock.
  */
 export async function getRunBaseWithLock(tx: Transaction, runId: string) {
   // Build the run query — use select() API so we can append FOR UPDATE.
