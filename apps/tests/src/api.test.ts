@@ -2733,7 +2733,7 @@ describe('API', () => {
       expect(completedRun.sessionItems[0].content.role).toBe("user");
       expect(completedRun.sessionItems[1].content.type).toBe("text");
       expect(completedRun.sessionItems[1].content.text).toBe("Hello world!");
-    }, 30000);
+    }, 10000);
 
     test("happy path: text + reasoning (validated via ai-sdk stream)", async () => {
       await updateConfigWithAiSdkUrl();
@@ -2786,7 +2786,7 @@ describe('API', () => {
       expect(completedRun.sessionItems[1].content.text).toBe("Let me think...");
       expect(completedRun.sessionItems[2].content.type).toBe("text");
       expect(completedRun.sessionItems[2].content.text).toBe("The answer is 42");
-    }, 30000);
+    }, 10000);
 
     test("happy path: tool call (validated via ai-sdk stream)", async () => {
       // Update config with tool-call step schema
@@ -2863,7 +2863,7 @@ describe('API', () => {
       expect(completedRun.sessionItems[1].content.output).toEqual({ temp: 72 });
       expect(completedRun.sessionItems[2].content.type).toBe("text");
       expect(completedRun.sessionItems[2].content.text).toBe("It's 72F in NYC");
-    }, 30000);
+    }, 10000);
 
 
     test("error event → run marked failed (validated via ai-sdk stream)", async () => {
@@ -2892,7 +2892,7 @@ describe('API', () => {
       const updatedSession = await av.getSession({ id: session.id });
       expect(updatedSession.lastRun!.status).toBe("failed");
       expect(updatedSession.lastRun!.failReason).toBeDefined();
-    }, 30000);
+    }, 10000);
 
     test("HTTP error: 500 → run marked failed (validated via ai-sdk stream)", async () => {
       await updateConfigWithAiSdkUrl();
@@ -2917,7 +2917,7 @@ describe('API', () => {
       const updatedSession = await av.getSession({ id: session.id });
       expect(updatedSession.lastRun!.status).toBe("failed");
       expect(updatedSession.lastRun!.failReason).toBeDefined();
-    }, 30000);
+    }, 10000);
 
     test("stream ends without finish → run marked failed (validated via ai-sdk stream)", async () => {
       await updateConfigWithAiSdkUrl();
@@ -2948,7 +2948,7 @@ describe('API', () => {
       const updatedSession = await av.getSession({ id: session.id });
       expect(updatedSession.lastRun!.status).toBe("failed");
       expect(updatedSession.lastRun!.failReason.message).toContain("Agent stream ended without completing");
-    }, 30000);
+    }, 10000);
 
 
     test("request body format: sends UIMessage[] with correct history", async () => {
@@ -2984,7 +2984,7 @@ describe('API', () => {
       expect(reqBody.messages[0].parts).toBeDefined();
       expect(reqBody.messages[0].parts[0].type).toBe("text");
       expect(reqBody.messages[0].parts[0].text).toBe("Hello AI SDK");
-    }, 30000);
+    }, 10000);
 
     test("multi-turn: second request has full conversation history", async () => {
       await updateConfigWithAiSdkUrl();
@@ -3043,9 +3043,9 @@ describe('API', () => {
       expect(reqBody.messages[1].parts[0].text).toBe("Hello!");
       expect(reqBody.messages[2].role).toBe("user");
       expect(reqBody.messages[2].parts[0].text).toBe("How are you?");
-    }, 30000);
+    }, 10000);
 
-    test.only("cancellation → run cancelled and agent connection aborted", async () => {
+    test("cancellation → run cancelled and agent connection aborted", async () => {
       await updateConfigWithAiSdkUrl();
       const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
@@ -3112,7 +3112,7 @@ describe('API', () => {
 
       // Ensure stream promise settles
       await streamPromise;
-    }, 15000);
+    }, 10000);
   });
 
   describe("comments and scores (flat API)", () => {
