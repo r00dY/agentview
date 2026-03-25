@@ -440,6 +440,7 @@ async function* callAgentAPIAISDK(
 
     } catch (error: unknown) {
         if (error instanceof Error && error.name === 'AbortError') {
+            await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));
             return; // abort doesn't require action since it means the run is already properly terminated
         }
 

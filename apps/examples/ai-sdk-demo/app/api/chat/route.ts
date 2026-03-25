@@ -87,10 +87,12 @@ const weatherTool = tool({
 });
 
 export async function POST(req: Request) {
-  const { messages, session }: { messages: UIMessage[], session?: SessionBase } = await req.json();
+  const { messages, session }: { messages: UIMessage[], session: SessionBase } = await req.json();
 
-  console.log('[chat] messages: ', JSON.stringify(messages, null, 2));
-  console.log('[chat] session: ', session);
+  console.log('New request received', session.id, messages[messages.length - 1]);
+
+  // console.log('[chat] messages: ', JSON.stringify(messages, null, 2));
+  // console.log('[chat] session: ', session);
 
   await new Promise(resolve => setTimeout(resolve, 5000));
 
@@ -104,19 +106,25 @@ export async function POST(req: Request) {
     tools: { weather: weatherTool },
     stopWhen: stepCountIs(5),
     onChunk({ chunk }) {
-      if (chunk.type === "text-delta") {
-        process.stdout.write(chunk.text);
-      } else if (chunk.type === "tool-call") {
-        console.log(
-          `\n[tool-call] ${chunk.toolName}(${JSON.stringify(chunk.input)})`
-        );
-      } else if (chunk.type === "tool-result") {
-        console.log(
-          `[tool-result] ${chunk.toolName}: ${JSON.stringify(chunk.output)}`
-        );
-      } else if (chunk.type === "reasoning-delta") {
-        process.stdout.write(`[reasoning] ${chunk.text}`);
-      }
+      console.log('chunk received', chunk.type)
+      // if (!wasFirstChunkSent) {
+      //   wasFirstChunkSent = true;
+      //   console.log('First chunk sent');
+      // }
+
+      // if (chunk.type === "text-delta") {
+      //   process.stdout.write(chunk.text);
+      // } else if (chunk.type === "tool-call") {
+      //   console.log(
+      //     `\n[tool-call] ${chunk.toolName}(${JSON.stringify(chunk.input)})`
+      //   );
+      // } else if (chunk.type === "tool-result") {
+      //   console.log(
+      //     `[tool-result] ${chunk.toolName}: ${JSON.stringify(chunk.output)}`
+      //   );
+      // } else if (chunk.type === "reasoning-delta") {
+      //   process.stdout.write(`[reasoning] ${chunk.text}`);
+      // }
     },
     onStepFinish({ finishReason, text, toolCalls, usage }) {
       console.log(

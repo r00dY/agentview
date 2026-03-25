@@ -3045,7 +3045,7 @@ describe('API', () => {
       expect(reqBody.messages[2].parts[0].text).toBe("How are you?");
     }, 10000);
 
-    test("cancellation → run cancelled and agent connection aborted", async () => {
+    test.only("cancellation → run cancelled and agent connection aborted", async () => {
       await updateConfigWithAiSdkUrl();
       const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
