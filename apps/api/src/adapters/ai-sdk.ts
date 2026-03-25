@@ -133,35 +133,47 @@ async function* callAgentAPIAISDK(
 
     } catch (error: unknown) { // Here we only handle fetch errors, other errors will be handled later
         if (error instanceof Error && error.name === 'AbortError') {
-            return; // abort doesn't require action since it means the run is already properly terminated
-        }
+            // if aborted during fetching, we don't have to yield anything since the run is already properly terminated in agentview
+            // but we'll need to properly handle opened stream.
 
-        let message: string;
-
-        if (error instanceof TypeError) { // node fetch error
-            message = (error as any).cause?.message ?? error.message ?? 'Fetch error';
+            console.log('[ai-sdk] aborted while fetching. Sending [RESPONSE] and [DONE] events to the stream')
+            await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({
+                status: 400,
+                headers: {}
+            }));
+            await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));
+            await publishAISDKStreamEvent(currentRun.id, "[DONE]");
+            return;
         }
         else {
-            message = (error as any)?.message ?? 'Unknown error';
-        }
+            let message: string;
 
-        yield {
-            name: 'run.patch',
-            data: {
-                status: 'failed',
-                failReason: {
-                    message
+            if (error instanceof TypeError) { // node fetch error
+                message = (error as any).cause?.message ?? error.message ?? 'Fetch error';
+            }
+            else {
+                message = (error as any)?.message ?? 'Unknown error';
+            }
+
+            yield {
+                name: 'run.patch',
+                data: {
+                    status: 'failed',
+                    failReason: {
+                        message
+                    },
                 },
-            },
-        };
+            };
 
-        await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({
-            status: 400,
-            headers: {},
-            error: message
-        }));
-
-        return;
+            await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({
+                status: 400,
+                headers: {},
+                error: message
+            }));
+            return;
+        }
+    } finally {
+        await expireAISDKStream(currentRun.id);
     }
 
     /**
@@ -440,6 +452,7 @@ async function* callAgentAPIAISDK(
 
     } catch (error: unknown) {
         if (error instanceof Error && error.name === 'AbortError') {
+            console.log('[ai-sdk] aborted while streaming')
             await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));
             return; // abort doesn't require action since it means the run is already properly terminated
         }
@@ -456,7 +469,7 @@ async function* callAgentAPIAISDK(
         };
 
     } finally {
-        console.log(`[ai-sdk][${currentRun.id}] stream cleanup`);
+        console.log(`[ai-sdk][${currentRun.id}] stream cleanup, sending [DONE]`);
         await publishAISDKStreamEvent(currentRun.id, "[DONE]");
         await expireAISDKStream(currentRun.id);
     }
