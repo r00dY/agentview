@@ -1951,19 +1951,13 @@ app.get('/api/invitations/:invitation_id', async (c) => {
   const { invitation_id } = c.req.param();
   const invitation = await requireValidInvitation(invitation_id);
 
-  const { user, organization } = await withOrg(invitation.organizationId, async tx => {
-    const user = await tx.query.users.findFirst({
-      where: eq(users.email, invitation.email)
-    })
+  // db__dangerous is used because we're querying users which are not under RLS
+  const user = await db__dangerous.query.users.findFirst({
+    where: eq(users.email, invitation.email)
+  })
 
-    const organization = await tx.query.organizations.findFirst({
-      where: eq(organizations.id, invitation.organizationId)
-    })
-
-    return {
-      user,
-      organization
-    }
+  const organization = await db__dangerous.query.organizations.findFirst({
+    where: eq(organizations.id, invitation.organizationId)
   })
 
   return c.json({ ...invitation, userExists: !!user, organization }, 200)

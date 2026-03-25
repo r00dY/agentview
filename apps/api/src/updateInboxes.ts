@@ -2,9 +2,11 @@ import { commentMessages, events } from "./schemas/schema";
 import { eq, type InferSelectModel, sql } from "drizzle-orm";
 import type { SessionItem, Session } from "agentview/apiTypes";
 import { inboxItems } from "./schemas/schema";
+import { members } from "./schemas/auth-schema";
 import type { Transaction } from "./types";
 import { isInboxItemUnread } from "./inboxItems";
 import { resolveTarget, targetFilter, type Target } from "./target";
+import { db__dangerous } from "./db";
 
 /**
  * This function is "MVP" and is far from perfect.
@@ -64,13 +66,25 @@ export async function updateInboxes(
         throw new Error(`Incorrect event type: "${newEvent.type}"`);
     }
 
-    const allUsers = await tx.query.users.findMany({
+    // Get all members of the organization
+    // members table, users table etc are not under RLS, so we use db__dangerous
+    const orgMembers = await db__dangerous.query.members.findMany({
+        where: eq(members.organizationId, newEvent.organizationId),
         with: {
-            inboxItems: {
-                where: targetFilter(inboxItems, target),
+            users: {
+                with: {
+                    inboxItems: {
+                        where: targetFilter(inboxItems, target),
+                    }
+                }
             }
         }
     });
+
+    const allUsers = orgMembers.map(m => m.users);
+
+
+
 
     const newInboxItemValues: any[] = [];
 
