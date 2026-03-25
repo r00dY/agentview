@@ -19,7 +19,7 @@ export function ChatUI(props: {
     id: session.id,
     messages: session.messages,
     resume: session.resume,
-    transport: client.createTransport(),
+    transport: client.as(userToken).createTransport(),
     // transport: new DefaultChatTransport({
     //   headers: {
     //     "Authorization": `Bearer ${process.env.NEXT_PUBLIC_AGENTVIEW_API_KEY!}`,

@@ -114,7 +114,7 @@ async function requireUserByToken(organizationId: string, userToken: string) {
 
 // setting x-user-token always forces either user principal or unauthorised.
 // but it's not work just on its own, you gotta be authenticated first (via api key or member cookie)
-export async function getPrincipal(headers: Headers): Promise<Principal | undefined> {
+export async function authnAllowAnon(headers: Headers): Promise<Principal> {
   const env  = headers.get('x-env') ?? undefined;
 
   // See whether it's gonna be user principal
@@ -128,7 +128,7 @@ export async function getPrincipal(headers: Headers): Promise<Principal | undefi
       userPrincipal = { type: 'user', user, organizationId: user.organizationId, env }
     }
     else {
-      return; // if you gave user token it must be correct, otherwise it's unauthorised
+      throw new HTTPException(401, { message: "Invalid User Token" });
     }
   }
 
@@ -171,31 +171,38 @@ export async function getPrincipal(headers: Headers): Promise<Principal | undefi
         return { type: 'apiKey', apiKey: key, organizationId: organization.id, env }
       }
     }
+    else {
+      throw new HTTPException(401, { message: "Invalid API Key" });
+    }
   }
-
-  // // TODO -> REMOVE IT!!!
-  // if (userPrincipal) {
-  //   return userPrincipal;
-  // }
+  else {
+    throw new HTTPException(401, { message: "Missing API Key" });
+  }
 }
 
-export async function authn(headers: Headers): Promise<PrivatePrincipal> {
-  const principal = await getPrincipal(headers);
-  if (!principal || principal.type === 'user' || principal.type === 'apiKeyPublic') {
-    throw new HTTPException(401, { message: "Unauthorized" });
+export async function authnAllowPublic(headers: Headers): Promise<PrivatePrincipal | UserPrincipal> {
+  const principal = await authnAllowAnon(headers);
+
+  if (principal.type === 'apiKeyPublic') {
+    throw new HTTPException(401, { message: "This endpoint requires user authentication. Please provide user token." });
   }
 
   return principal;
 }
 
-export async function authnAllowPublic(headers: Headers): Promise<Principal> {
-  const principal = await getPrincipal(headers);
-  if (principal) {
-    return principal;
+export async function authn(headers: Headers): Promise<PrivatePrincipal> {
+  const principal = await authnAllowAnon(headers);
+
+  if (principal.type === 'apiKeyPublic' || principal.type === 'user') {
+    throw new HTTPException(401, { message: "This endpoint is not available for public API keys. You should use it server-side with secret API key." });
   }
 
-  throw new HTTPException(401, { message: "Unauthorized" });
+  return principal;
 }
+
+// export async function authnAllowPublic(headers: Headers): Promise<Principal> {
+//   return await getPrincipal(headers);
+// }
 
 /** --------- PRINCIPAL HELPERS --------- */
 

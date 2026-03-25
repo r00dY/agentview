@@ -75,7 +75,7 @@ import { upsertAgentRef } from './agentRefs';
 import { adapters, getAdapter } from './adapters/adapters';
 import { createAISDKStreamConsumer, type AISDKStreamConsumer } from './adapters/ai-sdk-stream';
 import { parseMetadata } from './parseMetadata';
-import { authn, authorize, requireMemberPrincipal, type Principal, authnAllowPublic } from './authMiddleware';
+import { authn, authorize, requireMemberPrincipal, type Principal, authnAllowPublic, authnAllowAnon } from './authMiddleware';
 
 import { resolveTarget, resolveTargetWithObjects, targetFilter, type RunTarget, type SessionItemTarget, type Target, type TargetWithObjects } from './target';
 
@@ -481,7 +481,7 @@ async function createUser(tx: Transaction, principal: Principal, space_: Space |
 }
 
 app.openapi(usersPOSTRoute, async (c) => {
-  const principal = await authnAllowPublic(c.req.raw.headers)
+  const principal = await authnAllowAnon(c.req.raw.headers)
   const body = await c.req.valid('json')
 
   return withOrg(principal.organizationId, async (tx) => {
