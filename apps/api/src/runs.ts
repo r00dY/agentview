@@ -1,5 +1,5 @@
-import { eq, and, desc, not, inArray } from 'drizzle-orm';
-import { runs, sessionItems, sessions, webhookJobs, channelMessages } from './schemas/schema';
+import { eq, and, desc, not, inArray, asc, sql } from 'drizzle-orm';
+import { runs, sessionItems, sessions, webhookJobs, channelMessages, agentRefs } from './schemas/schema';
 import type { Transaction } from './types';
 import type { Environment, ManualRunCreate, ManualRunUpdate, Run } from 'agentview/apiTypes';
 import type { BaseRunConfig } from 'agentview/baseConfigTypes';
@@ -136,19 +136,39 @@ export async function markOutputItems(
   }).where(inArray(sessionItems.id, itemIds));
 }
 
-export async function getRun(tx: Transaction, runId: string) {
-  const run = await tx.query.runs.findFirst({
-    where: eq(runs.id, runId),
-    with: {
-      sessionItems: {
-        orderBy: (sessionItem, { asc }) => [asc(sessionItem.sortOrder)],
-        where: (sessionItem, { eq }) => eq(sessionItem.isState, false),
-      },
-      agentRef: true,
-    },
-  });
+/**
+ * Fetches a run with its agentRef and (optionally) session items.
+ *
+ * @param forUpdate — acquires a row-level lock on the run row (SELECT ... FOR UPDATE).
+ *   Use when the caller will modify the run inside the same transaction (applyRunPatch, terminateRun).
+ */
+export async function getRun(tx: Transaction, runId: string, options?: { forUpdate?: boolean }) {
+  // Build the run query — use select() API so we can append FOR UPDATE.
+  const runRows = await (() => {
+    const q = tx
+      .select()
+      .from(runs)
+      .leftJoin(agentRefs, eq(runs.agentRefId, agentRefs.id))
+      .where(eq(runs.id, runId))
+      .limit(1);
+    return options?.forUpdate ? q.for('update', { of: runs }) : q;
+  })();
 
-  return run;
+  const row = runRows[0];
+  if (!row) return undefined;
+
+  // Fetch session items separately (not locked — they don't need it)
+  const items = await tx
+    .select()
+    .from(sessionItems)
+    .where(and(eq(sessionItems.runId, runId), eq(sessionItems.isState, false)))
+    .orderBy(asc(sessionItems.sortOrder));
+
+  return {
+    ...row.runs,
+    agentRef: row.agent_refs,
+    sessionItems: items,
+  };
 }
 
 
@@ -163,7 +183,7 @@ export async function applyRunPatch(
   body: ManualRunUpdate
 ) {
   const { insertedItems, nowIso, isFinished, run } = await withOrg(organizationId, async (tx) => {
-    const run = await getRun(tx, runId);
+    const run = await getRun(tx, runId, { forUpdate: true });
 
     if (!run) {
       throw new AgentViewError("Run not found.", 404);
@@ -324,7 +344,7 @@ export async function applyRunPatch(
 export async function terminateRun(tx: OrgTransaction, runId: string, body: { status: 'cancelled' } | { status: 'failed', failReason: any }) {
   const nowIso = new Date().toISOString();
 
-  const run = await getRun(tx, runId);
+  const run = await getRun(tx, runId, { forUpdate: true }); // lock!
 
   if (!run) {
     throw new AgentViewError("Can't find run to terminate.", 404);
@@ -348,34 +368,6 @@ export async function terminateRun(tx: OrgTransaction, runId: string, body: { st
     await publishRunStreamEvent(runId, null, '[TERMINATED]');
   });
 }
-
-
-// async function finishRunStreams(run: NonNullable<Awaited<ReturnType<typeof getRun>>>, text: '[DONE]' | '[TERMINATED]') {
-//   await publishRunStreamEvent(run.id, 'agentview', null, text);
-//   if (run.agentRef?.adapter === 'ai-sdk') { // finish external adapter stream (ai-sdk)
-//     await publishRunStreamEvent(run.id, 'ai-sdk', null, text);
-//   }
-// }
-
-
-
-// async function cancelRun(runId: string, organizationId: string) {
-//   const nowIso = new Date().toISOString();
-
-//   await withOrg(organizationId, async (tx) => {
-//     await tx.update(runs).set({
-//       status: 'cancelled',
-//       finishedAt: nowIso,
-//       updatedAt: nowIso,
-//       expiresAt: null,
-//     }).where(eq(runs.id, runId));
-//   });
-// }
-
-// function endRedisStreams
-
-
-
 
 
 
