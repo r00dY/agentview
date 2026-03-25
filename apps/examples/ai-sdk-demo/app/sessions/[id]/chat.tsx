@@ -41,6 +41,8 @@ export function ChatUI(props: {
   });
   const [input, setInput] = useState("");
 
+  console.log('status', status);
+
   return (
     <>
       <div style={{ flex: 1, overflowY: "auto", marginBottom: "1rem" }}>
@@ -191,9 +193,9 @@ export function ChatUI(props: {
             outline: "none",
           }}
         />
-        {(status === "ready" || status === "submitted" || status === "error") && <button
+        {(status === "ready" || status === "error") && <button
           type="submit"
-          disabled={status === "submitted"}
+          // disabled={status === "submitted"}
           style={{
             padding: "0.75rem 1.25rem",
             borderRadius: 8,
@@ -207,7 +209,7 @@ export function ChatUI(props: {
           Send
         </button>}
 
-        {status === "streaming" && <button
+        {(status === "streaming" || status === "submitted") && <button
           type="submit"
           style={{
             padding: "0.75rem 1.25rem",
@@ -219,6 +221,7 @@ export function ChatUI(props: {
             cursor: "pointer",
           }}
           onClick={() => {
+            // stop()
             client.as(userToken).cancelRun({ sessionId: session.id });
           }}
         >
