@@ -19,29 +19,10 @@ export function ChatUI(props: {
     id: session.id,
     messages: session.messages,
     resume: session.resume,
-    transport: client.as(userToken).createTransport(),
-    // transport: new DefaultChatTransport({
-    //   headers: {
-    //     "Authorization": `Bearer ${process.env.NEXT_PUBLIC_AGENTVIEW_API_KEY!}`,
-    //     "X-Env": process.env.NEXT_PUBLIC_AGENTVIEW_ENV!,
-    //     "X-User-Token": userToken,
-    //   },
-    //   prepareSendMessagesRequest: ({ id, messages }) => ({
-    //     api: `http://localhost:1990/api/sessions/${id}/runs`,
-    //     body: {
-    //       input: messages[messages.length - 1],
-    //       stream: true
-    //     },
-    //   }),
-    //   prepareReconnectToStreamRequest: ({ id }) => ({
-    //     api: `http://localhost:1990/api/sessions/${id}/stream`,
-    //   }),
-    // }),
-    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+    transport: client.as(userToken).createTransport()
   });
+  
   const [input, setInput] = useState("");
-
-  console.log('status', status);
 
   return (
     <>
