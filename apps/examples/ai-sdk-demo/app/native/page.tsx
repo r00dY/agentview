@@ -10,7 +10,21 @@ import { useState } from "react";
 
 export default function Chat() {
   const { messages, sendMessage, status } = useChat({
-    transport: new DefaultChatTransport({ api: "/api/chat" }),
+    transport: new DefaultChatTransport({
+      api: "/api/chat",
+      prepareSendMessagesRequest: ({ messages, body, id }) => {
+        console.log('messages', messages);
+        console.log('body', body);
+        console.log('id', id);
+
+        return {
+          body: {
+            messages,
+          }
+        }
+      },
+
+    }),
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
   });
   const [input, setInput] = useState("");
@@ -113,10 +127,10 @@ export default function Chat() {
                       </div>
                       {(part.state === "input-available" ||
                         part.state === "output-available") && (
-                        <div style={{ color: "#aaa", fontSize: "0.8rem" }}>
-                          Input: {JSON.stringify(part.input)}
-                        </div>
-                      )}
+                          <div style={{ color: "#aaa", fontSize: "0.8rem" }}>
+                            Input: {JSON.stringify(part.input)}
+                          </div>
+                        )}
                       {part.state === "output-available" && (
                         <div
                           style={{
