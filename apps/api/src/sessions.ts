@@ -2,7 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { endUsers, events, runs, sessionItems, sessions } from "./schemas/schema"
 import type { Transaction } from "./types";
 import { isUUID } from "./isUUID";
-import type { ChannelRef, Environment, StandardSession } from "agentview/apiTypes";
+import type { ChannelRef, Environment, SessionBase, StandardSession } from "agentview/apiTypes";
 import { updateInboxes } from "./updateInboxes";
 import { parseMetadata } from "./parseMetadata";
 import { requireChannelConfig } from "agentview/baseConfigUtils";
@@ -35,8 +35,7 @@ export async function fetchLastRunStatus(
   return run ?? null;
 }
 
-
-export async function fetchSession(tx: Transaction, session_id: string): Promise<StandardSession | undefined> {
+function sessionWhere(session_id: string) {
   let where : ReturnType<typeof eq> | undefined;
 
   if (isUUID(session_id)) { // id
@@ -53,6 +52,53 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
     else {
       return undefined;
     }
+  }
+
+  return where;
+}
+
+
+export async function fetchSessionBase(tx: Transaction, session_id: string): Promise<SessionBase | undefined> {
+  const where = sessionWhere(session_id);
+  if (!where) {
+    return undefined;
+  }
+
+  const row = await tx.query.sessions.findFirst({
+    where,
+    with: {
+      user: true,
+      agentRef: true,
+    }
+  });
+
+  if (!row) {
+    return undefined;
+  }
+
+  return {
+    id: row.id,
+    handle: row.handleNumber.toString() + (row.handleSuffix ?? ""),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    metadata: row.metadata,
+    channel: row.channelType === 'api'
+      ? { type: 'api' as const, name: row.channelAddress }
+      : { type: row.channelType, address: row.channelAddress },
+    user: row.user,
+    userId: row.user.id,
+    space: row.user.space,
+    summary: row.summary,
+    agentRef: row.agentRef ?? null,
+    agentRefs: row.agentRefs ?? [],
+  } as SessionBase
+}
+
+
+export async function fetchSession(tx: Transaction, session_id: string): Promise<StandardSession | undefined> {
+  const where = sessionWhere(session_id);
+  if (!where) {
+    return undefined;
   }
 
   const row = await tx.query.sessions.findFirst({
@@ -105,6 +151,9 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
     user: row.user,
     userId: row.user.id,
     space: row.user.space,
+    summary: row.summary,
+    agentRef: row.agentRef ?? null,
+    agentRefs: row.agentRefs ?? [],
     runs: row.runs.filter((run, index) => run.status === "in_progress" || run.status === "completed" || index === row.runs.length - 1).map(run => ({
       ...run,
       // agentRef: run.agentRef ?? : null,
@@ -113,10 +162,7 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
         type: item.type ?? (index === 0 ? 'input' : 'step') // this condition is totally unimportant, just backward compat with nothing lol
       })),
     })),
-    summary: row.summary,
     state: state ?? row.initialState ?? null,
-    agentRef: row.agentRef ?? null,
-    agentRefs: row.agentRefs ?? []
   } as StandardSession;
 }
 

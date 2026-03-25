@@ -240,7 +240,6 @@ export const SessionBaseSchema = z.object({
   user: UserSchema,
   userId: z.string(), // potential bloat
   space: SpaceSchema, // this is actually user.space, but allows to "think user-less"
-  state: z.any().nullable().optional(),
   summary: z.string().nullable(),
   agentRef: AgentRefSchema.nullable(),
   agentRefs: z.array(AgentRefSchema),
@@ -250,6 +249,7 @@ export type SessionBase = z.infer<typeof SessionBaseSchema>
 
 export const StandardSessionSchema = SessionBaseSchema.extend({
   runs: z.array(StandardRunSchema),
+  state: z.any().nullable().optional(),
 })
 
 export type StandardSession = z.infer<typeof StandardSessionSchema>

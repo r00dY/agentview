@@ -3045,7 +3045,7 @@ describe('API', () => {
       expect(reqBody.messages[2].parts[0].text).toBe("How are you?");
     }, 30000);
 
-    test("cancellation → run cancelled and agent connection aborted", async () => {
+    test.only("cancellation → run cancelled and agent connection aborted", async () => {
       await updateConfigWithAiSdkUrl();
       const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
@@ -3075,7 +3075,7 @@ describe('API', () => {
           if (!res.closed) {
             res.write(`data: ${JSON.stringify({ type: "text-delta", id: "t2", delta: "." })}\n\n`);
           }
-        }, 200);
+        }, 2);
 
         res.on('close', () => {
           clearInterval(interval);

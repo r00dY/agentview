@@ -235,12 +235,14 @@ async function processAgentFetch(run: Run) {
         });
       }
       else if (event.name === 'run.patch') {
-        await applyRunPatch(
-          run.id,
-          run.organizationId,
-          environment,
-          event.data
-        );
+        await withOrg(run.organizationId, async (tx) => {
+          await applyRunPatch(
+            tx,
+            run.id,
+            environment,
+            event.data
+          );
+        })
       }
     }
 

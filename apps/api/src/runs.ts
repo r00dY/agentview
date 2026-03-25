@@ -142,34 +142,40 @@ export async function markOutputItems(
  * @param forUpdate — acquires a row-level lock on the run row (SELECT ... FOR UPDATE).
  *   Use when the caller will modify the run inside the same transaction (applyRunPatch, terminateRun).
  */
-export async function getRun(tx: Transaction, runId: string, options?: { forUpdate?: boolean }) {
+export async function getRunBaseWithLock(tx: Transaction, runId: string) {
   // Build the run query — use select() API so we can append FOR UPDATE.
-  const runRows = await (() => {
-    const q = tx
-      .select()
-      .from(runs)
-      .leftJoin(agentRefs, eq(runs.agentRefId, agentRefs.id))
-      .where(eq(runs.id, runId))
-      .limit(1);
-    return options?.forUpdate ? q.for('update', { of: runs }) : q;
-  })();
+
+  const runRows = await tx
+    .select()
+    .from(runs)
+    .leftJoin(agentRefs, eq(runs.agentRefId, agentRefs.id))
+    .where(eq(runs.id, runId))
+    .limit(1)
+    .for('update', { of: runs });
 
   const row = runRows[0];
   if (!row) return undefined;
 
-  // Fetch session items separately (not locked — they don't need it)
-  const items = await tx
-    .select()
-    .from(sessionItems)
-    .where(and(eq(sessionItems.runId, runId), eq(sessionItems.isState, false)))
-    .orderBy(asc(sessionItems.sortOrder));
-
   return {
     ...row.runs,
     agentRef: row.agent_refs,
-    sessionItems: items,
   };
 }
+
+export async function getRunInput(tx: Transaction, runId: string) {
+  return await tx.query.sessionItems.findFirst({
+    where: and(eq(sessionItems.runId, runId), eq(sessionItems.isState, false)),
+    orderBy: (sessionItem, { asc }) => [asc(sessionItem.sortOrder)],
+  });
+}
+
+export async function getRunSessionItems(tx: Transaction, runId: string) {
+  return await tx.query.sessionItems.findMany({
+    where: eq(sessionItems.runId, runId),
+    orderBy: (sessionItem, { asc }) => [asc(sessionItem.sortOrder)],
+  });
+}
+
 
 
 /**
@@ -177,20 +183,19 @@ export async function getRun(tx: Transaction, runId: string, options?: { forUpda
  * Validates items, metadata, status transitions, inserts items, and updates the run.
  */
 export async function applyRunPatch(
+  tx: OrgTransaction,
   runId: string,
-  organizationId: string,
   environment: Environment | null,
   body: ManualRunUpdate
 ) {
-  const { insertedItems, nowIso, isFinished, run } = await withOrg(organizationId, async (tx) => {
-    const run = await getRun(tx, runId, { forUpdate: true });
+    const run = await getRunBaseWithLock(tx, runId); // we must start with a lock for safety of concurrent writes!
 
     if (!run) {
       throw new AgentViewError("Run not found.", 404);
     }
 
     /** Find matching run config **/
-    const inputItem = getRunInputContent(run.sessionItems);
+    const inputItem = (await getRunInput(tx, runId))?.content;
 
     let parsedItems: any[] = [];
     let metadata: Record<string, any> | undefined = undefined;
@@ -227,7 +232,9 @@ export async function applyRunPatch(
         throw new AgentViewError("Cannot add items to a finished run.", 422);
       }
 
-      parsedItems = validateItems(runConfig, run.sessionItems.map(si => si.content), items);
+      const sessionItems = await getRunSessionItems(tx, runId);
+
+      parsedItems = validateItems(runConfig, sessionItems.map(si => si.content), items);
 
       /** State */
       if (body.state !== undefined && run.status !== 'in_progress') {
@@ -309,11 +316,11 @@ export async function applyRunPatch(
     if (status === 'completed' && runConfig) {
       const outputItemCount = body.outputItemCount ?? 1;
       await markOutputItems(tx, run.id, outputItemCount, runConfig);
-      await handleChannelReply(tx, run.id, run.sessionId, organizationId, body.channelReply);
+      await handleChannelReply(tx, run.id, run.sessionId, tx.organizationId, body.channelReply);
     }
 
-    return { insertedItems, nowIso, isFinished, run };
-  });
+  //   return { insertedItems, nowIso, isFinished, run };
+  // });
 
   // Publish to Redis stream only after transaction finished successfully in DB
   const dataToStream = JSON.stringify({
@@ -322,11 +329,12 @@ export async function applyRunPatch(
     updatedAt: nowIso
   });
 
-  await publishRunStreamEvent(runId, nowIso, dataToStream);
-
-  if (isFinished) {
-    await publishRunStreamEvent(runId, null, '[DONE]');
-  }
+  tx.afterCommit(async () => {
+    await publishRunStreamEvent(runId, nowIso, dataToStream);
+    if (isFinished) {
+      await publishRunStreamEvent(runId, null, '[DONE]');
+    }
+  });
 }
 
 /**
@@ -342,16 +350,16 @@ export async function applyRunPatch(
  * - when we listened to [done] event on redis streams in agent API call, even if integration called apply patch with "complete" / "failed" correctly. In that case we should not abort agent API call. That's why termination is different "path" in our system.
  */
 export async function terminateRun(tx: OrgTransaction, runId: string, body: { status: 'cancelled' } | { status: 'failed', failReason: any }) {
-  const nowIso = new Date().toISOString();
-
-  const run = await getRun(tx, runId, { forUpdate: true }); // lock!
-
-  if (!run) {
+  const runBase = await getRunBaseWithLock(tx, runId); // we must start with a lock for safety of concurrent writes!
+  
+  if (!runBase) {
     throw new AgentViewError("Can't find run to terminate.", 404);
   }
-  if (run.status !== 'in_progress') {
+  if (runBase.status !== 'in_progress') {
     throw new AgentViewError("Cannot terminate a run that is not in progress.", 422);
   }
+
+  const nowIso = new Date().toISOString();
 
   await tx.update(runs).set({
     ...body,

@@ -64,12 +64,12 @@ import { isInboxItemUnread } from './inboxItems';
 import { initDb } from './initDb';
 import { requireValidInvitation } from './invitations';
 import { members, organizations, users } from './schemas/auth-schema';
-import { createSession, fetchSession } from './sessions';
+import { createSession, fetchSession, fetchSessionBase } from './sessions';
 import type { Transaction } from './types';
 import { updateInboxes } from './updateInboxes';
 import { findUser } from './users';
 import { randomBytes } from 'crypto';
-import { applyRunPatch, getRun, createAutoRun, createManualRun, DEFAULT_IDLE_TIME, getRunInputContent, terminateRun } from './runs';
+import { applyRunPatch, getRunBaseWithLock, createAutoRun, createManualRun, DEFAULT_IDLE_TIME, getRunInputContent, terminateRun, getRunInput } from './runs';
 import { createRunStreamConsumer } from './runStream';
 import { upsertAgentRef } from './agentRefs';
 import { adapters, getAdapter } from './adapters/adapters';
@@ -197,8 +197,16 @@ async function requireSession(tx: Transaction, sessionId: string) {
   return session
 }
 
-async function requireRun(tx: Transaction, runId: string) {
-  const run = await getRun(tx, runId);
+async function requireSessionBase(tx: Transaction, sessionId: string) {
+  const session = await fetchSessionBase(tx, sessionId);
+  if (!session) {
+    throw new HTTPException(404, { message: "Session not found" });
+  }
+  return session
+}
+
+async function requireRunBaseWithLock(tx: Transaction, runId: string) {
+  const run = await getRunBaseWithLock(tx, runId);
   if (!run) {
     throw new HTTPException(404, { message: "Run not found" });
   }
@@ -1555,15 +1563,16 @@ app.openapi(runKeepAliveRoute, async (c) => {
   requireUUID(run_id);
 
   return withOrg(principal.organizationId, async (tx) => {
-    const run = await requireRun(tx, run_id);
-    const session = await requireSession(tx, run.sessionId);
+    const run = await requireRunBaseWithLock(tx, run_id);
+    const session = await requireSessionBase(tx, run.sessionId);
 
     authorize(principal, { action: "end-user:update", user: session.user });
 
     const config = await requireConfig(tx, principal);
     const channelConfig = requireChannelConfig(config, session.channel);
     const agentConfig = requireAgentConfig(config, getChannelAgent(channelConfig)?.name);
-    const inputItem = getRunInputContent(run.sessionItems);
+
+    const inputItem = (await getRunInput(tx, run_id))?.content;
     const runConfig = requireRunConfig(agentConfig, inputItem);
 
     const status = run.status;
@@ -1651,9 +1660,9 @@ app.openapi(runManualPATCHRoute, async (c) => {
 
   const body = await c.req.valid('json')
 
-  const { run, environment, session } = await withOrg(principal.organizationId, async (tx) => {
-    const run = await requireRun(tx, run_id);
-    const session = await requireSession(tx, run.sessionId);
+  return await withOrg(principal.organizationId, async (tx) => {
+    const run = await requireRunBaseWithLock(tx, run_id);
+    const session = await requireSessionBase(tx, run.sessionId);
 
     authorize(principal, { action: "end-user:update", user: session.user });
 
@@ -1664,14 +1673,9 @@ app.openapi(runManualPATCHRoute, async (c) => {
 
     const environment = await requireEnvironment(tx, principal.env);
 
-    return { run, environment, session };
-  })
+    await applyRunPatch(tx, run.id, environment, body);
 
-
-  await applyRunPatch(run.id, principal.organizationId, environment, body);
-
-  return withOrg(principal.organizationId, async (tx) => {
-    const updatedSession = await requireSession(tx, session.id);
+    const updatedSession = await requireSession(tx, session.id); // TODO: optimize
     const newRun = getLastRun(updatedSession)!;
     return c.json(newRun, 201);
   })
