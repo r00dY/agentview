@@ -178,7 +178,7 @@ export async function createSession(tx: Transaction, params: {
   authorId?: string | null;
   agentRefId?: string | null;
   initialState?: any;
-}): Promise<StandardSession> {
+}) {
   const config = getConfigFromEnvironment(params.environment);
   const channelConfig = requireChannelConfig(config, params.channelRef);
 
@@ -224,14 +224,9 @@ export async function createSession(tx: Transaction, params: {
     }
   }).returning();
 
-  const newSession = await fetchSession(tx, newSessionRow.id);
-  if (!newSession) {
-    throw new Error("[Internal Error] Session not found");
-  }
-
   await updateInboxes(tx, event);
 
-  return newSession;
+  return newSessionRow;
 }
 
 async function fetchSessionState(tx: Transaction, session_id: string) {

@@ -1121,7 +1121,7 @@ export async function createSessionHandler(c: Parameters<RouteHandler<typeof ses
       organizationId: principal.organizationId,
     });
 
-    let newSession = await createSession(tx, {
+    let newSessionRow = await createSession(tx, {
       organizationId: principal.organizationId,
       environment,
       channelRef,
@@ -1134,11 +1134,10 @@ export async function createSessionHandler(c: Parameters<RouteHandler<typeof ses
     });
 
     if (body.input) {
-      await createAutoRun(tx, principal.organizationId, environment, newSession.id, { input: body.input });
-      newSession = await requireSession(tx, newSession.id);
+      await createAutoRun(tx, principal.organizationId, environment, newSessionRow.id, { input: body.input });
     }
 
-    return newSession;
+    return await requireSession(tx, newSessionRow.id)
   })
 }
 

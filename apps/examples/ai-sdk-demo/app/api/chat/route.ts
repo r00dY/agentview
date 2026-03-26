@@ -91,7 +91,7 @@ const weatherTool = tool({
 export async function POST(req: Request) {
   const { messages, session }: { messages: UIMessage[], session: SessionBase } = await req.json();
 
-  console.log('New request received', session.id, messages[messages.length - 1]);
+  console.log('New request received', session?.id, messages[messages.length - 1]);
 
   const userLocation = session?.metadata?.userLocation;
 
@@ -122,7 +122,7 @@ export async function POST(req: Request) {
         },
       });
 
-      writer.write(result.toUIMessageStream());
+      writer.merge(result.toUIMessageStream());
     },
   });
 
