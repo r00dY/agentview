@@ -413,10 +413,15 @@ export type UserUIMessage = z.infer<typeof UserUIMessageSchema>
 export const RunSchema = StandardRunSchema;
 export type Run = z.infer<typeof RunSchema>
 
+export const SessionStatusSchema = z.enum(['in_progress', 'idle', 'cancelled', 'failed']);
+export type SessionStatus = z.infer<typeof SessionStatusSchema>
+
 export const SessionSchema = SessionBaseSchema.extend({
   messages: z.array(UIMessageSchema),
   resume: z.boolean(),
-})
+  status: SessionStatusSchema,
+  failReason: z.any().nullable().optional(),
+});
 
 export type Session = z.infer<typeof SessionSchema>
 

@@ -3,7 +3,6 @@
 import { useChat } from "@ai-sdk/react";
 import {
   isToolUIPart,
-  lastAssistantMessageIsCompleteWithToolCalls,
 } from "ai";
 import { useState } from "react";
 import type { Session } from "agentview";
@@ -21,7 +20,7 @@ export function ChatUI(props: {
     resume: session.resume,
     transport: client.as(userToken).createTransport()
   });
-  
+
   const [input, setInput] = useState("");
 
   return (

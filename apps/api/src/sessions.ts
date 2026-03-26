@@ -7,6 +7,7 @@ import { updateInboxes } from "./updateInboxes";
 import { parseMetadata } from "./parseMetadata";
 import { requireChannelConfig } from "agentview/baseConfigUtils";
 import { getConfigFromEnvironment } from "./environments";
+import type { SessionStatus } from "agentview/apiTypes";
 
 export type LastRunStatus = {
   id: string;
@@ -245,4 +246,14 @@ async function fetchSessionState(tx: Transaction, session_id: string) {
   }
 
   return stateItem.content as any
+}
+
+export function getSessionStatusFields(session: StandardSession) : { status: SessionStatus, failReason: any | null } {
+  const lastRun = session.runs[session.runs.length - 1];
+  const failReason = lastRun?.failReason;
+
+  return {
+    status: (!lastRun || lastRun.status === 'complete') ? 'idle' : (lastRun.status as SessionStatus),
+    failReason
+  }
 }

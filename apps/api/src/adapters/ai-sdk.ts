@@ -3,6 +3,7 @@ import { type AgentAPIEvent } from '../agentApi';
 import { expireAISDKStream, publishAISDKStreamEvent } from './ai-sdk-stream';
 import type { StandardSession, UIMessage } from 'agentview/apiTypes';
 import { type Adapter } from './adapters';
+import { getSessionStatusFields } from '../sessions';
 
 interface AISDKChunk {
     type: string;
@@ -550,6 +551,7 @@ export const aiSDKAdapter = {
     callAgent: callAgentAPIAISDK,
     enrichSession: (session: StandardSession) => ({
         messages: sessionToUIMessages(session),
-        resume: session.runs[session.runs.length - 1]?.status === 'in_progress'
+        resume: session.runs[session.runs.length - 1]?.status === 'in_progress',
+        ...getSessionStatusFields(session),
     }),
 } satisfies Adapter;
