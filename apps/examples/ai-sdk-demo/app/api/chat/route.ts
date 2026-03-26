@@ -91,26 +91,42 @@ const weatherTool = tool({
 export async function POST(req: Request) {
   const { messages, session }: { messages: UIMessage[], session: SessionBase } = await req.json();
 
-  console.log('New request received', session?.id, messages[messages.length - 1]);
+  console.log('New request received, messages length:', messages.length);
 
   const userLocation = session?.metadata?.userLocation;
 
-  const modelMessages = await convertToModelMessages(messages)
+  // const modelMessages = await convertToModelMessages(messages)
+
+  let wasInitialStateSent = false;
 
   const stream = createUIMessageStream({
-    execute: ({ writer }) => {
+    execute: async ({ writer }) => {
       const result = streamText({
         model: openai("gpt-5-mini"),
         system:
           `You are a helpful assistant with access to a weather tool. When the user asks about weather, use the tool to get real data. Be concise!` + (userLocation ? ` The user is currently at location: ${userLocation}.` : ''),
-        messages: modelMessages,
+        messages: await convertToModelMessages(messages),
         tools: { weather: weatherTool },
         stopWhen: stepCountIs(5),
-        onChunk({ chunk }) {
-          console.log('chunk received', chunk.type)
-        },
+        // onChunk({ chunk }) {
+        //   if (!wasInitialStateSent) {
+        //     console.log('data session state sent 1')
+        //     writer.write({
+        //       type: 'data-session-state',
+        //       data: { count: messages.length }
+        //     });
+        //     wasInitialStateSent = true;
+        //   }
+        // },
         onError(error) {
           console.error(error);
+        },
+        onFinish() {
+          console.log('data session state sent 2')
+          writer.write({
+            type: 'data-dupa',
+            data: { count: messages.length + 1 }
+          });
         },
     
         experimental_telemetry: {

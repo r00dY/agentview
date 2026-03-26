@@ -350,6 +350,7 @@ export async function applyRunPatch(
  * - when we listened to [done] event on redis streams in agent API call, even if integration called apply patch with "complete" / "failed" correctly. In that case we should not abort agent API call. That's why termination is different "path" in our system.
  */
 export async function terminateRun(tx: OrgTransaction, runId: string, body: { status: 'cancelled' } | { status: 'failed', failReason: any }) {
+  console.log('[[[[[[ TERMINATE RUN]]]]]');
   const runBase = await getRunBaseWithLock(tx, runId); // we must start with a lock for safety of concurrent writes!
   
   if (!runBase) {

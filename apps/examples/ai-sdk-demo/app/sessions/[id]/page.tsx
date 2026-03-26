@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { ChatUI } from "./chat";
 import { serverClient } from "@/lib/agentview.server";
+import { useEffect } from "react";
 
 export default async function SessionPage({
   params,

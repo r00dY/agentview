@@ -4,7 +4,7 @@ import { useChat } from "@ai-sdk/react";
 import {
   isToolUIPart,
 } from "ai";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Session } from "agentview";
 import { client } from "@/lib/agentview.client";
 
@@ -13,6 +13,10 @@ export function ChatUI(props: {
   userToken: string;
 }) {
   const { session, userToken } = props;
+
+  useEffect(() => {
+    console.log('session', session);
+  }, [session]);
   
   const { messages, sendMessage, status, error, stop } = useChat({
     id: session.id,

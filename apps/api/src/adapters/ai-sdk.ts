@@ -278,6 +278,8 @@ async function* callAgentAPIAISDK(
                     textBuffers.delete(chunk.id);
                     emittedItemTypes.push('text');
                     outputTexts.push(text);
+
+                    console.log(`[ai-sdk][${currentRun.id}] yield run.patch for "text"`)
                     yield {
                         name: 'run.patch',
                         data: { items: [{ type: 'text', text }] },
@@ -301,7 +303,7 @@ async function* callAgentAPIAISDK(
                     reasoningBuffers.delete(chunk.id);
                     emittedItemTypes.push('reasoning');
 
-                    console.log(`[ai-sdk][${currentRun.id}] yield run.patch for`, chunk)
+                    console.log(`[ai-sdk][${currentRun.id}] yield run.patch for "reasoning"`)
                     yield {
                         name: 'run.patch',
                         data: { items: [{ type: 'reasoning', text }] },
@@ -337,7 +339,7 @@ async function* callAgentAPIAISDK(
                     const state = toolStates.get(chunk.toolCallId);
                     if (state) {
                         emittedItemTypes.push('tool-call');
-                        console.log(`[ai-sdk][${currentRun.id}] yield run.patch for`, chunk)
+                        console.log(`[ai-sdk][${currentRun.id}] yield run.patch for "tool-output-available"`)
                         yield {
                             name: 'run.patch',
                             data: {
@@ -360,7 +362,7 @@ async function* callAgentAPIAISDK(
                     const state = toolStates.get(chunk.toolCallId);
                     if (state) {
                         emittedItemTypes.push('tool-call');
-                        console.log(`[ai-sdk][${currentRun.id}] yield run.patch for`, chunk)
+                        console.log(`[ai-sdk][${currentRun.id}] yield run.patch for "tool-output-error"`)
                         yield {
                             name: 'run.patch',
                             data: {
@@ -384,7 +386,7 @@ async function* callAgentAPIAISDK(
                         messageMetadata = chunk.messageMetadata;
                     }
                     const outputCount = computeOutputItemCount(emittedItemTypes);
-                    console.log(`[ai-sdk][${currentRun.id}] yield run.patch COMPLETED for`, chunk)
+                    console.log(`[ai-sdk][${currentRun.id}] yield run.patch for FINISH`)
 
                     isComplete = true;
                     yield {
@@ -400,7 +402,7 @@ async function* callAgentAPIAISDK(
                 }
 
                 case 'error': {
-                    console.log(`[ai-sdk][${currentRun.id}] yield run.patch ERROR for`, chunk)
+                    console.log(`[ai-sdk][${currentRun.id}] yield run.patch for ERROR`)
 
                     isComplete = true;
                     yield {
@@ -415,8 +417,9 @@ async function* callAgentAPIAISDK(
                     break;
                 }
 
-                case 'data-state': {
+                case 'data-session-state': {
                     emittedItemTypes.push('data');
+                    console.log(`[ai-sdk][${currentRun.id}] yield run.patch for "data-session-state"`)
                     yield {
                         name: 'run.patch',
                         data: { 
@@ -429,6 +432,7 @@ async function* callAgentAPIAISDK(
                 // Ignore other events: start-step, finish-step, source-url, file, etc.
                 default:
                     if (chunk.type.startsWith('data-')) {
+                        console.log(`[ai-sdk][${currentRun.id}] yield run.patch for "data-${chunk.type}"`)
                         emittedItemTypes.push('data');
                         yield {
                             name: 'run.patch',
@@ -437,14 +441,17 @@ async function* callAgentAPIAISDK(
                             },
                         };
                     }
-                    console.log(`[ai-sdk][${currentRun.id}] Ignored chunk: `, chunk.type);
+                    console.log(`[ai-sdk][${currentRun.id}] ignored chunk: `, chunk.type);
                     break;
             }
 
             // we just mirror native chunks to the stream.
-            console.log(`[ai-sdk][${currentRun.id}] stream event`, chunk)
+            console.log(`[ai-sdk][${currentRun.id}] stream event`, chunk.type)
             await publishAISDKStreamEvent(currentRun.id, JSON.stringify(chunk));
         }
+        
+
+        console.log('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
 
         if (!isComplete) {
             console.log(`[ai-sdk][${currentRun.id}] stream ended INCOMPLETE`);
@@ -470,6 +477,8 @@ async function* callAgentAPIAISDK(
         }
 
         // This is for severe errors.
+        console.log('[ai-sdk] severe error while streaming')
+        console.error(error)
         yield {
             name: 'run.patch',
             data: {
