@@ -415,6 +415,17 @@ async function* callAgentAPIAISDK(
                     break;
                 }
 
+                case 'data-state': {
+                    emittedItemTypes.push('data');
+                    yield {
+                        name: 'run.patch',
+                        data: { 
+                            state: chunk.data,
+                        },
+                    };
+                    break;
+                }
+
                 // Ignore other events: start-step, finish-step, source-url, file, etc.
                 default:
                     if (chunk.type.startsWith('data-')) {

@@ -1,5 +1,5 @@
 import { openai } from "@ai-sdk/openai";
-import { SessionBase } from "agentview";
+import { type SessionBase } from "agentview";
 
 import {
   convertToModelMessages,
@@ -7,7 +7,9 @@ import {
   stepCountIs,
   tool,
   UIMessage,
-  Output
+  Output,
+  createUIMessageStream,
+  createUIMessageStreamResponse
 } from "ai";
 import { z } from "zod";
 
@@ -91,73 +93,74 @@ export async function POST(req: Request) {
 
   console.log('New request received', session.id, messages[messages.length - 1]);
 
-  // console.log('[chat] messages: ', JSON.stringify(messages, null, 2));
-  // console.log('[chat] session: ', session);
-
-  await new Promise(resolve => setTimeout(resolve, 5000));
-
   const userLocation = session?.metadata?.userLocation;
 
-  const result = streamText({
-    model: openai("gpt-5-mini"),
-    system:
-      `You are a helpful assistant with access to a weather tool. When the user asks about weather, use the tool to get real data. Be concise!` + (userLocation ? ` The user is currently at location: ${userLocation}.` : ''),
-    messages: await convertToModelMessages(messages),
-    tools: { weather: weatherTool },
-    stopWhen: stepCountIs(5),
-    onChunk({ chunk }) {
-      console.log('chunk received', chunk.type)
-      // if (!wasFirstChunkSent) {
-      //   wasFirstChunkSent = true;
-      //   console.log('First chunk sent');
-      // }
+  const modelMessages = await convertToModelMessages(messages)
 
-      // if (chunk.type === "text-delta") {
-      //   process.stdout.write(chunk.text);
-      // } else if (chunk.type === "tool-call") {
-      //   console.log(
-      //     `\n[tool-call] ${chunk.toolName}(${JSON.stringify(chunk.input)})`
-      //   );
-      // } else if (chunk.type === "tool-result") {
-      //   console.log(
-      //     `[tool-result] ${chunk.toolName}: ${JSON.stringify(chunk.output)}`
-      //   );
-      // } else if (chunk.type === "reasoning-delta") {
-      //   process.stdout.write(`[reasoning] ${chunk.text}`);
-      // }
-    },
-    onStepFinish({ finishReason, text, toolCalls, usage }) {
-      console.log(
-        `\n[step-finish] reason=${finishReason} tools=${toolCalls.length} text=${text.slice(0, 100)}`
-      );
-    },
-    onFinish({ text, steps, usage }) {
-      console.log(
-        `[finish] steps=${steps.length} tokens=${JSON.stringify(usage)}`
-      );
-    },
-    onError(error) {
-      console.error(error);
-    },
+  const stream = createUIMessageStream({
+    execute: ({ writer }) => {
+      const result = streamText({
+        model: openai("gpt-5-mini"),
+        system:
+          `You are a helpful assistant with access to a weather tool. When the user asks about weather, use the tool to get real data. Be concise!` + (userLocation ? ` The user is currently at location: ${userLocation}.` : ''),
+        messages: modelMessages,
+        tools: { weather: weatherTool },
+        stopWhen: stepCountIs(5),
+        onChunk({ chunk }) {
+          console.log('chunk received', chunk.type)
+        },
+        onError(error) {
+          console.error(error);
+        },
+    
+        experimental_telemetry: {
+          isEnabled: true,
+          metadata: {
+            query: "weather",
+            location: "San Francisco",
+          },
+        },
+      });
 
-    experimental_telemetry: {
-      isEnabled: true,
-      metadata: {
-        query: "weather",
-        location: "San Francisco",
-      },
+      writer.write(result.toUIMessageStream());
     },
-    // output: Output.object({
-    //   schema: z.object({
-    //     response: z.string(),
-    //     is_user_happy: z.string()
-    //   }),
-    // }),
   });
 
-  return result.toUIMessageStreamResponse({
-    headers: {
-      'X-AgentView-Version': '0.0.1',
-    },
-  });
+  return createUIMessageStreamResponse({ stream });
+
+
+  // const result = streamText({
+  //   model: openai("gpt-5-mini"),
+  //   system:
+  //     `You are a helpful assistant with access to a weather tool. When the user asks about weather, use the tool to get real data. Be concise!` + (userLocation ? ` The user is currently at location: ${userLocation}.` : ''),
+  //   messages: await convertToModelMessages(messages),
+  //   tools: { weather: weatherTool },
+  //   stopWhen: stepCountIs(5),
+  //   onChunk({ chunk }) {
+  //     console.log('chunk received', chunk.type)
+  //   },
+  //   onError(error) {
+  //     console.error(error);
+  //   },
+
+  //   experimental_telemetry: {
+  //     isEnabled: true,
+  //     metadata: {
+  //       query: "weather",
+  //       location: "San Francisco",
+  //     },
+  //   },
+  //   // output: Output.object({
+  //   //   schema: z.object({
+  //   //     response: z.string(),
+  //   //     is_user_happy: z.string()
+  //   //   }),
+  //   // }),
+  // });
+
+  // return result.toUIMessageStreamResponse({
+  //   headers: {
+  //     'X-AgentView-Version': '0.0.1',
+  //   },
+  // });
 }

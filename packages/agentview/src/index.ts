@@ -16,6 +16,7 @@ export type {
     SessionsPaginatedResponse,
     CommentMessage,
     Score,
+    SessionBase,
     Session,
     SessionCreate,
     Run,
