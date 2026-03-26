@@ -329,7 +329,6 @@ export function channelProvider(type: string) {
        */
       if (!sessionId) {
         const newSession = await createSession(tx, {
-          organizationId: thread.organizationId,
           environment,
           channelRef,
           userId,
@@ -344,7 +343,7 @@ export function channelProvider(type: string) {
        * Create RUN
        */
 
-      const newRun = await createAutoRun(tx, thread.organizationId, environment, sessionId, {});
+      const newRun = await createAutoRun(tx, environment, sessionId, {});
 
       console.log('[ingestMessage] new run created: ', newRun.id);
 

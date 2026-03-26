@@ -107,7 +107,6 @@ async function processAgentFetch(run: Run) {
         if (!session.agentRef) {
           const result = await upsertAgentRef(tx, {
             agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
-            organizationId: run.organizationId,
           });
 
           sessionAgentRef = {
@@ -131,7 +130,6 @@ async function processAgentFetch(run: Run) {
         const { agentRefId } = await resolveAgentRef(tx, {
           agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
           previousAgentRef,
-          organizationId: run.organizationId,
           sessionId: run.sessionId,
         });
 

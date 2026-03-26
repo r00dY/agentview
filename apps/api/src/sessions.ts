@@ -8,6 +8,7 @@ import { parseMetadata } from "./parseMetadata";
 import { requireChannelConfig } from "agentview/baseConfigUtils";
 import { getConfigFromEnvironment } from "./environments";
 import type { SessionStatus } from "agentview/apiTypes";
+import type { OrgTransaction } from "./withOrg";
 
 export type LastRunStatus = {
   id: string;
@@ -167,8 +168,7 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
   } as StandardSession;
 }
 
-export async function createSession(tx: Transaction, params: {
-  organizationId: string;
+export async function createSession(tx: OrgTransaction, params: {
   environment: Environment;
   channelRef: ChannelRef;
   userId: string;
@@ -202,7 +202,7 @@ export async function createSession(tx: Transaction, params: {
   const newHandleNumber = sessionWithHighestHandleNumber ? sessionWithHighestHandleNumber.handleNumber + 1 : 1;
 
   const [newSessionRow] = await tx.insert(sessions).values({
-    organizationId: params.organizationId,
+    organizationId: tx.organizationId,
     handleNumber: newHandleNumber,
     handleSuffix,
     metadata,
@@ -216,7 +216,7 @@ export async function createSession(tx: Transaction, params: {
   }).returning();
 
   const [event] = await tx.insert(events).values({
-    organizationId: params.organizationId,
+    organizationId: tx.organizationId,
     type: 'session_created',
     authorId: params.authorId ?? null,
     payload: {

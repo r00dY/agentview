@@ -3,6 +3,7 @@ import { agentRefs, sessions } from './schemas/schema';
 import { AgentViewError } from 'agentview/AgentViewError';
 import type { Transaction } from './types';
 import type { AgentRef } from 'agentview/apiTypes';
+import type { OrgTransaction } from './withOrg';
 
 type ParsedVersion = {
   major: number;
@@ -47,9 +48,8 @@ export type InputAgentRef = {
  * Simple upsert: inserts agent_ref row if not exists, returns the row.
  * No version comparison, no session update.
  */
-export async function upsertAgentRef(tx: Transaction, opts: {
+export async function upsertAgentRef(tx: OrgTransaction, opts: {
   agentRef: InputAgentRef;
-  organizationId: string;
 }): Promise<{ agentRefId: string; version: string; agent: string; adapter: 'agentview' | 'ai-sdk' }> {
   const parsed = parseVersion(opts.agentRef.version);
   if (!parsed) {
@@ -61,7 +61,7 @@ export async function upsertAgentRef(tx: Transaction, opts: {
   const adapter = opts.agentRef.adapter ?? 'agentview';
 
   await tx.insert(agentRefs).values({
-    organizationId: opts.organizationId,
+    organizationId: tx.organizationId,
     version,
     agent,
     adapter,
@@ -76,10 +76,9 @@ export async function upsertAgentRef(tx: Transaction, opts: {
  * Validates version against previous, upserts the agent_refs row,
  * and updates the session's agentRefs array.
  */
-export async function resolveAgentRef(tx: Transaction, opts: {
+export async function resolveAgentRef(tx: OrgTransaction, opts: {
   agentRef: InputAgentRef;
   previousAgentRef?: AgentRef | null;
-  organizationId: string;
   sessionId: string;
 }): Promise<{ agentRefId: string; version: string; agent: string; adapter: 'agentview' | 'ai-sdk' }> {
   const parsed = parseVersion(opts.agentRef.version);
@@ -117,7 +116,7 @@ export async function resolveAgentRef(tx: Transaction, opts: {
 
   // Upsert agent ref row
   await tx.insert(agentRefs).values({
-    organizationId: opts.organizationId,
+    organizationId: tx.organizationId,
     version,
     agent,
     adapter,

@@ -1118,11 +1118,9 @@ export async function createSessionHandler(c: Parameters<RouteHandler<typeof ses
     // Resolve agent ref at session creation
     const { agentRefId } = await upsertAgentRef(tx, {
       agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
-      organizationId: principal.organizationId,
     });
 
     let newSessionRow = await createSession(tx, {
-      organizationId: principal.organizationId,
       environment,
       channelRef,
       userId: user.id,
@@ -1134,7 +1132,7 @@ export async function createSessionHandler(c: Parameters<RouteHandler<typeof ses
     });
 
     if (body.input) {
-      await createAutoRun(tx, principal.organizationId, environment, newSessionRow.id, { input: body.input });
+      await createAutoRun(tx, environment, newSessionRow.id, { input: body.input });
     }
 
     return await requireSession(tx, newSessionRow.id)
@@ -1385,14 +1383,13 @@ async function createRunHandler(c: Parameters<RouteHandler<typeof runsPOSTRoute>
   const { stream = false } = body;
 
   return await withOrg(principal.organizationId, async (tx) => {
-    const session = await requireSession(tx, params.session_id);
+    const session = await requireSessionBase(tx, params.session_id);
 
     authorize(principal, { action: "end-user:update", user: session.user });
 
-    const organizationId = principal.organizationId;
     const environment = await requireEnvironment(tx, principal.env);
 
-    await createAutoRun(tx, organizationId, environment, params.session_id, body);
+    await createAutoRun(tx, environment, params.session_id, body);
 
     const updatedSession = await requireSession(tx, params.session_id);
     const newRun = getLastRun(updatedSession)!;
@@ -1620,10 +1617,9 @@ app.openapi(runsManualPOSTRoute, async (c) => {
 
     authorize(principal, { action: "end-user:update", user: session.user });
 
-    const organizationId = principal.organizationId;
     const environment = await requireEnvironment(tx, principal.env);
 
-    await createManualRun(tx, organizationId, environment, params.session_id, body);
+    await createManualRun(tx, environment, params.session_id, body);
 
     const updatedSession = await requireSession(tx, params.session_id);
     const newRun = getLastRun(updatedSession)!;

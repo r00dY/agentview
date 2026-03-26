@@ -1,7 +1,8 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { channelMessages, runs, sessionItems } from "./schemas/schema";
 import type { Transaction } from "./types";
-import { AgentViewError, type ChannelMessage, type SessionItem, type StandardRun, type StandardSession, type InputTarget } from "agentview";
+import { AgentViewError } from "agentview";
+import { type ChannelMessage, type SessionItem, type StandardRun, type StandardSession, type InputTarget } from "agentview/apiTypes";
 import { fetchSession } from "./sessions";
 
 export type SessionTarget = {

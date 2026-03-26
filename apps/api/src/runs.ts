@@ -389,8 +389,7 @@ export async function terminateRun(tx: OrgTransaction, runId: string, body: RunT
  * Shared run-creation core. Receives pre-validated params, inserts run + items, queues webhooks.
  */
 async function createRunCore(
-  tx: Transaction,
-  organizationId: string,
+  tx: OrgTransaction,
   environment: Environment,
   sessionId: string,
   params: {
@@ -411,7 +410,7 @@ async function createRunCore(
   const { parsedInputItems, parsedNonInputItems, status, failReason, expiresAt, finishedAt, metadata, agentRefId, fetchStatus, state, runConfig, lastRun } = params;
 
   const [insertedRun] = await tx.insert(runs).values({
-    organizationId,
+    organizationId: tx.organizationId,
     sessionId,
     status,
     failReason,
@@ -426,7 +425,7 @@ async function createRunCore(
   if (parsedInputItems.length > 0) {
     await tx.insert(sessionItems).values(
       parsedInputItems.map(item => ({
-        organizationId,
+        organizationId: tx.organizationId,
         sessionId,
         content: item,
         runId: insertedRun.id,
@@ -438,7 +437,7 @@ async function createRunCore(
   if (parsedNonInputItems.length > 0) {
     await tx.insert(sessionItems).values(
       parsedNonInputItems.map(item => ({
-        organizationId,
+        organizationId: tx.organizationId,
         sessionId,
         content: item,
         runId: insertedRun.id,
@@ -449,7 +448,7 @@ async function createRunCore(
 
   if (state !== undefined) {
     await tx.insert(sessionItems).values({
-      organizationId,
+      organizationId: tx.organizationId,
       sessionId,
       content: state,
       runId: insertedRun.id,
@@ -467,7 +466,7 @@ async function createRunCore(
   if (isFirstRun) {
     if (config.webhookUrl) {
       await tx.insert(webhookJobs).values({
-        organizationId,
+        organizationId: tx.organizationId,
         eventType: 'session.on_first_run_created',
         payload: { session_id: sessionId },
         sessionId,
@@ -479,7 +478,7 @@ async function createRunCore(
 
     if (!config.__internal?.disableSummaries) {
       await tx.insert(webhookJobs).values({
-        organizationId,
+        organizationId: tx.organizationId,
         eventType: 'session.generate_summary',
         payload: { session_id: sessionId },
         sessionId,
@@ -496,7 +495,7 @@ async function createRunCore(
 /**
  * Prepares a session for run creation: fetches session, checks no in-progress run, finds config.
  */
-async function prepareRunCreation(tx: Transaction, organizationId: string, environment: Environment, sessionId: string) {
+async function prepareRunCreation(tx: OrgTransaction, environment: Environment, sessionId: string) {
   const session = await fetchSession(tx, sessionId);
   if (!session) {
     throw new AgentViewError("Session not found.", 404);
@@ -521,13 +520,12 @@ async function prepareRunCreation(tx: Transaction, organizationId: string, envir
  * For non-API channels: no input needed (channel messages serve as input).
  */
 export async function createAutoRun(
-  tx: Transaction,
-  organizationId: string,
+  tx: OrgTransaction,
   environment: Environment,
   sessionId: string,
   body: { input?: Record<string, any> }
 ): Promise<typeof runs.$inferSelect> {
-  const { session, lastRun, channelConfig, agentConfig } = await prepareRunCreation(tx, organizationId, environment, sessionId);
+  const { session, lastRun, channelConfig, agentConfig } = await prepareRunCreation(tx, environment, sessionId);
 
   let parsedInputItems: any[] = [];
   let runConfig: BaseRunConfig | undefined;
@@ -551,7 +549,6 @@ export async function createAutoRun(
     const result = await resolveAgentRef(tx, {
       agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
       previousAgentRef: lastRun?.agentRef ?? session.agentRef,
-      organizationId,
       sessionId: session.id,
     });
 
@@ -562,7 +559,7 @@ export async function createAutoRun(
 
   const idleTimeout = runConfig?.idleTimeout ?? DEFAULT_IDLE_TIME;
 
-  return createRunCore(tx, organizationId, environment, sessionId, {
+  return createRunCore(tx, environment, sessionId, {
     parsedInputItems,
     parsedNonInputItems: [],
     status: 'in_progress',
@@ -584,13 +581,12 @@ export async function createAutoRun(
  * API channels only.
  */
 export async function createManualRun(
-  tx: Transaction,
-  organizationId: string,
+  tx: OrgTransaction,
   environment: Environment,
   sessionId: string,
   body: ManualRunCreate
 ): Promise<typeof runs.$inferSelect> {
-  const { session, lastRun, channelConfig, agentConfig } = await prepareRunCreation(tx, organizationId, environment, sessionId);
+  const { session, lastRun, channelConfig, agentConfig } = await prepareRunCreation(tx, environment, sessionId);
 
   if (session.channel.type !== 'api') {
     throw new AgentViewError("For non-api channels manual mode is not supported.", 422);
@@ -608,7 +604,6 @@ export async function createManualRun(
   const resolved = await resolveAgentRef(tx, {
     agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
     previousAgentRef: lastRun?.agentRef ?? session.agentRef,
-    organizationId,
     sessionId: session.id,
   });
 
@@ -633,7 +628,7 @@ export async function createManualRun(
   const finishedAt = isFinished ? new Date().toISOString() : null;
   const expiresAt = isFinished ? null : new Date(Date.now() + idleTimeout).toISOString();
 
-  return createRunCore(tx, organizationId, environment, sessionId, {
+  return createRunCore(tx, environment, sessionId, {
     parsedInputItems,
     parsedNonInputItems,
     status,
