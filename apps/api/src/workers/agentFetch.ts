@@ -182,7 +182,6 @@ async function processAgentFetch(run: Run) {
      * - ALL THE RESPONSIBILITY FOR CLEANUP IS ON THE ADAPTER SIDE. It means that if adapter ends while the run is in_progress, it won't finish. It will just timeout.
      */
 
-
     const body: RunBody = { session };
     const adapter = getAdapter(agentConfig.adapter);
 
@@ -192,16 +191,11 @@ async function processAgentFetch(run: Run) {
       abortController.abort()
     });
 
-    console.log(`[agentFetch][${run.id}] calling agent API`);
+    // event handlers
 
-    for await (const event of adapter.callAgent(body, agentUrl, abortController.signal)) {
-      if (abortController.signal.aborted) {
-        break;
-      }
-
-      console.log(`[agentFetch][${run.id}] event: ${event.name}`);
-
+    const send = async (event: { name: string, data: any }) => {
       if (event.name === 'run.set_input') {
+        
         await withOrg(run.organizationId, async (tx) => {
           // Validate: run must have no items or only input items
           const existing = await tx
@@ -224,9 +218,9 @@ async function processAgentFetch(run: Run) {
             content: event.data,
           });
         });
+
       }
       else if (event.name === 'response_data') {
-        // Store response data
         await withOrg(run.organizationId, async (tx) => {
           await tx.update(runs).set({
             responseData: event.data,
@@ -244,7 +238,20 @@ async function processAgentFetch(run: Run) {
           );
         })
       }
+      else if (event.name === 'run.terminate') { // safe indempotent termination for cleanup
+        await withOrg(run.organizationId, async (tx) => {
+          await terminateRun(tx, run.id, {
+            status: 'failed',
+            failReason: event.data,
+          });
+        });
+      }
+
     }
+    
+    console.log(`[agentFetch][${run.id}] calling agent API`);
+
+    await adapter.callAgent(body, agentUrl, send, abortController.signal);
 
     console.log(`[agentFetch][${run.id}] agent API call finished`);
 
@@ -255,7 +262,7 @@ async function processAgentFetch(run: Run) {
 
     const errorMessage = error instanceof Error ? error.message : String(error);
 
-    console.log(`[agentFetch][${run.id}] error: ${errorMessage}`);
+    console.log(`[agentFetch][${run.id}] unexpected internal error: "${errorMessage}". This error happened because there's unhandled error in the adaptar.callAgent function. This should never happen.`);
 
     await withOrg(run.organizationId, async (tx) => {
       await terminateRun(tx, run.id, {

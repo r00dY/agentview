@@ -4,6 +4,7 @@ import { expireAISDKStream, publishAISDKStreamEvent } from './ai-sdk-stream';
 import type { StandardSession, UIMessage } from 'agentview/apiTypes';
 import { type Adapter } from './adapters';
 import { getSessionStatusFields } from '../sessions';
+import { AgentViewError } from 'agentview';
 
 interface AISDKChunk {
     type: string;
@@ -85,11 +86,12 @@ function computeOutputItemCount(emittedItemTypes: string[]): number {
     return Math.max(count, 1); // at least 1
 }
 
-async function* callAgentAPIAISDK(
+async function callAgentAPIAISDK(
     body: RunBody,
     url: string,
+    send: (event: { name: string, data: any }) => Promise<void>,
     signal?: AbortSignal
-): AsyncGenerator<AgentAPIEvent, void, unknown> {
+): Promise<void> {
     const currentRun = body.session.runs[body.session.runs.length - 1];
     console.log(`[ai-sdk][${currentRun.id}] start`);
 
@@ -108,7 +110,8 @@ async function* callAgentAPIAISDK(
             role: 'user',
             parts: incomingMessages.map(cm => ({ type: 'text', text: cm.text ?? '' })),
         };
-        yield { name: 'run.set_input', data: inputContent };
+        await send({ name: 'run.set_input', data: inputContent });
+
         messages.push({
             id: currentRun.id + '-input',
             role: 'user',
@@ -156,7 +159,7 @@ async function* callAgentAPIAISDK(
                 message = (error as any)?.message ?? 'Unknown error';
             }
 
-            yield {
+            await send({
                 name: 'run.patch',
                 data: {
                     status: 'failed',
@@ -164,7 +167,7 @@ async function* callAgentAPIAISDK(
                         message
                     },
                 },
-            };
+            });
 
             await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({
                 status: 400,
@@ -194,7 +197,7 @@ async function* callAgentAPIAISDK(
     }
 
     if (error) {
-        yield {
+        await send({
             name: 'run.patch',
             data: {
                 status: 'failed',
@@ -202,7 +205,7 @@ async function* callAgentAPIAISDK(
                     message: error
                 },
             },
-        };
+        });
 
         await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({
             status: response.status,
@@ -280,10 +283,10 @@ async function* callAgentAPIAISDK(
                     outputTexts.push(text);
 
                     console.log(`[ai-sdk][${currentRun.id}] yield run.patch for "text"`)
-                    yield {
+                    await send({
                         name: 'run.patch',
                         data: { items: [{ type: 'text', text }] },
-                    };
+                    });
                     break;
                 }
 
@@ -304,10 +307,10 @@ async function* callAgentAPIAISDK(
                     emittedItemTypes.push('reasoning');
 
                     console.log(`[ai-sdk][${currentRun.id}] yield run.patch for "reasoning"`)
-                    yield {
+                    await send({
                         name: 'run.patch',
                         data: { items: [{ type: 'reasoning', text }] },
-                    };
+                    });
                     break;
                 }
 
@@ -340,7 +343,7 @@ async function* callAgentAPIAISDK(
                     if (state) {
                         emittedItemTypes.push('tool-call');
                         console.log(`[ai-sdk][${currentRun.id}] yield run.patch for "tool-output-available"`)
-                        yield {
+                        await send({
                             name: 'run.patch',
                             data: {
                                 items: [{
@@ -352,7 +355,7 @@ async function* callAgentAPIAISDK(
                                     output: chunk.output,
                                 }],
                             },
-                        };
+                        });
                         toolStates.delete(chunk.toolCallId);
                     }
                     break;
@@ -363,7 +366,7 @@ async function* callAgentAPIAISDK(
                     if (state) {
                         emittedItemTypes.push('tool-call');
                         console.log(`[ai-sdk][${currentRun.id}] yield run.patch for "tool-output-error"`)
-                        yield {
+                        await send({
                             name: 'run.patch',
                             data: {
                                 items: [{
@@ -375,7 +378,7 @@ async function* callAgentAPIAISDK(
                                     errorText: chunk.errorText,
                                 }],
                             },
-                        };
+                        });
                         toolStates.delete(chunk.toolCallId);
                     }
                     break;
@@ -388,8 +391,7 @@ async function* callAgentAPIAISDK(
                     const outputCount = computeOutputItemCount(emittedItemTypes);
                     console.log(`[ai-sdk][${currentRun.id}] yield run.patch for FINISH`)
 
-                    isComplete = true;
-                    yield {
+                    await send({
                         name: 'run.patch',
                         data: {
                             status: 'completed',
@@ -397,15 +399,16 @@ async function* callAgentAPIAISDK(
                             channelReply: isChannelRun ? { text: outputTexts.filter(Boolean).join('\n\n') } : undefined,
                             ...(messageMetadata !== undefined ? { metadata: messageMetadata } : {}),
                         },
-                    };
+                    });
+
+                    isComplete = true;
                     break;
                 }
 
                 case 'error': {
                     console.log(`[ai-sdk][${currentRun.id}] yield run.patch for ERROR`)
 
-                    isComplete = true;
-                    yield {
+                    await send({
                         name: 'run.patch',
                         data: {
                             status: 'failed',
@@ -413,19 +416,20 @@ async function* callAgentAPIAISDK(
                                 message: chunk.errorText ?? 'Unknown error from AI SDK stream',
                             },
                         },
-                    };
+                    });
+                    isComplete = true;
                     break;
                 }
 
                 case 'data-session-state': {
                     emittedItemTypes.push('data');
                     console.log(`[ai-sdk][${currentRun.id}] yield run.patch for "data-session-state"`)
-                    yield {
+                    await send({
                         name: 'run.patch',
                         data: { 
                             state: chunk.data,
                         },
-                    };
+                    });
                     break;
                 }
 
@@ -434,12 +438,12 @@ async function* callAgentAPIAISDK(
                     if (chunk.type.startsWith('data-')) {
                         console.log(`[ai-sdk][${currentRun.id}] yield run.patch for "data-${chunk.type}"`)
                         emittedItemTypes.push('data');
-                        yield {
+                        await send({
                             name: 'run.patch',
                             data: {
                                 items: [{ type: chunk.type, data: chunk.data }],
                             },
-                        };
+                        });
                     }
                     console.log(`[ai-sdk][${currentRun.id}] ignored chunk: `, chunk.type);
                     break;
@@ -449,13 +453,10 @@ async function* callAgentAPIAISDK(
             console.log(`[ai-sdk][${currentRun.id}] stream event`, chunk.type)
             await publishAISDKStreamEvent(currentRun.id, JSON.stringify(chunk));
         }
-        
-
-        console.log('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
 
         if (!isComplete) {
             console.log(`[ai-sdk][${currentRun.id}] stream ended INCOMPLETE`);
-            yield {
+            await send({
                 name: 'run.patch',
                 data: {
                     status: 'failed',
@@ -463,7 +464,7 @@ async function* callAgentAPIAISDK(
                         message: 'Agent stream ended without completing',
                     },
                 },
-            };
+            });
         }
         else {
             console.log(`[ai-sdk][${currentRun.id}] stream ended complete`);
@@ -476,18 +477,21 @@ async function* callAgentAPIAISDK(
             return; // abort doesn't require action since it means the run is already properly terminated
         }
 
-        // This is for severe errors.
-        console.log('[ai-sdk] severe error while streaming')
+        if (error instanceof AgentViewError) {
+            console.error("[ai-sdk] SEVERE ERROR while streaming. It's AgentViewError, so must be coming from internal `send` call. This should never happen.")
+        }
+        else {
+            console.log('[ai-sdk] error while streaming')
+        }
         console.error(error)
-        yield {
-            name: 'run.patch',
+
+        // This is for severe errors.
+        await send({
+            name: 'run.terminate',
             data: {
-                status: 'failed',
-                failReason: {
-                    message: error instanceof Error ? error.message : String(error),
-                },
-            },
-        };
+                message: error instanceof Error ? error.message : String(error),
+            }
+        });
 
     } finally {
         console.log(`[ai-sdk][${currentRun.id}] stream cleanup, sending [DONE]`);

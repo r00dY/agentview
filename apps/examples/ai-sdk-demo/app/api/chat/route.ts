@@ -101,6 +101,12 @@ export async function POST(req: Request) {
 
   const stream = createUIMessageStream({
     execute: async ({ writer }) => {
+      writer.write({
+        type: 'data-notification',
+        data: { message: 'Processing your request...', level: 'info' },
+        // transient: true, // This part won't be added to message history
+      });
+
       const result = streamText({
         model: openai("gpt-5-mini"),
         system:

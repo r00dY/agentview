@@ -3,12 +3,12 @@ import { callAgentAPI, type AgentAPIEvent } from '../agentApi';
 import { aiSDKAdapter } from './ai-sdk';
 
 export interface Adapter {
-  callAgent: (body: RunBody, url: string, signal?: AbortSignal) => AsyncGenerator<AgentAPIEvent, void, unknown>;
+  callAgent: (body: RunBody, url: string, send: (event: { name: string, data: any }) => Promise<void>, signal?: AbortSignal) => Promise<void>;
   enrichSession: (session: StandardSession) => Record<string, any>;
 }
 
 const agentviewAdapter = {
-  callAgent: callAgentAPI,
+  callAgent: null as any, // temporarily disabled
   enrichSession: () => ({}),
 } satisfies Adapter;
 
