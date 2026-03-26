@@ -17,6 +17,8 @@ export function ChatUI(props: {
   useEffect(() => {
     console.log('session', session);
   }, [session]);
+
+  
   
   const { messages, sendMessage, status, error, stop } = useChat({
     id: session.id,

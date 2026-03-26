@@ -398,17 +398,6 @@ async function callAgentAPIAISDK(
                         ...(messageMetadata !== undefined ? { metadata: messageMetadata } : {}),
                     };
 
-                    // await send({
-                    //     name: 'run.patch',
-                    //     data: {
-                    //         status: 'completed',
-                    //         outputItemCount: outputCount,
-                    //         channelReply: isChannelRun ? { text: outputTexts.filter(Boolean).join('\n\n') } : undefined,
-                    //         ...(messageMetadata !== undefined ? { metadata: messageMetadata } : {}),
-                    //     },
-                    // });
-
-                    // isComplete = true;
                     break;
                 }
 
@@ -422,16 +411,6 @@ async function callAgentAPIAISDK(
                         },
                     };
 
-                    // await send({
-                    //     name: 'run.patch',
-                    //     data: {
-                    //         status: 'failed',
-                    //         failReason: {
-                    //             message: chunk.errorText ?? 'Unknown error from AI SDK stream',
-                    //         },
-                    //     },
-                    // });
-                    // isComplete = true;
                     break;
                 }
 
@@ -470,24 +449,22 @@ async function callAgentAPIAISDK(
 
         if (!finalPatch) {
             console.log(`[ai-sdk][${currentRun.id}] stream ended INCOMPLETE`);
-            await send({
-                name: 'run.patch',
-                data: {
-                    status: 'failed',
-                    failReason: {
-                        message: 'Agent stream ended without completing',
-                    },
+            finalPatch = {
+                status: 'failed',
+                failReason: {
+                    message: 'Agent stream ended without completing',
                 },
-            });
+            };
         }
         else {
             console.log(`[ai-sdk][${currentRun.id}] stream ended complete`);
-            await send({
-                name: 'run.patch',
-                data: finalPatch,
-            });
         }
 
+        await send({
+            name: 'run.patch',
+            data: finalPatch,
+        });
+        
     } catch (error: unknown) {
         if (error instanceof Error && error.name === 'AbortError') {
             console.log('[ai-sdk] aborted while streaming')
