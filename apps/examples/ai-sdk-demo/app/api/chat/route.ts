@@ -95,10 +95,6 @@ export async function POST(req: Request) {
 
   const userLocation = session?.metadata?.userLocation;
 
-  // const modelMessages = await convertToModelMessages(messages)
-
-  let wasInitialStateSent = false;
-
   const stream = createUIMessageStream({
     execute: async ({ writer }) => {
       writer.write({
