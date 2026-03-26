@@ -1,5 +1,6 @@
 import { redis } from './redis';
 import { createRedisStreamConsumer } from './redisStreamConsumer';
+import type { RunTerminationBody } from './types';
 
 /**
  * Redis Stream-based bridge for the "standard" (non-AI-SDK) run protocol.
@@ -25,7 +26,7 @@ export async function publishRunStreamEvent(runId: string, createdAt: string | n
   const ms = createdAt ? new Date(createdAt).getTime() : Date.now();
   await redis.xadd(key, `${ms}-*`, 'data', data);
 
-  if (data === '[DONE]' || data === '[TERMINATED]') {
+  if (data.startsWith('[DONE]') || data.startsWith('[TERMINATED]')) {
     await redis.expire(key, 60);
   }
 }
@@ -47,7 +48,7 @@ export function createRunStreamConsumer(runId: string, signal: AbortSignal, afte
 
   async function* entries() {
     for await (const data of consumer.entries()) {
-      if (data === '[DONE]' || data === '[TERMINATED]') return;
+      if (data.startsWith('[DONE]') || data.startsWith('[TERMINATED]')) return;
       yield data;
     }
   }
@@ -59,15 +60,16 @@ export function createRunStreamConsumer(runId: string, signal: AbortSignal, afte
  * Calls `onTerminated` when [TERMINATED] appears on the run stream.
  * Returns an AbortController — call .abort() to stop listening.
  */
-export function onRunTerminated(runId: string, onTerminated: () => void) {
+export function onRunTerminated(runId: string, onTerminated: (body: RunTerminationBody) => void) {
   const abortController = new AbortController();
   const consumer = createRedisStreamConsumer(streamKey(runId), abortController.signal);
 
   (async () => {
     try {
       for await (const data of consumer.entries()) {
-        if (data === '[TERMINATED]') {
-          onTerminated();
+        if (data.startsWith('[TERMINATED]')) {
+          const body : RunTerminationBody = JSON.parse(data.slice('[TERMINATED]'.length));
+          onTerminated(body);
           return;
         }
       }

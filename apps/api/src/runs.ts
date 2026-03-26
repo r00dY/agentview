@@ -1,6 +1,6 @@
 import { eq, and, desc, not, inArray, asc, sql } from 'drizzle-orm';
 import { runs, sessionItems, sessions, webhookJobs, channelMessages, agentRefs } from './schemas/schema';
-import type { Transaction } from './types';
+import type { RunTerminationBody, Transaction } from './types';
 import type { Environment, ManualRunCreate, ManualRunUpdate, Run } from 'agentview/apiTypes';
 import type { BaseRunConfig } from 'agentview/baseConfigTypes';
 import { requireRunConfig, findItemConfig, findChannelConfig, requireAgentConfig, getChannelAgent } from 'agentview/baseConfigUtils';
@@ -13,7 +13,7 @@ import { getConfigFromEnvironment } from './environments';
 import { publishRunStreamEvent } from './runStream';
 import { withOrg, type OrgTransaction } from './withOrg';
 
-export const DEFAULT_IDLE_TIME = 1000 * 60; // 60 seconds
+export const DEFAULT_IDLE_TIME = 1000 * 5;//60; // 60 seconds
 
 /**
  * Returns the input content for a run's session items.
@@ -349,8 +349,8 @@ export async function applyRunPatch(
  * - there's risk we introduce a bug which incorrectly terminates run.
  * - when we listened to [done] event on redis streams in agent API call, even if integration called apply patch with "complete" / "failed" correctly. In that case we should not abort agent API call. That's why termination is different "path" in our system.
  */
-export async function terminateRun(tx: OrgTransaction, runId: string, body: { status: 'cancelled' } | { status: 'failed', failReason: any }) {
-  console.log(`[terminateRun][${runId}] start`);
+export async function terminateRun(tx: OrgTransaction, runId: string, body: RunTerminationBody) {
+  console.log(`[terminateRun][${runId}] trying to terminate run (${body.status}${body.status === 'failed' ? ` -> ${body.failReason.message ?? "No fail reason"}` : ''})`);
   const runBase = await getRunBaseWithLock(tx, runId); // we must start with a lock for safety of concurrent writes!
   
   if (!runBase) {
@@ -376,7 +376,7 @@ export async function terminateRun(tx: OrgTransaction, runId: string, body: { st
       ...body,
       updatedAt: nowIso,
     }));
-    await publishRunStreamEvent(runId, null, '[TERMINATED]');
+    await publishRunStreamEvent(runId, null, '[TERMINATED]' + JSON.stringify(body));
   });
 }
 

@@ -11,6 +11,7 @@ import { resolveAgentRef, upsertAgentRef } from '../agentRefs';
 import type { AgentRef, RunBody } from 'agentview/apiTypes';
 import { onRunTerminated } from '../runStream';
 import { createWorker } from './utils';
+import { RunTerminationError } from '../types';
 
 type Run = typeof runs.$inferSelect;
 
@@ -186,9 +187,9 @@ async function processAgentFetch(run: Run) {
     const adapter = getAdapter(agentConfig.adapter);
 
     // Abort fetch immediately when run is terminated (e.g. external cancellation).
-    terminationAbortController = onRunTerminated(run.id, () => {
-      console.log(`[agentFetch][${run.id}] terminated, aborting`);
-      abortController.abort()
+    terminationAbortController = onRunTerminated(run.id, (body) => {
+      console.log(`[agentFetch][${run.id}] terminated, aborting (${body.status})`);
+      abortController.abort(new RunTerminationError('Run terminated', body));
     });
 
     // event handlers

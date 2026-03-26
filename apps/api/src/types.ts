@@ -24,3 +24,15 @@ export interface VersionManifest {
 }
 
 export type Transaction = Parameters<Parameters<typeof db__dangerous["transaction"]>[0]>[0]
+
+export type RunTerminationBody = { status: 'cancelled' } | { status: 'failed', failReason: any };
+
+export class RunTerminationError extends Error {
+  body: RunTerminationBody;
+
+  constructor(message: string, body: RunTerminationBody) {
+    super(message);
+    this.name = 'RunTerminationError';
+    this.body = body;
+  }
+}

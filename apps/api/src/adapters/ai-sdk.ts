@@ -1,10 +1,10 @@
 import type { RunBody } from 'agentview/apiTypes';
-import { type AgentAPIEvent } from '../agentApi';
 import { expireAISDKStream, publishAISDKStreamEvent } from './ai-sdk-stream';
 import type { StandardSession, UIMessage } from 'agentview/apiTypes';
 import { type Adapter } from './adapters';
 import { getSessionStatusFields } from '../sessions';
 import { AgentViewError } from 'agentview';
+import { RunTerminationError } from '../types';
 
 interface AISDKChunk {
     type: string;
@@ -136,17 +136,18 @@ async function callAgentAPIAISDK(
         });
 
     } catch (error: unknown) { // Here we only handle fetch errors, other errors will be handled later
-        if (error instanceof Error && error.name === 'AbortError') {
+        if (error instanceof RunTerminationError) {
             // if aborted during fetching, we don't have to yield anything since the run is already properly terminated in agentview
             // but we'll need to properly handle opened stream.
 
             console.log('[ai-sdk] aborted while fetching. Sending [RESPONSE] and [DONE] events to the stream')
             await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({
                 status: 400,
-                headers: {}
+                headers: {},
+                error: error.body
             }));
-            await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));
-            await publishAISDKStreamEvent(currentRun.id, "[DONE]");
+
+            // await publishAISDKStreamEvent(currentRun.id, "[DONE]");
             return;
         }
         else {
@@ -222,7 +223,7 @@ async function callAgentAPIAISDK(
 
     // send response first
 
-    let finalPatch : { status: 'completed' | 'failed', [key: string]: any } | undefined = undefined;
+    let finalPatch: { status: 'completed' | 'failed', [key: string]: any } | undefined = undefined;
 
     try {
         console.log(`[ai-sdk][${currentRun.id}] streaming`);
@@ -254,7 +255,7 @@ async function callAgentAPIAISDK(
             // transforms
             const chunk = JSON.parse(data) as AISDKChunk;
             if (chunk.type === 'start' && !chunk.messageId) {
-                chunk.messageId = currentRun.id + '-input';
+                chunk.messageId = currentRun.id;// + '-input';
             }
 
             switch (chunk.type) {
@@ -419,7 +420,7 @@ async function callAgentAPIAISDK(
                     console.log(`[ai-sdk][${currentRun.id}] yield run.patch for "data-session-state"`)
                     await send({
                         name: 'run.patch',
-                        data: { 
+                        data: {
                             state: chunk.data,
                         },
                     });
@@ -460,16 +461,25 @@ async function callAgentAPIAISDK(
             console.log(`[ai-sdk][${currentRun.id}] stream ended complete`);
         }
 
+        await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'data-session-patch', data: { status: finalPatch.status, failReason: finalPatch.failReason } }));
         await send({
             name: 'run.patch',
             data: finalPatch,
         });
-        
+
     } catch (error: unknown) {
-        if (error instanceof Error && error.name === 'AbortError') {
-            console.log('[ai-sdk] aborted while streaming')
-            await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));
-            return; // abort doesn't require action since it means the run is already properly terminated
+        if (error instanceof RunTerminationError) {
+            console.log(`[ai-sdk][${currentRun.id}] aborted while streaming`)
+
+            await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'data-session-patch', data: error.body }));
+            if (error.body.status === 'failed') {
+                await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'error', errorText: error.body.failReason.message }));
+            }
+            else {
+                await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));
+            }
+
+            return;
         }
 
         if (error instanceof AgentViewError) {
@@ -478,13 +488,17 @@ async function callAgentAPIAISDK(
         else {
             console.log('[ai-sdk] error while streaming')
         }
+
         console.error(error)
 
         // This is for severe errors.
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'data-session-patch', data: { status: "failed", failReason: { message: errorMessage } } }));
+
         await send({
             name: 'run.terminate',
             data: {
-                message: error instanceof Error ? error.message : String(error),
+                message: errorMessage,
             }
         });
 
@@ -494,10 +508,6 @@ async function callAgentAPIAISDK(
         await expireAISDKStream(currentRun.id);
     }
 }
-
-
-
-
 
 
 function sessionToUIMessages(session: StandardSession): UIMessage[] {
