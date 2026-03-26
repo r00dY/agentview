@@ -222,7 +222,7 @@ async function callAgentAPIAISDK(
 
     // send response first
 
-    let isComplete = false;
+    let finalPatch : { status: 'completed' | 'failed', [key: string]: any } | undefined = undefined;
 
     try {
         console.log(`[ai-sdk][${currentRun.id}] streaming`);
@@ -391,33 +391,47 @@ async function callAgentAPIAISDK(
                     const outputCount = computeOutputItemCount(emittedItemTypes);
                     console.log(`[ai-sdk][${currentRun.id}] yield run.patch for FINISH`)
 
-                    await send({
-                        name: 'run.patch',
-                        data: {
-                            status: 'completed',
-                            outputItemCount: outputCount,
-                            channelReply: isChannelRun ? { text: outputTexts.filter(Boolean).join('\n\n') } : undefined,
-                            ...(messageMetadata !== undefined ? { metadata: messageMetadata } : {}),
-                        },
-                    });
+                    finalPatch = {
+                        status: 'completed',
+                        outputItemCount: outputCount,
+                        channelReply: isChannelRun ? { text: outputTexts.filter(Boolean).join('\n\n') } : undefined,
+                        ...(messageMetadata !== undefined ? { metadata: messageMetadata } : {}),
+                    };
 
-                    isComplete = true;
+                    // await send({
+                    //     name: 'run.patch',
+                    //     data: {
+                    //         status: 'completed',
+                    //         outputItemCount: outputCount,
+                    //         channelReply: isChannelRun ? { text: outputTexts.filter(Boolean).join('\n\n') } : undefined,
+                    //         ...(messageMetadata !== undefined ? { metadata: messageMetadata } : {}),
+                    //     },
+                    // });
+
+                    // isComplete = true;
                     break;
                 }
 
                 case 'error': {
                     console.log(`[ai-sdk][${currentRun.id}] yield run.patch for ERROR`)
 
-                    await send({
-                        name: 'run.patch',
-                        data: {
-                            status: 'failed',
-                            failReason: {
-                                message: chunk.errorText ?? 'Unknown error from AI SDK stream',
-                            },
+                    finalPatch = {
+                        status: 'failed',
+                        failReason: {
+                            message: chunk.errorText ?? 'Unknown error from AI SDK stream',
                         },
-                    });
-                    isComplete = true;
+                    };
+
+                    // await send({
+                    //     name: 'run.patch',
+                    //     data: {
+                    //         status: 'failed',
+                    //         failReason: {
+                    //             message: chunk.errorText ?? 'Unknown error from AI SDK stream',
+                    //         },
+                    //     },
+                    // });
+                    // isComplete = true;
                     break;
                 }
 
@@ -454,7 +468,7 @@ async function callAgentAPIAISDK(
             await publishAISDKStreamEvent(currentRun.id, JSON.stringify(chunk));
         }
 
-        if (!isComplete) {
+        if (!finalPatch) {
             console.log(`[ai-sdk][${currentRun.id}] stream ended INCOMPLETE`);
             await send({
                 name: 'run.patch',
@@ -468,6 +482,10 @@ async function callAgentAPIAISDK(
         }
         else {
             console.log(`[ai-sdk][${currentRun.id}] stream ended complete`);
+            await send({
+                name: 'run.patch',
+                data: finalPatch,
+            });
         }
 
     } catch (error: unknown) {

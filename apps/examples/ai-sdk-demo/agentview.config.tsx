@@ -199,10 +199,11 @@ export default defineConfig({
             // }
           ],
           output: {
-            schema: z.looseObject({
-              type: z.literal("text"),
-              text: z.string(),
-            }),
+            // schema: z.looseObject({
+            //   type: z.literal("text"),
+            //   text: z.string(),
+            // }),
+            schema: z.any(),
             displayComponent: ({ item }) => <AssistantMessage>{item.text}</AssistantMessage>,
           },
           scores: [

@@ -102,9 +102,8 @@ export async function POST(req: Request) {
   const stream = createUIMessageStream({
     execute: async ({ writer }) => {
       writer.write({
-        type: 'data-notification',
-        data: { message: 'Processing your request...', level: 'info' },
-        // transient: true, // This part won't be added to message history
+        type: 'data-session-state',
+        data: { count: messages.length },
       });
 
       const result = streamText({
@@ -114,23 +113,12 @@ export async function POST(req: Request) {
         messages: await convertToModelMessages(messages),
         tools: { weather: weatherTool },
         stopWhen: stepCountIs(5),
-        // onChunk({ chunk }) {
-        //   if (!wasInitialStateSent) {
-        //     console.log('data session state sent 1')
-        //     writer.write({
-        //       type: 'data-session-state',
-        //       data: { count: messages.length }
-        //     });
-        //     wasInitialStateSent = true;
-        //   }
-        // },
         onError(error) {
           console.error(error);
         },
         onFinish() {
-          console.log('data session state sent 2')
           writer.write({
-            type: 'data-dupa',
+            type: 'data-session-state',
             data: { count: messages.length + 1 }
           });
         },
