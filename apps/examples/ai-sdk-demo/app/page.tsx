@@ -38,7 +38,11 @@ export default function Home() {
 
     } catch (error: unknown) {
       console.error(error);
-      setError((error as any).message ?? "Failed to create session");
+      let message = (error as any).message;
+      if (!message) {
+        message = "Failed to create session";
+      }
+      setError(message);
       setIsLoading(false);
     }
   };

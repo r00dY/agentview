@@ -266,7 +266,7 @@ export function getSessionStatusFields(session: StandardSession) : { status: Ses
   const failReason = lastRun?.failReason;
 
   return {
-    status: (!lastRun || lastRun.status === 'complete') ? 'idle' : (lastRun.status as SessionStatus),
+    status: (!lastRun || lastRun.status === 'completed') ? 'idle' : (lastRun.status as SessionStatus),
     failReason
   }
 }

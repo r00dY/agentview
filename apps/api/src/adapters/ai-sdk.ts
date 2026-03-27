@@ -153,7 +153,7 @@ async function callAgentAPIAISDK(
             let message: string;
 
             if (error instanceof TypeError) { // node fetch error
-                message = (error as any).cause?.message ?? error.message ?? 'Fetch error';
+                message = (error as any).cause?.message ?? error.message ?? 'Connection error';
             }
             else {
                 message = (error as any)?.message ?? 'Unknown error';
@@ -497,25 +497,37 @@ async function callAgentAPIAISDK(
             return;
         }
 
+        let message = "Unknown error";
+
+        console.log('[ai-sdk] error while streaming')
+        
         if (error instanceof AgentViewError) {
-            console.error("[ai-sdk] SEVERE ERROR while streaming. It's AgentViewError, so must be coming from internal `send` call. This should never happen.")
+            console.error("[ai-sdk] SEVERE! AgentViewError, so must be coming from internal `send` call. This should never happen.")
+            message = error.message;
+        }
+        else if (error instanceof TypeError) {
+            console.log('[ai-sdk] Connection error')
+            message = (error as any).cause?.message ?? error.message ?? 'Connection error';
+        }
+        else if (error instanceof Error) {
+            console.log('[ai-sdk] Error', error.message)
+            message = error.message;
         }
         else {
-            console.log('[ai-sdk] error while streaming')
+            console.log('[ai-sdk] Unknown error', String(error))
+            message = String(error);
         }
 
-        console.error(error)
-
         // This is for severe errors.
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'data-session-patch', data: { status: "failed", failReason: { message: errorMessage } } }));
+        await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'data-session-patch', data: { status: "failed", failReason: { message } } }));
+        await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'error', errorText: message }));
 
         await send({
             name: 'run.terminate',
             data: {
                 status: "failed",
                 failReason: {
-                    message: errorMessage,
+                    message,
                 }
             }
         });
@@ -596,11 +608,15 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
 
 export const aiSDKAdapter = {
     callAgent: callAgentAPIAISDK,
-    enrichSession: (session: StandardSession) => ({
-        messages: sessionToUIMessages(session),
-        resume: session.runs[session.runs.length - 1]?.status === 'in_progress',
-        ...getSessionStatusFields(session),
-    }),
+    enrichSession: (session: StandardSession) => {
+        const messages = sessionToUIMessages(session);
+        const statusFields = getSessionStatusFields(session);
+        return {
+            messages,
+            ...statusFields,
+            resume: statusFields.status === 'in_progress',
+        }
+    },
     createDefaultInputForChannelMessages: (incomingMessages: any[], runId: string) => {
         return {
             id: `${runId}-input`,

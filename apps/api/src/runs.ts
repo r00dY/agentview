@@ -14,7 +14,7 @@ import { publishRunStreamEvent } from './runStream';
 import { withOrg, type OrgTransaction } from './withOrg';
 import { getAdapter } from './adapters/adapters';
 
-export const DEFAULT_IDLE_TIME = 1000 * 5;//60; // 60 seconds
+export const DEFAULT_IDLE_TIME = 1000 * 60; // 60 seconds
 
 
 export function isRunFinished(run: { status: string }) {

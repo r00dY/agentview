@@ -96,16 +96,15 @@ export async function POST(req: Request) {
   const userLocation = session?.metadata?.userLocation;
 
   // throw new Error('vercel error thrown in endpoint');
-  // return new Response("error from vercel endpoint", { status: 400 });
-
-  await new Promise(resolve => setTimeout(resolve, 10000));
+  // return new Response("error from vercel endpoint", { status: 422 });
+  // await new Promise(resolve => setTimeout(resolve, 10000));
 
   const stream = createUIMessageStream({
     execute: async ({ writer }) => {
-      writer.write({
-        type: 'data-session-state',
-        data: { count: messages.length },
-      });
+      // writer.write({
+      //   type: 'data-session-state',
+      //   data: { count: messages.length },
+      // });
 
       const result = streamText({
         model: openai("gpt-5-mini"),

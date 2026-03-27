@@ -1185,7 +1185,7 @@ app.openapi(sessionsAISDKPOSTRoute, async (c) => {
     return c.json(standardToDefaultSession(session), 201);
   }
 
-  return createRunAISDKHandler(c, newRun, true, principal);
+  return createRunAISDKHandler(c, newRun, false, principal);
 })
 
 
