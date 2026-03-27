@@ -126,7 +126,7 @@ async function callAgentAPIAISDK(
             // if aborted during fetching, we don't have to yield anything since the run is already properly terminated in agentview
             // but we'll need to properly handle opened stream.
 
-            console.log('[ai-sdk] aborted while fetching. Sending [RESPONSE] and [DONE] events to the stream')
+            console.log('[ai-sdk] aborted while fetching. Sending [RESPONSE] with error, no stream.')
             await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({
                 status: 400,
                 headers: {},

@@ -49,8 +49,7 @@ async function processAgentFetch(run: Run) {
 
       // TEMPORARY -> SET AS IN_PROGRESS JUST FOR TEMPORARY TESTING
       // LATER WE'LL SET IT AFTER THE REQUEST IS DONE.
-      await tx.update(runs).set({ status: 'in_progress' }).where(eq(runs.id, run.id));
-
+      // await tx.update(runs).set({ status: 'in_progress' }).where(eq(runs.id, run.id));
 
 
       const session = await fetchSession(tx, run.sessionId, { allowInitRun: true });
