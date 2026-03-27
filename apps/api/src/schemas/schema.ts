@@ -66,7 +66,7 @@ export const runs = pgTable("runs", {
   expiresAt: timestamp("expires_at", { withTimezone: true, mode: "string" }),
   finishedAt: timestamp("finished_at", { withTimezone: true, mode: "string" }),
   sessionId: uuid("session_id").notNull().references(() => sessions.id, { onDelete: 'cascade' }),
-  agentRefId: uuid("agent_ref_id").references(() => agentRefs.id), // nullable because when run is created, agent ref is not yet known (auto-fetch provides it)
+  agentRefId: uuid("agent_ref_id").references(() => agentRefs.id), // nullable because when run is created, agent ref is not yet known (auto-fetch provides it) -> NOW COULD BE NOT NULL!!!
   status: varchar("status", { length: 255 }).notNull(),//.$type<'pending' | 'init' | 'in_progress' | 'completed' | 'cancelled' | 'failed'>(),
   failReason: jsonb("fail_reason"),
   responseData: jsonb("response_data"),

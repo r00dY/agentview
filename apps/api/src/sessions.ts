@@ -97,7 +97,7 @@ export async function fetchSessionBase(tx: Transaction, session_id: string): Pro
 }
 
 
-export async function fetchSession(tx: Transaction, session_id: string): Promise<StandardSession | undefined> {
+export async function fetchSession(tx: Transaction, session_id: string, options?: { allowInitRun?: boolean }): Promise<StandardSession | undefined> {
   const where = sessionWhere(session_id);
   if (!where) {
     return undefined;
@@ -157,7 +157,23 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
     agentRef: row.agentRef ?? null,
     agentRefs: row.agentRefs ?? [],
     runs: row.runs
-      .filter((run, index) => run.status === "in_progress" || run.status === "completed" || (index === row.runs.length - 1 && run.status  !== 'pending' && run.status !== 'init')) // we always send last run unless it's pending/init
+      .filter((run, index) => {
+        if (run.status === "completed") {
+          return true;
+        }
+
+        if (index === row.runs.length - 1) { // for last one
+          if (run.status === "in_progress" || run.status === "cancelled" || run.status === "failed") {
+            return true;
+          }
+
+          if (options?.allowInitRun && run.status === "init") {
+            return true;
+          }
+        }
+        return false;
+
+      }) // we always send last run unless it's pending/init
       .map(run => ({
       ...run,
       // agentRef: run.agentRef ?? : null,

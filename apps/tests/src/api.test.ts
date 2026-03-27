@@ -2688,7 +2688,7 @@ describe('API', () => {
       return chunks;
     }
 
-    test.only("happy path: text response (validated via ai-sdk stream)", async () => {
+    test("happy path: text response (validated via ai-sdk stream)", async () => {
       await updateConfigWithAiSdkUrl();
       const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
@@ -2888,7 +2888,7 @@ describe('API', () => {
       // The error chunk should be in the stream
       expect(chunks.some(c => c.type === "error")).toBe(true);
 
-      // The stream ends before the worker marks the run as failed, so wait briefly
+      // Changes should be available immediately after stream ends
       const updatedSession = await av.getSession({ id: session.id });
       expect(updatedSession.lastRun!.status).toBe("failed");
       expect(updatedSession.lastRun!.failReason).toBeDefined();

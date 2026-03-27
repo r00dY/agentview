@@ -59,7 +59,7 @@ import { getAllSessionItems, getLastRun } from 'agentview/sessionUtils';
 import packageJson from '../package.json';
 import { equalJSON } from './equalJSON';
 import { getAllowedOrigin } from './getAllowedOrigin';
-import { getEnvironment, requireEnvironment } from './environments';
+import { requireEnvironment } from './environments';
 import { isInboxItemUnread } from './inboxItems';
 import { initDb } from './initDb';
 import { requireValidInvitation } from './invitations';
@@ -1388,25 +1388,28 @@ async function createRunHandler(c: Parameters<RouteHandler<typeof runsPOSTRoute>
     authorize(principal, { action: "end-user:update", user: session.user });
 
     const environment = await requireEnvironment(tx, principal.env);
+    const run = await createAutoRun(tx, environment, params.session_id, body);
 
-    await createAutoRun(tx, environment, params.session_id, body);
+    // console.log('##########')
 
-    const updatedSession = await requireSession(tx, params.session_id);
-    const newRun = getLastRun(updatedSession)!;
+    // const updatedSession = await requireSession(tx, params.session_id);
+    // const newRun = getLastRun(updatedSession)!;
+    // console.log('newRun', newRun);
 
-    return { run: newRun, session: updatedSession, stream };
+    return { run, stream };
   });
 }
 
 app.openapi(runsPOSTRoute, async (c) => {
-  const { run, session, stream } = await createRunHandler(c);
+  throw new HTTPException(400, { message: 'Temporarily disabled.' });
+  // const { run, session, stream } = await createRunHandler(c);
 
-  if (stream) {
-    c.status(201);
-    return getSessionStreamResponse(c, session);
-  }
+  // if (stream) {
+  //   c.status(201);
+  //   return getSessionStreamResponse(c, session);
+  // }
 
-  return c.json(run, 201);
+  // return c.json(run, 201);
 })
 
 const runsAISDKPOSTRoute = createRoute({
@@ -1440,7 +1443,7 @@ const runsAISDKPOSTRoute = createRoute({
 })
 
 app.openapi(runsAISDKPOSTRoute, async (c) => {
-  const { run, session, stream } = await createRunHandler(c);
+  const { run, stream } = await createRunHandler(c);
 
   if (stream) {
     const consumer = createAISDKStreamConsumer(run.id, c.req.raw.signal);
@@ -1465,10 +1468,16 @@ app.openapi(runsAISDKPOSTRoute, async (c) => {
       throw e;
     }
   }
+  else {
+    throw new HTTPException(400, { message: 'Non-stream response is not supported temporarily.' });
 
-  const { sessionItems, channelMessages, ...runBase } = run;
+    // WE SHOULD RETURN SESSION HERE!!!
+    // BUT WE SHOULD WAIT FOR RESPONSE FIRST. IT SHOULD BE BLOCKING.
 
-  return c.json(runBase, 201);
+    // const { sessionItems, channelMessages, ...runBase } = run;
+
+    // return c.json(runBase, 201);
+  }
 })
 
 

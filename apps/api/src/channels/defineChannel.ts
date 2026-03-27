@@ -5,7 +5,7 @@ import { channels, channelThreads, channelMessages, endUsers, sessions } from '.
 import { withOrg } from '../withOrg';
 import { db__dangerous } from '../db';
 import type { Transaction } from '../types';
-import { createAutoRun, isRunFinished, terminateRun } from '../runs';
+import { createAutoRun, createAutoRunFromChannelMessages, isRunFinished, terminateRun } from '../runs';
 import { randomBytes } from 'crypto';
 import { createSession } from '../sessions';
 import type { ChannelRef } from 'agentview/apiTypes';
@@ -59,6 +59,7 @@ type IngestMessageResultSuccess = {
   thread: ChannelThread;
   message: ChannelMessage;
   sessionId: string;
+  inputMessages: ChannelMessage[];
 }
 
 type IngestMessageResultError = {
@@ -173,17 +174,6 @@ export function channelProvider(type: string) {
     }
 
     /**
-     * IGNORE ALL MESSAGES THAT DO NOT COME FROM MY EMAILS
-     */
-    // if (channel.type === 'gmail') {
-    //   return ignoreMessage(`Ignoring gmail email from ${params.contact}`);
-    // }
-
-    // if (params.contactKind === 'email' && params.contact !== 'a.r.dabrowski@gmail.com' && params.contact !== 'andrzej@commerce-ui.com') {
-    //   return ignoreMessage(`Ignored because comes from ${params.contact}.`);
-    // }
-
-    /**
      * Find environment. If no environment connected, ignore.
      */
     const environment = channel.environment;
@@ -197,7 +187,7 @@ export function channelProvider(type: string) {
 
     console.log('[ingestMessage] environment: ', environment.user?.email ?? 'production');
 
-    return withOrg(channel.organizationId, async (tx) => {
+    const result: IngestMessageResult = await withOrg(channel.organizationId, async (tx) => {
       /**
        * Create or get channel thread and channel message
        */
@@ -336,38 +326,72 @@ export function channelProvider(type: string) {
         });
         sessionId = newSession.id;
         console.log('[ingestMessage] new session created: ', newSession.id);
-
       }
+
+      return { ingested: true, sessionId, thread, message, inputMessages };
+    });
+
+    // we closed transaction here. It's on purpose
+    // 1. we already ingested message, created a user & session for it. Those operations MUST succeed, not succeeding is internal error.
+    // 2. next step -> creating run... it could actually not succeed, because the channel is not connected to an agent. The message pops in, it's directed to environment = ingestion. The fact there's no agent connected is normal and shouldn't discard the message.
+    // 3. If we can't create run, it will leave us with a session connected to channel_thread. channel_messages connected to channel_thread will be without run_id.
+    // 4. So essentially, if the code below fails, we should still keep the code above commited. (potential retries later)
+    // 
+    // ACTUALLY, maybe we should even give up on creating session / run in this function, but it's okay for now.
+
+    if (!result.ingested) {
+      return result; // if not ingested, return
+    }
+
+    /**
+     * Try to create a run (for now not in worker, so if it fails, it fails forever)
+     */
+    withOrg(channel.organizationId, async (tx) => {
+
+      await createAutoRunFromChannelMessages(tx, environment, result.sessionId, result.inputMessages);
+
+
+      // const newRun = await createAutoRun(tx, environment, sessionId, {});
+      // console.log('[ingestMessage] new run created: ', newRun.id);
+    });
+
+    return result;
+
 
       /**
        * Create RUN
        */
 
-      const newRun = await createAutoRun(tx, environment, sessionId, {});
-
-      console.log('[ingestMessage] new run created: ', newRun.id);
-
-      /**
-       * Assign run_id to all input messages
-       */
-      await tx.update(channelMessages).set({
-        runId: newRun.id,
-        updatedAt: new Date().toISOString(),
-      }).where(inArray(channelMessages.id, inputMessages.map(m => m.id)));
-
-      /**
-       * Set thread status
-       */
-      // await tx.update(channelThreads).set({
-      //   status: 'idle',
-      //   updatedAt: new Date().toISOString(),
-      // }).where(eq(channelThreads.id, thread.id));
+      // WE SHOULD CREATE RUN HERE!!!! Like proper run from channel messages. And later push this to job when it's not necessary. WOW!!!
 
 
-      console.log('[ingestMessage] finished ');
 
-      return { ingested: true, sessionId, thread, message };
-    });
+
+    //   const newRun = await createAutoRun(tx, environment, sessionId, {});
+
+    //   console.log('[ingestMessage] new run created: ', newRun.id);
+
+    //   /**
+    //    * Assign run_id to all input messages
+    //    */
+    //   await tx.update(channelMessages).set({
+    //     runId: newRun.id,
+    //     updatedAt: new Date().toISOString(),
+    //   }).where(inArray(channelMessages.id, inputMessages.map(m => m.id)));
+
+    //   /**
+    //    * Set thread status
+    //    */
+    //   // await tx.update(channelThreads).set({
+    //   //   status: 'idle',
+    //   //   updatedAt: new Date().toISOString(),
+    //   // }).where(eq(channelThreads.id, thread.id));
+
+
+    // //   console.log('[ingestMessage] finished ');
+
+    // //   return { ingested: true, sessionId, thread, message };
+    // // });
   }
 
   return {

@@ -2,8 +2,8 @@ import { eq, and, desc, not, inArray, asc, sql } from 'drizzle-orm';
 import { runs, sessionItems, sessions, webhookJobs, channelMessages, agentRefs } from './schemas/schema';
 import type { RunTerminationBody, Transaction } from './types';
 import type { Environment, ManualRunCreate, ManualRunUpdate, Run } from 'agentview/apiTypes';
-import type { BaseRunConfig } from 'agentview/baseConfigTypes';
-import { requireRunConfig, findItemConfig, findChannelConfig, requireAgentConfig, getChannelAgent } from 'agentview/baseConfigUtils';
+import type { BaseAgentConfig, BaseRunConfig } from 'agentview/baseConfigTypes';
+import { requireRunConfig, findItemConfig, findChannelConfig, requireAgentConfig, getChannelAgent, requireChannelConfig } from 'agentview/baseConfigUtils';
 import { AgentViewError } from 'agentview/AgentViewError';
 import { parseMetadata } from './parseMetadata';
 import { resolveAgentRef } from './agentRefs';
@@ -12,6 +12,7 @@ import { fetchSession, fetchSessionBase } from './sessions';
 import { getConfigFromEnvironment } from './environments';
 import { publishRunStreamEvent } from './runStream';
 import { withOrg, type OrgTransaction } from './withOrg';
+import { getAdapter } from './adapters/adapters';
 
 export const DEFAULT_IDLE_TIME = 1000 * 5;//60; // 60 seconds
 
@@ -403,23 +404,25 @@ async function createRunCore(
   environment: Environment,
   sessionId: string,
   params: {
-    parsedInputItems: any[];
+    id?: string | undefined;
+    parsedInput: any
     parsedNonInputItems: any[];
     status: string;
     failReason: any | null;
     expiresAt: string | null;
     finishedAt: string | null;
     metadata: Record<string, any> | undefined;
-    agentRefId: string | null;
+    agentRefId: string;
     manual: boolean;
     state: any | undefined;
-    runConfig: BaseRunConfig | undefined;
+    runConfig: BaseRunConfig;
     lastRun: ReturnType<typeof getLastRun>;
   }
 ): Promise<typeof runs.$inferSelect> {
-  const { parsedInputItems, parsedNonInputItems, status, failReason, expiresAt, finishedAt, metadata, agentRefId, manual, state, runConfig, lastRun } = params;
+  const { parsedInput, parsedNonInputItems, status, failReason, expiresAt, finishedAt, metadata, agentRefId, manual, state, runConfig, lastRun, id } = params;
 
   const [insertedRun] = await tx.insert(runs).values({
+    id,
     organizationId: tx.organizationId,
     sessionId,
     status,
@@ -432,17 +435,15 @@ async function createRunCore(
     environmentId: environment.id,
   }).returning();
 
-  if (parsedInputItems.length > 0) {
-    await tx.insert(sessionItems).values(
-      parsedInputItems.map(item => ({
-        organizationId: tx.organizationId,
-        sessionId,
-        content: item,
-        runId: insertedRun.id,
-        type: 'input' as const,
-      }))
-    );
-  }
+  await tx.insert(sessionItems).values(
+    {
+      organizationId: tx.organizationId,
+      sessionId,
+      content: parsedInput,
+      runId: insertedRun.id,
+      type: 'input' as const,
+    }
+  );
 
   if (parsedNonInputItems.length > 0) {
     await tx.insert(sessionItems).values(
@@ -466,7 +467,7 @@ async function createRunCore(
     });
   }
 
-  if (status === 'completed' && runConfig) {
+  if (status === 'completed') {
     await markOutputItems(tx, insertedRun.id, 1, runConfig);
   }
 
@@ -502,6 +503,9 @@ async function createRunCore(
   return insertedRun;
 }
 
+
+
+
 /**
  * Prepares a session for run creation: fetches session, checks no in-progress run, finds config.
  */
@@ -517,12 +521,78 @@ async function prepareRunCreation(tx: OrgTransaction, environment: Environment, 
   }
 
   const config = getConfigFromEnvironment(environment);
-  const channelConfig = findChannelConfig(config, session.channel);
-  const channelAgent = channelConfig ? getChannelAgent(channelConfig) : undefined;
-  const agentConfig = config.agents?.find(a => a.name === channelAgent?.name);
+  const channelConfig = requireChannelConfig(config, session.channel);
+  const agentConfig = requireAgentConfig(config, typeof channelConfig.agent === 'string' ? channelConfig.agent : channelConfig.agent?.name);
 
-  return { session, lastRun, config, channelConfig, channelAgent, agentConfig };
+  const agentRefWithId = await resolveAgentRef(tx, {
+    agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
+    previousAgentRef: lastRun?.agentRef ?? session.agentRef,
+  });
+
+  return { session, lastRun, config, agentConfig, channelConfig, agentRefId: agentRefWithId.id };
 }
+
+async function processInput(agentConfig: BaseAgentConfig, input: any) {
+  const runConfig = requireRunConfig(agentConfig, input);
+  const parsedInput = runConfig.input.schema.parse(input);
+  const idleTimeout = runConfig.idleTimeout ?? DEFAULT_IDLE_TIME;
+
+  return { runConfig, parsedInput, idleTimeout };
+}
+
+
+export async function createAutoRunFromChannelMessages(
+  tx: OrgTransaction,
+  environment: Environment,
+  sessionId: string,
+  incomingMessages: any[],
+) {
+  if (incomingMessages.length === 0) {
+    throw new AgentViewError("No incoming messages to create a run from.", 422);
+  }
+
+  const { lastRun, agentConfig, agentRefId, session } = await prepareRunCreation(tx, environment, sessionId);
+  const adapter = getAdapter(agentConfig.adapter);
+
+  const newRunId = crypto.randomUUID();
+  const input = adapter.createDefaultInputForChannelMessages(incomingMessages, newRunId);
+  const { runConfig, parsedInput, idleTimeout } = await processInput(agentConfig, input);
+
+  // session version might be totally not set yet
+  if (!session.agentRef) {
+    await tx.update(sessions).set({
+      agentRefId,
+    }).where(eq(sessions.id, sessionId));
+  }
+
+  await createRunCore(tx, environment, sessionId, {
+    id: newRunId,
+    parsedInput,
+    parsedNonInputItems: [],
+    status: 'pending',
+    failReason: null,
+    expiresAt: new Date(Date.now() + idleTimeout).toISOString(),
+    finishedAt: null,
+    metadata: undefined,
+    agentRefId,
+    manual: false,
+    state: undefined,
+    runConfig,
+    lastRun,
+  });
+
+  await tx.update(channelMessages).set({
+    runId: newRunId,
+    updatedAt: new Date().toISOString(),
+  }).where(inArray(channelMessages.id, incomingMessages.map(m => m.id)));
+  
+
+
+  // const { lastRun, runConfig, parsedInput, agentRefId, idleTimeout } = await prepareRunCreation(tx, environment, sessionId, body.input);
+}
+
+
+
 
 /**
  * Auto-fetch run creation. Used by POST /api/sessions/{id}/runs and channel message workers.
@@ -533,44 +603,45 @@ export async function createAutoRun(
   tx: OrgTransaction,
   environment: Environment,
   sessionId: string,
-  body: { input?: Record<string, any> }
+  body: { input: Record<string, any> }
 ): Promise<typeof runs.$inferSelect> {
-  const { session, lastRun, channelConfig, agentConfig } = await prepareRunCreation(tx, environment, sessionId);
+  const { lastRun, agentConfig, agentRefId } = await prepareRunCreation(tx, environment, sessionId);
+  const { runConfig, parsedInput, idleTimeout } = await processInput(agentConfig, body.input);
 
-  let parsedInputItems: any[] = [];
-  let runConfig: BaseRunConfig | undefined;
-  let agentRefId: string | null = null;
+  // let parsedInputItems: any[] = [];
+  // let runConfig: BaseRunConfig | undefined;
+  // let agentRefId: string | null = null;
 
-  if (session.channel.type !== 'api') {
-    // Non-API channels: simplified procedure, no input validation
-  }
-  else {
-    if (!channelConfig) {
-      throw new AgentViewError(`Channel config not found for ${JSON.stringify(session.channel)}.`, 404);
-    }
-    if (!agentConfig) {
-      throw new AgentViewError("Agent not found in environment config.", 404);
-    }
+  // if (session.channel.type !== 'api') {
+  //   // Non-API channels: simplified procedure, no input validation
+  // }
+  // else {
+  //   if (!channelConfig) {
+  //     throw new AgentViewError(`Channel config not found for ${JSON.stringify(session.channel)}.`, 404);
+  //   }
+  //   if (!agentConfig) {
+  //     throw new AgentViewError("Agent not found in environment config.", 404);
+  //   }
 
-    if (!body.input) {
-      throw new AgentViewError("Input is required for API channel runs.", 422);
-    }
+  //   if (!body.input) {
+  //     throw new AgentViewError("Input is required for API channel runs.", 422);
+  //   }
 
-    // For API we can validate input against schema & check version compatibility before we even create a run
-    const result = await resolveAgentRef(tx, {
-      agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
-      previousAgentRef: lastRun?.agentRef ?? session.agentRef,
-    });
+  //   // For API we can validate input against schema & check version compatibility before we even create a run
+  //   const result = await resolveAgentRef(tx, {
+  //     agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
+  //     previousAgentRef: lastRun?.agentRef ?? session.agentRef,
+  //   });
 
-    agentRefId = result.id;
-    runConfig = requireRunConfig(agentConfig, body.input);
-    parsedInputItems = [runConfig.input.schema.parse(body.input)];
-  }
+  //   agentRefId = result.id;
+  //   runConfig = requireRunConfig(agentConfig, body.input);
+  //   parsedInputItems = [runConfig.input.schema.parse(body.input)];
+  // }
 
-  const idleTimeout = runConfig?.idleTimeout ?? DEFAULT_IDLE_TIME;
+  // const idleTimeout = runConfig?.idleTimeout ?? DEFAULT_IDLE_TIME;
 
-  return createRunCore(tx, environment, sessionId, {
-    parsedInputItems,
+  return await createRunCore(tx, environment, sessionId, {
+    parsedInput,
     parsedNonInputItems: [],
     status: 'pending',
     failReason: null,
@@ -596,32 +667,48 @@ export async function createManualRun(
   sessionId: string,
   body: ManualRunCreate
 ): Promise<typeof runs.$inferSelect> {
-  const { session, lastRun, channelConfig, agentConfig } = await prepareRunCreation(tx, environment, sessionId);
+  const sessionBase = await fetchSessionBase(tx, sessionId); // todo: optimize
+  if (!sessionBase) {
+    throw new AgentViewError("Session not found.", 404);
+  }
 
-  if (session.channel.type !== 'api') {
+  if (sessionBase.channel.type !== 'api') {
     throw new AgentViewError("For non-api channels manual mode is not supported.", 422);
   }
-  if (!channelConfig) {
-    throw new AgentViewError(`Channel config not found for ${JSON.stringify(session.channel)}.`, 404);
-  }
-  if (!agentConfig) {
-    throw new AgentViewError("Agent not found in environment config.", 404);
-  }
+
   if (!body.items || body.items.length === 0) {
     throw new AgentViewError("Items are required for manual runs.", 422);
   }
 
-  const resolved = await resolveAgentRef(tx, {
-    agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
-    previousAgentRef: lastRun?.agentRef ?? session.agentRef,
-  });
-
   const inputItem = body.items[0];
   const nonInputItems = body.items.slice(1);
 
-  const runConfig = requireRunConfig(agentConfig, inputItem);
-  const parsedInputItems = [runConfig.input.schema.parse(inputItem)];
-  const parsedNonInputItems = validateItems(runConfig, [parsedInputItems], nonInputItems);
+  const { lastRun, agentConfig, agentRefId } = await prepareRunCreation(tx, environment, sessionId);
+  const { runConfig, parsedInput, idleTimeout } = await processInput(agentConfig, inputItem);
+
+
+  // if (session.channel.type !== 'api') {
+  //   throw new AgentViewError("For non-api channels manual mode is not supported.", 422);
+  // }
+  // if (!channelConfig) {
+  //   throw new AgentViewError(`Channel config not found for ${JSON.stringify(session.channel)}.`, 404);
+  // }
+  // if (!agentConfig) {
+  //   throw new AgentViewError("Agent not found in environment config.", 404);
+  // }
+  // if (!body.items || body.items.length === 0) {
+  //   throw new AgentViewError("Items are required for manual runs.", 422);
+  // }
+
+  // const resolved = await resolveAgentRef(tx, {
+  //   agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
+  //   previousAgentRef: lastRun?.agentRef ?? session.agentRef,
+  // });
+
+
+  // const runConfig = requireRunConfig(agentConfig, inputItem);
+  // const parsedInputItems = [runConfig.input.schema.parse(inputItem)];
+  const parsedNonInputItems = validateItems(runConfig, [parsedInput], nonInputItems);
 
   const metadata = parseMetadata(runConfig.metadata, runConfig.allowUnknownMetadata ?? true, body.metadata ?? {}, {});
 
@@ -633,19 +720,18 @@ export async function createManualRun(
   }
 
   const isFinished = status === 'completed' || status === 'cancelled' || status === 'failed';
-  const idleTimeout = runConfig.idleTimeout ?? DEFAULT_IDLE_TIME;
   const finishedAt = isFinished ? new Date().toISOString() : null;
   const expiresAt = isFinished ? null : new Date(Date.now() + idleTimeout).toISOString();
 
-  return createRunCore(tx, environment, sessionId, {
-    parsedInputItems,
+  return await createRunCore(tx, environment, sessionId, {
+    parsedInput,
     parsedNonInputItems,
     status,
     failReason,
     expiresAt,
     finishedAt,
     metadata,
-    agentRefId: resolved.id,
+    agentRefId,
     manual: true,
     state: body.state,
     runConfig,

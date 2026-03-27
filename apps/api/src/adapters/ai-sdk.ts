@@ -102,24 +102,25 @@ async function callAgentAPIAISDK(
      */
     const messages = sessionToUIMessages(body.session);
 
-    // For channel-based runs: create input from incoming channel messages
+    // For channel-based runs: we'll create run from incoming channel messages
     const incomingMessages = currentRun.channelMessages.filter(cm => cm.direction === 'incoming');
-    const hasInput = currentRun.sessionItems.some(si => si.type === 'input');
-    const isChannelRun = incomingMessages.length > 0 && !hasInput;
+    const isChannelRun = incomingMessages.length > 0;
 
-    if (isChannelRun) {
-        const inputContent = {
-            role: 'user',
-            parts: incomingMessages.map(cm => ({ type: 'text', text: cm.text ?? '' })),
-        };
-        await send({ name: 'run.set_input', data: inputContent });
+    // const hasInput = currentRun.sessionItems.some(si => si.type === 'input');
 
-        messages.push({
-            id: currentRun.id + '-input',
-            role: 'user',
-            parts: inputContent.parts,
-        });
-    }
+    // if (isChannelRun) {
+    //     const inputContent = {
+    //         role: 'user',
+    //         parts: incomingMessages.map(cm => ({ type: 'text', text: cm.text ?? '' })),
+    //     };
+    //     await send({ name: 'run.set_input', data: inputContent });
+
+    //     messages.push({
+    //         id: currentRun.id + '-input',
+    //         role: 'user',
+    //         parts: inputContent.parts,
+    //     });
+    // }
 
     /**
      * Fetch the agent API response
@@ -250,7 +251,7 @@ async function callAgentAPIAISDK(
          */
         for await (const data of parseAISDKStream(response.body!)) {
             if (data === '[DONE]') { // done is end of stream. We send it ourselves in the finally block.
-                console.log(`[ai-sdk][${currentRun.id}] [DONE]`);
+                console.log(`[ai-sdk][${currentRun.id}] [DONE] received`);
                 break;
             }
 
@@ -463,11 +464,12 @@ async function callAgentAPIAISDK(
             console.log(`[ai-sdk][${currentRun.id}] stream ended complete`);
         }
 
-        await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'data-session-patch', data: { status: finalPatch.status, failReason: finalPatch.failReason } }));
         await send({
             name: 'run.patch',
             data: finalPatch,
         });
+        await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'data-session-patch', data: { status: finalPatch.status, failReason: finalPatch.failReason } }));
+
 
     } catch (error: unknown) {
         if (error instanceof RunTerminationError) {
@@ -585,4 +587,11 @@ export const aiSDKAdapter = {
         resume: session.runs[session.runs.length - 1]?.status === 'in_progress',
         ...getSessionStatusFields(session),
     }),
+    createDefaultInputForChannelMessages: (incomingMessages: any[], runId: string) => {
+        return {
+            id: `${runId}-input`,
+            role: 'user',
+            parts: incomingMessages.map(cm => ({ type: 'text', text: cm.text ?? '' })),
+        };
+    }
 } satisfies Adapter;

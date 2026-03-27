@@ -5,11 +5,15 @@ import { aiSDKAdapter } from './ai-sdk';
 export interface Adapter {
   callAgent: (body: RunBody, url: string, send: (event: { name: string, data: any }) => Promise<void>, signal?: AbortSignal) => Promise<void>;
   enrichSession: (session: StandardSession) => Record<string, any>;
+  createDefaultInputForChannelMessages: (channelMessages: any[], runId: string) => any;
 }
 
 const agentviewAdapter = {
   callAgent: null as any, // temporarily disabled
   enrichSession: () => ({}),
+  createDefaultInputForChannelMessages: () => {
+    throw new Error('createDefaultInput not implemented');
+  }
 } satisfies Adapter;
 
 export const adapters = {
