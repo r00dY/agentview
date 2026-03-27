@@ -2633,7 +2633,7 @@ describe('API', () => {
 
     let mockAISDKServer: MockServer | null = null;
 
-    const updateConfigWithAiSdkUrl = async () => {
+    const updateConfigWithAiSdkUrl = async (options?: { aiEndpointIsDown?: boolean }) => {
       const inputSchema = z.looseObject({ role: z.literal("user"), parts: z.array(z.any()) });
       const outputSchema = z.looseObject({ type: z.literal("text"), text: z.string() });
       const stepSchema = z.looseObject({ type: z.literal("reasoning"), text: z.string() });
@@ -2643,7 +2643,7 @@ describe('API', () => {
           agents: [{
             name: "test-ai-sdk",
             version: "1.0.0",
-            url: AI_SDK_AGENT_URL,
+            url: options?.aiEndpointIsDown ? "http://localhost:10000/this-url-is-down" : AI_SDK_AGENT_URL,
             adapter: 'ai-sdk',
             runs: [{
               input: { schema: inputSchema },
@@ -2918,7 +2918,6 @@ describe('API', () => {
       expect(updatedSession.messages.length).toBe(0); // Error from AI endpoint means no messages are saved (user message included)
     }, 10000);
 
-
     test("HTTP error: 500 → client.createRun (no stream) passes error to client. No run is created.", async () => {
       await updateConfigWithAiSdkUrl();
       const session = await avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
@@ -2968,6 +2967,17 @@ describe('API', () => {
       await expect(promise).rejects.not.toBeInstanceOf(AgentViewError);
       await expect(promise).rejects.toThrowError("");
 
+    }, 10000);
+
+    test("Error HTTP endpoint is down → client.createRun (no stream) passes error to client. No run is created.", async () => {
+      await updateConfigWithAiSdkUrl({ aiEndpointIsDown: true });
+
+      const promise = avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
+
+      await expect(promise).rejects.toBeInstanceOf(AgentViewError);
+      await expect(promise).rejects.toThrowError(expect.objectContaining({
+        statusCode: 400
+      }));
     }, 10000);
 
 

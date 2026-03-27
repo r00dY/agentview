@@ -142,9 +142,9 @@ async function callAgentAPIAISDK(
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                error: {
+                error: JSON.stringify({
                     message: errorMessage ?? 'Unknown error',
-                }
+                })
             }));
 
             return;
@@ -174,9 +174,9 @@ async function callAgentAPIAISDK(
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                error: {
+                error: JSON.stringify({
                     message,
-                }
+                })
             }));
             return;
         }
