@@ -1471,11 +1471,14 @@ async function createRunAISDKHandler(c: Parameters<RouteHandler<typeof runsAISDK
 
   if (response.error) {
     consumer.close();
+
     c.status(response.status as StatusCode);
     for (const [key, value] of Object.entries(response.headers)) {
       c.header(key, value);
     }
-    return c.body(response.error);
+
+    console.log('!!!!!', response)
+    return c.body(JSON.stringify(response.error));
   }
 
   if (!stream) {

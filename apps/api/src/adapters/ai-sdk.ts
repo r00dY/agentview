@@ -127,10 +127,24 @@ async function callAgentAPIAISDK(
             // the only thing we need to do is return error response (no stream, so no [DONE])
 
             console.log('[ai-sdk] aborted while fetching. Sending [RESPONSE] with error, no stream.')
-            await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({
+
+            let errorMessage : string | undefined = undefined;
+            if (error.body.status === 'cancelled') {
+                errorMessage = "Cancelled by user";
+            }
+            else if (error.body.status === 'failed' || error.body.status === 'discarded') {
+                errorMessage = error.body.failReason?.message;
+            }
+
+            console.error(error.body)
+            await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({ // AgentViewError format
                 status: 400,
-                headers: {},
-                error: error.body
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                error: {
+                    message: errorMessage ?? 'Unknown error',
+                }
             }));
 
             return;
@@ -155,10 +169,14 @@ async function callAgentAPIAISDK(
                 },
             });
 
-            await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({
+            await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({ // AgentViewError format
                 status: 400,
-                headers: {},
-                error: message
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                error: {
+                    message,
+                }
             }));
             return;
         }
@@ -182,6 +200,11 @@ async function callAgentAPIAISDK(
         }
     }
 
+    const headers = {
+        ...Object.fromEntries(response.headers.entries()),
+        'X-Upstream-Response': "true", // signals it's original upstream response, not agentview middleware response
+    }
+
     if (error) {
         await send({
             name: 'run.terminate',
@@ -195,7 +218,7 @@ async function callAgentAPIAISDK(
 
         await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({
             status: response.status,
-            headers: Object.fromEntries(response.headers.entries()),
+            headers,
             error
         }));
 
@@ -220,7 +243,7 @@ async function callAgentAPIAISDK(
 
         await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({
             status: response.status,
-            headers: Object.fromEntries(response.headers.entries()),
+            headers
             // no error -> app expects stream
         }));
 

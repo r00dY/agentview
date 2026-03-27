@@ -368,7 +368,6 @@ export async function terminateRun(tx: OrgTransaction, runId: string, body: RunT
   if (runBase.status === 'failed' || runBase.status === 'cancelled' || runBase.status === 'completed' || runBase.status === 'discarded') {
     console.log(`[terminateRun][${runId}] attempted, not needed`);
     return; // indempotency
-    // throw new AgentViewError("Cannot terminate a run that is not in progress.", 422);
   }
 
   // logs

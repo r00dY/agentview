@@ -30,7 +30,7 @@ export const expiredRunsWorker = createWorker<Run>({
         tx,
         run.id,
         {
-          status: 'failed',
+          status: (run.status === 'pending' || run.status === 'init') ? 'discarded' : 'failed', // pending / init statuses are discarded! Failed means user sees this but it can only happen for runs that were started streaming.
           failReason: { message: 'Timeout' },
         }
       );
