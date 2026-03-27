@@ -95,8 +95,8 @@ export async function POST(req: Request) {
 
   const userLocation = session?.metadata?.userLocation;
 
-  throw new Error('vercel error thrown in endpoint');
-  // return new Response("error from vercel endpoint", { status: 500 });
+  // throw new Error('vercel error thrown in endpoint');
+  return new Response("error from vercel endpoint", { status: 400 });
 
   await new Promise(resolve => setTimeout(resolve, 10000));
 

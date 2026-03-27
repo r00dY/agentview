@@ -195,7 +195,7 @@ async function callAgentAPIAISDK(
     else if (!response.ok) {
         try {
             error = await response.text();
-        } catch (error: unknown) {
+        } catch {
             error = 'Error reading response body';
         }
     }
@@ -203,9 +203,10 @@ async function callAgentAPIAISDK(
     const headers = {
         ...Object.fromEntries(response.headers.entries()),
         'X-Upstream-Response': "true", // signals it's original upstream response, not agentview middleware response
+        'Access-Control-Expose-Headers': 'x-upstream-response'
     }
 
-    if (error) {
+    if (error !== undefined) {
         await send({
             name: 'run.terminate',
             data: {

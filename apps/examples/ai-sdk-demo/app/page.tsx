@@ -37,11 +37,8 @@ export default function Home() {
       router.push(`/sessions/${session.id}`);
 
     } catch (error: unknown) {
-      if (error instanceof AgentViewError) {
-        setError(error.message);
-      } else {
-        setError(error instanceof Error ? error.message : "Failed to create session");
-      }
+      console.error(error);
+      setError((error as any).message ?? "Failed to create session");
       setIsLoading(false);
     }
   };

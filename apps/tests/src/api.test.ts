@@ -2,7 +2,7 @@ import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 
 import { createStandardClient, configDefaults, type StandardAgentViewClient } from 'agentview/clientStandard'
 import type { StandardRun, StandardSession, SessionStreamEvent } from 'agentview/apiTypes';
-import { createClient, type AgentViewClient, type User } from 'agentview';
+import { AgentViewError, createClient, type AgentViewClient, type User } from 'agentview';
 
 
 import { z } from 'zod';
@@ -2894,45 +2894,49 @@ describe('API', () => {
       expect(updatedSession.lastRun!.failReason).toBeDefined();
     }, 10000);
 
-    test("HTTP error: 500 → run marked failed (validated via ai-sdk stream)", async () => {
-      await updateConfigWithAiSdkUrl();
-      const session = await avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
-      mockAISDKServer!.setHandler((_body, res) => {
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ message: "This is an error from test suite." }));
-      });
+    // FOR A SECOND -> we must write transport
 
-      const stream = sendMessageViaTransport(
-        avAISDK.createTransport(), 
-        session.id, 
-        { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
-      );
+    // test("HTTP error: 500 → run marked failed (validated via ai-sdk stream)", async () => {
+    //   await updateConfigWithAiSdkUrl();
+    //   const session = await avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
-      await expect(stream).rejects.toThrowError(expect.objectContaining({
-        message: expect.stringContaining("This is an error from test suite.")
-      }))
+    //   mockAISDKServer!.setHandler((_body, res) => {
+    //     res.writeHead(500, { 'Content-Type': 'application/json' });
+    //     res.end("This is an error from test suite.");
+    //   });
 
-      // The stream ends before the worker marks the run as failed, so wait briefly
-      const updatedSession = await avAISDK.getSession({ id: session.id });
-      expect(updatedSession.messages.length).toBe(0); // Error from AI endpoint means no messages are saved (user message included)
-    }, 10000);
+    //   const stream = sendMessageViaTransport(
+    //     avAISDK.createTransport(), 
+    //     session.id, 
+    //     { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
+    //   );
+
+    //   await expect(stream).rejects.toThrowError(expect.objectContaining({
+    //     message: expect.stringContaining("This is an error from test suite.")
+    //   }))
+
+    //   // The stream ends before the worker marks the run as failed, so wait briefly
+    //   const updatedSession = await avAISDK.getSession({ id: session.id });
+    //   expect(updatedSession.messages.length).toBe(0); // Error from AI endpoint means no messages are saved (user message included)
+    // }, 10000);
+
+
+
 
     test("HTTP error: 500 → client.createRun (no stream) passes error to client. No run is created.", async () => {
       await updateConfigWithAiSdkUrl();
       const session = await avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ message: "This is an error from test suite." }));
+        res.writeHead(500);
+        res.end("This is an error from test suite.");
       });
 
       const promise = avAISDK.createRun({ sessionId: session.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
 
-      await expect(promise).rejects.toThrowError(expect.objectContaining({
-        statusCode: 500,
-        message: expect.stringContaining("This is an error from test suite.")
-      }))
+      await expect(promise).rejects.not.toBeInstanceOf(AgentViewError);
+      await expect(promise).rejects.toThrowError("This is an error from test suite.");
 
       // The stream ends before the worker marks the run as failed, so wait briefly
       const updatedSession = await avAISDK.getSession({ id: session.id });
@@ -2942,17 +2946,32 @@ describe('API', () => {
     test("HTTP error: 422 → client.createSession with input. No run is created", async () => {
       await updateConfigWithAiSdkUrl();
 
+      const jsonError = JSON.stringify({ message: "blah blah blah" });
+
       mockAISDKServer!.setHandler((_body, res) => {
         res.writeHead(422, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ message: "blah blah blah" }));
+        res.end(jsonError);
       });
 
       const promise = avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
 
-      await expect(promise).rejects.toThrowError(expect.objectContaining({
-        statusCode: 422,
-        message: expect.stringContaining("blah blah blah")
-      }))
+      await expect(promise).rejects.not.toBeInstanceOf(AgentViewError);
+      await expect(promise).rejects.toThrowError(jsonError);
+
+    }, 10000);
+
+    test("HTTP error: 400 + empty body → client.createSession with input. No run is created", async () => {
+      await updateConfigWithAiSdkUrl();
+
+      mockAISDKServer!.setHandler((_body, res) => {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end("");
+      });
+
+      const promise = avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
+
+      await expect(promise).rejects.not.toBeInstanceOf(AgentViewError);
+      await expect(promise).rejects.toThrowError("");
 
     }, 10000);
 

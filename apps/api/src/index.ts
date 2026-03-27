@@ -1469,7 +1469,7 @@ async function createRunAISDKHandler(c: Parameters<RouteHandler<typeof runsAISDK
     throw e;
   }
 
-  if (response.error) {
+  if (response.error !== undefined) {
     consumer.close();
 
     c.status(response.status as StatusCode);
@@ -1477,8 +1477,7 @@ async function createRunAISDKHandler(c: Parameters<RouteHandler<typeof runsAISDK
       c.header(key, value);
     }
 
-    console.log('!!!!!', response)
-    return c.body(JSON.stringify(response.error));
+    return c.body(response.error);
   }
 
   if (!stream) {

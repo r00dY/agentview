@@ -81,6 +81,11 @@ export class AgentViewBase {
     }
 
     if (!response.ok) {
+      if (response.headers.get('X-Upstream-Response') === 'true') {
+        const text = await response.text();
+        throw new Error(text);
+      }
+
       const errorBody: AgentViewErrorBody = await response.json()
       const { message, ...details } = errorBody;
       throw new AgentViewError(message ?? "Unknown error", response.status, details)
