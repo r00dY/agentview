@@ -73,7 +73,7 @@ import { applyRunPatch, getRunBaseWithLock, createAutoRun, createManualRun, DEFA
 import { createRunStreamConsumer } from './runStream';
 import { resolveAgentRef } from './agentRefs';
 import { adapters, getAdapter } from './adapters/adapters';
-import { createAISDKStreamConsumer, type AISDKStreamConsumer } from './adapters/ai-sdk-stream';
+import { createAISDKStreamConsumer, type AISDKStreamConsumer, type AISDKResponseMeta } from './adapters/ai-sdk-stream';
 import { parseMetadata } from './parseMetadata';
 import { authn, authorize, requireMemberPrincipal, type Principal, authnAllowPublic, authnAllowAnon } from './authMiddleware';
 
@@ -1448,32 +1448,36 @@ app.openapi(runsAISDKPOSTRoute, async (c) => {
 
   const consumer = createAISDKStreamConsumer(run.id, c.req.raw.signal);
 
+  // Wait for agent response. If anything throws or we don't need to stream,
+  // close the consumer here. The streaming path transfers ownership to
+  // streamAISDKEvents which handles close() in its own finally.
+  let response: AISDKResponseMeta;
   try {
-    const { status, headers, error } = await consumer.waitForResponse();
-
-    if (error) {
-      c.status(status as StatusCode);
-      for (const [key, value] of Object.entries(headers)) {
-        c.header(key, value);
-      }
-      consumer.close();
-      return c.body(error);
-    }
-
-    if (!stream) {
-      consumer.close();
-      return withOrg(principal.organizationId, async (tx) => {
-        const session = await requireSession(tx, run.sessionId);
-        return c.json(standardToDefaultSession(session), 201);
-      });
-    }
-    else {
-      return streamAISDKEvents(c, consumer);
-    }
+    response = await consumer.waitForResponse();
   } catch (e) {
     consumer.close();
     throw e;
   }
+
+  if (response.error) {
+    consumer.close();
+    c.status(response.status as StatusCode);
+    for (const [key, value] of Object.entries(response.headers)) {
+      c.header(key, value);
+    }
+    return c.body(response.error);
+  }
+
+  if (!stream) {
+    consumer.close();
+    return withOrg(principal.organizationId, async (tx) => {
+      const session = await requireSession(tx, run.sessionId);
+      return c.json(standardToDefaultSession(session), 201);
+    });
+  }
+
+  // Ownership of consumer transfers to streamAISDKEvents (closes in its finally)
+  return streamAISDKEvents(c, consumer);
 })
 
 

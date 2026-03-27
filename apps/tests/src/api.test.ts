@@ -2939,6 +2939,22 @@ describe('API', () => {
       expect(updatedSession.messages.length).toBe(0); // Error from AI endpoint means no messages are saved (user message included)
     }, 10000);
 
+    test("HTTP error: 422 → client.createSession with input. No run is created", async () => {
+      await updateConfigWithAiSdkUrl();
+
+      mockAISDKServer!.setHandler((_body, res) => {
+        res.writeHead(422, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: "blah blah blah" }));
+      });
+
+      const promise = avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
+
+      await expect(promise).rejects.toThrowError(expect.objectContaining({
+        statusCode: 422,
+        message: expect.stringContaining("blah blah blah")
+      }))
+
+    }, 10000);
 
 
 
