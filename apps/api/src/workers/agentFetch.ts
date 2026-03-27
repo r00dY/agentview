@@ -1,13 +1,13 @@
 import { db__dangerous } from '../db';
 import { withOrg } from '../withOrg';
-import { runs, sessions, channelMessages, environments, sessionItems } from '../schemas/schema';
+import { runs, sessions, channelMessages, environments, sessionItems, channels } from '../schemas/schema';
 import { eq, and, inArray, sql, not, isNull } from 'drizzle-orm';
-import { getConfigFromEnvironment } from '../environments';
-import { fetchSession } from '../sessions';
+import { getConfigFromEnvironment, getEnvironment } from '../environments';
+import { fetchSession, fetchSessionBase } from '../sessions';
 import { getAdapter } from '../adapters/adapters';
 import { findChannelConfig, getChannelAgent } from 'agentview/baseConfigUtils';
 import { applyRunPatch, terminateRun } from '../runs';
-import { resolveAgentRef, upsertAgentRef } from '../agentRefs';
+import { resolveAgentRef } from '../agentRefs';
 import type { AgentRef, RunBody } from 'agentview/apiTypes';
 import { onRunTerminated } from '../runStream';
 import { createWorker } from './utils';
@@ -23,11 +23,11 @@ export const agentFetchWorker = createWorker<Run>({
     // Atomic claim: FOR UPDATE SKIP LOCKED prevents concurrent workers from double-claiming
     return db__dangerous
       .update(runs)
-      .set({ fetchStatus: 'fetching', updatedAt: new Date().toISOString() })
+      .set({ status: 'init', updatedAt: new Date().toISOString() })
       .where(
         inArray(
           runs.id,
-          sql`(SELECT ${runs.id} FROM ${runs} WHERE ${runs.fetchStatus} = 'pending' LIMIT ${sql.raw(String(limit))} FOR UPDATE SKIP LOCKED)`
+          sql`(SELECT ${runs.id} FROM ${runs} WHERE ${runs.status} = 'pending' LIMIT ${sql.raw(String(limit))} FOR UPDATE SKIP LOCKED)`
         )
       )
       .returning();
@@ -45,66 +45,85 @@ async function processAgentFetch(run: Run) {
   let terminationAbortController: AbortController | undefined;
 
   try {
-    // Fetch session within org context
-    let session = await withOrg(run.organizationId, async (tx) => {
-      return fetchSession(tx, run.sessionId);
-    });
 
-    if (!session) {
-      throw new Error(`Session ${run.sessionId} not found`);
-    }
+    /**
+     * PREPARATION ('init' phase)
+     */
 
-    // Get config from environment
-    const environmentId = run.environmentId;
-    if (!environmentId) {
-      throw new Error('Environment ID is required for auto-fetch');
-    }
+    await withOrg(run.organizationId, async (tx) => {
 
-    const environment = await withOrg(run.organizationId, async (tx) => {
-      return tx.query.environments.findFirst({
-        where: eq(environments.id, environmentId),
-        with: {
-          user: true,
-        },
-      });
-    });
+      let sessionBase = await fetchSessionBase(tx, run.sessionId);
+      if (!sessionBase) {
+        throw new Error(`Session ${run.sessionId} not found`);
+      }
 
-    if (!environment) {
-      throw new Error('Environment not found');
-    }
+      if (!run.environmentId) {
+        throw new Error('Environment ID is required for auto-fetch');
+      }
 
-    const config = getConfigFromEnvironment(environment);
+      const environment = await getEnvironment(tx, run.environmentId);
+      if (!environment) {
+        throw new Error(`Environment ${run.environmentId} not found`);
+      }
 
-    const channelConfig = findChannelConfig(config, session.channel);
-    if (!channelConfig) {
-      throw new Error(`Channel config not found for ${JSON.stringify(session.channel)}.`);
-    }
+      const config = getConfigFromEnvironment(environment);
 
-    const channelAgent = getChannelAgent(channelConfig);
-    const agentName = channelAgent?.name;
-    const agentConfig = config.agents?.find((a) => a.name === agentName);
+      const channelConfig = findChannelConfig(config, sessionBase.channel);
+      if (!channelConfig) {
+        throw new Error(`Channel config not found for ${JSON.stringify(sessionBase.channel)}.`);
+      }
 
-    if (!agentConfig) {
-      throw new Error(`Agent '${agentName}' not found in config`);
-    }
+      const channelAgent = getChannelAgent(channelConfig);
+      const agentName = channelAgent?.name;
+      const agentConfig = config.agents?.find((a) => a.name === agentName);
 
-    const agentUrl = agentConfig.url;
-    if (!agentUrl) {
-      throw new Error(`Agent '${agentName}' has no url`);
-    }
+      if (!agentConfig) {
+        throw new Error(`Agent '${agentName}' not found in config`);
+      }
 
-    // Resolve agent ref for session & run
-    if (session.channel.type !== 'api') {
+      const agentUrl = agentConfig.url;
+      if (!agentUrl) {
+        throw new Error(`Agent '${agentName}' has no url`);
+      }
 
-      await withOrg(run.organizationId, async (tx) => {
-        if (!session) {
-          throw new Error(`Session ${run.sessionId} not found`);
+      /**
+       * For non-existing session.agentRef & run.agentRef we must resolve them (mostly for channels)
+       */
+      if (sessionBase.channel.type === 'api') {
+        if (!sessionBase.agentRef) {
+          throw new Error('Session agent ref is required for API runs');
+        }
+        if (!run.agentRefId) {
+          throw new Error('Run agent ref is required for API runs');
+        }
+      }
+      else {
+        
+
+
+
+        let sessionAgentRef = sessionBase.agentRef;
+        if (!sessionAgentRef) {
+          sessionAgentRef = await resolveAgentRef(tx, {
+            agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
+          });
         }
 
+        if (run.agentRefId) {
+          throw new Error("Run agent ref should be empty for channel runs before agent fetch");
+        }
+      }
+      
+
+
+
+
+      // Resolve agent ref for session & run
+      if (sessionBase.channel.type !== 'api') {
         let sessionAgentRef: AgentRef;
 
         // First set session ref if necessary (new sessions from channel don't have agentRef assigned yet)
-        if (!session.agentRef) {
+        if (!sessionBase.agentRef) {
           const result = await upsertAgentRef(tx, {
             agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
           });
@@ -120,12 +139,12 @@ async function processAgentFetch(run: Run) {
           }).where(eq(sessions.id, run.sessionId));
         }
         else {
-          sessionAgentRef = session.agentRef;
+          sessionAgentRef = sessionBase.agentRef;
         }
 
         // Assign agentRef to a run
-        const lastCompletedRunAgentRef = session.runs.reverse().find(r => r.status === 'completed')?.agentRef;
-        const previousAgentRef = lastCompletedRunAgentRef ?? sessionAgentRef;
+        const lastRunAgentRef = sessionBase.agentRefs[sessionBase.agentRefs.length - 1];
+        const previousAgentRef = lastRunAgentRef ?? sessionAgentRef;
 
         const { agentRefId } = await resolveAgentRef(tx, {
           agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
@@ -137,9 +156,110 @@ async function processAgentFetch(run: Run) {
           agentRefId,
           updatedAt: new Date().toISOString(),
         }).where(eq(runs.id, run.id));
-      });
+      }
 
-    }
+      
+
+
+
+    });
+
+
+    // let session = await withOrg(run.organizationId, async (tx) => {
+    //   return fetchSession(tx, run.sessionId);
+    // });
+
+    // if (!session) {
+    //   throw new Error(`Session ${run.sessionId} not found`);
+    // }
+
+    // // Get config from environment
+    // const environmentId = run.environmentId;
+    // if (!environmentId) {
+    //   throw new Error('Environment ID is required for auto-fetch');
+    // }
+
+
+    // const environment = await withOrg(run.organizationId, async (tx) => {
+    //   return tx.query.environments.findFirst({
+    //     where: eq(environments.id, environmentId),
+    //     with: {
+    //       user: true,
+    //     },
+    //   });
+    // });
+
+    // if (!environment) {
+    //   throw new Error('Environment not found');
+    // }
+
+    // const config = getConfigFromEnvironment(environment);
+
+    // const channelConfig = findChannelConfig(config, session.channel);
+    // if (!channelConfig) {
+    //   throw new Error(`Channel config not found for ${JSON.stringify(session.channel)}.`);
+    // }
+
+    // const channelAgent = getChannelAgent(channelConfig);
+    // const agentName = channelAgent?.name;
+    // const agentConfig = config.agents?.find((a) => a.name === agentName);
+
+    // if (!agentConfig) {
+    //   throw new Error(`Agent '${agentName}' not found in config`);
+    // }
+
+    // const agentUrl = agentConfig.url;
+    // if (!agentUrl) {
+    //   throw new Error(`Agent '${agentName}' has no url`);
+    // }
+
+    // Resolve agent ref for session & run
+    // if (session.channel.type !== 'api') {
+
+    //   await withOrg(run.organizationId, async (tx) => {
+    //     if (!session) {
+    //       throw new Error(`Session ${run.sessionId} not found`);
+    //     }
+
+    //     let sessionAgentRef: AgentRef;
+
+    //     // First set session ref if necessary (new sessions from channel don't have agentRef assigned yet)
+    //     if (!session.agentRef) {
+    //       const result = await upsertAgentRef(tx, {
+    //         agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
+    //       });
+
+    //       sessionAgentRef = {
+    //         agent: result.agent,
+    //         version: result.version,
+    //         adapter: result.adapter
+    //       };
+
+    //       await tx.update(sessions).set({
+    //         agentRefId: result.agentRefId,
+    //       }).where(eq(sessions.id, run.sessionId));
+    //     }
+    //     else {
+    //       sessionAgentRef = session.agentRef;
+    //     }
+
+    //     // Assign agentRef to a run
+    //     const lastCompletedRunAgentRef = session.runs.reverse().find(r => r.status === 'completed')?.agentRef;
+    //     const previousAgentRef = lastCompletedRunAgentRef ?? sessionAgentRef;
+
+    //     const { agentRefId } = await resolveAgentRef(tx, {
+    //       agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
+    //       previousAgentRef,
+    //       sessionId: run.sessionId,
+    //     });
+
+    //     await tx.update(runs).set({
+    //       agentRefId,
+    //       updatedAt: new Date().toISOString(),
+    //     }).where(eq(runs.id, run.id));
+    //   });
+
+    // }
 
     // Refetch session after agentRef assignment
     session = await withOrg(run.organizationId, async (tx) => {
@@ -194,7 +314,8 @@ async function processAgentFetch(run: Run) {
 
     const send = async (event: { name: string, data: any }) => {
       if (event.name === 'run.set_input') {
-        
+        console.log(`[agentFetch][${run.id}] run.set_unput`);
+
         await withOrg(run.organizationId, async (tx) => {
           // Validate: run must have no items or only input items
           const existing = await tx
@@ -220,6 +341,8 @@ async function processAgentFetch(run: Run) {
 
       }
       else if (event.name === 'response_data') {
+        console.log(`[agentFetch][${run.id}] run.response_data`);
+
         await withOrg(run.organizationId, async (tx) => {
           await tx.update(runs).set({
             responseData: event.data,
@@ -228,6 +351,8 @@ async function processAgentFetch(run: Run) {
         });
       }
       else if (event.name === 'run.patch') {
+        console.log(`[agentFetch][${run.id}] run.patch`);
+
         await withOrg(run.organizationId, async (tx) => {
           await applyRunPatch(
             tx,
@@ -238,6 +363,8 @@ async function processAgentFetch(run: Run) {
         })
       }
       else if (event.name === 'run.terminate') { // safe indempotent termination for cleanup
+        console.log(`[agentFetch][${run.id}] run.terminate`);
+
         await withOrg(run.organizationId, async (tx) => {
           await terminateRun(tx, run.id, {
             status: 'failed',
@@ -247,7 +374,7 @@ async function processAgentFetch(run: Run) {
       }
 
     }
-    
+
     console.log(`[agentFetch][${run.id}] calling agent API`);
 
     await adapter.callAgent(body, agentUrl, send, abortController.signal);
@@ -274,14 +401,21 @@ async function processAgentFetch(run: Run) {
     terminationAbortController?.abort();
     console.log(`[agentFetch][${run.id}] finished`);
 
-    // Always clear fetchStatus when done (if not already cleared)
-    try {
-      await db__dangerous
-        .update(runs)
-        .set({ fetchStatus: null, updatedAt: new Date().toISOString() })
-        .where(and(eq(runs.id, run.id), eq(runs.fetchStatus, 'fetching')))
-    } catch {
-      // Best-effort cleanup
-    }
+    await withOrg(run.organizationId, async (tx) => {
+      await terminateRun(tx, run.id, {
+        status: 'failed',
+        failReason: { message: "The job ended with unfinished work. This should never happen." },
+      });
+    });
+
+    // // Always clear fetchStatus when done (if not already cleared)
+    // try {
+    //   await db__dangerous
+    //     .update(runs)
+    //     .set({ fetchStatus: null, updatedAt: new Date().toISOString() })
+    //     .where(and(eq(runs.id, run.id), eq(runs.fetchStatus, 'fetching')))
+    // } catch {
+    //   // Best-effort cleanup
+    // }
   }
 }

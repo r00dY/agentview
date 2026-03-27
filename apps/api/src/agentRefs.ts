@@ -1,7 +1,6 @@
 import { eq, and } from 'drizzle-orm';
-import { agentRefs, sessions } from './schemas/schema';
+import { agentRefs } from './schemas/schema';
 import { AgentViewError } from 'agentview/AgentViewError';
-import type { Transaction } from './types';
 import type { AgentRef } from 'agentview/apiTypes';
 import type { OrgTransaction } from './withOrg';
 
@@ -44,33 +43,75 @@ export type InputAgentRef = {
   adapter?: 'agentview' | 'ai-sdk';
 }
 
+export type AgentRefWithId = AgentRef & { id: string };
+
 /**
  * Simple upsert: inserts agent_ref row if not exists, returns the row.
  * No version comparison, no session update.
  */
-export async function upsertAgentRef(tx: OrgTransaction, opts: {
-  agentRef: InputAgentRef;
-}): Promise<{ agentRefId: string; version: string; agent: string; adapter: 'agentview' | 'ai-sdk' }> {
-  const parsed = parseVersion(opts.agentRef.version);
-  if (!parsed) {
-    throw new AgentViewError("Invalid version number format. Should be like '1.2.3' or '1.2.3-beta'", 422);
-  }
+// export async function upsertAgentRef(tx: OrgTransaction, opts: {
+//   agentRef: InputAgentRef;
+// }): Promise<AgentRefWithId> {
+//   const parsed = parseVersion(opts.agentRef.version);
+//   if (!parsed) {
+//     throw new AgentViewError("Invalid version number format. Should be like '1.2.3' or '1.2.3-beta'", 422);
+//   }
 
-  const version = versionToString(parsed);
-  const agent = opts.agentRef.agent;
-  const adapter = opts.agentRef.adapter ?? 'agentview';
+//   const version = versionToString(parsed);
+//   const agent = opts.agentRef.agent;
+//   const adapter = opts.agentRef.adapter ?? 'agentview';
 
-  await tx.insert(agentRefs).values({
-    organizationId: tx.organizationId,
-    version,
-    agent,
-    adapter,
-  }).onConflictDoNothing();
+//   await tx.insert(agentRefs).values({
+//     organizationId: tx.organizationId,
+//     version,
+//     agent,
+//     adapter,
+//   }).onConflictDoNothing();
 
-  const [row] = await tx.select().from(agentRefs).where(and(eq(agentRefs.version, version), eq(agentRefs.agent, agent), eq(agentRefs.adapter, adapter))).limit(1);
+//   const [row] = await tx.select().from(agentRefs).where(and(eq(agentRefs.version, version), eq(agentRefs.agent, agent), eq(agentRefs.adapter, adapter))).limit(1);
 
-  return { agentRefId: row.id, version, agent, adapter };
-}
+//   return { id: row.id, version, agent, adapter };
+// }
+
+// export function validateAgentRef(opts: {
+//   agentRef: InputAgentRef;
+//   previousAgentRef?: AgentRef | null}
+// ) {
+//   const parsed = parseVersion(opts.agentRef.version);
+//   if (!parsed) {
+//     throw new AgentViewError("Invalid version number format. Should be like '1.2.3' or '1.2.3-beta'", 422);
+//   }
+
+//   if (!opts.previousAgentRef) {
+//     return true;
+//   }
+
+//   const agent = opts.agentRef.agent;
+//   const adapter = opts.agentRef.adapter ?? 'agentview';
+
+//   if (opts.previousAgentRef.adapter !== adapter) {
+//     throw new AgentViewError("Cannot continue a session with a different adapter.", 422);
+//   }
+
+//   if (opts.previousAgentRef.agent !== agent) {
+//     throw new AgentViewError("Cannot continue a session with a different agent.", 422);
+//   }
+
+//   const prevParsed = parseVersion(opts.previousAgentRef.version);
+//   if (!prevParsed) {
+//     throw new AgentViewError("Invalid version format in previous run.", 422);
+//   }
+
+//   if (prevParsed.major !== parsed.major) {
+//     throw new AgentViewError("Cannot continue a session with a different major version.", 422);
+//   }
+
+//   if (compareVersions(parsed, prevParsed) < 0) {
+//     throw new AgentViewError("Cannot continue a session with an older version.", 422);
+//   }
+
+//   return true;
+// }
 
 /**
  * Validates version against previous, upserts the agent_refs row,
@@ -79,19 +120,19 @@ export async function upsertAgentRef(tx: OrgTransaction, opts: {
 export async function resolveAgentRef(tx: OrgTransaction, opts: {
   agentRef: InputAgentRef;
   previousAgentRef?: AgentRef | null;
-  sessionId: string;
-}): Promise<{ agentRefId: string; version: string; agent: string; adapter: 'agentview' | 'ai-sdk' }> {
+}): Promise<{ id: string; version: string; agent: string; adapter: 'agentview' | 'ai-sdk' }> {
+
+  // valiate version string
   const parsed = parseVersion(opts.agentRef.version);
   if (!parsed) {
     throw new AgentViewError("Invalid version number format. Should be like '1.2.3' or '1.2.3-beta'", 422);
   }
 
-  const version = versionToString(parsed);
   const agent = opts.agentRef.agent;
   const adapter = opts.agentRef.adapter ?? 'agentview';
 
+  // validate against previous one (semver compat)
   if (opts.previousAgentRef) {
-
     if (opts.previousAgentRef.adapter !== adapter) {
       throw new AgentViewError("Cannot continue a session with a different adapter.", 422);
     }
@@ -114,7 +155,9 @@ export async function resolveAgentRef(tx: OrgTransaction, opts: {
     }
   }
 
-  // Upsert agent ref row
+  const version = versionToString(parsed);
+
+  // insert to db
   await tx.insert(agentRefs).values({
     organizationId: tx.organizationId,
     version,
@@ -122,22 +165,73 @@ export async function resolveAgentRef(tx: OrgTransaction, opts: {
     adapter,
   }).onConflictDoNothing();
 
-  const [agentRefRow] = await tx.select().from(agentRefs).where(and(eq(agentRefs.version, version), eq(agentRefs.agent, agent), eq(agentRefs.adapter, adapter))).limit(1);
+  const [row] = await tx.select().from(agentRefs).where(and(eq(agentRefs.version, version), eq(agentRefs.agent, agent), eq(agentRefs.adapter, adapter))).limit(1);
 
-  // Update session's agentRefs array if new
-  const currentSession = await tx.query.sessions.findFirst({
-    where: eq(sessions.id, opts.sessionId),
-    columns: { agentRefs: true },
-  });
-  const existing = (currentSession?.agentRefs as { agent: string; version: string; adapter: "agentview" | "ai-sdk" }[]) ?? [];
+  return { id: row.id, version, agent, adapter };
 
-  const alreadyExists = existing.some(ref => ref.agent === opts.agentRef.agent && ref.version === version);
-  if (!alreadyExists) {
-    await tx.update(sessions).set({
-      agentRefs: [...existing, { agent, version, adapter }],
-      updatedAt: new Date().toISOString(),
-    }).where(eq(sessions.id, opts.sessionId));
-  }
 
-  return { agentRefId: agentRefRow.id, version, agent: opts.agentRef.agent, adapter };
+
+
+  // validateAgentRef(opts); // throws if invalid
+  // return await upsertAgentRef(tx, { agentRef: opts.agentRef });
+
+  // const parsed = parseVersion(opts.agentRef.version);
+  // if (!parsed) {
+  //   throw new AgentViewError("Invalid version number format. Should be like '1.2.3' or '1.2.3-beta'", 422);
+  // }
+
+  // const version = versionToString(parsed);
+  // const agent = opts.agentRef.agent;
+  // const adapter = opts.agentRef.adapter ?? 'agentview';
+
+  // if (opts.previousAgentRef) {
+
+  //   if (opts.previousAgentRef.adapter !== adapter) {
+  //     throw new AgentViewError("Cannot continue a session with a different adapter.", 422);
+  //   }
+
+  //   if (opts.previousAgentRef.agent !== agent) {
+  //     throw new AgentViewError("Cannot continue a session with a different agent.", 422);
+  //   }
+
+  //   const prevParsed = parseVersion(opts.previousAgentRef.version);
+  //   if (!prevParsed) {
+  //     throw new AgentViewError("Invalid version format in previous run.", 422);
+  //   }
+
+  //   if (prevParsed.major !== parsed.major) {
+  //     throw new AgentViewError("Cannot continue a session with a different major version.", 422);
+  //   }
+
+  //   if (compareVersions(parsed, prevParsed) < 0) {
+  //     throw new AgentViewError("Cannot continue a session with an older version.", 422);
+  //   }
+  // }
+
+  // Upsert agent ref row
+  // await tx.insert(agentRefs).values({
+  //   organizationId: tx.organizationId,
+  //   version,
+  //   agent,
+  //   adapter,
+  // }).onConflictDoNothing();
+
+  // const [agentRefRow] = await tx.select().from(agentRefs).where(and(eq(agentRefs.version, version), eq(agentRefs.agent, agent), eq(agentRefs.adapter, adapter))).limit(1);
+
+  // // Update session's agentRefs array if new
+  // const currentSession = await tx.query.sessions.findFirst({
+  //   where: eq(sessions.id, opts.sessionId),
+  //   columns: { agentRefs: true },
+  // });
+  // const existing = (currentSession?.agentRefs as { agent: string; version: string; adapter: "agentview" | "ai-sdk" }[]) ?? [];
+
+  // const alreadyExists = existing.some(ref => ref.agent === opts.agentRef.agent && ref.version === version);
+  // if (!alreadyExists) {
+  //   await tx.update(sessions).set({
+  //     agentRefs: [...existing, { agent, version, adapter }],
+  //     updatedAt: new Date().toISOString(),
+  //   }).where(eq(sessions.id, opts.sessionId));
+  // }
+
+  // return { agentRefId: agentRefRow.id, version, agent: opts.agentRef.agent, adapter };
 }

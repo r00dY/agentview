@@ -67,17 +67,16 @@ export const runs = pgTable("runs", {
   finishedAt: timestamp("finished_at", { withTimezone: true, mode: "string" }),
   sessionId: uuid("session_id").notNull().references(() => sessions.id, { onDelete: 'cascade' }),
   agentRefId: uuid("agent_ref_id").references(() => agentRefs.id), // nullable because when run is created, agent ref is not yet known (auto-fetch provides it)
-  status: varchar("status", { length: 255 }).notNull(),
+  status: varchar("status", { length: 255 }).notNull(),//.$type<'pending' | 'init' | 'in_progress' | 'completed' | 'cancelled' | 'failed'>(),
   failReason: jsonb("fail_reason"),
   responseData: jsonb("response_data"),
   metadata: jsonb("metadata"),
-  fetchStatus: varchar("fetch_status", { length: 24 }).$type<'pending' | 'fetching'>(),
   manual: boolean("manual").notNull().default(false),
   environmentId: uuid("environment_id").references(() => environments.id), // required for auto-fetch
 }, (table) => [
   index('runs_expires_at_status_idx').on(table.expiresAt, table.status),
   index('runs_session_id_created_at_idx').on(table.sessionId, table.createdAt),
-  index('runs_fetch_status_idx').on(table.fetchStatus),
+  index('runs_status_idx').on(table.status),
   createTenantPolicy('runs'),
 ]);
 

@@ -5,7 +5,7 @@ import { channels, channelThreads, channelMessages, endUsers, sessions } from '.
 import { withOrg } from '../withOrg';
 import { db__dangerous } from '../db';
 import type { Transaction } from '../types';
-import { createAutoRun, terminateRun } from '../runs';
+import { createAutoRun, isRunFinished, terminateRun } from '../runs';
 import { randomBytes } from 'crypto';
 import { createSession } from '../sessions';
 import type { ChannelRef } from 'agentview/apiTypes';
@@ -235,7 +235,7 @@ export function channelProvider(type: string) {
       /**
        * Cancel the last run if it is in progress
        */
-      if (lastRun?.status === 'in_progress') {
+      if (lastRun && !isRunFinished(lastRun)) {
         console.log('[ingestMessage] cancelling last run');
 
         // this is not inside of transaction!

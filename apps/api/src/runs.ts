@@ -8,12 +8,17 @@ import { AgentViewError } from 'agentview/AgentViewError';
 import { parseMetadata } from './parseMetadata';
 import { resolveAgentRef } from './agentRefs';
 import { getLastRun } from 'agentview/sessionUtils';
-import { fetchSession } from './sessions';
+import { fetchSession, fetchSessionBase } from './sessions';
 import { getConfigFromEnvironment } from './environments';
 import { publishRunStreamEvent } from './runStream';
 import { withOrg, type OrgTransaction } from './withOrg';
 
 export const DEFAULT_IDLE_TIME = 1000 * 5;//60; // 60 seconds
+
+
+export function isRunFinished(run: { status: string }) {
+  return run.status === 'completed' || run.status === 'cancelled' || run.status === 'failed';
+}
 
 /**
  * Returns the input content for a run's session items.
@@ -194,6 +199,10 @@ export async function applyRunPatch(
       throw new AgentViewError("Run not found.", 404);
     }
 
+    if (run.status === 'pending' || run.status === 'init') {
+      throw new AgentViewError("You can't run apply patch on run in 'init' or 'pending' status.", 422);
+    }
+
     /** Find matching run config **/
     const inputItem = (await getRunInput(tx, runId))?.content;
 
@@ -228,7 +237,7 @@ export async function applyRunPatch(
       /** Validate items */
       const items = body.items ?? [];
 
-      if (items.length > 0 && run.status !== 'in_progress') {
+      if (isRunFinished(run) && items.length > 0) {
         throw new AgentViewError("Cannot add items to a finished run.", 422);
       }
 
@@ -237,7 +246,7 @@ export async function applyRunPatch(
       parsedItems = validateItems(runConfig, sessionItems.map(si => si.content), items);
 
       /** State */
-      if (body.state !== undefined && run.status !== 'in_progress') {
+      if (isRunFinished(run) && body.state !== undefined) {
         throw new AgentViewError("Cannot set state to a finished run.", 422);
       }
 
@@ -248,7 +257,7 @@ export async function applyRunPatch(
     }
 
     /** Status, finished at, failReason */
-    if (run.status !== 'in_progress' && body.status && body.status !== run.status) {
+    if (isRunFinished(run) && body.status && body.status !== run.status) {
       throw new AgentViewError("Cannot change the status of a finished run.", 422);
     }
 
@@ -256,7 +265,7 @@ export async function applyRunPatch(
     const failReason = body.failReason ?? null;
 
     if (failReason) {
-      if (run.status !== 'in_progress') {
+      if (isRunFinished(run)) {
         throw new AgentViewError("failReason cannot be set for a finished run.", 422);
       }
       else if (status !== 'failed') {
@@ -350,17 +359,18 @@ export async function applyRunPatch(
  * - when we listened to [done] event on redis streams in agent API call, even if integration called apply patch with "complete" / "failed" correctly. In that case we should not abort agent API call. That's why termination is different "path" in our system.
  */
 export async function terminateRun(tx: OrgTransaction, runId: string, body: RunTerminationBody) {
-  console.log(`[terminateRun][${runId}] trying to terminate run (${body.status}${body.status === 'failed' ? ` -> ${body.failReason.message ?? "No fail reason"}` : ''})`);
   const runBase = await getRunBaseWithLock(tx, runId); // we must start with a lock for safety of concurrent writes!
   
   if (!runBase) {
     throw new AgentViewError("Can't find run to terminate.", 404);
   }
-  if (runBase.status !== 'in_progress') {
-    console.log(`[terminateRun][${runId}] already finished`);
+  if (runBase.status === 'failed' || runBase.status === 'cancelled' || runBase.status === 'completed') {
+    console.log(`[terminateRun][${runId}] attempted, not needed`);
     return; // indempotency
     // throw new AgentViewError("Cannot terminate a run that is not in progress.", 422);
   }
+
+  console.log(`[terminateRun][${runId}] running termination: (${body.status}${body.status === 'failed' ? ` -> ${body.failReason.message ?? "No fail reason"}` : ''})`);
 
   const nowIso = new Date().toISOString();
 
@@ -401,25 +411,25 @@ async function createRunCore(
     finishedAt: string | null;
     metadata: Record<string, any> | undefined;
     agentRefId: string | null;
-    fetchStatus: 'pending' | null;
+    manual: boolean;
     state: any | undefined;
     runConfig: BaseRunConfig | undefined;
     lastRun: ReturnType<typeof getLastRun>;
   }
 ): Promise<typeof runs.$inferSelect> {
-  const { parsedInputItems, parsedNonInputItems, status, failReason, expiresAt, finishedAt, metadata, agentRefId, fetchStatus, state, runConfig, lastRun } = params;
+  const { parsedInputItems, parsedNonInputItems, status, failReason, expiresAt, finishedAt, metadata, agentRefId, manual, state, runConfig, lastRun } = params;
 
   const [insertedRun] = await tx.insert(runs).values({
     organizationId: tx.organizationId,
     sessionId,
     status,
     failReason,
+    manual,
     expiresAt,
     finishedAt,
     agentRefId,
     metadata,
-    fetchStatus,
-    environmentId: fetchStatus === 'pending' ? environment.id : null,
+    environmentId: environment.id,
   }).returning();
 
   if (parsedInputItems.length > 0) {
@@ -496,13 +506,13 @@ async function createRunCore(
  * Prepares a session for run creation: fetches session, checks no in-progress run, finds config.
  */
 async function prepareRunCreation(tx: OrgTransaction, environment: Environment, sessionId: string) {
-  const session = await fetchSession(tx, sessionId);
+  const session = await fetchSession(tx, sessionId); // todo: optimize
   if (!session) {
     throw new AgentViewError("Session not found.", 404);
   }
 
   const lastRun = getLastRun(session);
-  if (lastRun?.status === 'in_progress') {
+  if (lastRun && !isRunFinished(lastRun)) {
     throw new AgentViewError(`Can't create a run because session has already a run in progress.`, 422);
   }
 
@@ -516,7 +526,7 @@ async function prepareRunCreation(tx: OrgTransaction, environment: Environment, 
 
 /**
  * Auto-fetch run creation. Used by POST /api/sessions/{id}/runs and channel message workers.
- * For API channels: validates a single input item, sets fetchStatus='pending'.
+ * For API channels: validates a single input item, sets status='pending'.
  * For non-API channels: no input needed (channel messages serve as input).
  */
 export async function createAutoRun(
@@ -546,13 +556,13 @@ export async function createAutoRun(
       throw new AgentViewError("Input is required for API channel runs.", 422);
     }
 
+    // For API we can validate input against schema & check version compatibility before we even create a run
     const result = await resolveAgentRef(tx, {
       agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
       previousAgentRef: lastRun?.agentRef ?? session.agentRef,
-      sessionId: session.id,
     });
 
-    agentRefId = result.agentRefId;
+    agentRefId = result.id;
     runConfig = requireRunConfig(agentConfig, body.input);
     parsedInputItems = [runConfig.input.schema.parse(body.input)];
   }
@@ -562,13 +572,13 @@ export async function createAutoRun(
   return createRunCore(tx, environment, sessionId, {
     parsedInputItems,
     parsedNonInputItems: [],
-    status: 'in_progress',
+    status: 'pending',
     failReason: null,
     expiresAt: new Date(Date.now() + idleTimeout).toISOString(),
     finishedAt: null,
     metadata: undefined,
     agentRefId,
-    fetchStatus: 'pending',
+    manual: false,
     state: undefined,
     runConfig,
     lastRun,
@@ -604,7 +614,6 @@ export async function createManualRun(
   const resolved = await resolveAgentRef(tx, {
     agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
     previousAgentRef: lastRun?.agentRef ?? session.agentRef,
-    sessionId: session.id,
   });
 
   const inputItem = body.items[0];
@@ -636,8 +645,8 @@ export async function createManualRun(
     expiresAt,
     finishedAt,
     metadata,
-    agentRefId: resolved.agentRefId,
-    fetchStatus: null,
+    agentRefId: resolved.id,
+    manual: true,
     state: body.state,
     runConfig,
     lastRun,

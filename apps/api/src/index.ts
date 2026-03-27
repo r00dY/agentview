@@ -69,9 +69,9 @@ import type { Transaction } from './types';
 import { updateInboxes } from './updateInboxes';
 import { findUser } from './users';
 import { randomBytes } from 'crypto';
-import { applyRunPatch, getRunBaseWithLock, createAutoRun, createManualRun, DEFAULT_IDLE_TIME, getRunInputContent, terminateRun, getRunInput } from './runs';
+import { applyRunPatch, getRunBaseWithLock, createAutoRun, createManualRun, DEFAULT_IDLE_TIME, getRunInputContent, terminateRun, getRunInput, isRunFinished } from './runs';
 import { createRunStreamConsumer } from './runStream';
-import { upsertAgentRef } from './agentRefs';
+import { resolveAgentRef } from './agentRefs';
 import { adapters, getAdapter } from './adapters/adapters';
 import { createAISDKStreamConsumer, type AISDKStreamConsumer } from './adapters/ai-sdk-stream';
 import { parseMetadata } from './parseMetadata';
@@ -1116,7 +1116,7 @@ export async function createSessionHandler(c: Parameters<RouteHandler<typeof ses
     const environment = await requireEnvironment(tx, principal.env);
 
     // Resolve agent ref at session creation
-    const { agentRefId } = await upsertAgentRef(tx, {
+    const agentRefWithId = await resolveAgentRef(tx, {
       agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
     });
 
@@ -1127,7 +1127,7 @@ export async function createSessionHandler(c: Parameters<RouteHandler<typeof ses
       metadata: body.metadata,
       summary: body.summary,
       authorId,
-      agentRefId,
+      agentRefId: agentRefWithId.id,
       initialState: body.initialState,
     });
 
@@ -1175,7 +1175,7 @@ app.openapi(sessionsAISDKPOSTRoute, async (c) => {
 function getSessionStreamResponse(c: any, session: StandardSession) {
   const lastRun = getLastRun(session);
 
-  if (!lastRun || lastRun.status !== 'in_progress') {
+  if (!lastRun || isRunFinished(lastRun)) {
     return c.body(null, 204); // 204 when no stream in our internal protocol
   }
 
@@ -1290,7 +1290,7 @@ app.openapi(sessionAISDKStreamRoute, async (c) => {
   const session = await sessionStreamHandler(c);
   const lastRun = getLastRun(session);
 
-  if (lastRun?.status !== 'in_progress') {
+  if (!lastRun || isRunFinished(lastRun)) {
     return c.body(null, 204);
   }
 
@@ -1500,7 +1500,7 @@ async function sessionStandardCancelHandler(c: Parameters<RouteHandler<typeof se
 
     authorize(principal, { action: "end-user:update", user: session.user });
 
-    if (lastRun?.status !== 'in_progress') {
+    if (!lastRun || isRunFinished(lastRun)) {
       throw new AgentViewError("Cannot cancel a run that is not in progress.", 422);
     }
 
@@ -1662,7 +1662,7 @@ app.openapi(runManualPATCHRoute, async (c) => {
     authorize(principal, { action: "end-user:update", user: session.user });
 
     // Guard: API can only cancel auto-fetch runs which are being auto-fetched
-    if (run.fetchStatus) {
+    if (!run.manual) {
       throw new AgentViewError("This endpoint is allowed only for manual runs.", 422);
     }
 

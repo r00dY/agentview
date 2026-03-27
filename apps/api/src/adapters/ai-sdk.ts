@@ -5,6 +5,7 @@ import { type Adapter } from './adapters';
 import { getSessionStatusFields } from '../sessions';
 import { AgentViewError } from 'agentview';
 import { RunTerminationError } from '../types';
+import { isRunFinished } from '../runs';
 
 interface AISDKChunk {
     type: string;
@@ -92,6 +93,7 @@ async function callAgentAPIAISDK(
     send: (event: { name: string, data: any }) => Promise<void>,
     signal?: AbortSignal
 ): Promise<void> {
+    console.log(`[ai-sdk] start`, body);
     const currentRun = body.session.runs[body.session.runs.length - 1];
     console.log(`[ai-sdk][${currentRun.id}] start`);
 
@@ -553,7 +555,7 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
         messages.push(userMessage);
 
         // For in_progress runs (current run), only include the user message
-        if (run.status === 'in_progress') {
+        if (!isRunFinished(run)) {
             continue;
         }
 

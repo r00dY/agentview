@@ -156,7 +156,9 @@ export async function fetchSession(tx: Transaction, session_id: string): Promise
     summary: row.summary,
     agentRef: row.agentRef ?? null,
     agentRefs: row.agentRefs ?? [],
-    runs: row.runs.filter((run, index) => run.status === "in_progress" || run.status === "completed" || index === row.runs.length - 1).map(run => ({
+    runs: row.runs
+      .filter((run, index) => run.status === "in_progress" || run.status === "completed" || (index === row.runs.length - 1 && run.status  !== 'pending' && run.status !== 'init')) // we always send last run unless it's pending/init
+      .map(run => ({
       ...run,
       // agentRef: run.agentRef ?? : null,
       sessionItems: run.sessionItems.map((item, index) => ({
