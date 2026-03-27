@@ -18,7 +18,7 @@ export const DEFAULT_IDLE_TIME = 1000 * 5;//60; // 60 seconds
 
 
 export function isRunFinished(run: { status: string }) {
-  return run.status === 'completed' || run.status === 'cancelled' || run.status === 'failed';
+  return run.status === 'completed' || run.status === 'cancelled' || run.status === 'failed' || run.status === 'discarded';
 }
 
 /**
@@ -365,13 +365,22 @@ export async function terminateRun(tx: OrgTransaction, runId: string, body: RunT
   if (!runBase) {
     throw new AgentViewError("Can't find run to terminate.", 404);
   }
-  if (runBase.status === 'failed' || runBase.status === 'cancelled' || runBase.status === 'completed') {
+  if (runBase.status === 'failed' || runBase.status === 'cancelled' || runBase.status === 'completed' || runBase.status === 'discarded') {
     console.log(`[terminateRun][${runId}] attempted, not needed`);
     return; // indempotency
     // throw new AgentViewError("Cannot terminate a run that is not in progress.", 422);
   }
 
-  console.log(`[terminateRun][${runId}] running termination: (${body.status}${body.status === 'failed' ? ` -> ${body.failReason.message ?? "No fail reason"}` : ''})`);
+  // logs
+  if (body.status === 'discarded') {
+    console.log(`[terminateRun][${runId}] discarded -> ${body.failReason.message ?? "no reason"}`);
+  }
+  else if (body.status === 'failed') {
+    console.log(`[terminateRun][${runId}] failed -> ${body.failReason.message ?? "no reason"}`);
+  }
+  else if (body.status === 'cancelled') {
+    console.log(`[terminateRun][${runId}] cancelled`);
+  }
 
   const nowIso = new Date().toISOString();
 

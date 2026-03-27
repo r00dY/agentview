@@ -123,8 +123,8 @@ async function callAgentAPIAISDK(
 
     } catch (error: unknown) { // Here we only handle fetch errors, other errors will be handled later
         if (error instanceof RunTerminationError) {
-            // if aborted during fetching, we don't have to yield anything since the run is already properly terminated in agentview
-            // but we'll need to properly handle opened stream.
+            // run already terminated, so we don't have to send() anything, it's already cleaned up.
+            // the only thing we need to do is return error response (no stream, so no [DONE])
 
             console.log('[ai-sdk] aborted while fetching. Sending [RESPONSE] with error, no stream.')
             await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({
@@ -133,7 +133,6 @@ async function callAgentAPIAISDK(
                 error: error.body
             }));
 
-            // await publishAISDKStreamEvent(currentRun.id, "[DONE]");
             return;
         }
         else {
@@ -147,9 +146,9 @@ async function callAgentAPIAISDK(
             }
 
             await send({
-                name: 'run.patch',
+                name: 'run.terminate',
                 data: {
-                    status: 'failed',
+                    status: 'discarded',
                     failReason: {
                         message
                     },
@@ -185,9 +184,9 @@ async function callAgentAPIAISDK(
 
     if (error) {
         await send({
-            name: 'run.patch',
+            name: 'run.terminate',
             data: {
-                status: 'failed',
+                status: 'discarded',
                 failReason: {
                     message: error
                 },
@@ -213,6 +212,11 @@ async function callAgentAPIAISDK(
 
     try {
         console.log(`[ai-sdk][${currentRun.id}] streaming`);
+
+        await send({
+            name: 'run.streaming_started',
+            data: {},
+        });
 
         await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({
             status: response.status,
@@ -485,7 +489,10 @@ async function callAgentAPIAISDK(
         await send({
             name: 'run.terminate',
             data: {
-                message: errorMessage,
+                status: "failed",
+                failReason: {
+                    message: errorMessage,
+                }
             }
         });
 

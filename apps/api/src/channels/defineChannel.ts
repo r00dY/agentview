@@ -229,7 +229,7 @@ export function channelProvider(type: string) {
         console.log('[ingestMessage] cancelling last run');
 
         // this is not inside of transaction!
-        await terminateRun(tx, lastRun.id, { status: 'cancelled' });
+        await terminateRun(tx, lastRun.id, { status: 'discarded', failReason: { message: 'New message ingested, discarding last run' } });
       }
       else {
         console.log('[ingestMessage] last run is not in progress');

@@ -1211,6 +1211,7 @@ function streamAISDKEvents(c: any, consumer: AISDKStreamConsumer) {
   return streamSSE(c, async (stream) => {
     try {
       for await (const data of consumer.stream()) {
+        console.log(`POST - event: ${data}`);
         await stream.writeSSE({ data });
       }
     } finally {
@@ -1396,7 +1397,7 @@ async function createRunHandler(c: Parameters<RouteHandler<typeof runsPOSTRoute>
     // const newRun = getLastRun(updatedSession)!;
     // console.log('newRun', newRun);
 
-    return { run, stream };
+    return { run, stream, principal };
   });
 }
 
@@ -1432,7 +1433,7 @@ const runsAISDKPOSTRoute = createRoute({
           schema: z.string(),
         },
         'application/json': {
-          schema: RunSchema, // Session schema???
+          schema: SessionSchema,
         },
       },
       description: "Streams native AI SDK events",
@@ -1443,40 +1444,35 @@ const runsAISDKPOSTRoute = createRoute({
 })
 
 app.openapi(runsAISDKPOSTRoute, async (c) => {
-  const { run, stream } = await createRunHandler(c);
+  const { run, stream, principal } = await createRunHandler(c);
 
-  if (stream) {
-    const consumer = createAISDKStreamConsumer(run.id, c.req.raw.signal);
+  const consumer = createAISDKStreamConsumer(run.id, c.req.raw.signal);
 
-    try {
-      const { status, headers, error } = await consumer.waitForResponse();
+  try {
+    const { status, headers, error } = await consumer.waitForResponse();
 
+    if (error) {
       c.status(status as StatusCode);
       for (const [key, value] of Object.entries(headers)) {
         c.header(key, value);
       }
-
-      if (error) {
-        consumer.close();
-        return c.body(error);
-      }
-
-      // consumer.close() is called inside streamAISDKEvents when streaming ends
-      return streamAISDKEvents(c, consumer);
-    } catch (e) {
       consumer.close();
-      throw e;
+      return c.body(error);
     }
-  }
-  else {
-    throw new HTTPException(400, { message: 'Non-stream response is not supported temporarily.' });
 
-    // WE SHOULD RETURN SESSION HERE!!!
-    // BUT WE SHOULD WAIT FOR RESPONSE FIRST. IT SHOULD BE BLOCKING.
-
-    // const { sessionItems, channelMessages, ...runBase } = run;
-
-    // return c.json(runBase, 201);
+    if (!stream) {
+      consumer.close();
+      return withOrg(principal.organizationId, async (tx) => {
+        const session = await requireSession(tx, run.sessionId);
+        return c.json(standardToDefaultSession(session), 201);
+      });
+    }
+    else {
+      return streamAISDKEvents(c, consumer);
+    }
+  } catch (e) {
+    consumer.close();
+    throw e;
   }
 })
 

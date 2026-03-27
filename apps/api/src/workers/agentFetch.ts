@@ -125,7 +125,7 @@ async function processAgentFetch(run: Run) {
 
     // Abort fetch immediately when run is terminated (e.g. external cancellation).
     terminationAbortController = onRunTerminated(run.id, (body) => {
-      console.log(`[agentFetch][${run.id}] terminated, aborting (${body.status})`);
+      console.log(`[agentFetch][${run.id}] onRunTerminated (${body.status})`);
       abortController.abort(new RunTerminationError('Run terminated', body));
     });
 
@@ -185,10 +185,12 @@ async function processAgentFetch(run: Run) {
         console.log(`[agentFetch][${run.id}] run.terminate`);
 
         await withOrg(run.organizationId, async (tx) => {
-          await terminateRun(tx, run.id, {
-            status: 'failed',
-            failReason: event.data,
-          });
+          await terminateRun(tx, run.id, event.data);
+        });
+      }
+      else if (event.name === 'run.streaming_started') {
+        await withOrg(run.organizationId, async (tx) => {
+          await tx.update(runs).set({ status: 'in_progress' }).where(eq(runs.id, run.id));
         });
       }
 

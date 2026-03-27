@@ -2896,7 +2896,7 @@ describe('API', () => {
 
     test("HTTP error: 500 → run marked failed (validated via ai-sdk stream)", async () => {
       await updateConfigWithAiSdkUrl();
-      const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
+      const session = await avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -2914,10 +2914,36 @@ describe('API', () => {
       }))
 
       // The stream ends before the worker marks the run as failed, so wait briefly
-      const updatedSession = await av.getSession({ id: session.id });
-      expect(updatedSession.lastRun!.status).toBe("failed");
-      expect(updatedSession.lastRun!.failReason).toBeDefined();
+      const updatedSession = await avAISDK.getSession({ id: session.id });
+      expect(updatedSession.messages.length).toBe(0); // Error from AI endpoint means no messages are saved (user message included)
     }, 10000);
+
+    test("HTTP error: 500 → client.createRun (no stream) passes error to client. No run is created.", async () => {
+      await updateConfigWithAiSdkUrl();
+      const session = await avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
+
+      mockAISDKServer!.setHandler((_body, res) => {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: "This is an error from test suite." }));
+      });
+
+      const promise = avAISDK.createRun({ sessionId: session.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
+
+      await expect(promise).rejects.toThrowError(expect.objectContaining({
+        statusCode: 500,
+        message: expect.stringContaining("This is an error from test suite.")
+      }))
+
+      // The stream ends before the worker marks the run as failed, so wait briefly
+      const updatedSession = await avAISDK.getSession({ id: session.id });
+      expect(updatedSession.messages.length).toBe(0); // Error from AI endpoint means no messages are saved (user message included)
+    }, 10000);
+
+
+
+
+
+
 
     test("stream ends without finish → run marked failed (validated via ai-sdk stream)", async () => {
       await updateConfigWithAiSdkUrl();
