@@ -52,6 +52,7 @@ import {
   RunCreateSchema,
   RunBaseSchema,
   RunSchema,
+  type RunBase,
 } from 'agentview/apiTypes';
 import { type BaseAgentViewConfig, BaseConfigSchema, BaseConfigSchemaToZod } from 'agentview/baseConfigTypes';
 import { findChannelConfig, findItemConfigById, requireChannelConfig, requireRunConfig, getChannelAgent } from 'agentview/baseConfigUtils';
@@ -1085,11 +1086,11 @@ const sessionsPOSTRoute = createRoute({
 
 export async function createSessionHandler(c: Parameters<RouteHandler<typeof sessionsPOSTRoute>>[0]) {
   const principal = await authnAllowPublic(c.req.raw.headers)
-  const body = await c.req.valid('json')
-
-  const authorId = principal.type === 'member' ? principal.session.user.id : null;
 
   return withOrg(principal.organizationId, async (tx) => {
+    const body = await c.req.valid('json')
+    const authorId = principal.type === 'member' ? principal.session.user.id : null;
+
     const config = await requireConfig(tx, principal)
 
     // in API channel and agent must exist
@@ -1131,18 +1132,30 @@ export async function createSessionHandler(c: Parameters<RouteHandler<typeof ses
       initialState: body.initialState,
     });
 
+    let newRun: Awaited<ReturnType<typeof createAutoRun>> | undefined = undefined;
     if (body.input) {
-      await createAutoRun(tx, environment, newSessionRow.id, { input: body.input });
+      newRun = await createAutoRun(tx, environment, newSessionRow.id, { input: body.input });
     }
 
-    return await requireSession(tx, newSessionRow.id)
+    const session = await requireSession(tx, newSessionRow.id);
+
+    return { session, newRun, principal };
   })
 }
 
 app.openapi(sessionsPOSTRoute, async (c) => {
-  const newSession = await createSessionHandler(c);
-  return c.json(newSession, 201);
+  /**
+   * For now we totally block creating session with input in Standard Session API.
+   */
+  const body = await c.req.valid('json')
+  if (body.input) {
+    throw new HTTPException(422, { message: 'Input is not supported for standard session creation.' });
+  }
+
+  const { session } = await createSessionHandler(c);
+  return c.json(session, 201);
 })
+
 
 function standardToDefaultSession(session: StandardSession): Session {
   const adapter = adapters["ai-sdk"];
@@ -1166,8 +1179,13 @@ const sessionsAISDKPOSTRoute = createRoute({
 })
 
 app.openapi(sessionsAISDKPOSTRoute, async (c) => {
-  const newSession = await createSessionHandler(c);
-  return c.json(standardToDefaultSession(newSession), 201);
+  const { session, newRun, principal } = await createSessionHandler(c);
+
+  if (!newRun) {
+    return c.json(standardToDefaultSession(session), 201);
+  }
+
+  return createRunAISDKHandler(c, newRun, true, principal);
 })
 
 
@@ -1391,12 +1409,6 @@ async function createRunHandler(c: Parameters<RouteHandler<typeof runsPOSTRoute>
     const environment = await requireEnvironment(tx, principal.env);
     const run = await createAutoRun(tx, environment, params.session_id, body);
 
-    // console.log('##########')
-
-    // const updatedSession = await requireSession(tx, params.session_id);
-    // const newRun = getLastRun(updatedSession)!;
-    // console.log('newRun', newRun);
-
     return { run, stream, principal };
   });
 }
@@ -1443,9 +1455,7 @@ const runsAISDKPOSTRoute = createRoute({
   },
 })
 
-app.openapi(runsAISDKPOSTRoute, async (c) => {
-  const { run, stream, principal } = await createRunHandler(c);
-
+async function createRunAISDKHandler(c: Parameters<RouteHandler<typeof runsAISDKPOSTRoute>>[0], run: { id: string, sessionId: string }, stream: boolean, principal: Principal) {
   const consumer = createAISDKStreamConsumer(run.id, c.req.raw.signal);
 
   // Wait for agent response. If anything throws or we don't need to stream,
@@ -1478,6 +1488,11 @@ app.openapi(runsAISDKPOSTRoute, async (c) => {
 
   // Ownership of consumer transfers to streamAISDKEvents (closes in its finally)
   return streamAISDKEvents(c, consumer);
+}
+
+app.openapi(runsAISDKPOSTRoute, async (c) => {
+  const { run, stream, principal } = await createRunHandler(c);
+  return createRunAISDKHandler(c, run, stream, principal);
 })
 
 
