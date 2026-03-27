@@ -585,20 +585,10 @@ export async function createAutoRunFromChannelMessages(
     runId: newRunId,
     updatedAt: new Date().toISOString(),
   }).where(inArray(channelMessages.id, incomingMessages.map(m => m.id)));
-  
-
-
-  // const { lastRun, runConfig, parsedInput, agentRefId, idleTimeout } = await prepareRunCreation(tx, environment, sessionId, body.input);
 }
 
 
 
-
-/**
- * Auto-fetch run creation. Used by POST /api/sessions/{id}/runs and channel message workers.
- * For API channels: validates a single input item, sets status='pending'.
- * For non-API channels: no input needed (channel messages serve as input).
- */
 export async function createAutoRun(
   tx: OrgTransaction,
   environment: Environment,
@@ -607,38 +597,6 @@ export async function createAutoRun(
 ): Promise<typeof runs.$inferSelect> {
   const { lastRun, agentConfig, agentRefId } = await prepareRunCreation(tx, environment, sessionId);
   const { runConfig, parsedInput, idleTimeout } = await processInput(agentConfig, body.input);
-
-  // let parsedInputItems: any[] = [];
-  // let runConfig: BaseRunConfig | undefined;
-  // let agentRefId: string | null = null;
-
-  // if (session.channel.type !== 'api') {
-  //   // Non-API channels: simplified procedure, no input validation
-  // }
-  // else {
-  //   if (!channelConfig) {
-  //     throw new AgentViewError(`Channel config not found for ${JSON.stringify(session.channel)}.`, 404);
-  //   }
-  //   if (!agentConfig) {
-  //     throw new AgentViewError("Agent not found in environment config.", 404);
-  //   }
-
-  //   if (!body.input) {
-  //     throw new AgentViewError("Input is required for API channel runs.", 422);
-  //   }
-
-  //   // For API we can validate input against schema & check version compatibility before we even create a run
-  //   const result = await resolveAgentRef(tx, {
-  //     agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
-  //     previousAgentRef: lastRun?.agentRef ?? session.agentRef,
-  //   });
-
-  //   agentRefId = result.id;
-  //   runConfig = requireRunConfig(agentConfig, body.input);
-  //   parsedInputItems = [runConfig.input.schema.parse(body.input)];
-  // }
-
-  // const idleTimeout = runConfig?.idleTimeout ?? DEFAULT_IDLE_TIME;
 
   return await createRunCore(tx, environment, sessionId, {
     parsedInput,
@@ -687,27 +645,7 @@ export async function createManualRun(
   const { runConfig, parsedInput, idleTimeout } = await processInput(agentConfig, inputItem);
 
 
-  // if (session.channel.type !== 'api') {
-  //   throw new AgentViewError("For non-api channels manual mode is not supported.", 422);
-  // }
-  // if (!channelConfig) {
-  //   throw new AgentViewError(`Channel config not found for ${JSON.stringify(session.channel)}.`, 404);
-  // }
-  // if (!agentConfig) {
-  //   throw new AgentViewError("Agent not found in environment config.", 404);
-  // }
-  // if (!body.items || body.items.length === 0) {
-  //   throw new AgentViewError("Items are required for manual runs.", 422);
-  // }
-
-  // const resolved = await resolveAgentRef(tx, {
-  //   agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
-  //   previousAgentRef: lastRun?.agentRef ?? session.agentRef,
-  // });
-
-
-  // const runConfig = requireRunConfig(agentConfig, inputItem);
-  // const parsedInputItems = [runConfig.input.schema.parse(inputItem)];
+  // Process non-input items, metadata etc
   const parsedNonInputItems = validateItems(runConfig, [parsedInput], nonInputItems);
 
   const metadata = parseMetadata(runConfig.metadata, runConfig.allowUnknownMetadata ?? true, body.metadata ?? {}, {});

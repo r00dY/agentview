@@ -93,7 +93,6 @@ async function callAgentAPIAISDK(
     send: (event: { name: string, data: any }) => Promise<void>,
     signal?: AbortSignal
 ): Promise<void> {
-    console.log(`[ai-sdk] start`, body);
     const currentRun = body.session.runs[body.session.runs.length - 1];
     console.log(`[ai-sdk][${currentRun.id}] start`);
 
@@ -105,22 +104,6 @@ async function callAgentAPIAISDK(
     // For channel-based runs: we'll create run from incoming channel messages
     const incomingMessages = currentRun.channelMessages.filter(cm => cm.direction === 'incoming');
     const isChannelRun = incomingMessages.length > 0;
-
-    // const hasInput = currentRun.sessionItems.some(si => si.type === 'input');
-
-    // if (isChannelRun) {
-    //     const inputContent = {
-    //         role: 'user',
-    //         parts: incomingMessages.map(cm => ({ type: 'text', text: cm.text ?? '' })),
-    //     };
-    //     await send({ name: 'run.set_input', data: inputContent });
-
-    //     messages.push({
-    //         id: currentRun.id + '-input',
-    //         role: 'user',
-    //         parts: inputContent.parts,
-    //     });
-    // }
 
     /**
      * Fetch the agent API response
