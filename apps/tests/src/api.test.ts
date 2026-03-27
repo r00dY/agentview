@@ -2895,33 +2895,28 @@ describe('API', () => {
     }, 10000);
 
 
-    // FOR A SECOND -> we must write transport
+    test("HTTP error: 500 → run marked failed (validated via ai-sdk stream)", async () => {
+      await updateConfigWithAiSdkUrl();
+      const session = await avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
-    // test("HTTP error: 500 → run marked failed (validated via ai-sdk stream)", async () => {
-    //   await updateConfigWithAiSdkUrl();
-    //   const session = await avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
+      mockAISDKServer!.setHandler((_body, res) => {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end("This is an error from test suite.");
+      });
 
-    //   mockAISDKServer!.setHandler((_body, res) => {
-    //     res.writeHead(500, { 'Content-Type': 'application/json' });
-    //     res.end("This is an error from test suite.");
-    //   });
+      const stream = sendMessageViaTransport(
+        avAISDK.createTransport(), 
+        session.id, 
+        { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
+      );
 
-    //   const stream = sendMessageViaTransport(
-    //     avAISDK.createTransport(), 
-    //     session.id, 
-    //     { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
-    //   );
+      await expect(stream).rejects.not.toBeInstanceOf(AgentViewError);
+      await expect(stream).rejects.toThrowError("This is an error from test suite.");
 
-    //   await expect(stream).rejects.toThrowError(expect.objectContaining({
-    //     message: expect.stringContaining("This is an error from test suite.")
-    //   }))
-
-    //   // The stream ends before the worker marks the run as failed, so wait briefly
-    //   const updatedSession = await avAISDK.getSession({ id: session.id });
-    //   expect(updatedSession.messages.length).toBe(0); // Error from AI endpoint means no messages are saved (user message included)
-    // }, 10000);
-
-
+      // The stream ends before the worker marks the run as failed, so wait briefly
+      const updatedSession = await avAISDK.getSession({ id: session.id });
+      expect(updatedSession.messages.length).toBe(0); // Error from AI endpoint means no messages are saved (user message included)
+    }, 10000);
 
 
     test("HTTP error: 500 → client.createRun (no stream) passes error to client. No run is created.", async () => {
