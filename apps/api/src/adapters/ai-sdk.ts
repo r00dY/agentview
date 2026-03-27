@@ -153,11 +153,17 @@ async function callAgentAPIAISDK(
             let message: string;
 
             if (error instanceof TypeError) { // node fetch error
-                message = (error as any).cause?.message ?? error.message ?? 'Connection error';
+                message = error.message ?? 'Connection error';
+            }
+            else if (error instanceof Error) {
+                message = error.message ?? 'Unknown error';
             }
             else {
-                message = (error as any)?.message ?? 'Unknown error';
+                message = String(error);
             }
+
+            console.log('[ai-sdk] error while fetching: ', message)
+
 
             await send({
                 name: 'run.terminate',
@@ -507,7 +513,7 @@ async function callAgentAPIAISDK(
         }
         else if (error instanceof TypeError) {
             console.log('[ai-sdk] Connection error')
-            message = (error as any).cause?.message ?? error.message ?? 'Connection error';
+            message = error.message ?? 'Connection error';
         }
         else if (error instanceof Error) {
             console.log('[ai-sdk] Error', error.message)
