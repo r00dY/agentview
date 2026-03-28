@@ -1,6 +1,6 @@
+import { AgentViewError, type AgentViewRunTerminationBody } from 'agentview';
 import { redis } from './redis';
 import { createRedisStreamConsumer } from './redisStreamConsumer';
-import type { RunTerminationBody } from './types';
 
 /**
  * Redis Stream-based bridge for the "standard" (non-AI-SDK) run protocol.
@@ -60,7 +60,7 @@ export function createRunStreamConsumer(runId: string, signal: AbortSignal, afte
  * Calls `onTerminated` when [TERMINATED] appears on the run stream.
  * Returns an AbortController — call .abort() to stop listening.
  */
-export function onRunTerminated(runId: string, onTerminated: (body: RunTerminationBody) => void) {
+export function onRunTerminated(runId: string, onTerminated: (body: AgentViewError) => void) {
   const abortController = new AbortController();
   const consumer = createRedisStreamConsumer(streamKey(runId), abortController.signal);
 
@@ -68,8 +68,12 @@ export function onRunTerminated(runId: string, onTerminated: (body: RunTerminati
     try {
       for await (const data of consumer.entries()) {
         if (data.startsWith('[TERMINATED]')) {
-          const body : RunTerminationBody = JSON.parse(data.slice('[TERMINATED]'.length));
-          onTerminated(body);
+          const body : AgentViewRunTerminationBody = JSON.parse(data.slice('[TERMINATED]'.length));
+          const error = new AgentViewError("Run terminated", 400, {
+            code: "run.finished",
+            ...body
+          });
+          onTerminated(error);
           return;
         }
       }

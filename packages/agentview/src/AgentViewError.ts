@@ -1,8 +1,24 @@
-export interface AgentViewErrorDetails {
+export interface AgentViewGeneralErrorDetails {
+    code?: undefined
     cause?: any
-    code?: "parse.schema"
     [key: string]: any
 }
+
+export interface AgentViewParseErrorDetails {
+    code: "parse.schema"
+    issues: any,
+}
+
+export type AgentViewRunTerminationBody = 
+    { status: 'cancelled' } | 
+    { status: 'failed', failReason: any } | 
+    { status: 'discarded', failReason: any };
+
+export type AgentViewRunTerminatedErrorDetails = {
+    code: "run.finished"
+} & AgentViewRunTerminationBody;
+
+export type AgentViewErrorDetails = AgentViewGeneralErrorDetails | AgentViewParseErrorDetails | AgentViewRunTerminatedErrorDetails
 
 export class AgentViewError extends Error {
     details?: AgentViewErrorDetails

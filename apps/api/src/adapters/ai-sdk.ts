@@ -4,7 +4,6 @@ import type { StandardSession, UIMessage } from 'agentview/apiTypes';
 import { type Adapter } from './adapters';
 import { getSessionStatusFields } from '../sessions';
 import { AgentViewError } from 'agentview';
-import { RunTerminationError } from '../types';
 import { isRunFinished } from '../runs';
 
 interface AISDKChunk {
@@ -122,21 +121,22 @@ async function callAgentAPIAISDK(
         });
 
     } catch (error: unknown) { // Here we only handle fetch errors, other errors will be handled later
-        if (error instanceof RunTerminationError) {
+
+        if (error instanceof AgentViewError && error.details?.code === "run.finished") {
             // run already terminated, so we don't have to send() anything, it's already cleaned up.
             // the only thing we need to do is return error response (no stream, so no [DONE])
 
             console.log('[ai-sdk] aborted while fetching. Sending [RESPONSE] with error, no stream.')
 
             let errorMessage : string | undefined = undefined;
-            if (error.body.status === 'cancelled') {
+            if (error.details.status === 'cancelled') {
                 errorMessage = "Cancelled by user";
             }
-            else if (error.body.status === 'failed' || error.body.status === 'discarded') {
-                errorMessage = error.body.failReason?.message;
+            else if (error.details.status === 'failed' || error.details.status === 'discarded') {
+                errorMessage = error.details.failReason?.message;
             }
 
-            console.error(error.body)
+            console.error(error.details)
             await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({ // AgentViewError format
                 status: 400,
                 headers: {
@@ -489,12 +489,12 @@ async function callAgentAPIAISDK(
 
 
     } catch (error: unknown) {
-        if (error instanceof RunTerminationError) {
+        if (error instanceof AgentViewError && error.details?.code === "run.finished") {
             console.log(`[ai-sdk][${currentRun.id}] aborted while streaming`)
 
-            await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'data-session-patch', data: error.body }));
-            if (error.body.status === 'failed') {
-                await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'error', errorText: error.body.failReason.message }));
+            await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'data-session-patch', data: error.details }));
+            if (error.details.status === 'failed') {
+                await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'error', errorText: error.details.failReason.message }));
             }
             else {
                 await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));

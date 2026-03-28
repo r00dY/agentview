@@ -1,10 +1,10 @@
 import { eq, and, desc, not, inArray, asc, sql } from 'drizzle-orm';
 import { runs, sessionItems, sessions, webhookJobs, channelMessages, agentRefs } from './schemas/schema';
-import type { RunTerminationBody, Transaction } from './types';
+import type { Transaction } from './types';
 import type { Environment, ManualRunCreate, ManualRunUpdate, Run } from 'agentview/apiTypes';
 import type { BaseAgentConfig, BaseRunConfig } from 'agentview/baseConfigTypes';
 import { requireRunConfig, findItemConfig, findChannelConfig, requireAgentConfig, getChannelAgent, requireChannelConfig } from 'agentview/baseConfigUtils';
-import { AgentViewError } from 'agentview/AgentViewError';
+import { AgentViewError, type AgentViewRunTerminationBody } from 'agentview/AgentViewError';
 import { parseMetadata } from './parseMetadata';
 import { resolveAgentRef } from './agentRefs';
 import { getLastRun } from 'agentview/sessionUtils';
@@ -239,7 +239,12 @@ export async function applyRunPatch(
       const items = body.items ?? [];
 
       if (isRunFinished(run) && items.length > 0) {
-        throw new AgentViewError("Cannot add items to a finished run.", 422);
+        // it's important to throw error with proper code. It allows other systems to handle cancels and fails differently!
+        throw new AgentViewError("Cannot add items to a finished run.", 422, {
+          code: "run.finished",
+          status: run.status as "cancelled" | "failed" | "discarded",
+          failReason: run.failReason
+        });
       }
 
       const sessionItems = await getRunSessionItems(tx, runId);
@@ -248,7 +253,11 @@ export async function applyRunPatch(
 
       /** State */
       if (isRunFinished(run) && body.state !== undefined) {
-        throw new AgentViewError("Cannot set state to a finished run.", 422);
+        throw new AgentViewError("Cannot set state to a finished run.", 422, {
+          code: "run.finished",
+          status: run.status as "cancelled" | "failed" | "discarded",
+          failReason: run.failReason
+        });
       }
 
       /** Metadata **/
@@ -259,7 +268,11 @@ export async function applyRunPatch(
 
     /** Status, finished at, failReason */
     if (isRunFinished(run) && body.status && body.status !== run.status) {
-      throw new AgentViewError("Cannot change the status of a finished run.", 422);
+      throw new AgentViewError("Cannot change the status of a finished run.", 422, {
+        code: "run.finished",
+        status: run.status as "cancelled" | "failed" | "discarded",
+        failReason: run.failReason
+      });
     }
 
     const status = body.status ?? 'in_progress';
@@ -267,7 +280,11 @@ export async function applyRunPatch(
 
     if (failReason) {
       if (isRunFinished(run)) {
-        throw new AgentViewError("failReason cannot be set for a finished run.", 422);
+        throw new AgentViewError("failReason cannot be set for a finished run.", 422, {
+          code: "run.finished",
+          status: run.status as "cancelled" | "failed" | "discarded",
+          failReason: run.failReason
+        });
       }
       else if (status !== 'failed') {
         throw new AgentViewError("failReason can only be set when changing status to 'failed'.", 422);
@@ -359,7 +376,7 @@ export async function applyRunPatch(
  * - there's risk we introduce a bug which incorrectly terminates run.
  * - when we listened to [done] event on redis streams in agent API call, even if integration called apply patch with "complete" / "failed" correctly. In that case we should not abort agent API call. That's why termination is different "path" in our system.
  */
-export async function terminateRun(tx: OrgTransaction, runId: string, body: RunTerminationBody) {
+export async function terminateRun(tx: OrgTransaction, runId: string, body: AgentViewRunTerminationBody) {
   const runBase = await getRunBaseWithLock(tx, runId); // we must start with a lock for safety of concurrent writes!
   
   if (!runBase) {

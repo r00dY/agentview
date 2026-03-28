@@ -1233,7 +1233,6 @@ function streamAISDKEvents(c: any, consumer: AISDKStreamConsumer) {
   return streamSSE(c, async (stream) => {
     try {
       for await (const data of consumer.stream()) {
-        console.log(`POST - event: ${data}`);
         await stream.writeSSE({ data });
       }
     } finally {
