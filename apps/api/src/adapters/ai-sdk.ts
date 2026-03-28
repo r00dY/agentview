@@ -474,8 +474,8 @@ async function callAgentAPIAISDK(
         console.log(`[ai-sdk][${currentRun.id}] yield run.patch for completion`)
 
         /**
-         * This is the moment when we send final run.patch that will close the stream.
-         * After this command we must expect `signal` to fire with "run.finished" error.
+         * This is the moment when we send final run.patch that will close the run internally.
+         * Closing the run triggers [DONE] event on the stream, which will trigger `signal` to abort (with "run.finished" error code).
          * That's why after this command we must only clean up and not touch `reader` anymore.
          */
         await send({
@@ -522,10 +522,12 @@ async function callAgentAPIAISDK(
         }
 
         /**
-         * Potential bug here!!!
-         * - there might be a race condition here
-         * - we got error from AI SDK stream (rare) or internal non-"run.finished" error
-         * - it might turn out when we call this command -> 
+         * Potential race conditionbug here!!!
+         * 1. AI SDK stream errors out (or internal error happens which is rare), we land here
+         * 2. The stream is already closed, but `signal` didn't fire yet.
+         * 3. This command will throw (in catch block).
+         * 
+         * Result: it will propagate to the parent
          */
         await send({
             name: 'run.patch',
@@ -537,7 +539,6 @@ async function callAgentAPIAISDK(
             }
         });
         
-        // This is for severe errors.
         await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'data-session-patch', data: { status: "failed", failReason: { message } } }));
         await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'error', errorText: message }));
 

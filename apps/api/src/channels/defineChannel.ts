@@ -164,6 +164,17 @@ export function channelProvider(type: string) {
 
   /**
    * Find channel by address, then ingest message within the channel's org.
+   * 
+   * TODO:
+   * - Concurrency, race conditions!!! This method might run concurrently for the same channel, we must make sure we don't duplicate sessions etc.
+   * - bug nr 2 -> finding session id by runs? This is bad, since run might not be created yet.
+   * - RACE?
+   *    - ingest message A, discard "no run" (run A not yet created)
+   *    - ingest message B, discard "no run" (run B not yet created)
+   *    - run A is created
+   *    - run B is created
+   *    - (do we even have some "safety check" for createing multiple `pending` runs?)
+   * 
    */
   async function ingestMessage(address: string, params: IngestMessageParams): Promise<IngestMessageResult> {
     console.log(`[ingestMessage] ingesting message to '${address}', from '${params.contactKind}:${params.contact}', text: '${params.text?.slice(0, 20)}...'`);
@@ -349,52 +360,11 @@ export function channelProvider(type: string) {
     /**
      * Try to create a run (for now not in worker, so if it fails, it fails forever)
      */
-    withOrg(channel.organizationId, async (tx) => {
-
+    await withOrg(channel.organizationId, async (tx) => {
       await createAutoRunFromChannelMessages(tx, environment, result.sessionId, result.inputMessages);
-
-
-      // const newRun = await createAutoRun(tx, environment, sessionId, {});
-      // console.log('[ingestMessage] new run created: ', newRun.id);
     });
 
     return result;
-
-
-      /**
-       * Create RUN
-       */
-
-      // WE SHOULD CREATE RUN HERE!!!! Like proper run from channel messages. And later push this to job when it's not necessary. WOW!!!
-
-
-
-
-    //   const newRun = await createAutoRun(tx, environment, sessionId, {});
-
-    //   console.log('[ingestMessage] new run created: ', newRun.id);
-
-    //   /**
-    //    * Assign run_id to all input messages
-    //    */
-    //   await tx.update(channelMessages).set({
-    //     runId: newRun.id,
-    //     updatedAt: new Date().toISOString(),
-    //   }).where(inArray(channelMessages.id, inputMessages.map(m => m.id)));
-
-    //   /**
-    //    * Set thread status
-    //    */
-    //   // await tx.update(channelThreads).set({
-    //   //   status: 'idle',
-    //   //   updatedAt: new Date().toISOString(),
-    //   // }).where(eq(channelThreads.id, thread.id));
-
-
-    // //   console.log('[ingestMessage] finished ');
-
-    // //   return { ingested: true, sessionId, thread, message };
-    // // });
   }
 
   return {
