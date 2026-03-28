@@ -9,7 +9,7 @@ import { findChannelConfig, getChannelAgent } from 'agentview/baseConfigUtils';
 import { applyRunPatch, terminateRun } from '../runs';
 import { resolveAgentRef } from '../agentRefs';
 import type { AgentRef, RunBody } from 'agentview/apiTypes';
-import { onRunTerminated } from '../runStream';
+import { onRunFinished } from '../runStream';
 import { createWorker } from './utils';
 
 type Run = typeof runs.$inferSelect;
@@ -42,6 +42,8 @@ async function processAgentFetch(run: Run) {
 
   const abortController = new AbortController();
   let terminationAbortController: AbortController | undefined;
+
+  let finalError: string | undefined = undefined;
 
   try {
     const { agentUrl, session, environment } = await withOrg(run.organizationId, async (tx) => {
@@ -104,8 +106,14 @@ async function processAgentFetch(run: Run) {
      * CALLING AGENT ENDPOINT
      * 
      * The algorithm here is pretty simple:
-     * - we call adapter.callAgent which is async generator
-     * - we're in the 'fetching' state until it returns
+     * - the run start with 'init' state which means we don't know what was the HTTP response (status, headers)
+     * - we await adapter.callAgent which is async function. Until it runs, we assume fetching is in progress.
+     * - adapter.callAgent can send events
+     * - when run is in 'init' state we first wait for response. It's acknowledged when "run.streaming_started" / "run.discarded" events are sent.
+     * - when run.streaming_started -> run becomes in_progress
+     * - later we expect run.yield events
+     * 
+     * - it first must send either "run.discard" or "run.streaming_started"
      * - it can, during processing, send patches to the run
      * - TERMINATION:
      *    - it gets signal to abort. We listen for abortion thanks to 'onRunTerminated' (which sets [TERMINATED] event on the 'agentview' native stream).
@@ -130,52 +138,14 @@ async function processAgentFetch(run: Run) {
      */
     
     // Abort fetch immediately when run is terminated (e.g. external cancellation).
-    terminationAbortController = onRunTerminated(run.id, (error) => {
-      console.log(`[agentFetch][${run.id}] onRunTerminated`);
+    terminationAbortController = onRunFinished(run.id, (error) => {
+      console.log(`[agentFetch][${run.id}] onRunFinished`);
       abortController.abort(error);
     });
 
     // event handlers
-
     const send = async (event: { name: string, data: any }) => {
-      if (event.name === 'run.set_input') {
-        console.log(`[agentFetch][${run.id}] run.set_unput`);
-
-        await withOrg(run.organizationId, async (tx) => {
-          // Validate: run must have no items or only input items
-          const existing = await tx
-            .select({ type: sessionItems.type })
-            .from(sessionItems)
-            .where(and(
-              eq(sessionItems.runId, run.id),
-              eq(sessionItems.isState, false),
-            ));
-
-          if (existing.some(item => item.type !== 'input')) {
-            throw new Error('Cannot set input: run already has non-input items');
-          }
-
-          await tx.insert(sessionItems).values({
-            organizationId: run.organizationId,
-            sessionId: run.sessionId,
-            runId: run.id,
-            type: 'input',
-            content: event.data,
-          });
-        });
-
-      }
-      else if (event.name === 'response_data') {
-        console.log(`[agentFetch][${run.id}] run.response_data`);
-
-        await withOrg(run.organizationId, async (tx) => {
-          await tx.update(runs).set({
-            responseData: event.data,
-            updatedAt: new Date().toISOString(),
-          }).where(eq(runs.id, run.id));
-        });
-      }
-      else if (event.name === 'run.patch') {
+      if (event.name === 'run.patch') {
         console.log(`[agentFetch][${run.id}] run.patch`, event.data);
 
         await withOrg(run.organizationId, async (tx) => {
@@ -186,12 +156,21 @@ async function processAgentFetch(run: Run) {
             event.data
           );
         })
+
+        console.log('run patch successful')
       }
-      else if (event.name === 'run.terminate') { // safe indempotent termination for cleanup
-        console.log(`[agentFetch][${run.id}] run.terminate`);
+      /**
+       * Discard and streaming started are only FIRST THINGS that should happen before streaming starts. Either run is discarded or streaming started, which means it becomes in_progress.
+       * This is *INTERNAL* api, not public (like run.patch)
+       */
+      else if (event.name === 'run.discard') { // safe indempotent termination for cleanup
+        console.log(`[agentFetch][${run.id}] run discarded`);
 
         await withOrg(run.organizationId, async (tx) => {
-          await terminateRun(tx, run.id, event.data);
+          await terminateRun(tx, run.id, {
+            status: 'discarded',
+            failReason: event.data,
+          });
         });
       }
       else if (event.name === 'run.streaming_started') {
@@ -200,7 +179,6 @@ async function processAgentFetch(run: Run) {
           await activateSession(tx, session.id);
         });
       }
-
     }
 
     console.log(`[agentFetch][${run.id}] calling agent API`);
@@ -210,40 +188,29 @@ async function processAgentFetch(run: Run) {
     console.log(`[agentFetch][${run.id}] agent API call finished`);
 
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') { // This is OK since abort is only than on the condition of the run being *not* in progress
-      return;
-    }
-
-    const errorMessage = error instanceof Error ? error.message : String(error);
-
-    console.log(`[agentFetch][${run.id}] unexpected internal error: "${errorMessage}". This error happened because there's unhandled error in the adaptar.callAgent function. This should never happen.`);
-
-    await withOrg(run.organizationId, async (tx) => {
-      await terminateRun(tx, run.id, {
-        status: 'failed',
-        failReason: { message: errorMessage },
-      });
-    });
+    /**
+     * This is rare case, but it's possible.
+     * The adapter is responsible for its own cleanup, but it can throw *inside the catch*.
+     * For example, adapter might get streaming error, try to send "failed" state, but exactly in between those events run becomes cancelled/timed out.
+     */
+    finalError = error instanceof Error ? error.message : String(error);
+    console.log(`[agentFetch][${run.id}] error thrown. Rare case, please investigate. Error: "${finalError}"`);
 
   } finally {
-    terminationAbortController?.abort();
-    console.log(`[agentFetch][${run.id}] finished`);
 
-    await withOrg(run.organizationId, async (tx) => {
-      await terminateRun(tx, run.id, {
-        status: 'failed',
-        failReason: { message: "The job ended with unfinished work. This should never happen." },
+    // best effort cleanup
+    try {
+      console.log(`[agentFetch][${run.id}] cleaning up`);
+
+      terminationAbortController?.abort();
+
+      await withOrg(run.organizationId, async (tx) => {
+        await terminateRun(tx, run.id, {
+          status: 'failed',
+          failReason: { message: finalError ?? "The job ended with unfinished work. This should never happen." },
+        });
       });
-    });
 
-    // // Always clear fetchStatus when done (if not already cleared)
-    // try {
-    //   await db__dangerous
-    //     .update(runs)
-    //     .set({ fetchStatus: null, updatedAt: new Date().toISOString() })
-    //     .where(and(eq(runs.id, run.id), eq(runs.fetchStatus, 'fetching')))
-    // } catch {
-    //   // Best-effort cleanup
-    // }
+    } catch {}
   }
 }

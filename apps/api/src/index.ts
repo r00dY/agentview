@@ -1529,11 +1529,13 @@ async function sessionStandardCancelHandler(c: Parameters<RouteHandler<typeof se
 
     authorize(principal, { action: "end-user:update", user: session.user });
 
-    if (!lastRun || isRunFinished(lastRun)) {
-      throw new AgentViewError("Cannot cancel a run that is not in progress.", 422);
+    if (!lastRun) {
+      throw new AgentViewError("The session has no run.", 422);
     }
 
-    await terminateRun(tx, lastRun.id, { status: 'cancelled' });
+    const environment = await requireEnvironment(tx, principal.env);
+
+    await applyRunPatch(tx, lastRun.id, environment, { status: 'cancelled' });
 
     return await requireSession(tx, session_id);
   });

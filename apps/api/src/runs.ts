@@ -4,7 +4,7 @@ import type { Transaction } from './types';
 import type { Environment, ManualRunCreate, ManualRunUpdate, Run } from 'agentview/apiTypes';
 import type { BaseAgentConfig, BaseRunConfig } from 'agentview/baseConfigTypes';
 import { requireRunConfig, findItemConfig, findChannelConfig, requireAgentConfig, getChannelAgent, requireChannelConfig } from 'agentview/baseConfigUtils';
-import { AgentViewError, type AgentViewRunTerminationBody } from 'agentview/AgentViewError';
+import { AgentViewError, type AgentViewRunFinishedErrorBody } from 'agentview/AgentViewError';
 import { parseMetadata } from './parseMetadata';
 import { resolveAgentRef } from './agentRefs';
 import { getLastRun } from 'agentview/sessionUtils';
@@ -358,62 +358,62 @@ export async function applyRunPatch(
 
   tx.afterCommit(async () => {
     await publishRunStreamEvent(runId, nowIso, dataToStream);
+
     if (isFinished) {
-      await publishRunStreamEvent(runId, null, '[DONE]');
+      await publishRunStreamEvent(runId, null, '[DONE]' + JSON.stringify({
+        status,
+        failReason,
+      }));
     }
   });
 }
 
 /**
- * Simplified run termination that doesn't reply on applyRunPatch logic.
- * apply patch logic is that it comes from "external source", like agent call or manual run patch.
- * when run is finished with apply patch it's essentially "correct" system state that doesn't need anything extra.
- * however, sometimes we need to terminate run where:
- * - it must be 100% certain that run is terminated, must be simplified
- * - it should be able to notify agent API call to abort.
- * 
- * If termination was done by apply patch:
- * - there's risk we introduce a bug which incorrectly terminates run.
- * - when we listened to [done] event on redis streams in agent API call, even if integration called apply patch with "complete" / "failed" correctly. In that case we should not abort agent API call. That's why termination is different "path" in our system.
+ * Best-effort run clean-up (for finally {} blocks, timeouts, discards etc)
  */
-export async function terminateRun(tx: OrgTransaction, runId: string, body: AgentViewRunTerminationBody) {
-  const runBase = await getRunBaseWithLock(tx, runId); // we must start with a lock for safety of concurrent writes!
-  
-  if (!runBase) {
-    throw new AgentViewError("Can't find run to terminate.", 404);
-  }
-  if (runBase.status === 'failed' || runBase.status === 'cancelled' || runBase.status === 'completed' || runBase.status === 'discarded') {
-    console.log(`[terminateRun][${runId}] attempted, not needed`);
-    return; // indempotency
-  }
+export async function terminateRun(tx: OrgTransaction, runId: string, body: AgentViewRunFinishedErrorBody) {
+  try {
+    const runBase = await getRunBaseWithLock(tx, runId); // we must start with a lock for safety of concurrent writes!
+    
+    if (!runBase) {
+      console.warn(`[terminateRun][${runId}] run not found`);
+      return;
+    }
 
-  // logs
-  if (body.status === 'discarded') {
-    console.log(`[terminateRun][${runId}] discarded -> ${body.failReason.message ?? "no reason"}`);
-  }
-  else if (body.status === 'failed') {
-    console.log(`[terminateRun][${runId}] failed -> ${body.failReason.message ?? "no reason"}`);
-  }
-  else if (body.status === 'cancelled') {
-    console.log(`[terminateRun][${runId}] cancelled`);
-  }
+    if (isRunFinished(runBase)) {
+      console.log(`[terminateRun][${runId}] attempted, not needed`);
+      return;
+    }
 
-  const nowIso = new Date().toISOString();
+    // logs
+    if (body.status === 'discarded') {
+      console.log(`[terminateRun][${runId}] discarded -> ${body.failReason.message ?? "no reason"}`);
+    }
+    else if (body.status === 'failed') {
+      console.log(`[terminateRun][${runId}] failed -> ${body.failReason.message ?? "no reason"}`);
+    }
+    else if (body.status === 'cancelled') {
+      console.log(`[terminateRun][${runId}] cancelled`);
+    }
 
-  await tx.update(runs).set({
-    ...body,
-    finishedAt: nowIso,
-    updatedAt: nowIso,
-    expiresAt: null,
-  }).where(eq(runs.id, runId));
+    const nowIso = new Date().toISOString();
 
-  tx.afterCommit(async () => {
-    await publishRunStreamEvent(runId, nowIso, JSON.stringify({ // this is important, we must send the last run patch event to the stream
+    await tx.update(runs).set({
       ...body,
+      finishedAt: nowIso,
       updatedAt: nowIso,
-    }));
-    await publishRunStreamEvent(runId, null, '[TERMINATED]' + JSON.stringify(body));
-  });
+      expiresAt: null,
+    }).where(eq(runs.id, runId));
+
+    tx.afterCommit(async () => {
+      await publishRunStreamEvent(runId, nowIso, JSON.stringify({ // this is important, we must send the last run patch event to the stream
+        ...body,
+        updatedAt: nowIso,
+      }));
+      await publishRunStreamEvent(runId, null, '[DONE]' + JSON.stringify(body));
+    });
+
+  } catch {}
 }
 
 

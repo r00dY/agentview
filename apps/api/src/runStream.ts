@@ -1,21 +1,7 @@
-import { AgentViewError, type AgentViewRunTerminationBody } from 'agentview';
+import { AgentViewError, type AgentViewRunFinishedErrorBody } from 'agentview';
 import { redis } from './redis';
 import { createRedisStreamConsumer } from './redisStreamConsumer';
 
-/**
- * Redis Stream-based bridge for the "standard" (non-AI-SDK) run protocol.
- *
- * The worker publishes run patches via publishRunStreamEvent(). HTTP handlers
- * consume them via createRunStreamConsumer() to stream updates to the client.
- *
- * Protocol:
- *   - N data entries  {json}        — run patch events
- *   - [DONE]                        — run finished normally
- *   - [TERMINATED]                  — run was cancelled externally
- *
- * Stream IDs use the Node.js clock (Date.now()) so both publisher and
- * consumer share the same time source — no Redis clock skew.
- */
 
 const streamKey = (runId: string) => `run-stream:agentview:${runId}`;
 
@@ -26,19 +12,13 @@ export async function publishRunStreamEvent(runId: string, createdAt: string | n
   const ms = createdAt ? new Date(createdAt).getTime() : Date.now();
   await redis.xadd(key, `${ms}-*`, 'data', data);
 
-  if (data.startsWith('[DONE]') || data.startsWith('[TERMINATED]')) {
+  if (data.startsWith('[DONE]')) {
     await redis.expire(key, 60);
   }
 }
 
 // --- Consuming (dedicated connection per consumer) ---
 
-/**
- * Yields run patch events. Stops on [DONE] or [TERMINATED] (neither is
- * forwarded to the caller).
- *
- * The caller MUST call close() when done (use try/finally).
- */
 export function createRunStreamConsumer(runId: string, signal: AbortSignal, afterTimestamp?: string) {
   const startId = afterTimestamp
     ? `${new Date(afterTimestamp).getTime()}-0`
@@ -48,7 +28,7 @@ export function createRunStreamConsumer(runId: string, signal: AbortSignal, afte
 
   async function* entries() {
     for await (const data of consumer.entries()) {
-      if (data.startsWith('[DONE]') || data.startsWith('[TERMINATED]')) return;
+      if (data.startsWith('[DONE]')) return;
       yield data;
     }
   }
@@ -57,23 +37,23 @@ export function createRunStreamConsumer(runId: string, signal: AbortSignal, afte
 }
 
 /**
- * Calls `onTerminated` when [TERMINATED] appears on the run stream.
+ * Calls `onFinished` when [DONE] appears on the run stream.
  * Returns an AbortController — call .abort() to stop listening.
  */
-export function onRunTerminated(runId: string, onTerminated: (body: AgentViewError) => void) {
+export function onRunFinished(runId: string, onFinished: (body: AgentViewError) => void) {
   const abortController = new AbortController();
   const consumer = createRedisStreamConsumer(streamKey(runId), abortController.signal);
 
   (async () => {
     try {
       for await (const data of consumer.entries()) {
-        if (data.startsWith('[TERMINATED]')) {
-          const body : AgentViewRunTerminationBody = JSON.parse(data.slice('[TERMINATED]'.length));
-          const error = new AgentViewError("Run terminated", 400, {
+        if (data.startsWith('[DONE]')) {
+          const body : AgentViewRunFinishedErrorBody = JSON.parse(data.slice('[DONE]'.length));
+          const error = new AgentViewError("Run finished.", 400, {
             code: "run.finished",
             ...body
           });
-          onTerminated(error);
+          onFinished(error);
           return;
         }
       }

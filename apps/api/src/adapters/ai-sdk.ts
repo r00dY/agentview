@@ -160,14 +160,10 @@ async function callAgentAPIAISDK(
 
             console.log('[ai-sdk] error while fetching: ', message)
 
-
             await send({
-                name: 'run.terminate',
+                name: 'run.discard',
                 data: {
-                    status: 'discarded',
-                    failReason: {
-                        message
-                    },
+                    message
                 },
             });
 
@@ -210,12 +206,9 @@ async function callAgentAPIAISDK(
 
     if (error !== undefined) {
         await send({
-            name: 'run.terminate',
+            name: 'run.discard',
             data: {
-                status: 'discarded',
-                failReason: {
-                    message: error
-                },
+                message: error
             },
         });
 
@@ -410,7 +403,6 @@ async function callAgentAPIAISDK(
                         messageMetadata = chunk.messageMetadata;
                     }
                     const outputCount = computeOutputItemCount(emittedItemTypes);
-                    console.log(`[ai-sdk][${currentRun.id}] yield run.patch for FINISH`)
 
                     finalPatch = {
                         status: 'completed',
@@ -423,8 +415,6 @@ async function callAgentAPIAISDK(
                 }
 
                 case 'error': {
-                    console.log(`[ai-sdk][${currentRun.id}] yield run.patch for ERROR`)
-
                     finalPatch = {
                         status: 'failed',
                         failReason: {
@@ -481,12 +471,18 @@ async function callAgentAPIAISDK(
             console.log(`[ai-sdk][${currentRun.id}] stream ended complete`);
         }
 
+        console.log(`[ai-sdk][${currentRun.id}] yield run.patch for completion`)
+
+        /**
+         * This is the moment when we send final run.patch that will close the stream.
+         * After this command we must expect `signal` to fire with "run.finished" error.
+         * That's why after this command we must only clean up and not touch `reader` anymore.
+         */
         await send({
             name: 'run.patch',
             data: finalPatch,
         });
         await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'data-session-patch', data: { status: finalPatch.status, failReason: finalPatch.failReason } }));
-
 
     } catch (error: unknown) {
         if (error instanceof AgentViewError && error.details?.code === "run.finished") {
@@ -510,6 +506,7 @@ async function callAgentAPIAISDK(
         if (error instanceof AgentViewError) {
             console.error("[ai-sdk] SEVERE! AgentViewError, so must be coming from internal `send` call. This should never happen.")
             message = error.message;
+            console.error(error)
         }
         else if (error instanceof TypeError) {
             console.log('[ai-sdk] Connection error')
@@ -524,12 +521,14 @@ async function callAgentAPIAISDK(
             message = String(error);
         }
 
-        // This is for severe errors.
-        await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'data-session-patch', data: { status: "failed", failReason: { message } } }));
-        await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'error', errorText: message }));
-
+        /**
+         * Potential bug here!!!
+         * - there might be a race condition here
+         * - we got error from AI SDK stream (rare) or internal non-"run.finished" error
+         * - it might turn out when we call this command -> 
+         */
         await send({
-            name: 'run.terminate',
+            name: 'run.patch',
             data: {
                 status: "failed",
                 failReason: {
@@ -537,12 +536,19 @@ async function callAgentAPIAISDK(
                 }
             }
         });
+        
+        // This is for severe errors.
+        await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'data-session-patch', data: { status: "failed", failReason: { message } } }));
+        await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'error', errorText: message }));
 
-    } finally {
-        console.log(`[ai-sdk][${currentRun.id}] stream cleanup, sending [DONE]`);
-        await publishAISDKStreamEvent(currentRun.id, "[DONE]");
-        await expireAISDKStream(currentRun.id);
-        await reader?.cancel();
+
+    } finally { // best effort cleanup
+        await reader?.cancel().catch(() => {}); // reader is potentially in error state ([done] already delivered)
+
+        try {
+            await publishAISDKStreamEvent(currentRun.id, "[DONE]");
+            await expireAISDKStream(currentRun.id);
+        } catch (e) {}
     }
 }
 

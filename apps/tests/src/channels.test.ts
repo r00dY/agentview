@@ -340,7 +340,7 @@ describe('Channels', () => {
     function setFailHandler() {
       mockServer!.setHandler((_body, res) => {
         res.writeHead(500, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ message: 'Internal server error' }))
+        res.end(JSON.stringify({ message: 'Internal server error inside test suite.' }))
       })
     }
 
