@@ -121,10 +121,14 @@ async function processAgentFetch(run: Run) {
      * STREAM TERMINATION (IMPORTANT)
      * 
      * - when we get info from Redis that run is terminated ([TERMINATED] event added to the stream), we must notify the adapter to abort.
-     * - we send normal AgentViewError with code "run.finished". It's because there's potential race condition and we want consistent behaviour
-     * - it's possible adapter calls run.patch BEFORE this event happens. In case of run being already finished, it will get "run.finished" error.
-     * - that's why semantics of AgentViewError is important. Thanks to this when calling apply.patch we know how to handle cancel vs. fail.
+     * - we send normal AgentViewError with code "run.finished". It's because it's consistent with our API.
+     * - there's potential RACE CONDITION where adapter calls run.patch, the run is already cancelled, and onRunTerminated was not yet called.
+     * - that's why our API (run.patch) must throw correct errors ("run.finished" error code) to handle this case correctly.
+     * - thanks to this we know how to handle cancel vs. fail (different semantics)
+     * - the error argument in onRunTerminated is the same type as our API error. It's AgentViewError with code "run.finished".
+     * - thanks to this adapter sees the same error code (AgentViewError with code "run.finished"), if it comes from API call or from termination.
      */
+    
     // Abort fetch immediately when run is terminated (e.g. external cancellation).
     terminationAbortController = onRunTerminated(run.id, (error) => {
       console.log(`[agentFetch][${run.id}] onRunTerminated`);
