@@ -16,41 +16,37 @@ interface AISDKChunk {
  * AI SDK uses `data: <json>\n\n` format (no `event:` field).
  * Stream ends with `data: [DONE]\n\n`.
  */
-async function* parseAISDKStream(body: ReadableStream<Uint8Array>): AsyncGenerator<string, void, unknown> {
-    const reader = body.getReader();
+async function* parseAISDKStream(reader: ReadableStreamDefaultReader<Uint8Array>): AsyncGenerator<string, void, unknown> {
+    
     const decoder = new TextDecoder();
 
-    try {
-        let buffer = '';
+    let buffer = '';
 
-        while (true) {
-            const { done, value } = await reader.read();
+    while (true) {
+        const { done, value } = await reader.read();
 
-            if (done) {
-                // Process remaining buffer
-                if (buffer.trim()) {
-                    const lines = buffer.split('\n\n');
-                    for (const block of lines) {
-                        const chunk = parseDataLine(block.trim());
-                        if (chunk) yield chunk;
-                    }
+        if (done) {
+            // Process remaining buffer
+            if (buffer.trim()) {
+                const lines = buffer.split('\n\n');
+                for (const block of lines) {
+                    const chunk = parseDataLine(block.trim());
+                    if (chunk) yield chunk;
                 }
-                break;
             }
-
-            buffer += decoder.decode(value, { stream: true });
-            const blocks = buffer.split('\n\n');
-            buffer = blocks.pop() || '';
-
-            for (const block of blocks) {
-                const trimmed = block.trim();
-                if (!trimmed) continue;
-                const chunk = parseDataLine(trimmed);
-                if (chunk) yield chunk;
-            }
+            break;
         }
-    } finally {
-        reader.releaseLock();
+
+        buffer += decoder.decode(value, { stream: true });
+        const blocks = buffer.split('\n\n');
+        buffer = blocks.pop() || '';
+
+        for (const block of blocks) {
+            const trimmed = block.trim();
+            if (!trimmed) continue;
+            const chunk = parseDataLine(trimmed);
+            if (chunk) yield chunk;
+        }
     }
 }
 
@@ -239,6 +235,7 @@ async function callAgentAPIAISDK(
     // send response first
 
     let finalPatch: { status: 'completed' | 'failed', [key: string]: any } | undefined = undefined;
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined = undefined;
 
     try {
         console.log(`[ai-sdk][${currentRun.id}] streaming`);
@@ -266,7 +263,10 @@ async function callAgentAPIAISDK(
          * 1. We first send event to "our system" (yield), and it's blocking
          * 2. Only then we send event to stream. 
          */
-        for await (const data of parseAISDKStream(response.body!)) {
+
+        reader = response.body!.getReader();
+
+        for await (const data of parseAISDKStream(reader)) {
             if (data === '[DONE]') { // done is end of stream. We send it ourselves in the finally block.
                 console.log(`[ai-sdk][${currentRun.id}] [DONE] received`);
                 break;
@@ -542,6 +542,7 @@ async function callAgentAPIAISDK(
         console.log(`[ai-sdk][${currentRun.id}] stream cleanup, sending [DONE]`);
         await publishAISDKStreamEvent(currentRun.id, "[DONE]");
         await expireAISDKStream(currentRun.id);
+        await reader?.cancel();
     }
 }
 
