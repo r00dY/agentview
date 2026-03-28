@@ -127,6 +127,34 @@
       "when": 1774602089143,
       "tag": "0017_free_jamie_braddock",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1774639497234,
+      "tag": "0018_previous_ricochet",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1774639709997,
+      "tag": "0019_pretty_mach_iv",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1774642553408,
+      "tag": "0020_minor_mockingbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1774697582516,
+      "tag": "0021_easy_onslaught",
+      "breakpoints": true
     }
   ]
 }

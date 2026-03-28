@@ -3,7 +3,7 @@ import { withOrg } from '../withOrg';
 import { runs, sessions, channelMessages, environments, sessionItems, channels } from '../schemas/schema';
 import { eq, and, inArray, sql, not, isNull } from 'drizzle-orm';
 import { getConfigFromEnvironment, getEnvironment } from '../environments';
-import { fetchSession, fetchSessionBase } from '../sessions';
+import { fetchSession, fetchSessionBase, activateSession } from '../sessions';
 import { getAdapter } from '../adapters/adapters';
 import { findChannelConfig, getChannelAgent } from 'agentview/baseConfigUtils';
 import { applyRunPatch, terminateRun } from '../runs';
@@ -47,12 +47,7 @@ async function processAgentFetch(run: Run) {
   try {
     const { agentUrl, session, environment } = await withOrg(run.organizationId, async (tx) => {
 
-      // TEMPORARY -> SET AS IN_PROGRESS JUST FOR TEMPORARY TESTING
-      // LATER WE'LL SET IT AFTER THE REQUEST IS DONE.
-      // await tx.update(runs).set({ status: 'in_progress' }).where(eq(runs.id, run.id));
-
-
-      const session = await fetchSession(tx, run.sessionId, { allowInitRun: true });
+      const session = await fetchSession(tx, run.sessionId, { includeInitRun: true });
 
       if (!session) {
         throw new Error(`Session ${run.sessionId} not found`);
@@ -191,6 +186,7 @@ async function processAgentFetch(run: Run) {
       else if (event.name === 'run.streaming_started') {
         await withOrg(run.organizationId, async (tx) => {
           await tx.update(runs).set({ status: 'in_progress' }).where(eq(runs.id, run.id));
+          await activateSession(tx, session.id);
         });
       }
 

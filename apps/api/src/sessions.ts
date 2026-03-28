@@ -9,6 +9,7 @@ import { requireChannelConfig } from "agentview/baseConfigUtils";
 import { getConfigFromEnvironment } from "./environments";
 import type { SessionStatus } from "agentview/apiTypes";
 import type { OrgTransaction } from "./withOrg";
+import { randomBytes } from "crypto";
 
 export type LastRunStatus = {
   id: string;
@@ -97,7 +98,7 @@ export async function fetchSessionBase(tx: Transaction, session_id: string): Pro
 }
 
 
-export async function fetchSession(tx: Transaction, session_id: string, options?: { allowInitRun?: boolean }): Promise<StandardSession | undefined> {
+export async function fetchSession(tx: Transaction, session_id: string, options?: { includeInitRun?: boolean }): Promise<StandardSession | undefined> {
   const where = sessionWhere(session_id);
   if (!where) {
     return undefined;
@@ -167,7 +168,7 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
             return true;
           }
 
-          if (options?.allowInitRun && run.status === "init") {
+          if (options?.includeInitRun && run.status === "init") {
             return true;
           }
         }
@@ -186,16 +187,16 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
   } as StandardSession;
 }
 
-export async function createSession(tx: OrgTransaction, params: {
+export async function createInactiveSession(tx: OrgTransaction, params: {
   environment: Environment;
   channelRef: ChannelRef;
   userId: string;
   metadata?: Record<string, any> | null;
   summary?: string | null;
   channelThreadId?: string | null;
-  authorId?: string | null;
   agentRefId?: string | null;
   initialState?: any;
+  createdBy?: string | null;
 }) {
   const config = getConfigFromEnvironment(params.environment);
   const channelConfig = requireChannelConfig(config, params.channelRef);
@@ -210,19 +211,11 @@ export async function createSession(tx: OrgTransaction, params: {
   if (!user) {
     throw new Error("[Internal Error] User not found");
   }
-  const handleSuffix = user.createdBy ? "s" : "";
-
-  const sessionWithHighestHandleNumber = await tx.query.sessions.findFirst({
-    orderBy: (sessions, { desc }) => [desc(sessions.handleNumber)],
-    where: eq(sessions.handleSuffix, handleSuffix),
-  });
-
-  const newHandleNumber = sessionWithHighestHandleNumber ? sessionWithHighestHandleNumber.handleNumber + 1 : 1;
 
   const [newSessionRow] = await tx.insert(sessions).values({
     organizationId: tx.organizationId,
-    handleNumber: newHandleNumber,
-    handleSuffix,
+    handleNumber: 0,
+    handleSuffix: randomBytes(32).toString('hex'),
     metadata,
     channelType: params.channelRef.type,
     channelAddress: params.channelRef.type === 'api' ? params.channelRef.name : params.channelRef.address,
@@ -231,21 +224,57 @@ export async function createSession(tx: OrgTransaction, params: {
     channelThreadId: params.channelThreadId ?? null,
     agentRefId: params.agentRefId ?? null,
     initialState: params.initialState ?? null,
+    createdBy: params.createdBy ?? null,
+    active: false
   }).returning();
+
+  return newSessionRow;
+}
+
+export async function activateSession(tx: OrgTransaction, sessionId: string) {
+  const session = await tx.query.sessions.findFirst({
+    where: eq(sessions.id, sessionId),
+    with: {
+      user: true,
+    },
+  });
+  if (!session) {
+    throw new Error("[Internal Error] Session not found");
+  }
+
+  if (session.active) {
+    console.log(`[activateSession][${sessionId}] Session is already active`);
+    return;
+  }
+
+  // handle!
+  const handleSuffix = session.user.createdBy ? "s" : "";
+
+  const sessionWithHighestHandleNumber = await tx.query.sessions.findFirst({
+    orderBy: (sessions, { desc }) => [desc(sessions.handleNumber)],
+    where: and(eq(sessions.handleSuffix, handleSuffix), eq(sessions.active, true)),
+  });
+
+  const newHandleNumber = sessionWithHighestHandleNumber ? sessionWithHighestHandleNumber.handleNumber + 1 : 1;
+
+  await tx.update(sessions).set({
+    active: true,
+    handleNumber: newHandleNumber,
+    handleSuffix: handleSuffix,
+  }).where(eq(sessions.id, session.id));
 
   const [event] = await tx.insert(events).values({
     organizationId: tx.organizationId,
     type: 'session_created',
-    authorId: params.authorId ?? null,
+    authorId: session.createdBy ?? null,
     payload: {
-      session_id: newSessionRow.id,
+      session_id: session.id,
     }
   }).returning();
 
   await updateInboxes(tx, event);
-
-  return newSessionRow;
 }
+
 
 async function fetchSessionState(tx: Transaction, session_id: string) {
   // Fetch the latest __state__ session item by createdAt descending

@@ -7,7 +7,7 @@ import { db__dangerous } from '../db';
 import type { Transaction } from '../types';
 import { createAutoRun, createAutoRunFromChannelMessages, isRunFinished, terminateRun } from '../runs';
 import { randomBytes } from 'crypto';
-import { createSession } from '../sessions';
+import { createInactiveSession, activateSession } from '../sessions';
 import type { ChannelRef } from 'agentview/apiTypes';
 
 export type Channel = typeof channels.$inferSelect;
@@ -318,13 +318,16 @@ export function channelProvider(type: string) {
        * Create SESSION
        */
       if (!sessionId) {
-        const newSession = await createSession(tx, {
+        const newSession = await createInactiveSession(tx, {
           environment,
           channelRef,
           userId,
           channelThreadId: thread.id,
         });
         sessionId = newSession.id;
+
+        await activateSession(tx, newSession.id);
+        
         console.log('[ingestMessage] new session created: ', newSession.id);
       }
 

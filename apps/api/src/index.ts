@@ -65,7 +65,7 @@ import { isInboxItemUnread } from './inboxItems';
 import { initDb } from './initDb';
 import { requireValidInvitation } from './invitations';
 import { members, organizations, users } from './schemas/auth-schema';
-import { createSession, fetchSession, fetchSessionBase } from './sessions';
+import { createInactiveSession, activateSession, fetchSession, fetchSessionBase } from './sessions';
 import type { Transaction } from './types';
 import { updateInboxes } from './updateInboxes';
 import { findUser } from './users';
@@ -618,7 +618,9 @@ const DEFAULT_PAGE = 1
 function getSessionListFilter(params: z.infer<typeof SessionsGetQueryParamsSchema>, principal: Principal) {
   const { space, userId } = params;
 
-  const filters: any[] = []
+  const filters: any[] = [
+    eq(sessions.active, true),
+  ]
 
   if (principal.type === 'member' || principal.type === 'apiKey') {
 
@@ -1089,7 +1091,7 @@ export async function createSessionHandler(c: Parameters<RouteHandler<typeof ses
 
   return withOrg(principal.organizationId, async (tx) => {
     const body = await c.req.valid('json')
-    const authorId = principal.type === 'member' ? principal.session.user.id : null;
+    const createdBy = principal.type === 'member' ? principal.session.user.id : null;
 
     const config = await requireConfig(tx, principal)
 
@@ -1121,20 +1123,22 @@ export async function createSessionHandler(c: Parameters<RouteHandler<typeof ses
       agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
     });
 
-    let newSessionRow = await createSession(tx, {
+    let newSessionRow = await createInactiveSession(tx, {
       environment,
       channelRef,
       userId: user.id,
       metadata: body.metadata,
       summary: body.summary,
-      authorId,
       agentRefId: agentRefWithId.id,
       initialState: body.initialState,
+      createdBy,
     });
 
     let newRun: Awaited<ReturnType<typeof createAutoRun>> | undefined = undefined;
     if (body.input) {
       newRun = await createAutoRun(tx, environment, newSessionRow.id, { input: body.input });
+    } else {
+      await activateSession(tx, newSessionRow.id);
     }
 
     const session = await requireSession(tx, newSessionRow.id);
