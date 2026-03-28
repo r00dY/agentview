@@ -3208,6 +3208,7 @@ describe('API', () => {
 
       // Wait for the agent connection to be established
       await connectionEstablishedPromise;
+      await new Promise(r => setTimeout(r, 1000)); // IMPORTANT. Makes sure cancellation happens after the text is saved.
 
       // Cancel the run
       // TODO: - make those AI SDK calls, not av!!! (we must have 'cancel' status available)

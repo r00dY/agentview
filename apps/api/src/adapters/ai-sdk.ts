@@ -490,7 +490,7 @@ async function callAgentAPIAISDK(
 
     } catch (error: unknown) {
         if (error instanceof AgentViewError && error.details?.code === "run.finished") {
-            console.log(`[ai-sdk][${currentRun.id}] aborted while streaming`)
+            console.log(`[ai-sdk][${currentRun.id}] run finished while streaming`)
 
             await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'data-session-patch', data: error.details }));
             if (error.details.status === 'failed') {

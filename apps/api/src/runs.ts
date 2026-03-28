@@ -240,7 +240,7 @@ export async function applyRunPatch(
 
       if (isRunFinished(run) && items.length > 0) {
         // it's important to throw error with proper code. It allows other systems to handle cancels and fails differently!
-        throw new AgentViewError("Cannot add items to a finished run.", 422, {
+        throw new AgentViewError("Run already finished. Cannot add items.", 422, {
           code: "run.finished",
           status: run.status as "cancelled" | "failed" | "discarded",
           failReason: run.failReason
@@ -253,7 +253,7 @@ export async function applyRunPatch(
 
       /** State */
       if (isRunFinished(run) && body.state !== undefined) {
-        throw new AgentViewError("Cannot set state to a finished run.", 422, {
+        throw new AgentViewError("Run already finished. Cannot set state.", 422, {
           code: "run.finished",
           status: run.status as "cancelled" | "failed" | "discarded",
           failReason: run.failReason
@@ -268,7 +268,7 @@ export async function applyRunPatch(
 
     /** Status, finished at, failReason */
     if (isRunFinished(run) && body.status && body.status !== run.status) {
-      throw new AgentViewError("Cannot change the status of a finished run.", 422, {
+      throw new AgentViewError("Run already finished. Cannot change status.", 422, {
         code: "run.finished",
         status: run.status as "cancelled" | "failed" | "discarded",
         failReason: run.failReason
@@ -280,7 +280,7 @@ export async function applyRunPatch(
 
     if (failReason) {
       if (isRunFinished(run)) {
-        throw new AgentViewError("failReason cannot be set for a finished run.", 422, {
+        throw new AgentViewError("Run already finished. failReason cannot be set.", 422, {
           code: "run.finished",
           status: run.status as "cancelled" | "failed" | "discarded",
           failReason: run.failReason
