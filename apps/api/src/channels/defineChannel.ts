@@ -1,14 +1,17 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
 import type { WorkerHandle } from '../workers/utils';
 import { and, eq, inArray, isNull, not, or } from 'drizzle-orm';
-import { channels, channelThreads, channelMessages, endUsers, sessions } from '../schemas/schema';
-import { withOrg } from '../withOrg';
+import { channels, channelThreads, channelMessages, endUsers, sessions, runs } from '../schemas/schema';
+import { withOrg, withTenant } from '../withOrg';
 import { db__dangerous } from '../db';
 import type { Transaction } from '../types';
 import { createAutoRun, createAutoRunFromChannelMessages, isRunFinished, terminateRun } from '../runs';
 import { randomBytes } from 'crypto';
 import { createInactiveSession, activateSession } from '../sessions';
 import type { ChannelRef } from 'agentview/apiTypes';
+import { ensureUserForEmail } from '../users';
+import type { ServicePrincipal } from 'src/authMiddleware';
+import { acquireCreateResourceLock } from 'src/locks';
 
 export type Channel = typeof channels.$inferSelect;
 type ChannelThread = typeof channelThreads.$inferSelect;
@@ -59,7 +62,6 @@ type IngestMessageResultSuccess = {
   thread: ChannelThread;
   message: ChannelMessage;
   sessionId: string;
-  inputMessages: ChannelMessage[];
 }
 
 type IngestMessageResultError = {
@@ -192,13 +194,19 @@ export function channelProvider(type: string) {
       return ignoreMessage('Channel is not routed to any environment');
     }
 
-    const space = environment.userId ? 'playground' : 'production';
-    const createdBy = environment.userId;
     const channelRef : ChannelRef = { type: channel.type as 'gmail' | 'mock', address: channel.address }
 
     console.log('[ingestMessage] environment: ', environment.user?.email ?? 'production');
 
-    const result: IngestMessageResult = await withOrg(channel.organizationId, async (tx) => {
+    const servicePrincipal : ServicePrincipal = {
+      type: 'service',
+      organizationId: channel.organizationId,
+      env: environment.handle,
+    };
+
+    const result: IngestMessageResult = await withTenant(servicePrincipal, async (tx) => {
+      await acquireCreateResourceLock(tx); // entire operation is serialized per tenant (we can optimize this later)
+
       /**
        * Create or get channel thread and channel message
        */
@@ -211,110 +219,109 @@ export function channelProvider(type: string) {
 
       console.log('[ingestMessage] thread and message created');
 
-
       /**
        * Last run associated with the thread -> allows us to find sessionId too.
        */
-      const lastRun = (await tx.query.channelMessages.findFirst({
-        columns: {
-        },
-        where: and(
-          eq(channelMessages.channelThreadId, thread.id),
-          not(isNull(channelMessages.runId)),
-        ),
-        orderBy: (cm, { desc }) => [desc(cm.createdAt)],
-        with: {
-          run: true,
+      let session = await tx.query.sessions.findFirst({
+        where: eq(sessions.channelThreadId, thread.id),
+      });
+
+      /**
+       * TODO: We should aquire SESSION LOCK TOO HERE.
+       */
+      if (session) {
+        console.log('[ingestMessage] session found');
+        const activeRun = await tx.query.runs.findFirst({
+          where: and(
+            eq(runs.sessionId, session?.id),
+            inArray(runs.status, ['pending', 'init', 'in_progress']),
+          )
+        })
+        if (activeRun) {
+          console.log('[ingestMessage] active run found, terminating');
+          await terminateRun(tx, activeRun.id, { status: 'discarded', failReason: { message: 'New message ingested, discarding active run' } });
+        } else {
+          console.log('[ingestMessage] no active run found');
         }
-      }))?.run ?? null;
+      }
+      else {
+        console.log('[ingestMessage] no session found');
+      }
 
-      let sessionId = lastRun?.sessionId;
+      // const activeRun = session ? await tx.query.runs.findFirst({
+      //   where: and(
+      //     eq(runs.sessionId, session?.id),
+      //     not(isNull(runs.finishedAt)),
+      //   )
+      // }) : null;
 
-      console.log('[ingestMessage] last run status: ', lastRun?.status);
-      console.log('[ingestMessage] sessionId: ', sessionId);
+      // const lastRun = (await tx.query.channelMessages.findFirst({
+      //   columns: {
+      //   },
+      //   where: and(
+      //     eq(channelMessages.channelThreadId, thread.id),
+      //     not(isNull(channelMessages.runId)),
+      //   ),
+      //   orderBy: (cm, { desc }) => [desc(cm.createdAt)],
+      //   with: {
+      //     run: true,
+      //   }
+      // }))?.run ?? null;
+
+      // let sessionId = lastRun?.sessionId;
+
+      // console.log('[ingestMessage] last run status: ', lastRun?.status);
+      // console.log('[ingestMessage] sessionId: ', sessionId);
 
       /**
        * Cancel the last run if it is in progress
-       */
-      if (lastRun && !isRunFinished(lastRun)) {
-        console.log('[ingestMessage] cancelling last run');
+      //  */
+      // if (lastRun && !isRunFinished(lastRun)) {
+      //   console.log('[ingestMessage] cancelling last run');
 
-        // this is not inside of transaction!
-        await terminateRun(tx, lastRun.id, { status: 'discarded', failReason: { message: 'New message ingested, discarding last run' } });
-      }
-      else {
-        console.log('[ingestMessage] last run is not in progress');
-      }
+      //   // this is not inside of transaction!
+      //   await terminateRun(tx, lastRun.id, { status: 'discarded', failReason: { message: 'New message ingested, discarding last run' } });
+      // }
+      // else {
+      //   console.log('[ingestMessage] last run is not in progress');
+      // }
 
       /**
        * Get all messages that are staged for next run
        * - no run_id (fresh ones)
        * - all messages from the last run that was not completed
        */
-      const inputMessages = await tx.query.channelMessages.findMany({
-        where: and(
-          eq(channelMessages.channelThreadId, thread.id),
-          or(
-            isNull(channelMessages.runId),
-            (lastRun && lastRun.status !== 'completed') ? eq(channelMessages.runId, lastRun.id) : undefined,
-          )
-        ),
-        orderBy: (cm, { asc }) => [asc(cm.date)],
-      });
 
-      console.log('[ingestMessage] inputMessages: ', inputMessages.length);
+      // const inputMessages = await tx.query.channelMessages.findMany({
+      //   where: and(
+      //     eq(channelMessages.channelThreadId, thread.id),
+      //     or(
+      //       isNull(channelMessages.runId),
+      //       (lastRun && lastRun.status !== 'completed') ? eq(channelMessages.runId, lastRun.id) : undefined,
+      //     )
+      //   ),
+      //   orderBy: (cm, { asc }) => [asc(cm.date)],
+      // });
 
-      if (inputMessages.length === 0) {
-        return ignoreMessage(`No input messages found for channel thread ${thread.id}`);
-      }
+      // console.log('[ingestMessage] inputMessages: ', inputMessages.length);
+
+      // if (inputMessages.length === 0) {
+      //   return ignoreMessage(`No input messages found for channel thread ${thread.id}`);
+      // }
 
       /**
-       * Find or create USER
+       * Ensure user
        */
-
       let userId: string | undefined;
 
       // If session exists, let's just use it's userId
-      if (sessionId) {
-        const session = await tx.query.sessions.findFirst({
-          where: eq(sessions.id, sessionId),
-        });
-        if (!session) {
-          throw new Error(`Unreachable: Session not found: ${sessionId}`);
-        }
+      if (session) {
         userId = session.userId;
       }
       else {
-
         if (thread.contactKind === 'email') {
-          let user = await tx.query.endUsers.findFirst({
-            where: and(
-              eq(endUsers.email, thread.contact),
-              eq(endUsers.space, space),
-              createdBy
-                ? eq(endUsers.createdBy, createdBy)
-                : isNull(endUsers.createdBy)
-            ),
-          });
-
-          console.log('[ingestMessage] user: ', user?.id);
-
-          if (!user) {
-            const [newUser] = await tx.insert(endUsers).values({
-              organizationId: thread.organizationId,
-              email: thread.contact,
-              space,
-              createdBy,
-              token: randomBytes(32).toString('hex'),
-            }).returning();
-            user = newUser;
-
-            console.log('[ingestMessage] creating new user: ', user?.id);
-
-          }
-
+          const user = await ensureUserForEmail(tx, thread.contact);
           userId = user?.id;
-
         } else {
           throw new Error(`Unsupported contact kind: ${thread.contactKind}`);
         }
@@ -324,25 +331,24 @@ export function channelProvider(type: string) {
         throw new Error(`Unreachable error: user not found and not created`);
       }
 
-
       /**
-       * Create SESSION
+       * Ensure session
        */
-      if (!sessionId) {
-        const newSession = await createInactiveSession(tx, {
+      if (!session) {
+        session = await createInactiveSession(tx, {
           environment,
           channelRef,
           userId,
           channelThreadId: thread.id,
         });
-        sessionId = newSession.id;
 
-        await activateSession(tx, newSession.id);
+        // I don't think we need to activate session here.
+        // await activateSession(tx, session.id);
         
-        console.log('[ingestMessage] new session created: ', newSession.id);
+        console.log('[ingestMessage] new session created: ', session.id);
       }
 
-      return { ingested: true, sessionId, thread, message, inputMessages };
+      return { ingested: true, sessionId: session.id, thread, message };
     });
 
     // we closed transaction here. It's on purpose
@@ -361,7 +367,7 @@ export function channelProvider(type: string) {
      * Try to create a run (for now not in worker, so if it fails, it fails forever)
      */
     await withOrg(channel.organizationId, async (tx) => {
-      await createAutoRunFromChannelMessages(tx, environment, result.sessionId, result.inputMessages);
+      await createAutoRunFromChannelMessages(tx, environment, result.sessionId);
     });
 
     return result;

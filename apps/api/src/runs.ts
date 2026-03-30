@@ -1,4 +1,4 @@
-import { eq, and, desc, not, inArray, asc, sql } from 'drizzle-orm';
+import { eq, and, desc, not, inArray, asc, sql, isNull, or } from 'drizzle-orm';
 import { runs, sessionItems, sessions, webhookJobs, channelMessages, agentRefs } from './schemas/schema';
 import type { Transaction } from './types';
 import type { Environment, ManualRunCreate, ManualRunUpdate, Run } from 'agentview/apiTypes';
@@ -13,6 +13,7 @@ import { getConfigFromEnvironment } from './environments';
 import { publishRunStreamEvent, publishRunTerminationEvent } from './runStream';
 import { withOrg, type OrgTransaction } from './withOrg';
 import { getAdapter } from './adapters/adapters';
+import { requireUUID } from './isUUID';
 
 export const DEFAULT_IDLE_TIME = 1000 * 60; // 60 seconds
 
@@ -149,8 +150,9 @@ export async function markOutputItems(
  * That's why we use SELECT FOR UPDATE here on row and this function should be always called with a lock.
  */
 export async function getRunBaseWithLock(tx: Transaction, runId: string) {
-  // Build the run query — use select() API so we can append FOR UPDATE.
+  requireUUID(runId);
 
+  // Build the run query — use select() API so we can append FOR UPDATE.
   const runRows = await tx
     .select()
     .from(runs)
@@ -166,6 +168,14 @@ export async function getRunBaseWithLock(tx: Transaction, runId: string) {
     ...row.runs,
     agentRef: row.agent_refs,
   };
+}
+
+export async function requireRunBaseWithLock(tx: Transaction, runId: string) {
+  const run = await getRunBaseWithLock(tx, runId);
+  if (!run) {
+    throw new AgentViewError("Run not found", 404);
+  }
+  return run
 }
 
 export async function getRunInput(tx: Transaction, runId: string) {
@@ -544,16 +554,45 @@ async function processInput(agentConfig: BaseAgentConfig, input: any) {
 export async function createAutoRunFromChannelMessages(
   tx: OrgTransaction,
   environment: Environment,
-  sessionId: string,
-  incomingMessages: any[],
+  sessionId: string
 ) {
+  const { lastRun, agentConfig, agentRefId, session } = await prepareRunCreation(tx, environment, sessionId);
+  const adapter = getAdapter(agentConfig.adapter);
+
+  /**
+   * Find channel thread id for the session
+   */
+  const channelThreadId = (await tx.query.sessions.findFirst({
+    where: eq(sessions.id, sessionId),
+    columns: {
+      channelThreadId: true,
+    },
+  }))?.channelThreadId;
+
+  if (typeof channelThreadId !== 'string') {
+    throw new AgentViewError("Session has no channel thread.", 422);
+  }
+
+  // we take either incoming messages without run_id or messages from the last run that was failed/cancelled/discarded (not completed)
+  const incomingMessages = await tx.query.channelMessages.findMany({
+    where: and(
+      eq(channelMessages.channelThreadId, channelThreadId),
+      or(
+        isNull(channelMessages.runId),
+        (lastRun && lastRun.status !== 'completed') ? eq(channelMessages.runId, lastRun.id) : undefined,
+      )
+    ),
+    orderBy: (cm, { asc }) => [asc(cm.date)],
+  });
+
   if (incomingMessages.length === 0) {
     throw new AgentViewError("No incoming messages to create a run from.", 422);
   }
 
-  const { lastRun, agentConfig, agentRefId, session } = await prepareRunCreation(tx, environment, sessionId);
-  const adapter = getAdapter(agentConfig.adapter);
 
+  /**
+   * Let's create a new run
+   */
   const newRunId = crypto.randomUUID();
   const input = adapter.createDefaultInputForChannelMessages(incomingMessages, newRunId);
   const { runConfig, parsedInput, idleTimeout } = await processInput(agentConfig, input);

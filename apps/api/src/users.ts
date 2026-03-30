@@ -8,6 +8,7 @@ import { randomBytes } from 'crypto'
 import { authorize, type Principal } from './authMiddleware'
 import type { OrgTransaction, TenantTransaction } from './withOrg'
 import { acquireCreateResourceLock } from './locks'
+import { requireUUID } from './isUUID'
 
 type FindUserByIdOptions = {
   id: string
@@ -28,6 +29,7 @@ type FindUserByEmailOptions = {
 
 export async function findUser(tx: OrgTransaction, args: FindUserByIdOptions | FindUserByExternalIdOptions | FindUserByTokenOptions | FindUserByEmailOptions) {
   if ('id' in args) {
+    requireUUID(args.id);
     return await tx.query.endUsers.findFirst({
       where: and(
         eq(endUsers.id, args.id),
@@ -59,6 +61,15 @@ export async function findUser(tx: OrgTransaction, args: FindUserByIdOptions | F
 
   return undefined;
 }
+
+export async function requireUser(tx: OrgTransaction, arg: Parameters<typeof findUser>[1]) {
+  const user = await findUser(tx, arg)
+  if (!user) {
+    throw new AgentViewError("End user not found", 404);
+  }
+  return user
+}
+
 
 
 function getDefaultSpaceFromEnvironment(environment: Environment): { space: Space, createdBy: string | null } {
@@ -127,7 +138,7 @@ export async function createUser(tx: TenantTransaction, body: UserCreate) {
  * The space is automatically determined based on the environment.
  */
 export async function ensureUserForEmail(tx: TenantTransaction, email: string) {
-  const user = await findUser(tx, { email }) // check
+  const user = await findUser(tx, { email }) // check (no lock)
   if (user) {
     return user
   }

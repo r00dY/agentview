@@ -13,7 +13,7 @@ import { and, countDistinct, desc, DrizzleQueryError, eq, inArray, isNull, or, s
 import { auth } from './auth';
 import { db__dangerous } from './db';
 import { body, response_data, response_error, response_no_content } from './hono_utils';
-import { isUUID } from './isUUID';
+import { requireUUID } from './isUUID';
 import { channelMessages, commentMentions, commentMessageEdits, commentMessages, environments, endUsers, events, inboxItems, runs, scores, sessionItems, sessions, starredSessions, webhookJobs } from './schemas/schema';
 import { withOrg, withTenant, type OrgTransaction } from './withOrg';
 import { AgentViewError } from 'agentview/AgentViewError';
@@ -67,9 +67,9 @@ import { members, organizations, users } from './schemas/auth-schema';
 import { createInactiveSession, activateSession, fetchSession, fetchSessionBase } from './sessions';
 import type { Transaction } from './types';
 import { updateInboxes } from './updateInboxes';
-import { createUser, findUser } from './users';
+import { createUser, requireUser } from './users';
 import { randomBytes } from 'crypto';
-import { applyRunPatch, getRunBaseWithLock, createAutoRun, createManualRun, DEFAULT_IDLE_TIME, getRunInputContent, terminateRun, getRunInput, isRunFinished } from './runs';
+import { applyRunPatch, getRunBaseWithLock, createAutoRun, createManualRun, DEFAULT_IDLE_TIME, getRunInputContent, terminateRun, getRunInput, isRunFinished, requireRunBaseWithLock } from './runs';
 import { createRunStreamConsumer, publishRunTerminationEvent } from './runStream';
 import { resolveAgentRef } from './agentRefs';
 import { adapters, getAdapter } from './adapters/adapters';
@@ -80,8 +80,7 @@ import { authn, authorize, requireMemberPrincipal, type Principal, authnAllowPub
 import { resolveTarget, resolveTargetWithObjects, targetFilter, type RunTarget, type SessionItemTarget, type Target, type TargetWithObjects } from './target';
 
 import { createComment, updateComment, deleteComment, requireCommentMessage, requireCommentOwnership } from './comments';
-// export { authn, authorize, requireMemberPrincipal, requireMemberId } from './authMiddleware';
-
+import { requireSession, requireSessionBase } from './sessions';
 
 await initDb();
 
@@ -182,45 +181,6 @@ function requireScoreConfig(scores: { name: string; schema: any }[] | undefined,
 
 // DATA HELPERS
 
-function requireUUID(id: string) {
-  if (!isUUID(id)) {
-    throw new HTTPException(404, { message: "Not found" });
-  }
-}
-
-async function requireSession(tx: Transaction, sessionId: string) {
-  const session = await fetchSession(tx, sessionId)
-  if (!session) {
-    throw new HTTPException(404, { message: "Session not found" });
-  }
-
-  return session
-}
-
-async function requireSessionBase(tx: Transaction, sessionId: string) {
-  const session = await fetchSessionBase(tx, sessionId);
-  if (!session) {
-    throw new HTTPException(404, { message: "Session not found" });
-  }
-  return session
-}
-
-async function requireRunBaseWithLock(tx: Transaction, runId: string) {
-  const run = await getRunBaseWithLock(tx, runId);
-  if (!run) {
-    throw new HTTPException(404, { message: "Run not found" });
-  }
-  return run
-}
-
-async function requireUser(tx: OrgTransaction, arg: Parameters<typeof findUser>[1]) {
-  const user = await findUser(tx, arg)
-  if (!user) {
-    throw new HTTPException(404, { message: "End user not found" });
-  }
-  return user
-}
-
 
 /* --------- END USERS --------- */
 
@@ -236,8 +196,6 @@ const usersPOSTRoute = createRoute({
     201: response_data(UserSchema)
   },
 })
-
-
 
 
 
@@ -300,7 +258,6 @@ app.openapi(userGETRoute, async (c) => {
   const principal = await authn(c.req.raw.headers)
 
   const { id } = c.req.param()
-  requireUUID(id);
 
   return withOrg(principal.organizationId, async (tx) => {
     const user = await requireUser(tx, { id })
@@ -1373,7 +1330,6 @@ app.openapi(runKeepAliveRoute, async (c) => {
   const principal = await authn(c.req.raw.headers)
 
   const { run_id } = c.req.param()
-  requireUUID(run_id);
 
   return withOrg(principal.organizationId, async (tx) => {
     const run = await requireRunBaseWithLock(tx, run_id);

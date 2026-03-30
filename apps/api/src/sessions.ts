@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { endUsers, events, runs, sessionItems, sessions } from "./schemas/schema"
 import type { Transaction } from "./types";
-import { isUUID } from "./isUUID";
+import { isUUID, requireUUID } from "./isUUID";
 import type { ChannelRef, Environment, SessionBase, StandardSession } from "agentview/apiTypes";
 import { updateInboxes } from "./updateInboxes";
 import { parseMetadata } from "./parseMetadata";
@@ -10,6 +10,8 @@ import { getConfigFromEnvironment } from "./environments";
 import type { SessionStatus } from "agentview/apiTypes";
 import type { OrgTransaction } from "./withOrg";
 import { randomBytes } from "crypto";
+import { AgentViewError } from "agentview";
+import { HTTPException } from "hono/http-exception";
 
 export type LastRunStatus = {
   id: string;
@@ -62,6 +64,8 @@ function sessionWhere(session_id: string) {
 
 
 export async function fetchSessionBase(tx: Transaction, session_id: string): Promise<SessionBase | undefined> {
+  requireUUID(session_id);
+
   const where = sessionWhere(session_id);
   if (!where) {
     return undefined;
@@ -187,6 +191,26 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
     state: state ?? row.initialState ?? null,
   } as StandardSession;
 }
+
+
+export async function requireSession(tx: Transaction, sessionId: string) {
+  const session = await fetchSession(tx, sessionId)
+  if (!session) {
+    throw new AgentViewError("Session not found", 404);
+  }
+
+  return session
+}
+
+export async function requireSessionBase(tx: Transaction, sessionId: string) {
+  const session = await fetchSessionBase(tx, sessionId);
+  if (!session) {
+    throw new AgentViewError("Session not found", 404);
+  }
+  return session
+}
+
+
 
 export async function createInactiveSession(tx: OrgTransaction, params: {
   environment: Environment;
