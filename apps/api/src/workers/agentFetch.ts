@@ -212,12 +212,10 @@ async function processAgentFetch(run: Run) {
 
   } catch (error) {
     /**
-     * This is rare case, but it's possible.
-     * The adapter is responsible for its own cleanup, but it can throw *inside the catch*.
-     * For example, adapter might get streaming error, try to send "failed" state, but exactly in between those events run becomes cancelled/timed out.
+     * This is severe error and always should be investigated. An unhandled error propagated from adapter here. The cleanup should be always graceful, so this is severe.
      */
     finalError = error instanceof Error ? error.message : String(error);
-    console.log(`[agentFetch][${run.id}] error thrown. Rare case, please investigate. Error: "${finalError}"`);
+    console.log(`[agentFetch][${run.id}] SEVERE, please investigate. Error: "${finalError}"`);
 
   } finally {
 
@@ -225,14 +223,14 @@ async function processAgentFetch(run: Run) {
     try {
       console.log(`[agentFetch][${run.id}] cleaning up`);
 
-      clearTerminationListener?.();
-
       await withOrg(run.organizationId, async (tx) => {
         await terminateRun(tx, run.id, {
           status: 'failed',
           failReason: { message: finalError ?? "The job ended with unfinished work. This should never happen." },
         });
       });
+
+      clearTerminationListener?.();
 
     } catch {}
   }

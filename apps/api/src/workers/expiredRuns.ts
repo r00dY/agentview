@@ -32,14 +32,14 @@ export const expiredRunsWorker = createWorker<Run>({
   },
   async process(run) {
     if (!run.manual) {
+      // we send signal for auto-fetcher, it should clean up the run.
       await publishRunTerminationEvent(run.id, TERMINATION_REASON); // signal timeout
       await new Promise((resolve) => setTimeout(resolve, TERMINATION_DELAY_MS));
     }
-    
+
     await withOrg(run.organizationId, async (tx) => {
       await terminateRun(tx, run.id, TERMINATION_REASON);
     });
   },
 });
-
 
