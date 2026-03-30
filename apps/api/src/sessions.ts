@@ -120,6 +120,7 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
           metadata: true,
           sessionId: true,
           agentRefId: true,
+          manual: true,
         },
         orderBy: (run, { asc }) => [asc(run.createdAt)],
         with: {

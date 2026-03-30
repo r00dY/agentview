@@ -179,6 +179,7 @@ export const RunBaseSchema = z.object({
   failReason: z.any().nullable(),
   agentRef: AgentRefSchema.nullable(),
   metadata: z.record(z.string(), z.any()).nullable(),
+  manual: z.boolean(),
   sessionId: z.string(), // potential bloat
 })
 

@@ -4,7 +4,7 @@ import type { StandardSession, UIMessage } from 'agentview/apiTypes';
 import { type Adapter } from './adapters';
 import { getSessionStatusFields } from '../sessions';
 import { AgentViewError } from 'agentview';
-import { isRunFinished } from '../runs';
+import { isRunFinished, RunTerminationError, type RunTerminationReason } from '../runs';
 
 interface AISDKChunk {
     type: string;
@@ -116,68 +116,103 @@ async function callAgentAPIAISDK(
             signal,
         });
 
-    } catch (error: unknown) { // Here we only handle fetch errors, other errors will be handled later
+    } catch (error: unknown) {
+        /**
+         * If we get error while fetching we always send back response and discard the run.
+         * It doesn't matter whether it's termination error or not.
+         * Basically if fetch is unsuccessful, run won't exist.
+         */
+        let message : string | undefined = undefined;
 
-        if (error instanceof AgentViewError && error.details?.code === "run.finished") {
-            // run already terminated, so we don't have to send() anything, it's already cleaned up.
-            // the only thing we need to do is return error response (no stream, so no [DONE])
-
-            console.log('[ai-sdk] aborted while fetching. Sending [RESPONSE] with error, no stream.')
-
-            let errorMessage : string | undefined = undefined;
-            if (error.details.status === 'cancelled') {
-                errorMessage = "Cancelled by user";
-            }
-            else if (error.details.status === 'failed' || error.details.status === 'discarded') {
-                errorMessage = error.details.failReason?.message;
-            }
-
-            console.error(error.details)
-            await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({ // AgentViewError format
-                status: 400,
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                error: JSON.stringify({
-                    message: errorMessage ?? 'Unknown error',
-                })
-            }));
-
-            return;
+        if (error instanceof RunTerminationError) {
+            message = error.message;
+        } else if (error instanceof TypeError) {
+            message = error.message ?? 'Connection error';
+        } else if (error instanceof Error) {
+            message = error.message ?? 'Unknown error';
+        } else {
+            message = String(error);
         }
-        else {
-            let message: string;
 
-            if (error instanceof TypeError) { // node fetch error
-                message = error.message ?? 'Connection error';
-            }
-            else if (error instanceof Error) {
-                message = error.message ?? 'Unknown error';
-            }
-            else {
-                message = String(error);
-            }
+        await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({ // AgentViewError format
+            status: 400,
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            error: JSON.stringify({
+                message
+            })
+        }));
 
-            console.log('[ai-sdk] error while fetching: ', message)
+        await send({
+            name: 'run.discard',
+            data: {
+                message
+            },
+        });
 
-            await send({
-                name: 'run.discard',
-                data: {
-                    message
-                },
-            });
+        return;
 
-            await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({ // AgentViewError format
-                status: 400,
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                error: JSON.stringify({
-                    message,
-                })
-            }));
-            return;
-        }
+        // if (error instanceof AgentViewError && error.details?.code === "run.finished") {
+        //     // run already terminated, so we don't have to send() anything, it's already cleaned up.
+        //     // the only thing we need to do is return error response (no stream, so no [DONE])
+
+        //     console.log('[ai-sdk] aborted while fetching. Sending [RESPONSE] with error, no stream.')
+
+        //     let errorMessage : string | undefined = undefined;
+        //     if (error.details.status === 'cancelled') {
+        //         errorMessage = "Cancelled by user";
+        //     }
+        //     else if (error.details.status === 'failed' || error.details.status === 'discarded') {
+        //         errorMessage = error.details.failReason?.message;
+        //     }
+
+        //     console.error(error.details)
+        //     await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({ // AgentViewError format
+        //         status: 400,
+        //         headers: {
+        //             'Content-Type': 'application/json',
+        //         },
+        //         error: JSON.stringify({
+        //             message: errorMessage ?? 'Unknown error',
+        //         })
+        //     }));
+
+        //     return;
+        // }
+        // else {
+        //     let message: string;
+
+        //     if (error instanceof TypeError) { // node fetch error
+        //         message = error.message ?? 'Connection error';
+        //     }
+        //     else if (error instanceof Error) {
+        //         message = error.message ?? 'Unknown error';
+        //     }
+        //     else {
+        //         message = String(error);
+        //     }
+
+        //     console.log('[ai-sdk] error while fetching: ', message)
+
+        //     await send({
+        //         name: 'run.discard',
+        //         data: {
+        //             message
+        //         },
+        //     });
+
+        //     await publishAISDKStreamEvent(currentRun.id, '[RESPONSE]' + JSON.stringify({ // AgentViewError format
+        //         status: 400,
+        //         headers: {
+        //             'Content-Type': 'application/json',
+        //         },
+        //         error: JSON.stringify({
+        //             message,
+        //         })
+        //     }));
+        //     return;
+        // }
     } finally {
         await expireAISDKStream(currentRun.id);
     }
@@ -227,14 +262,14 @@ async function callAgentAPIAISDK(
 
     // send response first
 
-    let finalPatch: { status: 'completed' | 'failed', [key: string]: any } | undefined = undefined;
+    let finalPatch: { status: 'completed' | 'failed' | 'cancelled', [key: string]: any } | undefined = undefined;
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined = undefined;
 
     try {
         console.log(`[ai-sdk][${currentRun.id}] streaming`);
 
         await send({
-            name: 'run.streaming_started',
+            name: 'run.accept',
             data: {},
         });
 
@@ -471,13 +506,12 @@ async function callAgentAPIAISDK(
             console.log(`[ai-sdk][${currentRun.id}] stream ended complete`);
         }
 
-        console.log(`[ai-sdk][${currentRun.id}] yield run.patch for completion`)
-
         /**
          * This is the moment when we send final run.patch that will close the run internally.
          * Closing the run triggers [DONE] event on the stream, which will trigger `signal` to abort (with "run.finished" error code).
          * That's why after this command we must only clean up and not touch `reader` anymore.
          */
+        console.log(`[ai-sdk][${currentRun.id}] yield run.patch for completion`)
         await send({
             name: 'run.patch',
             data: finalPatch,
@@ -485,62 +519,106 @@ async function callAgentAPIAISDK(
         await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'data-session-patch', data: { status: finalPatch.status, failReason: finalPatch.failReason } }));
 
     } catch (error: unknown) {
-        if (error instanceof AgentViewError && error.details?.code === "run.finished") {
-            console.log(`[ai-sdk][${currentRun.id}] run finished while streaming`)
 
-            await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'data-session-patch', data: error.details }));
-            if (error.details.status === 'failed') {
-                await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'error', errorText: error.details.failReason.message }));
+        // Run terminated signal (we have 5s to clean up)
+        if (error instanceof RunTerminationError) {
+            console.log(`[ai-sdk][${currentRun.id}] run terminated while streaming`)
+
+            if (error.reason.status === 'discarded') {
+                throw new Error(`[ai-sdk][${currentRun.id}] SEVERE: Run discarded while streaming`);
             }
             else {
-                await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));
-            }
-
-            return;
-        }
-
-        let message = "Unknown error";
-
-        console.log('[ai-sdk] error while streaming')
-        
-        if (error instanceof AgentViewError) {
-            console.error("[ai-sdk] SEVERE! AgentViewError, so must be coming from internal `send` call. This should never happen.")
-            message = error.message;
-            console.error(error)
-        }
-        else if (error instanceof TypeError) {
-            console.log('[ai-sdk] Connection error')
-            message = error.message ?? 'Connection error';
-        }
-        else if (error instanceof Error) {
-            console.log('[ai-sdk] Error', error.message)
-            message = error.message;
-        }
-        else {
-            console.log('[ai-sdk] Unknown error', String(error))
-            message = String(error);
-        }
-
-        /**
-         * Potential race conditionbug here!!!
-         * 1. AI SDK stream errors out (or internal error happens which is rare), we land here
-         * 2. The stream is already closed, but `signal` didn't fire yet.
-         * 3. This command will throw (in catch block).
-         * 
-         * Result: it will propagate to the parent
-         */
-        await send({
-            name: 'run.patch',
-            data: {
-                status: "failed",
-                failReason: {
-                    message,
+                finalPatch = {
+                    ...error.reason,
                 }
             }
+        }
+        else if (error instanceof TypeError) {
+            console.log(`[ai-sdk][${currentRun.id}] connection error while streaming`);
+
+            finalPatch = {
+                status: 'failed',
+                failReason: {
+                    message: error.message ?? 'Connection error',
+                },
+            };
+        }
+        else {
+            console.log(`[ai-sdk][${currentRun.id}] SEVERE: unexpected error while streaming (not termination and not connection error)`);
+
+            finalPatch = {
+                status: 'failed',
+                failReason: {
+                    message: error instanceof Error ? error.message ?? 'Unknown error' : String(error)
+                },
+            };
+        }
+
+        if (!finalPatch) {
+            throw new Error(`[ai-sdk][${currentRun.id}] SEVERE: finalPatch is not set. This should never happen.`);
+        }
+
+        await send({
+            name: 'run.patch',
+            data: finalPatch,
         });
+
+        if (finalPatch.status === 'cancelled') {
+            await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));
+        }
+        else {
+            await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'error', errorText: finalPatch.failReason?.message ?? 'Unknown error' }));
+        }
+
+        // let message = "Unknown error";
+
+        // if (error instanceof TypeError) {
+        //     message = error.message ?? 'Connection error';
+        // }
+        // else {
+        //     message = error instanceof Error ? error.message ?? 'Unknown error' : String(error);
+        // }
+
+        // console.log('[ai-sdk] error while streaming')
         
-        await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'data-session-patch', data: { status: "failed", failReason: { message } } }));
-        await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'error', errorText: message }));
+        // if (error instanceof AgentViewError) {
+        //     console.error("[ai-sdk] SEVERE! AgentViewError, so must be coming from internal `send` call. This should never happen.")
+        //     message = error.message;
+        //     console.error(error)
+        // }
+        // else if (error instanceof TypeError) {
+        //     console.log('[ai-sdk] Connection error')
+        //     message = error.message ?? 'Connection error';
+        // }
+        // else if (error instanceof Error) {
+        //     console.log('[ai-sdk] Error', error.message)
+        //     message = error.message;
+        // }
+        // else {
+        //     console.log('[ai-sdk] Unknown error', String(error))
+        //     message = String(error);
+        // }
+
+        // /**
+        //  * Potential race conditionbug here!!!
+        //  * 1. AI SDK stream errors out (or internal error happens which is rare), we land here
+        //  * 2. The stream is already closed, but `signal` didn't fire yet.
+        //  * 3. This command will throw (in catch block).
+        //  * 
+        //  * Result: it will propagate to the parent
+        //  */
+        // await send({
+        //     name: 'run.patch',
+        //     data: {
+        //         status: "failed",
+        //         failReason: {
+        //             message,
+        //         }
+        //     }
+        // });
+        
+        // await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'data-session-patch', data: { status: "failed", failReason: { message } } }));
+        // await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'error', errorText: message }));
 
 
     } finally { // best effort cleanup
@@ -550,6 +628,7 @@ async function callAgentAPIAISDK(
             await publishAISDKStreamEvent(currentRun.id, "[DONE]");
             await expireAISDKStream(currentRun.id);
         } catch (e) {}
+
     }
 }
 

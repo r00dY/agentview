@@ -2,10 +2,14 @@ import { db__dangerous } from '../db';
 import { runs } from '../schemas/schema';
 import { inArray, sql } from 'drizzle-orm';
 import { createWorker } from './utils';
-import { terminateRun } from '../runs';
-import { withOrg } from 'src/withOrg';
+import { terminateRun, type RunTerminationReason } from '../runs';
+import { withOrg } from '../withOrg';
+import { publishRunTerminationEvent } from '../runStream';
 
 type Run = typeof runs.$inferSelect;
+
+const TERMINATION_DELAY_MS = 5000;
+const TERMINATION_REASON : RunTerminationReason = { status: 'failed', failReason: { message: 'Timeout' } };
 
 export const expiredRunsWorker = createWorker<Run>({
   name: 'expired-runs',
@@ -15,7 +19,9 @@ export const expiredRunsWorker = createWorker<Run>({
     const now = new Date().toISOString();
     return db__dangerous
       .update(runs)
-      .set({ expiresAt: null })
+      .set({
+        expiresAt: sql`${runs.expiresAt} + INTERVAL '${sql.raw(String(TERMINATION_DELAY_MS * 2))} milliseconds'` // when claiming we set expiration to 2x the termination delay. It should be done by then, but if it's not, it will be reclaimed.
+      })
       .where(
         inArray(
           runs.id,
@@ -25,15 +31,15 @@ export const expiredRunsWorker = createWorker<Run>({
       .returning();
   },
   async process(run) {
+    if (!run.manual) {
+      await publishRunTerminationEvent(run.id, TERMINATION_REASON); // signal timeout
+      await new Promise((resolve) => setTimeout(resolve, TERMINATION_DELAY_MS));
+    }
+    
     await withOrg(run.organizationId, async (tx) => {
-      await terminateRun(
-        tx,
-        run.id,
-        {
-          status: (run.status === 'pending' || run.status === 'init') ? 'discarded' : 'failed', // pending / init statuses are discarded! Failed means user sees this but it can only happen for runs that were started streaming.
-          failReason: { message: 'Timeout' },
-        }
-      );
+      await terminateRun(tx, run.id, TERMINATION_REASON);
     });
   },
 });
+
+

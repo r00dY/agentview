@@ -1714,8 +1714,7 @@ describe('API', () => {
 
         expect(run.status).toBe("in_progress")
 
-        // Wait for expiration (timeout + worker interval buffer)
-        // Worker runs every 5 seconds, so wait timeout + 6s to be safe
+        // Wait for expiration (timeout + worker interval buffer ~1s)
         await new Promise(resolve => setTimeout(resolve, SHORT_TIMEOUT * 2))
 
         const updatedSession = await av.getSession({ id: session.id })

@@ -4,13 +4,13 @@ import type { Transaction } from './types';
 import type { Environment, ManualRunCreate, ManualRunUpdate, Run } from 'agentview/apiTypes';
 import type { BaseAgentConfig, BaseRunConfig } from 'agentview/baseConfigTypes';
 import { requireRunConfig, findItemConfig, findChannelConfig, requireAgentConfig, getChannelAgent, requireChannelConfig } from 'agentview/baseConfigUtils';
-import { AgentViewError, type AgentViewRunFinishedErrorBody } from 'agentview/AgentViewError';
+import { AgentViewError } from 'agentview/AgentViewError';
 import { parseMetadata } from './parseMetadata';
 import { resolveAgentRef } from './agentRefs';
 import { getLastRun } from 'agentview/sessionUtils';
 import { fetchSession, fetchSessionBase } from './sessions';
 import { getConfigFromEnvironment } from './environments';
-import { publishRunStreamEvent } from './runStream';
+import { publishRunStreamEvent, publishRunTerminationEvent } from './runStream';
 import { withOrg, type OrgTransaction } from './withOrg';
 import { getAdapter } from './adapters/adapters';
 
@@ -240,11 +240,7 @@ export async function applyRunPatch(
 
       if (isRunFinished(run) && items.length > 0) {
         // it's important to throw error with proper code. It allows other systems to handle cancels and fails differently!
-        throw new AgentViewError("Run already finished. Cannot add items.", 422, {
-          code: "run.finished",
-          status: run.status as "cancelled" | "failed" | "discarded",
-          failReason: run.failReason
-        });
+        throw new AgentViewError("Run already finished. Cannot add items.", 422);
       }
 
       const sessionItems = await getRunSessionItems(tx, runId);
@@ -253,11 +249,7 @@ export async function applyRunPatch(
 
       /** State */
       if (isRunFinished(run) && body.state !== undefined) {
-        throw new AgentViewError("Run already finished. Cannot set state.", 422, {
-          code: "run.finished",
-          status: run.status as "cancelled" | "failed" | "discarded",
-          failReason: run.failReason
-        });
+        throw new AgentViewError("Run already finished. Cannot set state.", 422);
       }
 
       /** Metadata **/
@@ -268,11 +260,7 @@ export async function applyRunPatch(
 
     /** Status, finished at, failReason */
     if (isRunFinished(run) && body.status && body.status !== run.status) {
-      throw new AgentViewError("Run already finished. Cannot change status.", 422, {
-        code: "run.finished",
-        status: run.status as "cancelled" | "failed" | "discarded",
-        failReason: run.failReason
-      });
+      throw new AgentViewError("Run already finished. Cannot change status.", 422);
     }
 
     const status = body.status ?? 'in_progress';
@@ -280,11 +268,7 @@ export async function applyRunPatch(
 
     if (failReason) {
       if (isRunFinished(run)) {
-        throw new AgentViewError("Run already finished. failReason cannot be set.", 422, {
-          code: "run.finished",
-          status: run.status as "cancelled" | "failed" | "discarded",
-          failReason: run.failReason
-        });
+        throw new AgentViewError("Run already finished. failReason cannot be set.", 422);
       }
       else if (status !== 'failed') {
         throw new AgentViewError("failReason can only be set when changing status to 'failed'.", 422);
@@ -360,10 +344,7 @@ export async function applyRunPatch(
     await publishRunStreamEvent(runId, nowIso, dataToStream);
 
     if (isFinished) {
-      await publishRunStreamEvent(runId, null, '[DONE]' + JSON.stringify({
-        status,
-        failReason,
-      }));
+      await publishRunStreamEvent(runId, null, '[DONE]');
     }
   });
 }
@@ -371,7 +352,7 @@ export async function applyRunPatch(
 /**
  * Best-effort run clean-up (for finally {} blocks, timeouts, discards etc)
  */
-export async function terminateRun(tx: OrgTransaction, runId: string, body: AgentViewRunFinishedErrorBody) {
+export async function terminateRun(tx: OrgTransaction, runId: string, reason: RunTerminationReason) {
   try {
     const runBase = await getRunBaseWithLock(tx, runId); // we must start with a lock for safety of concurrent writes!
     
@@ -381,44 +362,38 @@ export async function terminateRun(tx: OrgTransaction, runId: string, body: Agen
     }
 
     if (isRunFinished(runBase)) {
-      console.log(`[terminateRun][${runId}] attempted, not needed`);
       return;
     }
 
     // logs
-    if (body.status === 'discarded') {
-      console.log(`[terminateRun][${runId}] discarded -> ${body.failReason.message ?? "no reason"}`);
-    }
-    else if (body.status === 'failed') {
-      console.log(`[terminateRun][${runId}] failed -> ${body.failReason.message ?? "no reason"}`);
-    }
-    else if (body.status === 'cancelled') {
-      console.log(`[terminateRun][${runId}] cancelled`);
+    const logText = terminationReasonText(reason);
+
+    // When we get termination for pending/init run, we override to discard.
+    if ((runBase.status === 'pending' || runBase.status === 'init') && reason.status !== 'discarded') {
+      reason = { status: 'discarded', failReason: { message: `Overriden for pending/init from: ${logText}` } };
     }
 
+    console.log(`[terminateRun][${runId}] terminating, ${logText}`);
     const nowIso = new Date().toISOString();
 
     await tx.update(runs).set({
-      ...body,
+      ...reason,
       finishedAt: nowIso,
       updatedAt: nowIso,
       expiresAt: null,
     }).where(eq(runs.id, runId));
 
+    // this is important, we must send the last run patch event to the stream
     tx.afterCommit(async () => {
-      await publishRunStreamEvent(runId, nowIso, JSON.stringify({ // this is important, we must send the last run patch event to the stream
-        ...body,
+      await publishRunStreamEvent(runId, nowIso, JSON.stringify({ 
+        ...reason,
         updatedAt: nowIso,
       }));
-      await publishRunStreamEvent(runId, null, '[DONE]' + JSON.stringify(body));
+      await publishRunStreamEvent(runId, null, '[DONE]');
     });
 
   } catch {}
 }
-
-
-
-
 
 
 /**
@@ -700,4 +675,25 @@ export async function createManualRun(
     runConfig,
     lastRun,
   });
+}
+
+
+export type RunTerminationReason = { status: 'cancelled' } | { status: 'failed', failReason: any } | { status: 'discarded', failReason: any };
+
+export function terminationReasonText(body: RunTerminationReason) {
+  switch (body.status) {
+    case 'cancelled':
+      return 'cancelled';
+    case 'failed':
+      return `failed${body.failReason ? ` (${body.failReason.message})` : ''}`;
+    case 'discarded':
+      return `discarded${body.failReason ? ` (${body.failReason.message})` : ''}`;
+  }
+}
+
+export class RunTerminationError extends Error {
+  constructor(public reason: RunTerminationReason) {
+    super(terminationReasonText(reason));
+    this.name = 'RunTerminationError';
+  }
 }

@@ -71,7 +71,7 @@ import { updateInboxes } from './updateInboxes';
 import { findUser } from './users';
 import { randomBytes } from 'crypto';
 import { applyRunPatch, getRunBaseWithLock, createAutoRun, createManualRun, DEFAULT_IDLE_TIME, getRunInputContent, terminateRun, getRunInput, isRunFinished } from './runs';
-import { createRunStreamConsumer } from './runStream';
+import { createRunStreamConsumer, publishRunTerminationEvent } from './runStream';
 import { resolveAgentRef } from './agentRefs';
 import { adapters, getAdapter } from './adapters/adapters';
 import { createAISDKStreamConsumer, type AISDKStreamConsumer, type AISDKResponseMeta } from './adapters/ai-sdk-stream';
@@ -1201,15 +1201,12 @@ function getSessionStreamResponse(c: any, session: StandardSession) {
     return c.body(null, 204); // 204 when no stream in our internal protocol
   }
 
-  const consumer = createRunStreamConsumer(lastRun.id, c.req.raw.signal, lastRun.updatedAt);
-
   return streamSSE(c, async (stream) => {
-    if (c.req.raw.signal.aborted) {
-      consumer.close();
-      return;
-    };
+    let streamConsumer : ReturnType<typeof createRunStreamConsumer> | undefined = undefined;
 
     try {
+      streamConsumer = createRunStreamConsumer(lastRun.id, c.req.raw.signal);
+
       // session snapshot first
       await stream.writeSSE({
         event: 'session.snapshot',
@@ -1217,15 +1214,16 @@ function getSessionStreamResponse(c: any, session: StandardSession) {
       });
 
       // stream run events from last updatedAt
-      for await (const data of consumer.entries()) {
+      for await (const data of streamConsumer.entries()) {
         await stream.writeSSE({
           event: 'run.patch',
           data
         });
       }
     } finally {
-      consumer.close();
+      streamConsumer?.close();
     }
+
   });
 }
 
@@ -1523,20 +1521,48 @@ async function sessionStandardCancelHandler(c: Parameters<RouteHandler<typeof se
 
   const { session_id } = c.req.param()
 
-  return await withOrg(principal.organizationId, async (tx) => {
+  // Phase 1. Throw error if run is not in progress
+  const { lastRun } = await withOrg(principal.organizationId, async (tx) => {
     const session = await requireSession(tx, session_id);
-    const lastRun = getLastRun(session);
 
     authorize(principal, { action: "end-user:update", user: session.user });
 
+    const lastRun = getLastRun(session);
     if (!lastRun) {
       throw new AgentViewError("The session has no run.", 422);
     }
 
-    const environment = await requireEnvironment(tx, principal.env);
+    if (lastRun.manual) {
+      throw new AgentViewError("This endpoint is allowed only for auto-fetch runs.", 422);
+    }
 
-    await applyRunPatch(tx, lastRun.id, environment, { status: 'cancelled' });
+    return { lastRun }
+  });
 
+  // Phase 2. 
+  // - Signal cancellation and schedule hard termination after 5s
+  // - the setTimeout must be non-blocking. We don't want to wait 5s as it might potentially end much faster than that, when [DONE] is sent sooner.
+  // - this 5s is just a safety net. termineRun inside it should be no-op in all cases.
+  await publishRunTerminationEvent(lastRun.id, { status: 'cancelled' });
+
+  setTimeout(() => {
+    withOrg(principal.organizationId, async (tx) => {
+      await terminateRun(tx, lastRun.id, { status: 'cancelled' });
+    });
+  }, 5000);
+  
+  // Phase 3. Wait for stream to end (this is expected behaviour).
+  let streamConsumer : ReturnType<typeof createRunStreamConsumer> | undefined = undefined;
+
+  try {
+    streamConsumer = createRunStreamConsumer(lastRun.id, c.req.raw.signal);
+    for await (const data of streamConsumer!.entries()) {}
+  } finally {
+    streamConsumer?.close();
+  }
+
+  // Phase 4. Return session to the client (must be updated by now)
+  return await withOrg(principal.organizationId, async (tx) => {
     return await requireSession(tx, session_id);
   });
 };
@@ -1603,7 +1629,7 @@ app.openapi(runKeepAliveRoute, async (c) => {
     const runConfig = requireRunConfig(agentConfig, inputItem);
 
     const status = run.status;
-    const isFinished = status === 'completed' || status === 'failed' || status === 'cancelled';
+    const isFinished = isRunFinished(run);
     const idleTimeout = runConfig.idleTimeout ?? DEFAULT_IDLE_TIME;
     const expiresAt = isFinished ? null : new Date(Date.now() + idleTimeout).toISOString();
 

@@ -1,4 +1,5 @@
 import Redis from 'ioredis';
+import { REDIS_URL } from './redis';
 
 /**
  * Dedicated Redis connection that consumes a single Redis Stream.
@@ -15,7 +16,6 @@ import Redis from 'ioredis';
  *   }
  */
 
-const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379';
 const BLOCK_TIMEOUT_MS = 1000;
 
 export interface RedisStreamConsumer {

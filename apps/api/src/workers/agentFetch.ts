@@ -6,13 +6,15 @@ import { getConfigFromEnvironment, getEnvironment } from '../environments';
 import { fetchSession, fetchSessionBase, activateSession } from '../sessions';
 import { getAdapter } from '../adapters/adapters';
 import { findChannelConfig, getChannelAgent } from 'agentview/baseConfigUtils';
-import { applyRunPatch, terminateRun } from '../runs';
+import { applyRunPatch, RunTerminationError, terminateRun } from '../runs';
 import { resolveAgentRef } from '../agentRefs';
 import type { AgentRef, RunBody } from 'agentview/apiTypes';
-import { onRunFinished } from '../runStream';
 import { createWorker } from './utils';
+import { createRunTerminationReceiver } from '../runStream';
 
 type Run = typeof runs.$inferSelect;
+
+const runTerminationReceiver = await createRunTerminationReceiver(); // one Redis connection per worker process
 
 export const agentFetchWorker = createWorker<Run>({
   name: 'agent-fetch',
@@ -41,7 +43,8 @@ async function processAgentFetch(run: Run) {
   console.log(`[agentFetch][${run.id}] start`);
 
   const abortController = new AbortController();
-  let terminationAbortController: AbortController | undefined;
+
+  let clearTerminationListener: (() => void) | undefined;
 
   let finalError: string | undefined = undefined;
 
@@ -138,15 +141,23 @@ async function processAgentFetch(run: Run) {
      */
     
     // Abort fetch immediately when run is terminated (e.g. external cancellation).
-    terminationAbortController = onRunFinished(run.id, (error) => {
-      console.log(`[agentFetch][${run.id}] onRunFinished`);
-      abortController.abort(error);
+
+    clearTerminationListener = runTerminationReceiver.listen(run.id, (reason) => {
+      console.log(`[agentFetch][${run.id}] run termination received`, reason);
+      abortController.abort(new RunTerminationError(reason));
     });
+
+    let isFirstEventSent = false;
 
     // event handlers
     const send = async (event: { name: string, data: any }) => {
+
       if (event.name === 'run.patch') {
         console.log(`[agentFetch][${run.id}] run.patch`, event.data);
+
+        if (!isFirstEventSent) {
+          throw new Error(`[agentFetch][${run.id}] "run.patch" called before "run.discard" or "run.accept".`);
+        }
 
         await withOrg(run.organizationId, async (tx) => {
           await applyRunPatch(
@@ -157,7 +168,7 @@ async function processAgentFetch(run: Run) {
           );
         })
 
-        console.log('run patch successful')
+        console.log(`[agentFetch][${run.id}] run.patch successful`);
       }
       /**
        * Discard and streaming started are only FIRST THINGS that should happen before streaming starts. Either run is discarded or streaming started, which means it becomes in_progress.
@@ -166,6 +177,11 @@ async function processAgentFetch(run: Run) {
       else if (event.name === 'run.discard') { // safe indempotent termination for cleanup
         console.log(`[agentFetch][${run.id}] run discarded`);
 
+        if (isFirstEventSent) {
+          throw new Error(`[agentFetch][${run.id}] "run.discard" can be only called as a first event.`);
+        }
+        isFirstEventSent = true;
+
         await withOrg(run.organizationId, async (tx) => {
           await terminateRun(tx, run.id, {
             status: 'discarded',
@@ -173,7 +189,14 @@ async function processAgentFetch(run: Run) {
           });
         });
       }
-      else if (event.name === 'run.streaming_started') {
+      else if (event.name === 'run.accept') { // set run as in progress!
+        console.log(`[agentFetch][${run.id}] run accepted`);
+
+        if (isFirstEventSent) {
+          throw new Error(`[agentFetch][${run.id}] "run.accept" can be only called as a first event.`);
+        }
+        isFirstEventSent = true;
+
         await withOrg(run.organizationId, async (tx) => {
           await tx.update(runs).set({ status: 'in_progress' }).where(eq(runs.id, run.id));
           await activateSession(tx, session.id);
@@ -202,7 +225,7 @@ async function processAgentFetch(run: Run) {
     try {
       console.log(`[agentFetch][${run.id}] cleaning up`);
 
-      terminationAbortController?.abort();
+      clearTerminationListener?.();
 
       await withOrg(run.organizationId, async (tx) => {
         await terminateRun(tx, run.id, {

@@ -1,4 +1,4 @@
-import { redis } from '../redis';
+import { redisPublisher } from '../redis';
 import { createRedisStreamConsumer, type RedisStreamConsumer } from '../redisStreamConsumer';
 
 /**
@@ -18,11 +18,11 @@ const streamKey = (runId: string) => `run-stream:ai-sdk:${runId}`;
 // --- Publishing (shared connection) ---
 
 export async function publishAISDKStreamEvent(runId: string, data: string) {
-  await redis.xadd(streamKey(runId), `${Date.now()}-*`, 'data', data);
+  await redisPublisher.xadd(streamKey(runId), `${Date.now()}-*`, 'data', data);
 }
 
 export async function expireAISDKStream(runId: string) {
-  await redis.expire(streamKey(runId), 60);
+  await redisPublisher.expire(streamKey(runId), 60);
 }
 
 // --- Consuming (dedicated connection per consumer) ---

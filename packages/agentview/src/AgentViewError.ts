@@ -9,16 +9,7 @@ export interface AgentViewParseErrorDetails {
     issues: any,
 }
 
-export type AgentViewRunFinishedErrorBody = 
-    { status: 'cancelled' } | 
-    { status: 'failed', failReason: any } | 
-    { status: 'discarded', failReason: any };
-
-export type AgentViewRunFinishedErrorDetails = {
-    code: "run.finished"
-} & AgentViewRunFinishedErrorBody;
-
-export type AgentViewErrorDetails = AgentViewGeneralErrorDetails | AgentViewParseErrorDetails | AgentViewRunFinishedErrorDetails
+export type AgentViewErrorDetails = AgentViewGeneralErrorDetails | AgentViewParseErrorDetails;
 
 export class AgentViewError extends Error {
     details?: AgentViewErrorDetails
