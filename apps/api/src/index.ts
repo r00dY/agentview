@@ -12,7 +12,6 @@ import { createRoute, OpenAPIHono, z, type RouteHandler } from '@hono/zod-openap
 import { and, countDistinct, desc, DrizzleQueryError, eq, inArray, isNull, or, sql, type InferSelectModel } from 'drizzle-orm';
 import { auth } from './auth';
 import { db__dangerous } from './db';
-import { extractMentions } from './extractMentions';
 import { body, response_data, response_error, response_no_content } from './hono_utils';
 import { isUUID } from './isUUID';
 import { channelMessages, commentMentions, commentMessageEdits, commentMessages, environments, endUsers, events, inboxItems, runs, scores, sessionItems, sessions, starredSessions, webhookJobs } from './schemas/schema';
@@ -80,7 +79,7 @@ import { authn, authorize, requireMemberPrincipal, type Principal, authnAllowPub
 
 import { resolveTarget, resolveTargetWithObjects, targetFilter, type RunTarget, type SessionItemTarget, type Target, type TargetWithObjects } from './target';
 
-
+import { createComment, updateComment, deleteComment, requireCommentMessage, requireCommentOwnership } from './comments';
 // export { authn, authorize, requireMemberPrincipal, requireMemberId } from './authMiddleware';
 
 
@@ -220,194 +219,6 @@ async function requireUser(tx: Transaction, arg: Parameters<typeof findUser>[1])
     throw new HTTPException(404, { message: "End user not found" });
   }
   return user
-}
-
-async function requireCommentMessage(tx: Transaction, commentId: string) {
-  const comment = await tx.query.commentMessages.findFirst({
-    where: and(
-      eq(commentMessages.id, commentId),
-      isNull(commentMessages.deletedAt)
-    )
-  });
-
-  if (!comment) {
-    throw new HTTPException(404, { message: "Comment not found" });
-  }
-
-  return comment
-}
-
-function requireCommentOwnership(comment: { userId: string }, memberId: string) {
-  if (comment.userId !== memberId) {
-    throw new HTTPException(401, { message: "You can only edit your own comments." });
-  }
-}
-
-
-
-/* --------- COMMENT OPERATIONS --------- */
-
-async function createComment(
-  tx: Transaction,
-  target: Target,
-  memberId: string,
-  content: string | null,
-  organizationId: string,
-) {
-  // Add comment
-  const [newMessage] = await tx.insert(commentMessages).values({
-    organizationId,
-    ...target.ids,
-    // ...commentTargetColumns(target),
-    userId: memberId,
-    content,
-  }).returning();
-
-  let userMentions: string[] = [];
-
-  // Add comment mentions
-  if (content) {
-    const mentions = extractMentions(content);
-
-    userMentions = mentions.user_id || [];
-
-    if (userMentions.length > 0) {
-      await tx.insert(commentMentions).values(
-        userMentions.map((mentionedUserId: string) => ({
-          organizationId,
-          commentMessageId: newMessage.id,
-          mentionedUserId,
-        }))
-      );
-    }
-  }
-
-  // Emit event
-  const [event] = await tx.insert(events).values({
-    organizationId,
-    type: 'comment_created',
-    authorId: memberId,
-    payload: {
-      comment_id: newMessage.id,
-      has_comment: content ? true : false,
-      user_mentions: userMentions,
-    }
-  }).returning();
-
-  await updateInboxes(tx, event);
-
-  return newMessage;
-}
-
-async function updateComment(
-  tx: Transaction,
-  commentMessage: any,
-  newContent: string | null,
-  organizationId: string,
-) {
-  // Extract mentions from new content
-  let newMentions, previousMentions;
-  let newUserMentions: string[] = [], previousUserMentions: string[] = [];
-
-  newMentions = extractMentions(newContent ?? "");
-  previousMentions = extractMentions(commentMessage.content ?? "");
-  newUserMentions = newMentions.user_id || [];
-  previousUserMentions = previousMentions.user_id || [];
-
-  // Store previous content in edit history
-  await tx.insert(commentMessageEdits).values({
-    organizationId,
-    commentMessageId: commentMessage.id,
-    previousContent: commentMessage.content,
-  });
-
-  // Update the comment message
-  await tx.update(commentMessages)
-    .set({ content: newContent, updatedAt: new Date().toISOString() })
-    .where(eq(commentMessages.id, commentMessage.id));
-
-  // Handle mentions for edits
-  if (newUserMentions.length > 0 || previousUserMentions.length > 0) {
-    // Get existing mentions for this message
-    const existingMentions = await tx
-      .select()
-      .from(commentMentions)
-      .where(eq(commentMentions.commentMessageId, commentMessage.id));
-
-    const existingMentionedUserIds = existingMentions.map((m: any) => m.mentionedUserId);
-
-    // Find new mentions to add
-    const newMentionsToAdd = newUserMentions.filter((mention: string) =>
-      !existingMentionedUserIds.includes(mention)
-    );
-
-    // Find mentions to remove (existed before but not in new content)
-    const mentionsToRemove = existingMentionedUserIds.filter((mention: string) =>
-      !newUserMentions.includes(mention)
-    );
-
-    // Remove mentions that are no longer present
-    if (mentionsToRemove.length > 0) {
-      await tx.delete(commentMentions)
-        .where(and(
-          eq(commentMentions.commentMessageId, commentMessage.id),
-          inArray(commentMentions.mentionedUserId, mentionsToRemove)
-        ));
-    }
-
-    // Add new mentions
-    if (newMentionsToAdd.length > 0) {
-      await tx.insert(commentMentions).values(
-        newMentionsToAdd.map((mentionedUserId: string) => ({
-          organizationId,
-          commentMessageId: commentMessage.id,
-          mentionedUserId,
-        }))
-      );
-    }
-  }
-
-  // Emit event
-  const [event] = await tx.insert(events).values({
-    organizationId,
-    type: 'comment_edited',
-    authorId: commentMessage.userId,
-    payload: {
-      comment_id: commentMessage.id,
-      has_comment: newContent ? true : false,
-      user_mentions: newUserMentions,
-    }
-  }).returning();
-
-  await updateInboxes(tx, event);
-
-  return commentMessage;
-}
-
-async function deleteComment(
-  tx: Transaction,
-  commentId: any,
-  memberId: string,
-  organizationId: string,
-): Promise<void> {
-  await tx.delete(commentMentions).where(eq(commentMentions.commentMessageId, commentId));
-  await tx.delete(scores).where(eq(scores.commentId, commentId));
-  await tx.update(commentMessages).set({
-    deletedAt: new Date().toISOString(),
-    deletedBy: memberId
-  }).where(eq(commentMessages.id, commentId));
-
-  // Emit event
-  const [event] = await tx.insert(events).values({
-    organizationId,
-    type: 'comment_deleted',
-    authorId: memberId,
-    payload: {
-      comment_id: commentId
-    }
-  }).returning();
-
-  await updateInboxes(tx, event);
 }
 
 
@@ -1776,7 +1587,7 @@ app.openapi(commentsPOSTRoute, async (c) => {
 
   return withOrg(principal.organizationId, async (tx) => {
     const target = await resolveTarget(tx, body);
-    await createComment(tx, target, memberId, body.content ?? null, principal.organizationId);
+    await createComment(tx, target, memberId, body.content ?? null);
     return c.json({}, 201);
   })
 })
@@ -1814,7 +1625,7 @@ app.openapi(commentsPUTRoute, async (c) => {
     requireCommentOwnership(commentMessage, memberId);
 
     try {
-      await updateComment(tx, commentMessage, body.content, principal.organizationId);
+      await updateComment(tx, commentMessage, body.content);
     } catch (error) {
       return c.json({ message: `Invalid mention format: ${(error as Error).message}` }, 422);
     }
@@ -1852,30 +1663,10 @@ app.openapi(commentsDELETERoute, async (c) => {
     const commentMessage = await requireCommentMessage(tx, commentId);
     requireCommentOwnership(commentMessage, memberId);
 
-    await deleteComment(tx, commentMessage.id, memberId, principal.organizationId);
+    await deleteComment(tx, commentMessage.id, memberId);
     return c.json({}, 200);
   })
 })
-
-
-// function parseCommentTarget(body: { sessionItemId?: string; runId?: string; channelMessageId?: string }): CommentTarget {
-//   const targets = [body.sessionItemId, body.runId, body.channelMessageId].filter(Boolean);
-//   if (targets.length !== 1) {
-//     throw new AgentViewError("Exactly one of sessionItemId, runId, or channelMessageId must be provided", 422);
-//   }
-//   if (body.sessionItemId) return { sessionItemId: body.sessionItemId };
-//   if (body.runId) return { runId: body.runId };
-//   return { channelMessageId: body.channelMessageId! };
-// }
-
-// function parseScoreTarget(body: { sessionItemId?: string; runId?: string }): CommentTarget {
-//   const targets = [body.sessionItemId, body.runId].filter(Boolean);
-//   if (targets.length !== 1) {
-//     throw new AgentViewError("Exactly one of sessionItemId or runId must be provided", 422);
-//   }
-//   if (body.sessionItemId) return { sessionItemId: body.sessionItemId };
-//   return { runId: body.runId! };
-// }
 
 
 /* --------- FLAT SCORES API --------- */
@@ -1952,7 +1743,7 @@ app.openapi(scoresPATCHRoute, async (c) => {
       // delete
       if (value === null || value === undefined) {
         if (existingScore) {
-          await deleteComment(tx, existingScore.commentId, memberId, principal.organizationId);
+          await deleteComment(tx, existingScore.commentId, memberId);
           await tx.delete(scores)
             .where(eq(scores.id, existingScore.id));
         }
@@ -1978,7 +1769,7 @@ app.openapi(scoresPATCHRoute, async (c) => {
         }
         // create
         else {
-          const commentMessage = await createComment(tx, target, memberId, null, principal.organizationId);
+          const commentMessage = await createComment(tx, target, memberId, null);
 
           await tx.insert(scores).values({
             organizationId: principal.organizationId,
