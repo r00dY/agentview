@@ -160,6 +160,7 @@ async function callAgentAPIAISDK(
     /**
      * Response is there.
      * Let's check for error responses or no response body
+     * If error, we send upstream error response to the client.
      */
     let error: string | undefined = undefined;
     if (!response.body) {
