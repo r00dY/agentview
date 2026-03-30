@@ -5,46 +5,35 @@ import type { Principal } from './authMiddleware';
 
 export type AfterCommit = (fn: () => void | Promise<void>) => void;
 
+type EditSessionLock = { type: "edit_session", sessionId: string }
+type CreateResourceLock = { type: "create_resource" }
+type Lock = EditSessionLock | CreateResourceLock;
+
+function getLockKey(organizationId: string, lock: Lock) {
+  if (lock.type === "edit_session") {
+    return `${organizationId}:edit_session:${lock.sessionId}`;
+  } else if (lock.type === "create_resource") {
+    return `${organizationId}:create_resource`;
+  }
+}
+
 export type OrgTransaction = Transaction & {
   afterCommit: AfterCommit;
   organizationId: string;
+  acquireLock: (lock: Lock) => Promise<void>;
 };
 
 export type TenantTransaction = OrgTransaction & {
   principal: Principal;
 };
 
-/**
- * Executes a function within a transaction with the organization context set.
- * This enables PostgreSQL RLS policies to filter data by organization.
- *
- * The callback receives an `OrgTransaction` — a regular drizzle transaction
- * extended with `afterCommit` and `organizationId`.
- *
- * @example
- * ```ts
- * const session = await withOrg(principal.organizationId, async (tx) => {
- *   return tx.query.sessions.findFirst({
- *     where: eq(sessions.id, sessionId),
- *   });
- * });
- * ```
- *
- * @example
- * ```ts
- * await withOrg(principal.organizationId, async (tx) => {
- *   await tx.insert(runs).values({ ... });
- *   tx.afterCommit(async () => {
- *     await notifyExternalService();
- *   });
- * });
- * ```
- */
 export async function withOrg<T>(
   organizationId: string,
   fn: (tx: OrgTransaction) => Promise<T>
 ): Promise<T> {
   const afterCommitCallbacks: (() => void | Promise<void>)[] = [];
+  
+  let lockedSessionId : string | undefined = undefined;
 
   const result = await db__dangerous.transaction(async (tx) => {
     // Switch to app_user role to enforce RLS (admin is superuser, bypasses RLS)
@@ -58,6 +47,24 @@ export async function withOrg<T>(
     const orgTx = Object.assign(tx, {
       afterCommit: (cb: () => void | Promise<void>) => { afterCommitCallbacks.push(cb) },
       organizationId,
+      acquireLock: async (lock: Lock) => { 
+
+        // We can't allow for create_resource lock be added after edit_session lock. Deadlock prevention.
+        if (lock.type === "create_resource" && lockedSessionId) {
+          await tx.rollback();
+          throw new Error("!!!!!!!!!!!!!!!!! LOCK ORDER VIOLATION. 'create_resource' after 'edit_session' !!!!!!!!!!!!!!!!! ");
+        } else if (lock.type === "edit_session") {
+          if (lockedSessionId && lockedSessionId !== lock.sessionId) {
+            await tx.rollback();
+            throw new Error("!!!!!!!!!!!!!!!!! LOCK ORDER VIOLATION. multiple sessions locked !!!!!!!!!!!!!!!!! ");
+          }
+          lockedSessionId = lock.sessionId;
+        }
+
+        const lockKey = getLockKey(organizationId, lock);
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
+
+      },
     }) as OrgTransaction;
 
     return fn(orgTx);

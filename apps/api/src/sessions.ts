@@ -11,7 +11,6 @@ import type { SessionStatus } from "agentview/apiTypes";
 import type { OrgTransaction } from "./withOrg";
 import { randomBytes } from "crypto";
 import { AgentViewError } from "agentview";
-import { HTTPException } from "hono/http-exception";
 
 export type LastRunStatus = {
   id: string;
@@ -212,6 +211,37 @@ export async function requireSessionBase(tx: Transaction, sessionId: string) {
 
 
 
+
+
+async function fetchSessionState(tx: Transaction, session_id: string) {
+  // Fetch the latest __state__ session item by createdAt descending
+  const stateItem = await tx.query.sessionItems.findFirst({
+    where: and(eq(sessionItems.sessionId, session_id), eq(sessionItems.isState, true)),
+    orderBy: (sessionItem, { desc }) => [desc(sessionItem.createdAt)],
+  });
+
+  if (!stateItem) {
+    return null
+  }
+
+  return stateItem.content as any
+}
+
+export function getSessionStatusFields(session: StandardSession) : { status: SessionStatus, failReason: any | null } {
+  const lastRun = session.runs[session.runs.length - 1];
+  const failReason = lastRun?.failReason;
+
+  return {
+    status: (!lastRun || lastRun.status === 'completed') ? 'idle' : (lastRun.status as SessionStatus),
+    failReason
+  }
+}
+
+
+/**
+ * Mutations. Locks required.
+ */
+
 export async function createInactiveSession(tx: OrgTransaction, params: {
   environment: Environment;
   channelRef: ChannelRef;
@@ -223,6 +253,8 @@ export async function createInactiveSession(tx: OrgTransaction, params: {
   initialState?: any;
   createdBy?: string | null;
 }) {
+  await tx.acquireLock({ type: "create_resource" });
+
   const config = getConfigFromEnvironment(params.environment);
   const channelConfig = requireChannelConfig(config, params.channelRef);
 
@@ -257,12 +289,15 @@ export async function createInactiveSession(tx: OrgTransaction, params: {
 }
 
 export async function activateSession(tx: OrgTransaction, sessionId: string) {
+  await tx.acquireLock({ type: "edit_session", sessionId });
+
   const session = await tx.query.sessions.findFirst({
     where: eq(sessions.id, sessionId),
     with: {
       user: true,
     },
   });
+
   if (!session) {
     throw new Error("[Internal Error] Session not found");
   }
@@ -298,29 +333,4 @@ export async function activateSession(tx: OrgTransaction, sessionId: string) {
   }).returning();
 
   await updateInboxes(tx, event);
-}
-
-
-async function fetchSessionState(tx: Transaction, session_id: string) {
-  // Fetch the latest __state__ session item by createdAt descending
-  const stateItem = await tx.query.sessionItems.findFirst({
-    where: and(eq(sessionItems.sessionId, session_id), eq(sessionItems.isState, true)),
-    orderBy: (sessionItem, { desc }) => [desc(sessionItem.createdAt)],
-  });
-
-  if (!stateItem) {
-    return null
-  }
-
-  return stateItem.content as any
-}
-
-export function getSessionStatusFields(session: StandardSession) : { status: SessionStatus, failReason: any | null } {
-  const lastRun = session.runs[session.runs.length - 1];
-  const failReason = lastRun?.failReason;
-
-  return {
-    status: (!lastRun || lastRun.status === 'completed') ? 'idle' : (lastRun.status as SessionStatus),
-    failReason
-  }
 }

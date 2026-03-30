@@ -62,7 +62,7 @@ export function validateItems(runConfig: BaseRunConfig, previousRunItems: any[],
   return parsedItems;
 }
 
-export async function handleChannelReply(
+async function handleChannelReply(
   tx: Transaction,
   runId: string,
   sessionId: string,
@@ -105,7 +105,7 @@ export async function handleChannelReply(
  * Marks the last N non-input, non-state items as 'output' on run completion.
  * Validates each item against the output schema before marking.
  */
-export async function markOutputItems(
+async function markOutputItems(
   tx: Transaction,
   runId: string,
   outputItemCount: number,
@@ -149,7 +149,7 @@ export async function markOutputItems(
  * Most modifications of a run, especially run patch or terminate can be concurrent. Apply patch logic takes non-obvious amount of time to complete, so we must start with a lock for safety of concurrent writes.
  * That's why we use SELECT FOR UPDATE here on row and this function should be always called with a lock.
  */
-export async function getRunBaseWithLock(tx: Transaction, runId: string) {
+export async function getRunBase(tx: Transaction, runId: string) {
   requireUUID(runId);
 
   // Build the run query — use select() API so we can append FOR UPDATE.
@@ -170,8 +170,8 @@ export async function getRunBaseWithLock(tx: Transaction, runId: string) {
   };
 }
 
-export async function requireRunBaseWithLock(tx: Transaction, runId: string) {
-  const run = await getRunBaseWithLock(tx, runId);
+export async function requireRunBase(tx: Transaction, runId: string) {
+  const run = await getRunBase(tx, runId);
   if (!run) {
     throw new AgentViewError("Run not found", 404);
   }
@@ -194,216 +194,6 @@ export async function getRunSessionItems(tx: Transaction, runId: string) {
 
 
 
-/**
- * Core run-update logic shared between the PATCH handler and the worker.
- * Validates items, metadata, status transitions, inserts items, and updates the run.
- */
-export async function applyRunPatch(
-  tx: OrgTransaction,
-  runId: string,
-  environment: Environment | null,
-  body: ManualRunUpdate
-) {
-    const run = await getRunBaseWithLock(tx, runId); // we must start with a lock for safety of concurrent writes!
-
-    if (!run) {
-      throw new AgentViewError("Run not found.", 404);
-    }
-
-    if (run.status === 'pending' || run.status === 'init') {
-      throw new AgentViewError("You can't run apply patch on run in 'init' or 'pending' status.", 422);
-    }
-
-    /** Find matching run config **/
-    const inputItem = (await getRunInput(tx, runId))?.content;
-
-    let parsedItems: any[] = [];
-    let metadata: Record<string, any> | undefined = undefined;
-    let idleTimeout: number | undefined;
-
-    /** Reject outputItemCount if status is not being set to 'completed' */
-    if (body.outputItemCount !== undefined && body.status !== 'completed') {
-      throw new AgentViewError("outputItemCount can only be set when status is 'completed'.", 422);
-    }
-    if (body.channelReply !== undefined && body.status !== 'completed') {
-      throw new AgentViewError("channelReply can only be set when status is 'completed'.", 422);
-    }
-
-    let runConfig: BaseRunConfig | undefined;
-
-    if (body.items || body.metadata || body.state || body.status === 'completed') { // operations requiring run config
-      if (!environment) {
-        throw new AgentViewError("Environment is required for this operation.", 422);
-      }
-      const config = getConfigFromEnvironment(environment);
-
-      const agentName = run.agentRef?.agent;
-      if (!agentName) {
-        throw new AgentViewError("You're trying to update run items, metadata or state, but the run doesn't have an agent assigned yet.", 422);
-      }
-
-      const agentConfig = requireAgentConfig(config, agentName);
-      runConfig = requireRunConfig(agentConfig, inputItem);
-
-      /** Validate items */
-      const items = body.items ?? [];
-
-      if (isRunFinished(run) && items.length > 0) {
-        // it's important to throw error with proper code. It allows other systems to handle cancels and fails differently!
-        throw new AgentViewError("Run already finished. Cannot add items.", 422);
-      }
-
-      const sessionItems = await getRunSessionItems(tx, runId);
-
-      parsedItems = validateItems(runConfig, sessionItems.map(si => si.content), items);
-
-      /** State */
-      if (isRunFinished(run) && body.state !== undefined) {
-        throw new AgentViewError("Run already finished. Cannot set state.", 422);
-      }
-
-      /** Metadata **/
-      metadata = parseMetadata(runConfig.metadata, runConfig.allowUnknownMetadata ?? true, body.metadata ?? {}, run.metadata ?? {});
-
-      idleTimeout = runConfig.idleTimeout ?? DEFAULT_IDLE_TIME;
-    }
-
-    /** Status, finished at, failReason */
-    if (isRunFinished(run) && body.status && body.status !== run.status) {
-      throw new AgentViewError("Run already finished. Cannot change status.", 422);
-    }
-
-    const status = body.status ?? 'in_progress';
-    const failReason = body.failReason ?? null;
-
-    if (failReason) {
-      if (isRunFinished(run)) {
-        throw new AgentViewError("Run already finished. failReason cannot be set.", 422);
-      }
-      else if (status !== 'failed') {
-        throw new AgentViewError("failReason can only be set when changing status to 'failed'.", 422);
-      }
-    }
-
-    const now = new Date();
-    const nowIso = now.toISOString();
-
-    const isFinished = status === 'completed' || status === 'failed' || status === 'cancelled';
-    const finishedAt = run.finishedAt ?? (isFinished ? nowIso : null);
-
-    let expiresAt: string | null = null;
-    if (!isFinished) {
-      if (!idleTimeout) { // if not finished, then idleTimeout must be set
-        throw new AgentViewError("idleTimeout must be set when run is not finished.", 422);
-      }
-      expiresAt = new Date(now.getTime() + idleTimeout).toISOString();
-    }
-
-    let insertedItems: any[] = [];
-
-    // await withOrg(organizationId, async (tx) => {
-    if (parsedItems.length > 0) {
-      insertedItems = await tx.insert(sessionItems).values(
-        parsedItems.map(item => ({
-          organizationId: run.organizationId,
-          sessionId: run.sessionId,
-          content: item,
-          runId: run.id,
-          type: 'step' as const,
-        }))
-      ).returning();
-    }
-
-    await tx.update(runs).set({
-      status,
-      metadata,
-      failReason,
-      finishedAt,
-      expiresAt,
-      updatedAt: nowIso,
-    }).where(eq(runs.id, run.id));
-
-    if (body.state !== undefined) {
-      await tx.insert(sessionItems).values({
-        organizationId: run.organizationId,
-        sessionId: run.sessionId,
-        content: body.state,
-        runId: run.id,
-        isState: true,
-      });
-    }
-
-    /** Mark output items on completion */
-    if (status === 'completed' && runConfig) {
-      const outputItemCount = body.outputItemCount ?? 1;
-      await markOutputItems(tx, run.id, outputItemCount, runConfig);
-      await handleChannelReply(tx, run.id, run.sessionId, tx.organizationId, body.channelReply);
-    }
-
-  //   return { insertedItems, nowIso, isFinished, run };
-  // });
-
-  // Publish to Redis stream only after transaction finished successfully in DB
-  const dataToStream = JSON.stringify({
-    ...body,
-    items: insertedItems,
-    updatedAt: nowIso
-  });
-
-  tx.afterCommit(async () => {
-    await publishRunStreamEvent(runId, nowIso, dataToStream);
-
-    if (isFinished) {
-      await publishRunStreamEvent(runId, null, '[DONE]');
-    }
-  });
-}
-
-/**
- * Best-effort run clean-up (for finally {} blocks, timeouts, discards etc)
- */
-export async function terminateRun(tx: OrgTransaction, runId: string, reason: RunTerminationReason) {
-  try {
-    const runBase = await getRunBaseWithLock(tx, runId); // we must start with a lock for safety of concurrent writes!
-    
-    if (!runBase) {
-      console.warn(`[terminateRun][${runId}] run not found`);
-      return;
-    }
-
-    if (isRunFinished(runBase)) {
-      return;
-    }
-
-    // logs
-    const logText = terminationReasonText(reason);
-
-    // When we get termination for pending/init run, we override to discard.
-    if ((runBase.status === 'pending' || runBase.status === 'init') && reason.status !== 'discarded') {
-      reason = { status: 'discarded', failReason: { message: `Overriden for pending/init from: ${logText}` } };
-    }
-
-    console.log(`[terminateRun][${runId}] terminating, ${logText}`);
-    const nowIso = new Date().toISOString();
-
-    await tx.update(runs).set({
-      ...reason,
-      finishedAt: nowIso,
-      updatedAt: nowIso,
-      expiresAt: null,
-    }).where(eq(runs.id, runId));
-
-    // this is important, we must send the last run patch event to the stream
-    tx.afterCommit(async () => {
-      await publishRunStreamEvent(runId, nowIso, JSON.stringify({ 
-        ...reason,
-        updatedAt: nowIso,
-      }));
-      await publishRunStreamEvent(runId, null, '[DONE]');
-    });
-
-  } catch {}
-}
 
 
 /**
@@ -428,7 +218,7 @@ async function createRunCore(
     runConfig: BaseRunConfig;
     lastRun: ReturnType<typeof getLastRun>;
   }
-): Promise<typeof runs.$inferSelect> {
+): Promise<typeof runs.$inferSelect> {  
   const { parsedInput, parsedNonInputItems, status, failReason, expiresAt, finishedAt, metadata, agentRefId, manual, state, runConfig, lastRun, id } = params;
 
   const [insertedRun] = await tx.insert(runs).values({
@@ -551,11 +341,260 @@ async function processInput(agentConfig: BaseAgentConfig, input: any) {
 }
 
 
+
+export type RunTerminationReason = { status: 'cancelled' } | { status: 'failed', failReason: any } | { status: 'discarded', failReason: any };
+
+export function terminationReasonText(body: RunTerminationReason) {
+  switch (body.status) {
+    case 'cancelled':
+      return 'cancelled';
+    case 'failed':
+      return `failed${body.failReason ? ` (${body.failReason.message})` : ''}`;
+    case 'discarded':
+      return `discarded${body.failReason ? ` (${body.failReason.message})` : ''}`;
+  }
+}
+
+export class RunTerminationError extends Error {
+  constructor(public reason: RunTerminationReason) {
+    super(terminationReasonText(reason));
+    this.name = 'RunTerminationError';
+  }
+}
+
+
+
+/**
+ * Mutations. Locks required.
+ */
+
+
+/**
+ * Core run-update logic shared between the PATCH handler and the worker.
+ * Validates items, metadata, status transitions, inserts items, and updates the run.
+ */
+export async function applyRunPatch(
+  tx: OrgTransaction,
+  sessionId: string,
+  runId: string,
+  environment: Environment | null,
+  body: ManualRunUpdate
+) {
+  await tx.acquireLock({ type: "edit_session", sessionId });
+
+  const run = await requireRunBase(tx, runId); // we must start with a lock for safety of concurrent writes!
+
+  if (!run) {
+    throw new AgentViewError("Run not found.", 404);
+  }
+
+  if (run.status === 'pending' || run.status === 'init') {
+    throw new AgentViewError("You can't run apply patch on run in 'init' or 'pending' status.", 422);
+  }
+
+  /** Find matching run config **/
+  const inputItem = (await getRunInput(tx, runId))?.content;
+
+  let parsedItems: any[] = [];
+  let metadata: Record<string, any> | undefined = undefined;
+  let idleTimeout: number | undefined;
+
+  /** Reject outputItemCount if status is not being set to 'completed' */
+  if (body.outputItemCount !== undefined && body.status !== 'completed') {
+    throw new AgentViewError("outputItemCount can only be set when status is 'completed'.", 422);
+  }
+  if (body.channelReply !== undefined && body.status !== 'completed') {
+    throw new AgentViewError("channelReply can only be set when status is 'completed'.", 422);
+  }
+
+  let runConfig: BaseRunConfig | undefined;
+
+  if (body.items || body.metadata || body.state || body.status === 'completed') { // operations requiring run config
+    if (!environment) {
+      throw new AgentViewError("Environment is required for this operation.", 422);
+    }
+    const config = getConfigFromEnvironment(environment);
+
+    const agentName = run.agentRef?.agent;
+    if (!agentName) {
+      throw new AgentViewError("You're trying to update run items, metadata or state, but the run doesn't have an agent assigned yet.", 422);
+    }
+
+    const agentConfig = requireAgentConfig(config, agentName);
+    runConfig = requireRunConfig(agentConfig, inputItem);
+
+    /** Validate items */
+    const items = body.items ?? [];
+
+    if (isRunFinished(run) && items.length > 0) {
+      // it's important to throw error with proper code. It allows other systems to handle cancels and fails differently!
+      throw new AgentViewError("Run already finished. Cannot add items.", 422);
+    }
+
+    const sessionItems = await getRunSessionItems(tx, runId);
+
+    parsedItems = validateItems(runConfig, sessionItems.map(si => si.content), items);
+
+    /** State */
+    if (isRunFinished(run) && body.state !== undefined) {
+      throw new AgentViewError("Run already finished. Cannot set state.", 422);
+    }
+
+    /** Metadata **/
+    metadata = parseMetadata(runConfig.metadata, runConfig.allowUnknownMetadata ?? true, body.metadata ?? {}, run.metadata ?? {});
+
+    idleTimeout = runConfig.idleTimeout ?? DEFAULT_IDLE_TIME;
+  }
+
+  /** Status, finished at, failReason */
+  if (isRunFinished(run) && body.status && body.status !== run.status) {
+    throw new AgentViewError("Run already finished. Cannot change status.", 422);
+  }
+
+  const status = body.status ?? 'in_progress';
+  const failReason = body.failReason ?? null;
+
+  if (failReason) {
+    if (isRunFinished(run)) {
+      throw new AgentViewError("Run already finished. failReason cannot be set.", 422);
+    }
+    else if (status !== 'failed') {
+      throw new AgentViewError("failReason can only be set when changing status to 'failed'.", 422);
+    }
+  }
+
+  const now = new Date();
+  const nowIso = now.toISOString();
+
+  const isFinished = status === 'completed' || status === 'failed' || status === 'cancelled';
+  const finishedAt = run.finishedAt ?? (isFinished ? nowIso : null);
+
+  let expiresAt: string | null = null;
+  if (!isFinished) {
+    if (!idleTimeout) { // if not finished, then idleTimeout must be set
+      throw new AgentViewError("idleTimeout must be set when run is not finished.", 422);
+    }
+    expiresAt = new Date(now.getTime() + idleTimeout).toISOString();
+  }
+
+  let insertedItems: any[] = [];
+
+  // await withOrg(organizationId, async (tx) => {
+  if (parsedItems.length > 0) {
+    insertedItems = await tx.insert(sessionItems).values(
+      parsedItems.map(item => ({
+        organizationId: run.organizationId,
+        sessionId: run.sessionId,
+        content: item,
+        runId: run.id,
+        type: 'step' as const,
+      }))
+    ).returning();
+  }
+
+  await tx.update(runs).set({
+    status,
+    metadata,
+    failReason,
+    finishedAt,
+    expiresAt,
+    updatedAt: nowIso,
+  }).where(eq(runs.id, run.id));
+
+  if (body.state !== undefined) {
+    await tx.insert(sessionItems).values({
+      organizationId: run.organizationId,
+      sessionId: run.sessionId,
+      content: body.state,
+      runId: run.id,
+      isState: true,
+    });
+  }
+
+  /** Mark output items on completion */
+  if (status === 'completed' && runConfig) {
+    const outputItemCount = body.outputItemCount ?? 1;
+    await markOutputItems(tx, run.id, outputItemCount, runConfig);
+    await handleChannelReply(tx, run.id, run.sessionId, tx.organizationId, body.channelReply);
+  }
+
+  //   return { insertedItems, nowIso, isFinished, run };
+  // });
+
+  // Publish to Redis stream only after transaction finished successfully in DB
+  const dataToStream = JSON.stringify({
+    ...body,
+    items: insertedItems,
+    updatedAt: nowIso
+  });
+
+  tx.afterCommit(async () => {
+    await publishRunStreamEvent(runId, nowIso, dataToStream);
+
+    if (isFinished) {
+      await publishRunStreamEvent(runId, null, '[DONE]');
+    }
+  });
+}
+
+/**
+ * Best-effort run clean-up (for finally {} blocks, timeouts, discards etc)
+ */
+export async function terminateRun(tx: OrgTransaction, sessionId: string, runId: string, reason: RunTerminationReason) {
+  await tx.acquireLock({ type: "edit_session", sessionId });
+
+  try {
+    const runBase = await getRunBase(tx, runId); // we must start with a lock for safety of concurrent writes!
+
+    if (!runBase) {
+      console.warn(`[terminateRun][${runId}] run not found`);
+      return;
+    }
+
+    if (isRunFinished(runBase)) {
+      return;
+    }
+
+    // logs
+    const logText = terminationReasonText(reason);
+
+    // When we get termination for pending/init run, we override to discard.
+    if ((runBase.status === 'pending' || runBase.status === 'init') && reason.status !== 'discarded') {
+      reason = { status: 'discarded', failReason: { message: `Overriden for pending/init from: ${logText}` } };
+    }
+
+    console.log(`[terminateRun][${runId}] terminating, ${logText}`);
+    const nowIso = new Date().toISOString();
+
+    await tx.update(runs).set({
+      ...reason,
+      finishedAt: nowIso,
+      updatedAt: nowIso,
+      expiresAt: null,
+    }).where(eq(runs.id, runId));
+
+    // this is important, we must send the last run patch event to the stream
+    tx.afterCommit(async () => {
+      await publishRunStreamEvent(runId, nowIso, JSON.stringify({
+        ...reason,
+        updatedAt: nowIso,
+      }));
+      await publishRunStreamEvent(runId, null, '[DONE]');
+    });
+
+  } catch { }
+}
+
+
+
+
 export async function createAutoRunFromChannelMessages(
   tx: OrgTransaction,
   environment: Environment,
   sessionId: string
 ) {
+  await tx.acquireLock({ type: "edit_session", sessionId });
+
   const { lastRun, agentConfig, agentRefId, session } = await prepareRunCreation(tx, environment, sessionId);
   const adapter = getAdapter(agentConfig.adapter);
 
@@ -634,6 +673,8 @@ export async function createAutoRun(
   sessionId: string,
   body: { input: Record<string, any> }
 ): Promise<typeof runs.$inferSelect> {
+  await tx.acquireLock({ type: "edit_session", sessionId });
+
   const { lastRun, agentConfig, agentRefId } = await prepareRunCreation(tx, environment, sessionId);
   const { runConfig, parsedInput, idleTimeout } = await processInput(agentConfig, body.input);
 
@@ -664,6 +705,8 @@ export async function createManualRun(
   sessionId: string,
   body: ManualRunCreate
 ): Promise<typeof runs.$inferSelect> {
+  await tx.acquireLock({ type: "edit_session", sessionId });
+
   const sessionBase = await fetchSessionBase(tx, sessionId); // todo: optimize
   if (!sessionBase) {
     throw new AgentViewError("Session not found.", 404);
@@ -714,25 +757,4 @@ export async function createManualRun(
     runConfig,
     lastRun,
   });
-}
-
-
-export type RunTerminationReason = { status: 'cancelled' } | { status: 'failed', failReason: any } | { status: 'discarded', failReason: any };
-
-export function terminationReasonText(body: RunTerminationReason) {
-  switch (body.status) {
-    case 'cancelled':
-      return 'cancelled';
-    case 'failed':
-      return `failed${body.failReason ? ` (${body.failReason.message})` : ''}`;
-    case 'discarded':
-      return `discarded${body.failReason ? ` (${body.failReason.message})` : ''}`;
-  }
-}
-
-export class RunTerminationError extends Error {
-  constructor(public reason: RunTerminationReason) {
-    super(terminationReasonText(reason));
-    this.name = 'RunTerminationError';
-  }
 }

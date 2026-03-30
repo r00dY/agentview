@@ -69,7 +69,7 @@ import type { Transaction } from './types';
 import { updateInboxes } from './updateInboxes';
 import { createUser, requireUser } from './users';
 import { randomBytes } from 'crypto';
-import { applyRunPatch, getRunBaseWithLock, createAutoRun, createManualRun, DEFAULT_IDLE_TIME, getRunInputContent, terminateRun, getRunInput, isRunFinished, requireRunBaseWithLock } from './runs';
+import { applyRunPatch, createAutoRun, createManualRun, DEFAULT_IDLE_TIME, getRunInputContent, terminateRun, getRunInput, isRunFinished, requireRunBase } from './runs';
 import { createRunStreamConsumer, publishRunTerminationEvent } from './runStream';
 import { resolveAgentRef } from './agentRefs';
 import { adapters, getAdapter } from './adapters/adapters';
@@ -1264,7 +1264,7 @@ async function sessionStandardCancelHandler(c: Parameters<RouteHandler<typeof se
 
   setTimeout(() => {
     withOrg(principal.organizationId, async (tx) => {
-      await terminateRun(tx, lastRun.id, { status: 'cancelled' });
+      await terminateRun(tx, session_id, lastRun.id, { status: 'cancelled' });
     });
   }, 5000);
   
@@ -1332,7 +1332,7 @@ app.openapi(runKeepAliveRoute, async (c) => {
   const { run_id } = c.req.param()
 
   return withOrg(principal.organizationId, async (tx) => {
-    const run = await requireRunBaseWithLock(tx, run_id);
+    const run = await requireRunBase(tx, run_id);
     const session = await requireSessionBase(tx, run.sessionId);
 
     authorize(principal, { action: "end-user:update", user: session.user });
@@ -1429,7 +1429,7 @@ app.openapi(runManualPATCHRoute, async (c) => {
   const body = await c.req.valid('json')
 
   return await withOrg(principal.organizationId, async (tx) => {
-    const run = await requireRunBaseWithLock(tx, run_id);
+    const run = await requireRunBase(tx, run_id);
     const session = await requireSessionBase(tx, run.sessionId);
 
     authorize(principal, { action: "end-user:update", user: session.user });
@@ -1441,7 +1441,7 @@ app.openapi(runManualPATCHRoute, async (c) => {
 
     const environment = await requireEnvironment(tx, principal.env);
 
-    await applyRunPatch(tx, run.id, environment, body);
+    await applyRunPatch(tx, session.id, run.id, environment, body);
 
     const updatedSession = await requireSession(tx, session.id); // TODO: optimize
     const newRun = getLastRun(updatedSession)!;

@@ -11,7 +11,6 @@ import { createInactiveSession, activateSession } from '../sessions';
 import type { ChannelRef } from 'agentview/apiTypes';
 import { ensureUserForEmail } from '../users';
 import type { ServicePrincipal } from 'src/authMiddleware';
-import { acquireCreateResourceLock } from 'src/locks';
 
 export type Channel = typeof channels.$inferSelect;
 type ChannelThread = typeof channelThreads.$inferSelect;
@@ -205,7 +204,7 @@ export function channelProvider(type: string) {
     };
 
     const result: IngestMessageResult = await withTenant(servicePrincipal, async (tx) => {
-      await acquireCreateResourceLock(tx); // entire operation is serialized per tenant (we can optimize this later)
+      await tx.acquireLock({ type: "create_resource" });
 
       /**
        * Create or get channel thread and channel message
@@ -230,6 +229,8 @@ export function channelProvider(type: string) {
        * TODO: We should aquire SESSION LOCK TOO HERE.
        */
       if (session) {
+        await tx.acquireLock({ type: "edit_session", sessionId: session.id });
+
         console.log('[ingestMessage] session found');
         const activeRun = await tx.query.runs.findFirst({
           where: and(
@@ -239,7 +240,7 @@ export function channelProvider(type: string) {
         })
         if (activeRun) {
           console.log('[ingestMessage] active run found, terminating');
-          await terminateRun(tx, activeRun.id, { status: 'discarded', failReason: { message: 'New message ingested, discarding active run' } });
+          await terminateRun(tx, session.id, activeRun.id, { status: 'discarded', failReason: { message: 'New message ingested, discarding active run' } });
         } else {
           console.log('[ingestMessage] no active run found');
         }

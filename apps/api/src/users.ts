@@ -7,7 +7,6 @@ import { requireEnvironment } from './environments'
 import { randomBytes } from 'crypto'
 import { authorize, type Principal } from './authMiddleware'
 import type { OrgTransaction, TenantTransaction } from './withOrg'
-import { acquireCreateResourceLock } from './locks'
 import { requireUUID } from './isUUID'
 
 type FindUserByIdOptions = {
@@ -90,9 +89,12 @@ function getDefaultSpaceFromEnvironment(environment: Environment): { space: Spac
   }
 }
 
+/**
+ * Mutations. Locks required.
+ */
   
 export async function createUser(tx: TenantTransaction, body: UserCreate) {
-  await acquireCreateResourceLock(tx);
+  await tx.acquireLock({ type: "create_resource" });
 
   const environment = await requireEnvironment(tx, tx.principal.env)
 
@@ -143,7 +145,7 @@ export async function ensureUserForEmail(tx: TenantTransaction, email: string) {
     return user
   }
 
-  await acquireCreateResourceLock(tx); // lock
+  await tx.acquireLock({ type: "create_resource" });
   const user2 = await findUser(tx, { email }) // check
   if (user2) {
     return user2

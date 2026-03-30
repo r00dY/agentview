@@ -38,7 +38,7 @@ export const expiredRunsWorker = createWorker<Run>({
     }
 
     await withOrg(run.organizationId, async (tx) => {
-      await terminateRun(tx, run.id, TERMINATION_REASON);
+      await terminateRun(tx, run.sessionId, run.id, TERMINATION_REASON);
     });
   },
 });

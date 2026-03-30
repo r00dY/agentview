@@ -162,6 +162,7 @@ async function processAgentFetch(run: Run) {
         await withOrg(run.organizationId, async (tx) => {
           await applyRunPatch(
             tx,
+            session.id,
             run.id,
             environment,
             event.data
@@ -183,7 +184,7 @@ async function processAgentFetch(run: Run) {
         isFirstEventSent = true;
 
         await withOrg(run.organizationId, async (tx) => {
-          await terminateRun(tx, run.id, {
+          await terminateRun(tx, session.id, run.id, {
             status: 'discarded',
             failReason: event.data,
           });
@@ -198,6 +199,8 @@ async function processAgentFetch(run: Run) {
         isFirstEventSent = true;
 
         await withOrg(run.organizationId, async (tx) => {
+          await tx.acquireLock({ type: "edit_session", sessionId: session.id });
+          
           await tx.update(runs).set({ status: 'in_progress' }).where(eq(runs.id, run.id));
           await activateSession(tx, session.id);
         });
@@ -224,7 +227,7 @@ async function processAgentFetch(run: Run) {
       console.log(`[agentFetch][${run.id}] cleaning up`);
 
       await withOrg(run.organizationId, async (tx) => {
-        await terminateRun(tx, run.id, {
+        await terminateRun(tx, run.sessionId, run.id, {
           status: 'failed',
           failReason: { message: finalError ?? "The job ended with unfinished work. This should never happen." },
         });
