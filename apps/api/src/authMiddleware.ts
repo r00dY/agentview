@@ -32,8 +32,8 @@ async function verifyAndGetKey(bearer: string) {
 export type MemberPrincipal = {
   type: 'member',
   session: NonNullable<Awaited<ReturnType<(typeof getBetterAuthSession)>>>,
-  env?: string,
   role: string,
+  env?: string,
   organizationId: any,
 }
 
@@ -41,7 +41,6 @@ export type ApiKeyPrincipal = {
   type: 'apiKey',
   env?: string,
   apiKey: NonNullable<Awaited<ReturnType<typeof verifyAndGetKey>>>,
-  // role: string,
   organizationId: any,
 }
 
@@ -59,8 +58,14 @@ export type UserPrincipal = {
   organizationId: string
 }
 
+export type ServicePrincipal = {
+  type: 'service',
+  env?: string,
+  organizationId: string
+}
+
 export type PrivatePrincipal = MemberPrincipal | ApiKeyPrincipal;
-export type Principal = MemberPrincipal | ApiKeyPrincipal | UserPrincipal | ApiKeyPublicPrincipal;
+export type Principal = MemberPrincipal | ApiKeyPrincipal | UserPrincipal | ApiKeyPublicPrincipal | ServicePrincipal;
 
 /** --------- INTERNAL HELPERS --------- */
 
@@ -102,45 +107,39 @@ async function requireOrganization(input: Headers | string) {
   return organization
 }
 
-async function requireUserByToken(organizationId: string, userToken: string) {
-  const user = await withOrg(organizationId, tx => findUser(tx, { token: userToken }))
-  if (!user) {
-    throw new HTTPException(404, { message: "User not found." });
-  }
-  return user;
-}
-
 /** --------- AUTHENTICATION --------- */
 
 // setting x-user-token always forces either user principal or unauthorised.
 // but it's not work just on its own, you gotta be authenticated first (via api key or member cookie)
-export async function authnAllowAnon(headers: Headers): Promise<Principal> {
-  const env  = headers.get('x-env') ?? undefined;
 
-  // See whether it's gonna be user principal
-  let userPrincipal: UserPrincipal | undefined;
+
+async function getUserPrincipal(headers: Headers, organizationId: string, env?: string) : Promise<UserPrincipal | undefined> {
   const userToken = extractUserToken(headers);
   if (userToken) {
-    const user = await db__dangerous.transaction(async tx => {
-      return await findUser(tx, { token: userToken })
-    })
-    if (user) {
-      userPrincipal = { type: 'user', user, organizationId: user.organizationId, env }
-    }
-    else {
+    const user = await withOrg(organizationId, tx => findUser(tx, { token: userToken }))
+    if (!user) {
       throw new HTTPException(401, { message: "Invalid User Token" });
     }
+    return { type: 'user', user, organizationId, env }
   }
+  return undefined;
+}
+
+export async function authnAllowAnon(headers: Headers): Promise<Principal> {
+  const env  = headers.get('x-env') ?? undefined;
 
   // members (cookies)
   const memberSession = await auth.api.getSession({ headers })
 
   if (memberSession) {
+    const organization = await requireOrganization(headers)
+
+    // Check for user principal
+    const userPrincipal = await getUserPrincipal(headers, organization.id, env)
     if (userPrincipal) {
       return userPrincipal;
     }
 
-    const organization = await requireOrganization(headers)
     const role = await getRole(memberSession.user.id, organization.id)
 
     return { type: 'member', session: memberSession, role, organizationId: organization.id, env }
@@ -157,12 +156,13 @@ export async function authnAllowAnon(headers: Headers): Promise<Principal> {
     })
 
     if (valid === true && !error && key) {
+      const organization = await requireOrganization(key.metadata?.organizationId ?? "");
+
+      // Check for user principal
+      const userPrincipal = await getUserPrincipal(headers, organization.id, env)
       if (userPrincipal) {
         return userPrincipal;
       }
-
-      const organization = await requireOrganization(key.metadata?.organizationId ?? "");
-      // const role = await getRole(key.userId, organization.id)
 
       if (key.prefix === 'pk_') {
         return { type: 'apiKeyPublic', apiKey: key, organizationId: organization.id, env }
@@ -180,7 +180,7 @@ export async function authnAllowAnon(headers: Headers): Promise<Principal> {
   }
 }
 
-export async function authnAllowPublic(headers: Headers): Promise<PrivatePrincipal | UserPrincipal> {
+export async function authnAllowPublic(headers: Headers): Promise<ServicePrincipal | PrivatePrincipal | UserPrincipal> {
   const principal = await authnAllowAnon(headers);
 
   if (principal.type === 'apiKeyPublic') {
@@ -190,7 +190,7 @@ export async function authnAllowPublic(headers: Headers): Promise<PrivatePrincip
   return principal;
 }
 
-export async function authn(headers: Headers): Promise<PrivatePrincipal> {
+export async function authn(headers: Headers): Promise<ServicePrincipal | PrivatePrincipal> {
   const principal = await authnAllowAnon(headers);
 
   if (principal.type === 'apiKeyPublic' || principal.type === 'user') {
@@ -291,7 +291,10 @@ export function authorize(principal: Principal, action: Action) {
       throw new HTTPException(401, { message: "Unauthorized. Production data can be only accessed with production environment." });
     }
 
-    if (principal.type === 'user') {
+    if (principal.type === 'service') {
+      return true;
+    }
+    else if (principal.type === 'user') {
       if (action.action === "end-user:read" || action.action === "end-user:update") {
         if (action.user.id === principal.user.id) {
           return true;

@@ -1,34 +1,37 @@
 import { endUsers } from './schemas/schema'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, sql } from 'drizzle-orm'
 import type { Transaction } from './types'
-import type { Environment, Space } from 'agentview/apiTypes'
+import type { Environment, Space, UserCreate } from 'agentview/apiTypes'
 import { AgentViewError } from 'agentview'
 import { requireEnvironment } from './environments'
 import { randomBytes } from 'crypto'
 import { authorize, type Principal } from './authMiddleware'
+import type { OrgTransaction, TenantTransaction } from './withOrg'
+import { acquireCreateResourceLock } from './locks'
 
 type FindUserByIdOptions = {
   id: string
-}
-
-type FindUserByExternalIdOptions = {
-  externalId: string,
-  organizationId: string,
 }
 
 type FindUserByTokenOptions = {
   token: string
 }
 
-type FindUserByEmailOptions = {
-  email: string,
-  organizationId: string,
+type FindUserByExternalIdOptions = {
+  externalId: string,
 }
 
-export async function findUser(tx: Transaction, args: FindUserByIdOptions | FindUserByExternalIdOptions | FindUserByTokenOptions | FindUserByEmailOptions) {
+type FindUserByEmailOptions = {
+  email: string,
+}
+
+
+export async function findUser(tx: OrgTransaction, args: FindUserByIdOptions | FindUserByExternalIdOptions | FindUserByTokenOptions | FindUserByEmailOptions) {
   if ('id' in args) {
     return await tx.query.endUsers.findFirst({
-      where: eq(endUsers.id, args.id),
+      where: and(
+        eq(endUsers.id, args.id),
+      ),
     });
   }
 
@@ -36,14 +39,13 @@ export async function findUser(tx: Transaction, args: FindUserByIdOptions | Find
     return await tx.query.endUsers.findFirst({
       where: and(
         eq(endUsers.externalId, args.externalId),
-        eq(endUsers.organizationId, args.organizationId)
       ),
     });
   }
 
   if ('token' in args) {
     return await tx.query.endUsers.findFirst({
-      where: eq(endUsers.token, args.token), // fixme: this is terrible
+      where: eq(endUsers.token, args.token),
     });
   }
 
@@ -51,7 +53,6 @@ export async function findUser(tx: Transaction, args: FindUserByIdOptions | Find
     return await tx.query.endUsers.findFirst({
       where: and(
         eq(endUsers.email, args.email),
-        eq(endUsers.organizationId, args.organizationId)
       ),
     });
   }
@@ -78,35 +79,37 @@ function getDefaultSpaceFromEnvironment(environment: Environment): { space: Spac
   }
 }
 
-export async function createUser(tx: Transaction, principal: Principal, space_: Space | undefined | null, createdBy_: string | null | undefined, externalId?: string | null, email?: string | null) {
-  const environment = await requireEnvironment(tx, principal.env)
+  
+export async function createUser(tx: TenantTransaction, body: UserCreate) {
+  await acquireCreateResourceLock(tx);
 
-  if (space_ && space_ === 'playground' && createdBy_ !== null) {
+  const environment = await requireEnvironment(tx, tx.principal.env)
+
+  if (body.space && body.space === 'playground' && body.createdBy !== null) {
     throw new AgentViewError('Users in playground space must have "createdBy" set.', 400)
   }
 
-  const { space, createdBy } = space_ ? { space: space_, createdBy: createdBy_ ?? null } : getDefaultSpaceFromEnvironment(environment);
+  const { space, createdBy } = body.space ? { space: body.space, createdBy: body.createdBy ?? null } : getDefaultSpaceFromEnvironment(environment);
 
-  await authorize(principal, { action: "end-user:create", space })
+  await authorize(tx.principal, { action: "end-user:create", space })
 
-  if (externalId) {
-    const existingUserWithExternalId = await findUser(tx, { externalId, organizationId: principal.organizationId })
+  if (body.externalId) {
+    const existingUserWithExternalId = await findUser(tx, { externalId: body.externalId })
     if (existingUserWithExternalId) {
       throw new AgentViewError('User with this external ID already exists', 422)
     }
   }
-
-  if (space === 'production' && createdBy !== null) { // sanity check
-    throw new AgentViewError('Users in production space can be created only with production api key.', 401)
-  }
-  if ((space === 'playground' || space === 'shared-playground') && createdBy === null) {
-    throw new AgentViewError(`Users in '${space}' space can't be created with production api key, only via member login.`, 401)
+  if (body.email) {
+    const existingUserWithEmail = await findUser(tx, { email: body.email })
+    if (existingUserWithEmail) {
+      throw new AgentViewError('User with this email already exists', 422)
+    }
   }
 
   const [newEndUser] = await tx.insert(endUsers).values({
-    organizationId: principal.organizationId,
-    externalId,
-    email,
+    organizationId: tx.organizationId,
+    externalId: body.externalId,
+    email: body.email,
     createdBy,
     space,
     token: randomBytes(32).toString('hex'),
@@ -114,3 +117,27 @@ export async function createUser(tx: Transaction, principal: Principal, space_: 
 
   return newEndUser
 }
+
+
+/**
+ * Serialized "ensureUser" for specific email.
+ * - if called by 2+ concurrent requests, one will create the user, the other will return the existing user.
+ * - it's "check-lock-check" pattern (fast path without lock, slow path with lock)
+ * 
+ * The space is automatically determined based on the environment.
+ */
+export async function ensureUserForEmail(tx: TenantTransaction, email: string) {
+  const user = await findUser(tx, { email }) // check
+  if (user) {
+    return user
+  }
+
+  await acquireCreateResourceLock(tx); // lock
+  const user2 = await findUser(tx, { email }) // check
+  if (user2) {
+    return user2
+  }
+
+  return await createUser(tx, { email })
+}
+

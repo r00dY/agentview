@@ -28,6 +28,7 @@ export const endUsers = pgTable("end_users", {
 
 }, (table) => [
   uniqueIndex('end_user_external_id_org_unique').on(table.externalId, table.organizationId),
+  uniqueIndex('end_user_email_org_unique').on(table.email, table.organizationId),
   createTenantPolicy('end_users'),
   // If space = 'production' then createdBy must be null, otherwise createdBy must be defined
   check('end_users_created_by_space_check', sql`(space = 'production' AND created_by IS NULL) OR (space != 'production' AND created_by IS NOT NULL)`),

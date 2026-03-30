@@ -15,7 +15,7 @@ import { db__dangerous } from './db';
 import { body, response_data, response_error, response_no_content } from './hono_utils';
 import { isUUID } from './isUUID';
 import { channelMessages, commentMentions, commentMessageEdits, commentMessages, environments, endUsers, events, inboxItems, runs, scores, sessionItems, sessions, starredSessions, webhookJobs } from './schemas/schema';
-import { withOrg } from './withOrg';
+import { withOrg, withTenant, type OrgTransaction } from './withOrg';
 import { AgentViewError } from 'agentview/AgentViewError';
 import {
   EnvironmentBaseSchema,
@@ -213,7 +213,7 @@ async function requireRunBaseWithLock(tx: Transaction, runId: string) {
   return run
 }
 
-async function requireUser(tx: Transaction, arg: Parameters<typeof findUser>[1]) {
+async function requireUser(tx: OrgTransaction, arg: Parameters<typeof findUser>[1]) {
   const user = await findUser(tx, arg)
   if (!user) {
     throw new HTTPException(404, { message: "End user not found" });
@@ -245,8 +245,8 @@ app.openapi(usersPOSTRoute, async (c) => {
   const principal = await authnAllowAnon(c.req.raw.headers)
   const body = await c.req.valid('json')
 
-  return withOrg(principal.organizationId, async (tx) => {
-    const newUser = await createUser(tx, principal, body.space, body.createdBy, body.externalId, body.email);
+  return withTenant(principal, async (tx) => {
+    const newUser = await createUser(tx, body);
     return c.json(newUser, 201);
   })
 })
@@ -330,8 +330,8 @@ app.openapi(userByExternalIdGETRoute, async (c) => {
 
   const { external_id } = c.req.param()
 
-  return withOrg(principal.organizationId, async (tx) => {
-    const user = await requireUser(tx, { externalId: external_id, organizationId: principal.organizationId })
+  return withTenant(principal, async (tx) => {
+    const user = await requireUser(tx, { externalId: external_id })
     await authorize(principal, { action: "end-user:read", user })
     return c.json(user, 200);
   })
@@ -849,7 +849,7 @@ const sessionsPOSTRoute = createRoute({
 export async function createSessionHandler(c: Parameters<RouteHandler<typeof sessionsPOSTRoute>>[0]) {
   const principal = await authnAllowPublic(c.req.raw.headers)
 
-  return withOrg(principal.organizationId, async (tx) => {
+  return withTenant(principal, async (tx) => {
     const body = await c.req.valid('json')
     const createdBy = principal.type === 'member' ? principal.session.user.id : null;
 
@@ -871,7 +871,7 @@ export async function createSessionHandler(c: Parameters<RouteHandler<typeof ses
         return principal.user;
       }
 
-      return await createUser(tx, principal, body.space, body.createdBy, undefined);
+      return await createUser(tx, { space: body.space, createdBy: body.createdBy });
     })()
 
     authorize(principal, { action: "end-user:update", user });

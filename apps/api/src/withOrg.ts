@@ -1,12 +1,17 @@
 import { sql } from 'drizzle-orm';
 import { db__dangerous } from './db';
 import type { Transaction } from './types';
+import type { Principal } from './authMiddleware';
 
 export type AfterCommit = (fn: () => void | Promise<void>) => void;
 
 export type OrgTransaction = Transaction & {
   afterCommit: AfterCommit;
   organizationId: string;
+};
+
+export type TenantTransaction = OrgTransaction & {
+  principal: Principal;
 };
 
 /**
@@ -63,4 +68,13 @@ export async function withOrg<T>(
   }
 
   return result;
+}
+
+export async function withTenant<T>(
+  principal: Principal,
+  fn: (tx: TenantTransaction) => Promise<T>
+): Promise<T> {
+  return withOrg(principal.organizationId, async (tx) => {
+    return fn(Object.assign(tx, { principal }) as TenantTransaction);
+  });
 }
