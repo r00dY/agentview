@@ -1,4 +1,5 @@
 import { serve } from '@hono/node-server';
+import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 
 import type { User as BetterAuthUser } from "better-auth";
@@ -700,7 +701,17 @@ const sessionsAISDKPOSTRoute = createRoute({
     body: body(SessionCreateSchema)
   },
   responses: {
-    201: response_data(SessionSchema),
+    201: {
+      content: {
+        'text/event-stream': {
+          schema: z.string(),
+        },
+        'application/json': {
+          schema: SessionSchema,
+        },
+      },
+      description: 'Creates a session, optionally streaming the first run',
+    },
     422: response_error()
   },
 })
@@ -987,7 +998,7 @@ const runsAISDKPOSTRoute = createRoute({
   },
 })
 
-async function createRunAISDKHandler(c: Parameters<RouteHandler<typeof runsAISDKPOSTRoute>>[0], run: { id: string, sessionId: string }, stream: boolean, principal: Principal) {
+async function createRunAISDKHandler(c: Context, run: { id: string, sessionId: string }, stream: boolean, principal: Principal) {
   const consumer = createAISDKStreamConsumer(run.id, c.req.raw.signal);
 
   // Wait for agent response. If anything throws or we don't need to stream,

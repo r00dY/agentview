@@ -96,7 +96,7 @@ function getDefaultSpaceFromEnvironment(environment: Environment): { space: Spac
 export async function createUser(tx: TenantTransaction, body: UserCreate) {
   await tx.acquireLock({ type: "create_resource" });
 
-  const environment = await requireEnvironment(tx, tx.principal.env)
+  const environment = await requireEnvironment(tx)
 
   if (body.space && body.space === 'playground' && body.createdBy !== null) {
     throw new AgentViewError('Users in playground space must have "createdBy" set.', 400)
