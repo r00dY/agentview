@@ -658,7 +658,6 @@ export async function createAutoRunFromChannelMessages(
   }
 
   console.log(`[createAutoRunFromChannelMessages][session:${sessionId}]: incoming messages: ${incomingMessages.length}`);
-  console.log(incomingMessages);
 
 
   /**
