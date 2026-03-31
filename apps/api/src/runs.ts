@@ -394,10 +394,6 @@ export async function applyRunPatch(
     throw new AgentViewError("This endpoint is allowed only for manual runs.", 422);
   }
 
-  if (!run) {
-    throw new AgentViewError("Run not found.", 404);
-  }
-
   if (run.status === 'pending' || run.status === 'init') {
     throw new AgentViewError("You can't run apply patch on run in 'init' or 'pending' status.", 422);
   }
@@ -422,9 +418,6 @@ export async function applyRunPatch(
   let runConfig: BaseRunConfig | undefined;
 
   if (body.items || body.metadata || body.state || body.status === 'completed') { // operations requiring run config
-    if (!environment) {
-      throw new AgentViewError("Environment is required for this operation.", 422);
-    }
     const config = getConfigFromEnvironment(environment);
 
     const agentName = run.agentRef?.agent;
@@ -587,6 +580,13 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
       expiresAt: null,
     }).where(eq(runs.id, runId));
 
+    // Channel messages must be disconnected from the run.
+    if (reason.status === "discarded") {
+      await tx.update(channelMessages).set({
+        runId: null
+      }).where(eq(channelMessages.runId, runId));
+    }
+
     // this is important, we must send the last run patch event to the stream
     tx.afterCommit(async () => {
       await publishRunStreamEvent(runId, nowIso, JSON.stringify({
@@ -596,10 +596,23 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
       await publishRunStreamEvent(runId, null, '[DONE]');
     });
 
-  } catch { }
+    console.error(`[terminateRun][${runId}] termination successful`);
+
+  } catch (e) {
+    console.error(`[terminateRun][${runId}] SEVERE ERROR!!!! Termination failed: ${e instanceof Error ? e.message : String(e)}`);
+   }
 }
 
+export async function acceptRun(tx: TenantTransaction, sessionId: string, runId: string) {
+  await tx.acquireLock({ type: "edit_session", sessionId });
 
+  const runBase = await requireRunBase(tx, runId);
+  if (runBase?.status !== 'init') {
+    throw new AgentViewError("You can't accept run that is not in 'init' status.", 422);
+  }
+
+  await tx.update(runs).set({ status: 'in_progress' }).where(eq(runs.id, runId));
+}
 
 
 export async function createAutoRunFromChannelMessages(
@@ -608,6 +621,8 @@ export async function createAutoRunFromChannelMessages(
   sessionId: string
 ) {
   await tx.acquireLock({ type: "edit_session", sessionId });
+
+  console.log(`[createAutoRunFromChannelMessages][session:${sessionId}]: creating run from channel messages`);
 
   const { lastRun, agentConfig, agentRefId, session } = await prepareRunCreation(tx, environment, sessionId);
   const adapter = getAdapter(agentConfig.adapter);
@@ -642,12 +657,18 @@ export async function createAutoRunFromChannelMessages(
     throw new AgentViewError("No incoming messages to create a run from.", 422);
   }
 
+  console.log(`[createAutoRunFromChannelMessages][session:${sessionId}]: incoming messages: ${incomingMessages.length}`);
+  console.log(incomingMessages);
+
 
   /**
    * Let's create a new run
    */
   const newRunId = crypto.randomUUID();
   const input = adapter.createDefaultInputForChannelMessages(incomingMessages, newRunId);
+
+  console.log(`[createAutoRunFromChannelMessages][session:${sessionId}]: input: ${JSON.stringify(input)}`);
+
   const { runConfig, parsedInput, idleTimeout } = await processInput(agentConfig, input);
 
   // session version might be totally not set yet

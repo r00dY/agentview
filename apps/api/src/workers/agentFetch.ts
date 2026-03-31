@@ -4,7 +4,7 @@ import { eq, inArray, sql } from 'drizzle-orm';
 import { getAdapter } from '../adapters/adapters';
 import { db__dangerous } from '../db';
 import { getConfigFromEnvironment } from '../environments';
-import { applyRunPatch, RunTerminationError, terminateRun } from '../runs';
+import { applyRunPatch, RunTerminationError, terminateRun, acceptRun } from '../runs';
 import { createRunTerminationReceiver } from '../runStream';
 import { environments, runs } from '../schemas/schema';
 import { activateSession, fetchSession } from '../sessions';
@@ -202,10 +202,10 @@ async function processAgentFetch(run: Run) {
         }
         isFirstEventSent = true;
 
-        await withOrg(run.organizationId, async (tx) => {
+        await withTenant(principal, async (tx) => {
           await tx.acquireLock({ type: "edit_session", sessionId: session.id });
           
-          await tx.update(runs).set({ status: 'in_progress' }).where(eq(runs.id, run.id));
+          await acceptRun(tx, session.id, run.id);
           await activateSession(tx, session.id);
         });
       }
