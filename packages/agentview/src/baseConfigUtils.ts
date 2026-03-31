@@ -23,12 +23,12 @@ export function findAgentConfig<T extends BaseAgentViewConfig>(config: T, agentN
 export function requireAgentConfig<T extends BaseAgentViewConfig>(config: T, agentName?: string | null): NonNullable<T["agents"]>[number] {
     const agentConfig = findAgentConfig(config, agentName);
     if (!agentConfig) {
-        throw new Error(`Agent config not found for agent '${agentName}'`);
+        throw new AgentViewError(`Agent config not found for agent '${agentName}'`, 404);
     }
     return agentConfig;
 }
 
-export function findChannelConfig<T extends BaseAgentViewConfig>(config: T, channelRef: ChannelRef) : NonNullable<T["channels"]>[number] | undefined {
+export function findChannelConfig<T extends BaseAgentViewConfig>(config: T, channelRef: ChannelRef): NonNullable<T["channels"]>[number] | undefined {
     if (channelRef.type === 'api') {
         return config.channels?.find((c) => c.type === 'api' && c.name === channelRef.name);
     }
@@ -276,4 +276,23 @@ export function serializeConfig(config: any) {
         throw new AgentViewError("Invalid config", 422, { cause: error.issues });
     }
     return data;
+}
+
+
+export function requireItemConfig(runConfig: ReturnType<typeof requireRunConfig>, sessionItems: SessionItem[], itemId: string, itemType?: "input" | "output" | "step") {
+    let itemConfig = findItemConfigById(runConfig, sessionItems, itemId, itemType);
+
+    if (!itemConfig) {
+        throw new AgentViewError(`Item not found in configuration for item '${itemId}'.`, 400);
+    }
+
+    return itemConfig
+}
+
+export function requireScoreConfig(scores: { name: string; schema: any }[] | undefined, scoreName: string) {
+    const scoreConfig = scores?.find((scoreConfig) => scoreConfig.name === scoreName)
+    if (!scoreConfig) {
+        throw new AgentViewError(`Score name '${scoreName}' not found in configuration.'`, 400);
+    }
+    return scoreConfig
 }

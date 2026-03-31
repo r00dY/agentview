@@ -54,7 +54,7 @@ import {
   type RunBase,
 } from 'agentview/apiTypes';
 import { type BaseAgentViewConfig, BaseConfigSchema, BaseConfigSchemaToZod } from 'agentview/baseConfigTypes';
-import { findChannelConfig, findItemConfigById, requireChannelConfig, requireRunConfig, getChannelAgent } from 'agentview/baseConfigUtils';
+import { findChannelConfig, findItemConfigById, requireChannelConfig, requireRunConfig, getChannelAgent, requireAgentConfig, requireItemConfig, requireScoreConfig } from 'agentview/baseConfigUtils';
 import { getAllSessionItems, getLastRun } from 'agentview/sessionUtils';
 import packageJson from '../package.json';
 import { equalJSON } from './equalJSON';
@@ -141,35 +141,6 @@ app.on(["POST", "GET"], "/api/auth/*", (c) => {
   return auth.handler(c.req.raw);
 });
 
-
-// CONFIG HELPERS
-
-
-function requireAgentConfig(config: BaseAgentViewConfig, name?: string) {
-  const agentConfig = config.agents?.find((agent) => agent.name === name)
-  if (!agentConfig) {
-    throw new HTTPException(404, { message: `Agent '${name}' not found in schema.` });
-  }
-  return agentConfig
-}
-
-function requireItemConfig(runConfig: ReturnType<typeof requireRunConfig>, sessionItems: SessionItem[], itemId: string, itemType?: "input" | "output" | "step") {
-  let itemConfig = findItemConfigById(runConfig, sessionItems, itemId, itemType);
-
-  if (!itemConfig) {
-    throw new HTTPException(400, { message: `Item not found in configuration for item '${itemId}'.` });
-  }
-
-  return itemConfig
-}
-
-function requireScoreConfig(scores: { name: string; schema: any }[] | undefined, scoreName: string) {
-  const scoreConfig = scores?.find((scoreConfig) => scoreConfig.name === scoreName)
-  if (!scoreConfig) {
-    throw new HTTPException(400, { message: `Score name '${scoreName}' not found in configuration.'` });
-  }
-  return scoreConfig
-}
 
 // DATA HELPERS
 
