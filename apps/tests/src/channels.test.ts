@@ -398,13 +398,15 @@ describe('Channels', () => {
 
       test('rapid messages while agent is processing → batched into single outgoing reply', async () => {
         // Agent takes 2s to respond, giving us time to send more messages
-        setParrotHandler({ delayMs: 2000 })
+        setParrotHandler({ delayMs: 4000 })
 
-        await send('rapid-1', 'rapid@test.com', 'A')
+
+        await send('rapid-1', 'rapid@test.com', 'A', '2025-01-01T00:00:01Z')
         // Wait just enough for the worker to pick up the run, then send more
-        await new Promise(r => setTimeout(r, 500))
-        await send('rapid-2', 'rapid@test.com', 'B')
-        await send('rapid-3', 'rapid@test.com', 'C')
+        await new Promise(r => setTimeout(r, 2000))
+
+        send('rapid-2', 'rapid@test.com', 'B', '2025-01-01T00:00:02Z')
+        send('rapid-3', 'rapid@test.com', 'C', '2025-01-01T00:00:03Z')
 
         // First run gets cancelled, second run batches all 3 messages → single outgoing
         const entries = await waitForOutbox('rapid@test.com', 1)
@@ -431,13 +433,13 @@ describe('Channels', () => {
       }, 20000)
 
       test('rapid out-of-order messages → batched in date order', async () => {
-        setParrotHandler({ delayMs: 2000 })
+        setParrotHandler({ delayMs: 4000 })
 
         // Send 3 messages quickly with out-of-order dates
         await send('ooo-1', 'out-of-order@test.com', 'C', '2025-01-01T00:00:03Z')
-        await new Promise(r => setTimeout(r, 500))
-        await send('ooo-2', 'out-of-order@test.com', 'A', '2025-01-01T00:00:01Z')
-        await send('ooo-3', 'out-of-order@test.com', 'B', '2025-01-01T00:00:02Z')
+        await new Promise(r => setTimeout(r, 2000))
+        send('ooo-2', 'out-of-order@test.com', 'A', '2025-01-01T00:00:01Z')
+        send('ooo-3', 'out-of-order@test.com', 'B', '2025-01-01T00:00:02Z')
 
         // Messages should be sorted by date, not insertion order
         const entries = await waitForOutbox('out-of-order@test.com', 1)
