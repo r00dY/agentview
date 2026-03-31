@@ -2,17 +2,20 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { endUsers, events, runs, sessionItems, sessions } from "./schemas/schema"
 import type { Transaction } from "./types";
 import { isUUID, requireUUID } from "./isUUID";
-import type { ChannelRef, Environment, SessionBase, SessionsGetQueryParams, SessionsGetQueryParamsSchema, SessionUpdate, StandardSession } from "agentview/apiTypes";
+import type { ChannelRef, Environment, SessionBase, SessionCreate, SessionsGetQueryParams, SessionsGetQueryParamsSchema, SessionUpdate, StandardSession, StandardSessionCreate } from "agentview/apiTypes";
 import { updateInboxes } from "./updateInboxes";
 import { parseMetadata } from "./parseMetadata";
-import { findChannelConfig, requireChannelConfig } from "agentview/baseConfigUtils";
-import { getConfigFromEnvironment, requireConfig } from "./environments";
+import { findChannelConfig, getChannelAgent, requireAgentConfig, requireChannelConfig } from "agentview/baseConfigUtils";
+import { getConfigFromEnvironment, requireConfig, requireEnvironment } from "./environments";
 import type { SessionStatus } from "agentview/apiTypes";
 import type { OrgTransaction, TenantTransaction } from "./withOrg";
 import { randomBytes } from "crypto";
 import { AgentViewError } from "agentview";
 import { authorize, type Principal } from "./authMiddleware";
 import type z from "zod";
+import { createUser, requireUser } from "./users";
+import { resolveAgentRef } from "./agentRefs";
+import { createAutoRun } from "./runs";
 
 export type LastRunStatus = {
   id: string;
@@ -393,6 +396,66 @@ export async function getSessions(tx: TenantTransaction, params: SessionsGetQuer
  * Mutations. Locks required.
  */
 
+export async function createSession(tx: TenantTransaction, body: StandardSessionCreate) {
+  await tx.acquireLock({ type: "create_resource" });
+
+  const createdBy = tx.principal.type === 'member' ? tx.principal.session.user.id : null;
+
+  const config = await requireConfig(tx)
+
+  // in API channel and agent must exist
+  const channelRef: ChannelRef = { type: 'api', name: body.agent }
+
+  const channelConfig = requireChannelConfig(config, channelRef)
+  const agentConfig = requireAgentConfig(config, getChannelAgent(channelConfig)?.name)
+
+  // find user or create new one if not found
+  const user = await (async () => {
+    if (body.userId) {
+      return await requireUser(tx, { id: body.userId });
+    }
+
+    if (tx.principal.type === 'user') {
+      return tx.principal.user;
+    }
+
+    return await createUser(tx, { space: body.space, createdBy: body.createdBy });
+  })()
+
+  authorize(tx.principal, { action: "end-user:update", user });
+
+  const environment = await requireEnvironment(tx);
+
+  // Resolve agent ref at session creation
+  const agentRefWithId = await resolveAgentRef(tx, {
+    agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
+  });
+
+  let newSessionRow = await createInactiveSession(tx, {
+    environment,
+    channelRef,
+    userId: user.id,
+    metadata: body.metadata,
+    summary: body.summary,
+    agentRefId: agentRefWithId.id,
+    initialState: body.initialState,
+    createdBy,
+  });
+
+  let newRun: Awaited<ReturnType<typeof createAutoRun>> | undefined = undefined;
+  if (body.input) {
+    newRun = await createAutoRun(tx, environment, newSessionRow.id, { input: body.input });
+  } else {
+    await activateSession(tx, newSessionRow.id);
+  }
+
+  return { session: newSessionRow, run: newRun };
+}
+
+
+
+
+
 export async function createInactiveSession(tx: OrgTransaction, params: {
   environment: Environment;
   channelRef: ChannelRef;
@@ -488,7 +551,7 @@ export async function activateSession(tx: OrgTransaction, sessionId: string) {
 
 export async function updateSession(tx: TenantTransaction, session_id: string, body: SessionUpdate) {
   const session = await requireSessionBase(tx, session_id);
-  
+
   authorize(tx.principal, { action: "end-user:update", user: session.user });
 
   const config = await requireConfig(tx)
