@@ -453,7 +453,7 @@ export async function applyRunPatch(
 
   /** Status, finished at, failReason */
   if (isRunFinished(run) && body.status && body.status !== run.status) {
-    throw new AgentViewError("Run already finished. Cannot change status.", 422);
+    throw new AgentViewError("Run already finished (status: " + run.status + "). Cannot change status.", 422);
   }
 
   const status = body.status ?? 'in_progress';
@@ -608,7 +608,7 @@ export async function acceptRun(tx: TenantTransaction, sessionId: string, runId:
 
   const runBase = await requireRunBase(tx, runId);
   if (runBase?.status !== 'init') {
-    throw new AgentViewError("You can't accept run that is not in 'init' status.", 422);
+    throw new AgentViewError("You can't accept run that is not in 'init' status. Status: " + runBase.status, 422);
   }
 
   await tx.update(runs).set({ status: 'in_progress' }).where(eq(runs.id, runId));
