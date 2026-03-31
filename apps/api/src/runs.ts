@@ -389,6 +389,10 @@ export async function applyRunPatch(
 
   authorize(tx.principal, { action: "end-user:update", user: session.user });
 
+  if (run.status === 'discarded') { // important for auto-fetch. When resource is discarded all "patch" operations should trigger this error to handle race conditions gracefully.
+    throw new RunTerminationError({ status: run.status, failReason: run.failReason });
+  }
+
   // Guard: API can only cancel auto-fetch runs which are being auto-fetched
   if (mustBeManual && !run.manual) {
     throw new AgentViewError("This endpoint is allowed only for manual runs.", 422);
@@ -606,9 +610,14 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
 export async function acceptRun(tx: TenantTransaction, sessionId: string, runId: string) {
   await tx.acquireLock({ type: "edit_session", sessionId });
 
-  const runBase = await requireRunBase(tx, runId);
-  if (runBase?.status !== 'init') {
-    throw new AgentViewError("You can't accept run that is not in 'init' status. Status: " + runBase.status, 422);
+  const run = await requireRunBase(tx, runId);
+
+  if (run.status === 'discarded') { // important for auto-fetch. When resource is discarded all "patch" operations should trigger this error to handle race conditions gracefully.
+    throw new RunTerminationError({ status: run.status, failReason: run.failReason });
+  }
+
+  if (run?.status !== 'init') {
+    throw new AgentViewError("You can't accept run that is not in 'init' status. Status: " + run.status, 422);
   }
 
   await tx.update(runs).set({ status: 'in_progress' }).where(eq(runs.id, runId));
