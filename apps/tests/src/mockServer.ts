@@ -54,7 +54,6 @@ export type SSEEvent = { event: string; data: any }
 
 export function writeAISDKSuccessHeaders(res: ServerResponse) {
   if (res.destroyed) {
-    console.log('!!!! writeAISDKSuccessHeaders: res destroyed')
     return
   }
 
@@ -69,7 +68,6 @@ export function writeAISDKSuccessHeaders(res: ServerResponse) {
 export function writeAISDKChunks(res: ServerResponse, chunks: any[]) {
   for (const chunk of chunks) {
     if (res.destroyed) {
-      console.log('!!!! writeAISDKChunks: res destroyed')
       return
     }
     res.write(`data: ${JSON.stringify(chunk)}\n\n`)
@@ -78,7 +76,6 @@ export function writeAISDKChunks(res: ServerResponse, chunks: any[]) {
 
 export function writeAISDKDone(res: ServerResponse) {
   if (res.destroyed) {
-    console.log('!!!! writeAISDKDone: res destroyed')
     return
   }
   res.write('data: [DONE]\n\n')
