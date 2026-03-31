@@ -154,3 +154,13 @@ export async function ensureUserForEmail(tx: TenantTransaction, email: string) {
   return await createUser(tx, { email })
 }
 
+
+export async function updateUser(tx: TenantTransaction, id: string, body: UserCreate) {
+  await tx.acquireLock({ type: "create_resource" }); // this is actually "edit" but we treat 'create_resource' as general fallback lock
+
+  const user = await requireUser(tx, { id })
+  await authorize(tx.principal, { action: "end-user:update", user })
+
+  const [updatedUser] = await tx.update(endUsers).set(body).where(eq(endUsers.id, id)).returning();
+  return updatedUser
+}

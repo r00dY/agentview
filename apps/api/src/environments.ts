@@ -2,9 +2,10 @@ import { environments } from "./schemas/schema";
 import { eq, isNull, and } from "drizzle-orm";
 import type { Transaction } from "./types";
 import { HTTPException } from "hono/http-exception";
-import { BaseConfigSchemaToZod } from "agentview/baseConfigTypes";
+import { BaseConfigSchemaToZod, type BaseAgentViewConfig } from "agentview/baseConfigTypes";
 import type { Environment } from "agentview/apiTypes";
 import { db__dangerous } from "./db";
+import type { TenantTransaction } from "./withOrg";
 
 // export type ProdEnv = {
 //     type: 'prod'
@@ -23,7 +24,9 @@ import { db__dangerous } from "./db";
  * - userId = null: production config (shared across org)
  * - userId = string: user's development config
  */
-export async function getEnvironment(tx: Transaction, envHandle?: string) { // envId is actually either null (production) or user id (user's dev environment). For now!
+export async function getEnvironment(tx: TenantTransaction) { // envId is actually either null (production) or user id (user's dev environment). For now!
+  const envHandle = tx.principal.env;
+
   if (!envHandle) {
     return undefined;
   }
@@ -44,16 +47,12 @@ export async function getEnvironment(tx: Transaction, envHandle?: string) { // e
   return environment ?? undefined;
 }
 
-export async function requireEnvironment(tx: Transaction, envHandle?: string) {
-  const environment = await getEnvironment(tx, envHandle);
+export async function requireEnvironment(tx: TenantTransaction) {
+  const environment = await getEnvironment(tx);
   if (!environment) {
     throw new HTTPException(404, { message: "Environment not found" });
   }
   return environment;
-}
-
-export function getConfigFromEnvironment(environment: Environment) {
-  return BaseConfigSchemaToZod.parse(environment.config)
 }
 
 export async function createEnvironment(orgId: string, envHandle: string, userId: string | null) {
@@ -63,4 +62,16 @@ export async function createEnvironment(orgId: string, envHandle: string, userId
     userId: userId,
     config: null,
   })
+}
+
+export function getConfigFromEnvironment(environment: Environment) {
+  return BaseConfigSchemaToZod.parse(environment.config)
+}
+
+export async function requireConfig(tx: TenantTransaction): Promise<BaseAgentViewConfig> {
+  const environment = await requireEnvironment(tx);
+  if (environment.config === null) {
+    throw new HTTPException(400, { message: "Environment has no config." });
+  }
+  return getConfigFromEnvironment(environment)
 }

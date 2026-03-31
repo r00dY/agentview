@@ -1,16 +1,18 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { endUsers, events, runs, sessionItems, sessions } from "./schemas/schema"
 import type { Transaction } from "./types";
 import { isUUID, requireUUID } from "./isUUID";
-import type { ChannelRef, Environment, SessionBase, StandardSession } from "agentview/apiTypes";
+import type { ChannelRef, Environment, SessionBase, SessionsGetQueryParams, SessionsGetQueryParamsSchema, SessionUpdate, StandardSession } from "agentview/apiTypes";
 import { updateInboxes } from "./updateInboxes";
 import { parseMetadata } from "./parseMetadata";
-import { requireChannelConfig } from "agentview/baseConfigUtils";
-import { getConfigFromEnvironment } from "./environments";
+import { findChannelConfig, requireChannelConfig } from "agentview/baseConfigUtils";
+import { getConfigFromEnvironment, requireConfig } from "./environments";
 import type { SessionStatus } from "agentview/apiTypes";
-import type { OrgTransaction } from "./withOrg";
+import type { OrgTransaction, TenantTransaction } from "./withOrg";
 import { randomBytes } from "crypto";
 import { AgentViewError } from "agentview";
+import { authorize, type Principal } from "./authMiddleware";
+import type z from "zod";
 
 export type LastRunStatus = {
   id: string;
@@ -40,7 +42,7 @@ export async function fetchLastRunStatus(
 }
 
 function sessionWhere(session_id: string) {
-  let where : ReturnType<typeof eq> | undefined;
+  let where: ReturnType<typeof eq> | undefined;
 
   if (isUUID(session_id)) { // id
     where = eq(sessions.id, session_id);
@@ -180,13 +182,13 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
 
       }) // we always send last run unless it's pending/init
       .map(run => ({
-      ...run,
-      // agentRef: run.agentRef ?? : null,
-      sessionItems: run.sessionItems.map((item, index) => ({
-        ...item,
-        type: item.type ?? (index === 0 ? 'input' : 'step') // this condition is totally unimportant, just backward compat with nothing lol
+        ...run,
+        // agentRef: run.agentRef ?? : null,
+        sessionItems: run.sessionItems.map((item, index) => ({
+          ...item,
+          type: item.type ?? (index === 0 ? 'input' : 'step') // this condition is totally unimportant, just backward compat with nothing lol
+        })),
       })),
-    })),
     state: state ?? row.initialState ?? null,
   } as StandardSession;
 }
@@ -209,10 +211,6 @@ export async function requireSessionBase(tx: Transaction, sessionId: string) {
   return session
 }
 
-
-
-
-
 async function fetchSessionState(tx: Transaction, session_id: string) {
   // Fetch the latest __state__ session item by createdAt descending
   const stateItem = await tx.query.sessionItems.findFirst({
@@ -227,7 +225,7 @@ async function fetchSessionState(tx: Transaction, session_id: string) {
   return stateItem.content as any
 }
 
-export function getSessionStatusFields(session: StandardSession) : { status: SessionStatus, failReason: any | null } {
+export function getSessionStatusFields(session: StandardSession): { status: SessionStatus, failReason: any | null } {
   const lastRun = session.runs[session.runs.length - 1];
   const failReason = lastRun?.failReason;
 
@@ -236,6 +234,159 @@ export function getSessionStatusFields(session: StandardSession) : { status: Ses
     failReason
   }
 }
+
+/**
+ * 
+ * Lists
+ * /
+ * 
+ * 
+/**
+ * SESSIONS
+ */
+
+const DEFAULT_LIMIT = 50
+const DEFAULT_PAGE = 1
+
+export function getSessionListFilter(tx: TenantTransaction, params: z.infer<typeof SessionsGetQueryParamsSchema>) {
+  const { space, userId } = params;
+  const principal = tx.principal;
+
+  const filters: any[] = [
+    eq(sessions.active, true),
+  ]
+
+  if (principal.type === 'member' || principal.type === 'apiKey') {
+
+    if (!space && !userId) {
+      throw new AgentViewError("You must set either `space` or `userId` to make this request.", 422);
+    }
+    if (space && userId) {
+      throw new AgentViewError("You must set either `space` or `userId`, not both.", 422);
+    }
+
+    if (space) { // space
+      filters.push(eq(endUsers.space, space));
+    }
+
+    if (userId) { // explicit user
+      filters.push(eq(endUsers.id, userId));
+    }
+
+    if (space === "playground") {
+
+      if (principal.type === 'member') {
+        filters.push(eq(endUsers.createdBy, principal.session.user.id));
+      }
+      else if (principal.type === 'apiKey') {
+        filters.push(eq(endUsers.createdBy, principal.apiKey.userId));
+      }
+    }
+  }
+  else if (principal.type === 'user') {
+    filters.push(eq(endUsers.id, principal.user.id));
+  }
+
+  return and(...filters);
+}
+
+function normalizeNumberParam(value: number | string | undefined, defaultValue: number) {
+  let numValue: number;
+
+  if (!value) {
+    numValue = defaultValue;
+  }
+  else if (typeof value === 'string') {
+    numValue = parseInt(value);
+  }
+  else {
+    numValue = value;
+  }
+
+  if (isNaN(numValue)) {
+    return 1;
+  }
+
+  return Math.max(numValue, 1);
+}
+
+function buildPaginationMetadata(totalCount: number, page: number, limit: number, offset: number) {
+  const totalPages = Math.ceil(totalCount / limit);
+  return {
+    totalCount,
+    totalPages,
+    page,
+    limit,
+    hasNextPage: page < totalPages,
+    hasPreviousPage: page > 1,
+    currentPageStart: offset + 1,
+    currentPageEnd: Math.min(offset + limit, totalCount),
+  };
+}
+
+function mapSessionRow(row: { sessions: typeof sessions.$inferSelect; end_users: typeof endUsers.$inferSelect | null }) {
+  return {
+    id: row.sessions.id,
+    handle: row.sessions.handleNumber.toString() + (row.sessions.handleSuffix ?? ""),
+    createdAt: row.sessions.createdAt,
+    updatedAt: row.sessions.updatedAt,
+    metadata: row.sessions.metadata as Record<string, any>,
+    summary: row.sessions.summary,
+    channel: row.sessions.channelType === 'api'
+      ? { type: 'api' as const, name: row.sessions.channelAddress }
+      : { type: row.sessions.channelType as "gmail" | "mock", address: row.sessions.channelAddress },
+    user: row.end_users!,
+    space: row.end_users!.space,
+    userId: row.end_users!.id,
+    agentRef: null, // not resolved in list view
+    agentRefs: row.sessions.agentRefs ?? []
+  };
+}
+
+export async function getSessions(tx: TenantTransaction, params: SessionsGetQueryParams) {
+  const limit = normalizeNumberParam(params.limit, DEFAULT_LIMIT);
+  const page = normalizeNumberParam(params.page, DEFAULT_PAGE);
+
+  const MAX_LIMIT = 1000;
+  if (limit > MAX_LIMIT) {
+    throw new AgentViewError(`Page limit cannot exceed ${MAX_LIMIT}`, 422);
+  }
+
+  const offset = (page - 1) * limit;
+  const baseFilter = getSessionListFilter(tx, params);
+
+  // Build count query
+  const countQuery = tx
+    .select({ count: sql<number>`cast(count(*) as integer)` })
+    .from(sessions)
+    .$dynamic();
+
+  const totalCountResult = await countQuery
+    .leftJoin(endUsers, eq(sessions.userId, endUsers.id))
+    .where(baseFilter);
+
+  const totalCount = totalCountResult[0]?.count ?? 0;
+
+  // Build sessions query
+  const sessionsQuery = tx
+    .select({ sessions, end_users: endUsers })
+    .from(sessions)
+    .$dynamic();
+
+  const result = await sessionsQuery
+    .leftJoin(endUsers, eq(sessions.userId, endUsers.id))
+    .where(baseFilter)
+    .orderBy(desc(sessions.updatedAt))
+    .limit(limit)
+    .offset(offset);
+
+  return {
+    sessions: result.map(mapSessionRow),
+    pagination: buildPaginationMetadata(totalCount, page, limit, offset),
+  };
+}
+
+
 
 
 /**
@@ -258,8 +409,8 @@ export async function createInactiveSession(tx: OrgTransaction, params: {
   const config = getConfigFromEnvironment(params.environment);
   const channelConfig = requireChannelConfig(config, params.channelRef);
 
-  const metadata : Record<string, any> = channelConfig.type === 'api' ? 
-    parseMetadata(channelConfig.metadata, channelConfig.allowUnknownMetadata ?? true, params.metadata ?? {}, {}) : 
+  const metadata: Record<string, any> = channelConfig.type === 'api' ?
+    parseMetadata(channelConfig.metadata, channelConfig.allowUnknownMetadata ?? true, params.metadata ?? {}, {}) :
     {};
 
   const user = await tx.query.endUsers.findFirst({
@@ -333,4 +484,25 @@ export async function activateSession(tx: OrgTransaction, sessionId: string) {
   }).returning();
 
   await updateInboxes(tx, event);
+}
+
+export async function updateSession(tx: TenantTransaction, session_id: string, body: SessionUpdate) {
+  const session = await requireSessionBase(tx, session_id);
+  
+  authorize(tx.principal, { action: "end-user:update", user: session.user });
+
+  const config = await requireConfig(tx)
+  const channelConfig = findChannelConfig(config, session.channel);
+
+  const channelMetadata = channelConfig && 'metadata' in channelConfig ? channelConfig.metadata : undefined;
+  const allowUnknownMetadata = channelConfig && 'allowUnknownMetadata' in channelConfig ? (channelConfig.allowUnknownMetadata ?? true) : true;
+  const metadata = parseMetadata(channelMetadata, allowUnknownMetadata, body.metadata, session.metadata);
+
+  const [updatedSession] = await tx.update(sessions).set({
+    metadata,
+    summary: body.summary,
+    updatedAt: new Date().toISOString(),
+  }).where(eq(sessions.id, session_id)).returning();
+
+  return updatedSession;
 }

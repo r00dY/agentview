@@ -15,7 +15,7 @@ import { db__dangerous } from './db';
 import { body, response_data, response_error, response_no_content } from './hono_utils';
 import { requireUUID } from './isUUID';
 import { channelMessages, commentMentions, commentMessageEdits, commentMessages, environments, endUsers, events, inboxItems, runs, scores, sessionItems, sessions, starredSessions, webhookJobs } from './schemas/schema';
-import { withOrg, withTenant, type OrgTransaction } from './withOrg';
+import { withOrg, withTenant, type OrgTransaction, type TenantTransaction } from './withOrg';
 import { AgentViewError } from 'agentview/AgentViewError';
 import {
   EnvironmentBaseSchema,
@@ -59,15 +59,15 @@ import { getAllSessionItems, getLastRun } from 'agentview/sessionUtils';
 import packageJson from '../package.json';
 import { equalJSON } from './equalJSON';
 import { getAllowedOrigin } from './getAllowedOrigin';
-import { requireEnvironment } from './environments';
+import { requireEnvironment, requireConfig } from './environments';
 import { isInboxItemUnread } from './inboxItems';
 import { initDb } from './initDb';
 import { requireValidInvitation } from './invitations';
 import { members, organizations, users } from './schemas/auth-schema';
-import { createInactiveSession, activateSession, fetchSession, fetchSessionBase } from './sessions';
+import { createInactiveSession, activateSession, getSessions, getSessionListFilter, updateSession } from './sessions';
 import type { Transaction } from './types';
 import { updateInboxes } from './updateInboxes';
-import { createUser, requireUser } from './users';
+import { createUser, requireUser, updateUser } from './users';
 import { randomBytes } from 'crypto';
 import { applyRunPatch, createAutoRun, createManualRun, DEFAULT_IDLE_TIME, getRunInputContent, terminateRun, getRunInput, isRunFinished, requireRunBase } from './runs';
 import { createRunStreamConsumer, publishRunTerminationEvent } from './runStream';
@@ -143,14 +143,6 @@ app.on(["POST", "GET"], "/api/auth/*", (c) => {
 
 
 // CONFIG HELPERS
-
-async function requireConfig(tx: Transaction, principal: Principal): Promise<BaseAgentViewConfig> {
-  const environment = await requireEnvironment(tx, principal.env);
-  if (environment.config === null) {
-    throw new HTTPException(400, { message: "Environment has no config." });
-  }
-  return BaseConfigSchemaToZod.parse(environment.config)
-}
 
 
 function requireAgentConfig(config: BaseAgentViewConfig, name?: string) {
@@ -314,160 +306,12 @@ app.openapi(apiUsersPATCHRoute, async (c) => {
   const { id } = c.req.param()
   const body = await c.req.valid('json')
 
-  return withOrg(principal.organizationId, async (tx) => {
-    const user = await requireUser(tx, { id })
-    await authorize(principal, { action: "end-user:update", user })
-
-    const [updatedUser] = await tx.update(endUsers).set(body).where(eq(endUsers.id, id)).returning();
+  return withTenant(principal, async (tx) => {
+    const updatedUser = await updateUser(tx, id, body);
     return c.json(updatedUser, 200);
   })
 })
 
-
-
-/**
- * SESSIONS
- */
-
-const DEFAULT_LIMIT = 50
-const DEFAULT_PAGE = 1
-
-function getSessionListFilter(params: z.infer<typeof SessionsGetQueryParamsSchema>, principal: Principal) {
-  const { space, userId } = params;
-
-  const filters: any[] = [
-    eq(sessions.active, true),
-  ]
-
-  if (principal.type === 'member' || principal.type === 'apiKey') {
-
-    if (!space && !userId) {
-      throw new HTTPException(422, { message: "You must set either `space` or `userId` to make this request." });
-    }
-    if (space && userId) {
-      throw new HTTPException(422, { message: "You must set either `space` or `userId`, not both." });
-    }
-
-    if (space) { // space
-      filters.push(eq(endUsers.space, space));
-    }
-
-    if (userId) { // explicit user
-      filters.push(eq(endUsers.id, userId));
-    }
-
-    if (space === "playground") {
-
-      if (principal.type === 'member') {
-        filters.push(eq(endUsers.createdBy, principal.session.user.id));
-      }
-      else if (principal.type === 'apiKey') {
-        filters.push(eq(endUsers.createdBy, principal.apiKey.userId));
-      }
-    }
-  }
-  else if (principal.type === 'user') {
-    filters.push(eq(endUsers.id, principal.user.id));
-  }
-
-  return and(...filters);
-}
-
-function normalizeNumberParam(value: number | string | undefined, defaultValue: number) {
-  let numValue: number;
-
-  if (!value) {
-    numValue = defaultValue;
-  }
-  else if (typeof value === 'string') {
-    numValue = parseInt(value);
-  }
-  else {
-    numValue = value;
-  }
-
-  if (isNaN(numValue)) {
-    return 1;
-  }
-
-  return Math.max(numValue, 1);
-}
-
-function buildPaginationMetadata(totalCount: number, page: number, limit: number, offset: number) {
-  const totalPages = Math.ceil(totalCount / limit);
-  return {
-    totalCount,
-    totalPages,
-    page,
-    limit,
-    hasNextPage: page < totalPages,
-    hasPreviousPage: page > 1,
-    currentPageStart: offset + 1,
-    currentPageEnd: Math.min(offset + limit, totalCount),
-  };
-}
-
-function mapSessionRow(row: { sessions: typeof sessions.$inferSelect; end_users: typeof endUsers.$inferSelect | null }) {
-  return {
-    id: row.sessions.id,
-    handle: row.sessions.handleNumber.toString() + (row.sessions.handleSuffix ?? ""),
-    createdAt: row.sessions.createdAt,
-    updatedAt: row.sessions.updatedAt,
-    metadata: row.sessions.metadata as Record<string, any>,
-    summary: row.sessions.summary,
-    channel: row.sessions.channelType === 'api'
-      ? { type: 'api' as const, name: row.sessions.channelAddress }
-      : { type: row.sessions.channelType as "gmail" | "mock", address: row.sessions.channelAddress },
-    user: row.end_users!,
-    space: row.end_users!.space,
-    userId: row.end_users!.id,
-    agentRef: null, // not resolved in list view
-    agentRefs: row.sessions.agentRefs ?? []
-  };
-}
-
-async function getSessions(tx: Transaction, params: SessionsGetQueryParams, principal: Principal) {
-  const limit = normalizeNumberParam(params.limit, DEFAULT_LIMIT);
-  const page = normalizeNumberParam(params.page, DEFAULT_PAGE);
-
-  const MAX_LIMIT = 1000;
-  if (limit > MAX_LIMIT) {
-    throw new HTTPException(422, { message: `Page limit cannot exceed ${MAX_LIMIT}` });
-  }
-
-  const offset = (page - 1) * limit;
-  const baseFilter = getSessionListFilter(params, principal);
-
-  // Build count query
-  const countQuery = tx
-    .select({ count: sql<number>`cast(count(*) as integer)` })
-    .from(sessions)
-    .$dynamic();
-
-  const totalCountResult = await countQuery
-    .leftJoin(endUsers, eq(sessions.userId, endUsers.id))
-    .where(baseFilter);
-
-  const totalCount = totalCountResult[0]?.count ?? 0;
-
-  // Build sessions query
-  const sessionsQuery = tx
-    .select({ sessions, end_users: endUsers })
-    .from(sessions)
-    .$dynamic();
-
-  const result = await sessionsQuery
-    .leftJoin(endUsers, eq(sessions.userId, endUsers.id))
-    .where(baseFilter)
-    .orderBy(desc(sessions.updatedAt))
-    .limit(limit)
-    .offset(offset);
-
-  return {
-    sessions: result.map(mapSessionRow),
-    pagination: buildPaginationMetadata(totalCount, page, limit, offset),
-  };
-}
 
 
 // internal
@@ -489,8 +333,8 @@ app.openapi(sessionsGETRoute, async (c) => {
   const principal = await authnAllowPublic(c.req.raw.headers)
   const params = c.req.valid("query");
 
-  return withOrg(principal.organizationId, async (tx) => {
-    const sessions = await getSessions(tx, params, principal)
+  return withTenant(principal, async (tx) => {
+    const sessions = await getSessions(tx, params)
     return c.json(sessions, 200);
   })
 })
@@ -533,7 +377,7 @@ app.openapi(sessionsGETStatsRoute, async (c) => {
 
   const { granular = false, ...params } = c.req.valid("query");
 
-  return withOrg(principal.organizationId, async (tx) => {
+  return withTenant(principal, async (tx) => {
     const result = await tx
       .select({
         unreadSessions: countDistinct(inboxItems.sessionId),
@@ -545,7 +389,7 @@ app.openapi(sessionsGETStatsRoute, async (c) => {
         and(
           eq(inboxItems.userId, memberPrincipal.session.user.id),
           sql`${inboxItems.lastNotifiableEventId} > COALESCE(${inboxItems.lastReadEventId}, 0)`,
-          getSessionListFilter(params, principal)
+          getSessionListFilter(tx, params)
         )
       )
 
@@ -554,7 +398,7 @@ app.openapi(sessionsGETStatsRoute, async (c) => {
     }
 
     if (granular) {
-      const sessionsResult = await getSessions(tx, params, principal);
+      const sessionsResult = await getSessions(tx, params);
       const sessionIds = sessionsResult.sessions.map((row) => row.id);
 
       response.sessions = {}
@@ -684,23 +528,10 @@ app.openapi(sessionPATCHRoute, async (c) => {
   const { session_id } = c.req.param()
   const body = await c.req.valid('json')
 
-  return withOrg(principal.organizationId, async (tx) => {
-    const session = await requireSession(tx, session_id);
-    authorize(principal, { action: "end-user:update", user: session.user });
-
-    const config = await requireConfig(tx, principal)
-    const channelConfig = findChannelConfig(config, session.channel);
-
-    const channelMetadata = channelConfig && 'metadata' in channelConfig ? channelConfig.metadata : undefined;
-    const allowUnknownMetadata = channelConfig && 'allowUnknownMetadata' in channelConfig ? (channelConfig.allowUnknownMetadata ?? true) : true;
-    const metadata = parseMetadata(channelMetadata, allowUnknownMetadata, body.metadata, session.metadata);
-
-    await tx.update(sessions).set({
-      metadata,
-      summary: body.summary,
-      updatedAt: new Date().toISOString(),
-    }).where(eq(sessions.id, session_id));
-
+  return withTenant(principal, async (tx) => {
+    await updateSession(tx, session_id, body);
+    
+    // we return full session
     const updatedSession = await requireSession(tx, session_id);
     return c.json(updatedSession, 200);
   })
@@ -810,7 +641,7 @@ export async function createSessionHandler(c: Parameters<RouteHandler<typeof ses
     const body = await c.req.valid('json')
     const createdBy = principal.type === 'member' ? principal.session.user.id : null;
 
-    const config = await requireConfig(tx, principal)
+    const config = await requireConfig(tx)
 
     // in API channel and agent must exist
     const channelRef: ChannelRef = { type: 'api', name: body.agent }
@@ -833,7 +664,7 @@ export async function createSessionHandler(c: Parameters<RouteHandler<typeof ses
 
     authorize(principal, { action: "end-user:update", user });
 
-    const environment = await requireEnvironment(tx, principal.env);
+    const environment = await requireEnvironment(tx);
 
     // Resolve agent ref at session creation
     const agentRefWithId = await resolveAgentRef(tx, {
@@ -1119,12 +950,12 @@ async function createRunHandler(c: Parameters<RouteHandler<typeof runsPOSTRoute>
 
   const { stream = false } = body;
 
-  return await withOrg(principal.organizationId, async (tx) => {
+  return await withTenant(principal, async (tx) => {
     const session = await requireSessionBase(tx, params.session_id);
 
     authorize(principal, { action: "end-user:update", user: session.user });
 
-    const environment = await requireEnvironment(tx, principal.env);
+    const environment = await requireEnvironment(tx);
     const run = await createAutoRun(tx, environment, params.session_id, body);
 
     return { run, stream, principal };
@@ -1331,13 +1162,13 @@ app.openapi(runKeepAliveRoute, async (c) => {
 
   const { run_id } = c.req.param()
 
-  return withOrg(principal.organizationId, async (tx) => {
+  return withTenant(principal, async (tx) => {
     const run = await requireRunBase(tx, run_id);
     const session = await requireSessionBase(tx, run.sessionId);
 
     authorize(principal, { action: "end-user:update", user: session.user });
 
-    const config = await requireConfig(tx, principal);
+    const config = await requireConfig(tx);
     const channelConfig = requireChannelConfig(config, session.channel);
     const agentConfig = requireAgentConfig(config, getChannelAgent(channelConfig)?.name);
 
@@ -1385,12 +1216,12 @@ app.openapi(runsManualPOSTRoute, async (c) => {
   const body = await c.req.valid('json')
   const params = await c.req.param();
 
-  return withOrg(principal.organizationId, async (tx) => {
+  return withTenant(principal, async (tx) => {
     const session = await requireSession(tx, params.session_id);
 
     authorize(principal, { action: "end-user:update", user: session.user });
 
-    const environment = await requireEnvironment(tx, principal.env);
+    const environment = await requireEnvironment(tx);
 
     await createManualRun(tx, environment, params.session_id, body);
 
@@ -1428,7 +1259,7 @@ app.openapi(runManualPATCHRoute, async (c) => {
 
   const body = await c.req.valid('json')
 
-  return await withOrg(principal.organizationId, async (tx) => {
+  return await withTenant(principal, async (tx) => {
     const run = await requireRunBase(tx, run_id);
     const session = await requireSessionBase(tx, run.sessionId);
 
@@ -1439,7 +1270,7 @@ app.openapi(runManualPATCHRoute, async (c) => {
       throw new AgentViewError("This endpoint is allowed only for manual runs.", 422);
     }
 
-    const environment = await requireEnvironment(tx, principal.env);
+    const environment = await requireEnvironment(tx);
 
     await applyRunPatch(tx, session.id, run.id, environment, body);
 
@@ -1604,8 +1435,8 @@ app.openapi(scoresPATCHRoute, async (c) => {
   // const target = parseScoreTarget(body);
   const inputScores = body.scores;
 
-  return withOrg(principal.organizationId, async (tx) => {
-    const config = await requireConfig(tx, principal)
+  return withTenant(principal, async (tx) => {
+    const config = await requireConfig(tx)
 
     const target = await resolveTargetWithObjects(tx, body);
     if (target.type !== 'sessionItem' && target.type !== 'run') {
@@ -1797,8 +1628,8 @@ app.openapi(environmentGETRoute, async (c) => {
   const principal = await authn(c.req.raw.headers)
   authorize(principal, { action: "environment:read" });
 
-  return withOrg(principal.organizationId, async (tx) => {
-    const environment = await requireEnvironment(tx, principal.env);
+  return withTenant(principal, async (tx) => {
+    const environment = await requireEnvironment(tx);
     return c.json(environment ?? null, 200)
   })
 })
@@ -1830,8 +1661,8 @@ app.openapi(environmentPATCHRoute, async (c) => {
     return c.json({ message: "Invalid config", code: 'parse.schema', details: error.issues }, 422);
   }
 
-  return withOrg(principal.organizationId, async (tx) => {
-    const environment = await requireEnvironment(tx, principal.env);
+  return withTenant(principal, async (tx) => {
+    const environment = await requireEnvironment(tx);
 
     // @ts-ignore
     if (environment && equalJSON(environment.config, data)) {
@@ -1847,7 +1678,7 @@ app.openapi(environmentPATCHRoute, async (c) => {
         )
       );
 
-    const updatedEnvironment = await requireEnvironment(tx, principal.env);
+    const updatedEnvironment = await requireEnvironment(tx);
 
     return c.json(updatedEnvironment, 200)
   })
