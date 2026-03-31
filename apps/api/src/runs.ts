@@ -13,7 +13,7 @@ import { parseMetadata } from './parseMetadata';
 import { publishEvent } from './redisPubSub';
 import { publishRunStreamEvent } from './runStream';
 import { agentRefs, channelMessages, runs, sessionItems, sessions, webhookJobs } from './schemas/schema';
-import { fetchSession, fetchSessionBase, requireSession, requireSessionBase } from './sessions';
+import { fetchSessionBase, requireSession, requireSessionBase } from './sessions';
 import type { Transaction } from './types';
 import { type OrgTransaction, type TenantTransaction } from './withOrg';
 
