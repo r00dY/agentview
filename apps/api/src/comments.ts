@@ -1,9 +1,9 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { HTTPException } from "hono/http-exception";
 import { type OrgTransaction } from "./withOrg";
 import { type Target } from "./target";
 import { updateInboxes } from "./updateInboxes";
 import { commentMentions, events, commentMessageEdits, scores, commentMessages } from "./schemas/schema";
+import { AgentViewError } from "agentview";
 
 export async function requireCommentMessage(tx: OrgTransaction, commentId: string) {
   const comment = await tx.query.commentMessages.findFirst({
@@ -14,7 +14,7 @@ export async function requireCommentMessage(tx: OrgTransaction, commentId: strin
   });
 
   if (!comment) {
-    throw new HTTPException(404, { message: "Comment not found" });
+    throw new AgentViewError("Comment not found", 404);
   }
 
   return comment
@@ -22,7 +22,7 @@ export async function requireCommentMessage(tx: OrgTransaction, commentId: strin
 
 export function requireCommentOwnership(comment: { userId: string }, memberId: string) {
   if (comment.userId !== memberId) {
-    throw new HTTPException(401, { message: "You can only edit your own comments." });
+    throw new AgentViewError("You can only edit your own comments.", 401);
   }
 }
 

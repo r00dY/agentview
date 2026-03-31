@@ -177,7 +177,7 @@ export function channelProvider(type: string) {
    * 
    */
   async function ingestMessage(address: string, params: IngestMessageParams): Promise<IngestMessageResult> {
-    console.log(`[ingestMessage] ingesting message to '${address}', from '${params.contactKind}:${params.contact}', text: '${params.text?.slice(0, 20)}...'`);
+    console.log(`[ingestMessage] ingesting message to '${address}', from '${params.contactKind}:${params.contact}', text: '${params.text?.slice(0, 20)}...', sourceId: '${params.sourceId}'`);
 
     const channel = await getChannel(address);
     if (!channel) {
@@ -194,7 +194,7 @@ export function channelProvider(type: string) {
 
     const channelRef : ChannelRef = { type: channel.type as 'gmail' | 'mock', address: channel.address }
 
-    console.log('[ingestMessage] environment: ', environment.user?.email ?? 'production');
+    console.log(`[ingestMessage][${params.sourceId}] environment: ', environment.user?.email ?? 'production'`);
 
     const servicePrincipal : ServicePrincipal = {
       type: 'service',
@@ -215,7 +215,7 @@ export function channelProvider(type: string) {
         return ignoreMessage('Duplicate message (sourceId already exists)');
       }
 
-      console.log('[ingestMessage] thread and message created');
+      console.log(`[ingestMessage][${params.sourceId}] thread and message created`);
 
       /**
        * Last run associated with the thread -> allows us to find sessionId too.
@@ -230,7 +230,7 @@ export function channelProvider(type: string) {
       if (session) {
         await tx.acquireLock({ type: "edit_session", sessionId: session.id });
 
-        console.log('[ingestMessage] session found');
+        console.log(`[ingestMessage][${params.sourceId}] session found`);
         const activeRun = await tx.query.runs.findFirst({
           where: and(
             eq(runs.sessionId, session?.id),
@@ -238,76 +238,15 @@ export function channelProvider(type: string) {
           )
         })
         if (activeRun) {
-          console.log('[ingestMessage] active run found, terminating');
+          console.log(`[ingestMessage][${params.sourceId}] active run found, terminating`);
           await terminateRun(tx, session.id, activeRun.id, { status: 'discarded', failReason: { message: 'New message ingested, discarding active run' } });
         } else {
-          console.log('[ingestMessage] no active run found');
+          console.log(`[ingestMessage][${params.sourceId}] no active run found`);
         }
       }
       else {
-        console.log('[ingestMessage] no session found');
+        console.log(`[ingestMessage][${params.sourceId}] no session found`);
       }
-
-      // const activeRun = session ? await tx.query.runs.findFirst({
-      //   where: and(
-      //     eq(runs.sessionId, session?.id),
-      //     not(isNull(runs.finishedAt)),
-      //   )
-      // }) : null;
-
-      // const lastRun = (await tx.query.channelMessages.findFirst({
-      //   columns: {
-      //   },
-      //   where: and(
-      //     eq(channelMessages.channelThreadId, thread.id),
-      //     not(isNull(channelMessages.runId)),
-      //   ),
-      //   orderBy: (cm, { desc }) => [desc(cm.createdAt)],
-      //   with: {
-      //     run: true,
-      //   }
-      // }))?.run ?? null;
-
-      // let sessionId = lastRun?.sessionId;
-
-      // console.log('[ingestMessage] last run status: ', lastRun?.status);
-      // console.log('[ingestMessage] sessionId: ', sessionId);
-
-      /**
-       * Cancel the last run if it is in progress
-      //  */
-      // if (lastRun && !isRunFinished(lastRun)) {
-      //   console.log('[ingestMessage] cancelling last run');
-
-      //   // this is not inside of transaction!
-      //   await terminateRun(tx, lastRun.id, { status: 'discarded', failReason: { message: 'New message ingested, discarding last run' } });
-      // }
-      // else {
-      //   console.log('[ingestMessage] last run is not in progress');
-      // }
-
-      /**
-       * Get all messages that are staged for next run
-       * - no run_id (fresh ones)
-       * - all messages from the last run that was not completed
-       */
-
-      // const inputMessages = await tx.query.channelMessages.findMany({
-      //   where: and(
-      //     eq(channelMessages.channelThreadId, thread.id),
-      //     or(
-      //       isNull(channelMessages.runId),
-      //       (lastRun && lastRun.status !== 'completed') ? eq(channelMessages.runId, lastRun.id) : undefined,
-      //     )
-      //   ),
-      //   orderBy: (cm, { asc }) => [asc(cm.date)],
-      // });
-
-      // console.log('[ingestMessage] inputMessages: ', inputMessages.length);
-
-      // if (inputMessages.length === 0) {
-      //   return ignoreMessage(`No input messages found for channel thread ${thread.id}`);
-      // }
 
       /**
        * Ensure user
@@ -322,6 +261,7 @@ export function channelProvider(type: string) {
         if (thread.contactKind === 'email') {
           const user = await ensureUserForEmail(tx, thread.contact);
           userId = user?.id;
+          console.log(`[ingestMessage][${params.sourceId}] user got from email: ${thread.contact} -> ${userId}`);
         } else {
           throw new Error(`Unsupported contact kind: ${thread.contactKind}`);
         }
@@ -335,6 +275,7 @@ export function channelProvider(type: string) {
        * Ensure session
        */
       if (!session) {
+        console.log(`[ingestMessage][${params.sourceId}] creating new session`);
         session = await createInactiveSession(tx, {
           environment,
           channelRef,
@@ -345,7 +286,7 @@ export function channelProvider(type: string) {
         // I don't think we need to activate session here.
         // await activateSession(tx, session.id);
         
-        console.log('[ingestMessage] new session created: ', session.id);
+        console.log(`[ingestMessage][${params.sourceId}] new session created: ${session.id}`);
       }
 
       return { ingested: true, sessionId: session.id, thread, message };

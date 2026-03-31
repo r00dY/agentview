@@ -1,6 +1,5 @@
 import { serve } from '@hono/node-server';
 import type { Context } from 'hono';
-import { HTTPException } from 'hono/http-exception';
 
 import { APIError as BetterAuthAPIError } from "better-auth/api";
 import { cors } from 'hono/cors';
@@ -85,27 +84,25 @@ export const app = new OpenAPIHono({
 /** --------- ERROR HANDLING --------- */
 
 app.onError((error, c) => {
-  console.error(error)
   if (error instanceof AgentViewError) {
     const payload = { message: error.message, ...(error.details ?? {}) }
-    console.log('AgentViewError', error.statusCode, payload);
+    console.log('[AgentViewError]', error.statusCode, error.message);
     return c.json(payload, error.statusCode as any);
   }
   else if (error instanceof BetterAuthAPIError) {
+    console.log('[BetterAuthAPIError]', error.statusCode, error.message);
     return c.json(error.body, error.statusCode as any); // "as any" because error.statusCode is "number" and hono expects some numeric literal union 
   }
   else if (error instanceof DrizzleQueryError) {
+    console.error('[DrizzleQueryError]', error);
     return c.json({ ...error, message: "DB error" }, 400);
   }
-  else if (error instanceof HTTPException) {
-    return c.json({
-      message: error.message,
-    }, error.status);
-  }
   else if (error instanceof Error) {
+    console.error('[Error]', error);
     return c.json({ message: error.message }, 400);
   }
   else {
+    console.error('[Unexpected error]', error);
     return c.json({ message: "Unexpected error" }, 400);
   }
 });
@@ -173,13 +170,13 @@ app.openapi(userMeRoute, async (c) => {
   const principal = await authnAllowPublic(c.req.raw.headers)
 
   if (principal.type !== 'user') {
-    throw new HTTPException(401, { message: "This endpoint is only available for user-scoped tokens." });
+    throw new AgentViewError("This endpoint is only available for user-scoped tokens.", 401);
   }
 
   const user = principal.user;
 
   if (!user) {
-    throw new HTTPException(422, { message: "You must provide an end user token to access this endpoint." });
+    throw new AgentViewError("You must provide an end user token to access this endpoint.", 422);
   }
 
   await authorize(principal, { action: "end-user:read", user })
@@ -595,7 +592,7 @@ app.openapi(sessionsPOSTRoute, async (c) => {
   const body = await c.req.valid('json')
 
   if (body.input) {
-    throw new HTTPException(422, { message: 'Input is not supported for standard session creation.' });
+    throw new AgentViewError('Input is not supported for standard session creation.', 422);
   }
 
   return withTenant(principal, async (tx) => {
@@ -862,7 +859,7 @@ const runsPOSTRoute = createRoute({
 
 
 app.openapi(runsPOSTRoute, async (_c) => {
-  throw new HTTPException(400, { message: 'Temporarily disabled.' });
+  throw new AgentViewError('Temporarily disabled.', 400);
   // const { run, session, stream } = await createRunHandler(c);
 
   // if (stream) {
@@ -1179,7 +1176,7 @@ function getMemberIdBasedOnPrincipal(principal: Principal) { // we use it only f
     return principal.apiKey.userId;
   }
   else {
-    throw new HTTPException(401, { message: "Unauthorized" });
+    throw new AgentViewError("Unauthorized", 401);
   }
 }
 

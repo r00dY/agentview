@@ -203,6 +203,7 @@ async function processAgentFetch(run: Run) {
         isFirstEventSent = true;
 
         await withTenant(principal, async (tx) => {
+          await tx.acquireLock({ type: "create_resource" }); // handles!
           await tx.acquireLock({ type: "edit_session", sessionId: session.id });
           
           await acceptRun(tx, session.id, run.id);

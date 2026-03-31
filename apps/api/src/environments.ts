@@ -1,10 +1,10 @@
 import type { Environment } from "agentview/apiTypes";
 import { BaseConfigSchemaToZod, type BaseAgentViewConfig } from "agentview/baseConfigTypes";
 import { eq } from "drizzle-orm";
-import { HTTPException } from "hono/http-exception";
 import { db__dangerous } from "./db";
 import { environments } from "./schemas/schema";
 import type { TenantTransaction } from "./withOrg";
+import { AgentViewError } from "agentview";
 
 // export type ProdEnv = {
 //     type: 'prod'
@@ -49,7 +49,7 @@ export async function getEnvironment(tx: TenantTransaction) { // envId is actual
 export async function requireEnvironment(tx: TenantTransaction) {
   const environment = await getEnvironment(tx);
   if (!environment) {
-    throw new HTTPException(404, { message: "Environment not found" });
+    throw new AgentViewError("Environment not found", 404);
   }
   return environment;
 }
@@ -70,7 +70,7 @@ export function getConfigFromEnvironment(environment: Environment) {
 export async function requireConfig(tx: TenantTransaction): Promise<BaseAgentViewConfig> {
   const environment = await requireEnvironment(tx);
   if (environment.config === null) {
-    throw new HTTPException(400, { message: "Environment has no config." });
+    throw new AgentViewError("Environment has no config.", 400);
   }
   return getConfigFromEnvironment(environment)
 }

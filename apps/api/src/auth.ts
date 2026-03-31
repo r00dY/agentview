@@ -52,10 +52,17 @@ export const auth = betterAuth({
                 const signupUrl = `${getWebAppUrl()}/accept-invitation?invitationId=${encodeURIComponent(invitation.id)}`;
                 const organization = invitation.organization;
 
+                const subject = `You're invited to join ${organization.name}`;
+
+                if (process.env.RESEND_DISABLED === 'true') {
+                    console.log(`[resend-mock-mail] [${invitation.email}] ${subject}`);
+                    return;
+                }
+
                 const { error } = await resend.emails.send({
                     from: 'AgentView <noreply@agentview.app>',
                     to: [invitation.email],
-                    subject: `You're invited to join ${organization.name}`,
+                    subject,
                     html: `<p>Hello,</p>
 <p>You've been invited to join <strong>${organization.name}</strong> as a <strong>${invitation.role}</strong>.</p>
 <p>To accept your invitation and create your account, please click the link below:</p>

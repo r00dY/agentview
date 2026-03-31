@@ -1,4 +1,3 @@
-import { HTTPException } from 'hono/http-exception';
 import { and, eq } from 'drizzle-orm';
 import { auth } from './auth';
 import { db__dangerous } from './db';
@@ -6,6 +5,7 @@ import { withOrg } from './withOrg';
 import { members, organizations } from './schemas/auth-schema';
 import { findUser } from './users';
 import type { User, Space } from 'agentview/apiTypes';
+import { AgentViewError } from 'agentview';
 
 /** --------- TYPE INFERENCE HELPERS --------- */
 
@@ -87,7 +87,7 @@ function extractUserToken(headers: Headers) {
 async function getRole(userId: string, organizationId: string) {
   const member = await db__dangerous.query.members.findFirst({ where: and(eq(members.userId, userId), eq(members.organizationId, organizationId)) })
   if (!member) {
-    throw new HTTPException(401, { message: "Unauthorized" });
+    throw new AgentViewError("Unauthorized", 401);
   }
   return member.role
 }
@@ -96,12 +96,12 @@ async function requireOrganization(input: Headers | string) {
   const organizationId = typeof input === "string" ? input : input.get('x-organization-id')
 
   if (!organizationId) {
-    throw new HTTPException(404, { message: "Organization ID is not provided." });
+    throw new AgentViewError("Organization ID is not provided.", 404);
   }
 
   const organization = await db__dangerous.query.organizations.findFirst({ where: eq(organizations.id, organizationId) })
   if (!organization) {
-    throw new HTTPException(404, { message: "Organization not found" });
+    throw new AgentViewError("Organization not found", 404);
   }
   return organization
 }
@@ -117,7 +117,7 @@ async function getUserPrincipal(headers: Headers, organizationId: string, env?: 
   if (userToken) {
     const user = await withOrg(organizationId, tx => findUser(tx, { token: userToken }))
     if (!user) {
-      throw new HTTPException(401, { message: "Invalid User Token" });
+      throw new AgentViewError("Invalid User Token", 401);
     }
     return { type: 'user', user, organizationId, env }
   }
@@ -171,11 +171,11 @@ export async function authnAllowAnon(headers: Headers): Promise<Principal> {
       }
     }
     else {
-      throw new HTTPException(401, { message: "Invalid API Key" });
+      throw new AgentViewError("Invalid API Key", 401);
     }
   }
   else {
-    throw new HTTPException(401, { message: "Missing API Key" });
+    throw new AgentViewError("Missing API Key", 401);
   }
 }
 
@@ -183,7 +183,7 @@ export async function authnAllowPublic(headers: Headers): Promise<ServicePrincip
   const principal = await authnAllowAnon(headers);
 
   if (principal.type === 'apiKeyPublic') {
-    throw new HTTPException(401, { message: "This endpoint requires user authentication. Please provide user token." });
+    throw new AgentViewError("This endpoint requires user authentication. Please provide user token.", 401);
   }
 
   return principal;
@@ -193,7 +193,7 @@ export async function authn(headers: Headers): Promise<ServicePrincipal | Privat
   const principal = await authnAllowAnon(headers);
 
   if (principal.type === 'apiKeyPublic' || principal.type === 'user') {
-    throw new HTTPException(401, { message: "This endpoint is not available for public API keys. You should use it server-side with secret API key." });
+    throw new AgentViewError("This endpoint is not available for public API keys. You should use it server-side with secret API key.", 401);
   }
 
   return principal;
@@ -209,7 +209,7 @@ export function requireMemberPrincipal(principal: Principal) {
   if (principal.type === 'member') {
     return principal;
   }
-  throw new HTTPException(401, { message: "Unauthorized" });
+  throw new AgentViewError("Unauthorized", 401);
 }
 
 // export function getMemberId(principal: PrivatePrincipal) {
@@ -287,7 +287,7 @@ export function authorize(principal: Principal, action: Action) {
       (action.action === "end-user:update" && action.user.space === 'production');
 
     if (endUserBelongsToProdSpace && principal.env !== 'production') {
-      throw new HTTPException(401, { message: "Unauthorized. Production data can be only accessed with production environment." });
+      throw new AgentViewError("Unauthorized. Production data can be only accessed with production environment.", 401);
     }
 
     if (principal.type === 'service') {
@@ -335,5 +335,5 @@ export function authorize(principal: Principal, action: Action) {
     }
   }
 
-  throw new HTTPException(401, { message: "Unauthorized" });
+  throw new AgentViewError("Unauthorized", 401);
 }
