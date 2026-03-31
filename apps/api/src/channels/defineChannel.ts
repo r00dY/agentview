@@ -5,7 +5,7 @@ import { channels, channelThreads, channelMessages, endUsers, sessions, runs } f
 import { withOrg, withTenant } from '../withOrg';
 import { db__dangerous } from '../db';
 import type { Transaction } from '../types';
-import { createAutoRun, createAutoRunFromChannelMessages, isRunFinished, terminateRun } from '../runs';
+import { createAutoRunFromChannelMessages, isRunFinished, terminateRun } from '../runs';
 import { randomBytes } from 'crypto';
 import { createInactiveSession, activateSession } from '../sessions';
 import type { ChannelRef } from 'agentview/apiTypes';

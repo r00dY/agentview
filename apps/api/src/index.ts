@@ -937,24 +937,6 @@ const runsPOSTRoute = createRoute({
   },
 })
 
-async function createRunHandler(c: Parameters<RouteHandler<typeof runsPOSTRoute>>[0]) {
-  const principal = await authnAllowPublic(c.req.raw.headers)
-  const body = await c.req.valid('json')
-  const params = await c.req.param();
-
-  const { stream = false } = body;
-
-  return await withTenant(principal, async (tx) => {
-    const session = await requireSessionBase(tx, params.session_id);
-
-    authorize(principal, { action: "end-user:update", user: session.user });
-
-    const environment = await requireEnvironment(tx);
-    const run = await createAutoRun(tx, environment, params.session_id, body);
-
-    return { run, stream, principal };
-  });
-}
 
 app.openapi(runsPOSTRoute, async (c) => {
   throw new HTTPException(400, { message: 'Temporarily disabled.' });
@@ -1036,8 +1018,15 @@ async function createRunAISDKHandler(c: Context, run: { id: string, sessionId: s
 }
 
 app.openapi(runsAISDKPOSTRoute, async (c) => {
-  const { run, stream, principal } = await createRunHandler(c);
-  return createRunAISDKHandler(c, run, stream, principal);
+  const principal = await authnAllowPublic(c.req.raw.headers)
+  const body = await c.req.valid('json')
+  const params = await c.req.param();
+
+  const run = await withTenant(principal, async (tx) => {
+    return await createAutoRun(tx, params.session_id, body);
+  })
+  
+  return createRunAISDKHandler(c, run, body.stream ?? false, principal);
 })
 
 
@@ -1211,14 +1200,9 @@ app.openapi(runsManualPOSTRoute, async (c) => {
   const params = await c.req.param();
 
   return withTenant(principal, async (tx) => {
-    const session = await requireSession(tx, params.session_id);
+    await createManualRun(tx, params.session_id, body);
 
-    authorize(principal, { action: "end-user:update", user: session.user });
-
-    const environment = await requireEnvironment(tx);
-
-    await createManualRun(tx, environment, params.session_id, body);
-
+    // get full run (we could optimise this)
     const updatedSession = await requireSession(tx, params.session_id);
     const newRun = getLastRun(updatedSession)!;
 

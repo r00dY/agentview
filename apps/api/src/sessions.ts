@@ -444,7 +444,7 @@ export async function createSession(tx: TenantTransaction, body: StandardSession
 
   let newRun: Awaited<ReturnType<typeof createAutoRun>> | undefined = undefined;
   if (body.input) {
-    newRun = await createAutoRun(tx, environment, newSessionRow.id, { input: body.input });
+    newRun = await createAutoRun(tx, newSessionRow.id, { input: body.input });
   } else {
     await activateSession(tx, newSessionRow.id);
   }

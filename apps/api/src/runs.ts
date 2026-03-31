@@ -8,12 +8,13 @@ import { AgentViewError } from 'agentview/AgentViewError';
 import { parseMetadata } from './parseMetadata';
 import { resolveAgentRef } from './agentRefs';
 import { getLastRun } from 'agentview/sessionUtils';
-import { fetchSession, fetchSessionBase } from './sessions';
-import { getConfigFromEnvironment } from './environments';
+import { fetchSession, fetchSessionBase, requireSession, requireSessionBase } from './sessions';
+import { getConfigFromEnvironment, requireEnvironment } from './environments';
 import { publishRunStreamEvent, publishRunTerminationEvent } from './runStream';
-import { withOrg, type OrgTransaction } from './withOrg';
+import { withOrg, type OrgTransaction, type TenantTransaction } from './withOrg';
 import { getAdapter } from './adapters/adapters';
 import { requireUUID } from './isUUID';
+import { authorize } from './authMiddleware';
 
 export const DEFAULT_IDLE_TIME = 1000 * 60; // 60 seconds
 
@@ -668,12 +669,16 @@ export async function createAutoRunFromChannelMessages(
 
 
 export async function createAutoRun(
-  tx: OrgTransaction,
-  environment: Environment,
+  tx: TenantTransaction,
   sessionId: string,
   body: { input: Record<string, any> }
 ): Promise<typeof runs.$inferSelect> {
   await tx.acquireLock({ type: "edit_session", sessionId });
+
+  const session = await requireSessionBase(tx, sessionId);
+  authorize(tx.principal, { action: "end-user:update", user: session.user });
+
+  const environment = await requireEnvironment(tx);
 
   const { lastRun, agentConfig, agentRefId } = await prepareRunCreation(tx, environment, sessionId);
   const { runConfig, parsedInput, idleTimeout } = await processInput(agentConfig, body.input);
@@ -700,8 +705,7 @@ export async function createAutoRun(
  * API channels only.
  */
 export async function createManualRun(
-  tx: OrgTransaction,
-  environment: Environment,
+  tx: TenantTransaction,
   sessionId: string,
   body: ManualRunCreate
 ): Promise<typeof runs.$inferSelect> {
@@ -711,6 +715,8 @@ export async function createManualRun(
   if (!sessionBase) {
     throw new AgentViewError("Session not found.", 404);
   }
+
+  authorize(tx.principal, { action: "end-user:update", user: sessionBase.user });
 
   if (sessionBase.channel.type !== 'api') {
     throw new AgentViewError("For non-api channels manual mode is not supported.", 422);
@@ -722,6 +728,8 @@ export async function createManualRun(
 
   const inputItem = body.items[0];
   const nonInputItems = body.items.slice(1);
+
+  const environment = await requireEnvironment(tx);
 
   const { lastRun, agentConfig, agentRefId } = await prepareRunCreation(tx, environment, sessionId);
   const { runConfig, parsedInput, idleTimeout } = await processInput(agentConfig, inputItem);
