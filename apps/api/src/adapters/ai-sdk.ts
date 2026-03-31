@@ -463,8 +463,11 @@ async function callAgentAPIAISDK(
         if (error instanceof RunTerminationError) {
             console.log(`[ai-sdk][${currentRun.id}] run terminated while streaming`)
 
-            if (error.reason.status === 'discarded') {
-                throw new Error(`[ai-sdk][${currentRun.id}] SEVERE: Run discarded while streaming`);
+            if (error.reason.status === 'discarded') { 
+                // this can happen for channels, when new messages pops in.
+                // We don't need to cleanup this, since discard is not a SIGNAL, the run is already closed. We can just safely return
+                console.log(`[ai-sdk][${currentRun.id}] run discarded, returning`)
+                return;
             }
             else {
                 finalPatch = {
