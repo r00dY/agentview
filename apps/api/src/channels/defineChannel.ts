@@ -283,33 +283,35 @@ export function channelProvider(type: string) {
           channelThreadId: thread.id,
         });
 
-        // I don't think we need to activate session here.
-        // await activateSession(tx, session.id);
-        
         console.log(`[ingestMessage][${params.sourceId}] new session created: ${session.id}`);
       }
 
       return { ingested: true, sessionId: session.id, thread, message };
     });
 
-    // we closed transaction here. It's on purpose
-    // 1. we already ingested message, created a user & session for it. Those operations MUST succeed, not succeeding is internal error.
-    // 2. next step -> creating run... it could actually not succeed, because the channel is not connected to an agent. The message pops in, it's directed to environment = ingestion. The fact there's no agent connected is normal and shouldn't discard the message.
-    // 3. If we can't create run, it will leave us with a session connected to channel_thread. channel_messages connected to channel_thread will be without run_id.
-    // 4. So essentially, if the code below fails, we should still keep the code above commited. (potential retries later)
-    // 
-    // ACTUALLY, maybe we should even give up on creating session / run in this function, but it's okay for now.
+    /**
+     * we close transaction here. It's on purpose
+     * 1. we already ingested message, created a user & session for it. Those operations MUST succeed, not succeeding is internal error.
+     * 2. next step -> creating run... it could actually not succeed, because the channel is not connected to an agent. The message pops in, it's directed to environment = ingestion. The fact there's no agent connected is normal and shouldn't discard the message.
+     * 3. If we can't create run, it will leave us with a session connected to channel_thread. channel_messages connected to channel_thread will be without run_id.
+     * 4. So essentially, if the code below fails, we should still keep the code above commited. (potential retries later)
+     */
 
     if (!result.ingested) {
       return result; // if not ingested, return
     }
 
     /**
-     * Try to create a run (for now not in worker, so if it fails, it fails forever)
+     * Create a run from channel messages
+     * IMPORTANT: this might be concurrent, 2 channel messages might be ingested at the same time. Error about "run already in progress" is correct state.
      */
-    await withOrg(channel.organizationId, async (tx) => {
-      await createAutoRunFromChannelMessages(tx, environment, result.sessionId);
-    });
+    try {
+      await withOrg(channel.organizationId, async (tx) => {
+        await createAutoRunFromChannelMessages(tx, environment, result.sessionId);
+      });
+    } catch (error) {
+      console.log(`[ingestMessage:createAutoRunFromChannelMessages][${params.sourceId}] failed to create run: ${error}`);
+    }
 
     return result;
   }

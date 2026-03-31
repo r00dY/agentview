@@ -12,7 +12,7 @@ import { requireUUID } from './isUUID';
 import { parseMetadata } from './parseMetadata';
 import { publishRunStreamEvent, publishRunTerminationEvent } from './runStream';
 import { agentRefs, channelMessages, runs, sessionItems, sessions, webhookJobs } from './schemas/schema';
-import { fetchSession, fetchSessionBase, requireSessionBase } from './sessions';
+import { fetchSession, fetchSessionBase, requireSession, requireSessionBase } from './sessions';
 import type { Transaction } from './types';
 import { type OrgTransaction, type TenantTransaction } from './withOrg';
 
@@ -311,10 +311,7 @@ async function createRunCore(
  * Prepares a session for run creation: fetches session, checks no in-progress run, finds config.
  */
 async function prepareRunCreation(tx: OrgTransaction, environment: Environment, sessionId: string) {
-  const session = await fetchSession(tx, sessionId); // todo: optimize
-  if (!session) {
-    throw new AgentViewError("Session not found.", 404);
-  }
+  const session = await requireSession(tx, sessionId, { includePendingRun: true, includeInitRun: true }); // todo: optimize
 
   const lastRun = getLastRun(session);
   if (lastRun && !isRunFinished(lastRun)) {

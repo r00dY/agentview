@@ -104,8 +104,12 @@ export async function fetchSessionBase(tx: Transaction, session_id: string): Pro
   } as SessionBase
 }
 
+export type FetchSessionOptions = {
+  includeInitRun?: boolean;
+  includePendingRun?: boolean;
+}
 
-export async function fetchSession(tx: Transaction, session_id: string, options?: { includeInitRun?: boolean }): Promise<StandardSession | undefined> {
+export async function fetchSession(tx: Transaction, session_id: string, options?: FetchSessionOptions): Promise<StandardSession | undefined> {
   const where = sessionWhere(session_id);
   if (!where) {
     return undefined;
@@ -179,6 +183,11 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
           if (options?.includeInitRun && run.status === "init") {
             return true;
           }
+
+          if (options?.includePendingRun && run.status === "pending") {
+            return true;
+          }
+
         }
         return false;
 
@@ -196,8 +205,8 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
 }
 
 
-export async function requireSession(tx: Transaction, sessionId: string) {
-  const session = await fetchSession(tx, sessionId)
+export async function requireSession(tx: Transaction, sessionId: string, options?: FetchSessionOptions) {
+  const session = await fetchSession(tx, sessionId, options)
   if (!session) {
     throw new AgentViewError("Session not found", 404);
   }

@@ -52,7 +52,12 @@ export async function createMockServer(port: number): Promise<MockServer> {
 
 export type SSEEvent = { event: string; data: any }
 
-function writeSSEHeaders(res: ServerResponse) {
+export function writeAISDKSuccessHeaders(res: ServerResponse) {
+  if (res.destroyed) {
+    console.log('!!!! writeAISDKSuccessHeaders: res destroyed')
+    return
+  }
+
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
@@ -60,26 +65,21 @@ function writeSSEHeaders(res: ServerResponse) {
   })
 }
 
-/** Named-event SSE format: `event: name\ndata: {...}\n\n` */
-export function writeSSE(res: ServerResponse, events: SSEEvent[]) {
-  writeSSEHeaders(res)
-  for (const ev of events) {
-    res.write(`event: ${ev.event}\ndata: ${JSON.stringify(ev.data)}\n\n`)
-  }
-  res.end()
-}
-
 /** AI SDK streaming format: `data: {...}\n\n` with `data: [DONE]\n\n` sentinel */
-export function writeAISDKStream(res: ServerResponse, chunks: any[], options?: { endWithDone?: boolean }) {
-  writeSSEHeaders(res)
+export function writeAISDKChunks(res: ServerResponse, chunks: any[]) {
   for (const chunk of chunks) {
+    if (res.destroyed) {
+      console.log('!!!! writeAISDKChunks: res destroyed')
+      return
+    }
     res.write(`data: ${JSON.stringify(chunk)}\n\n`)
   }
+}
 
-  const shouldEndWithDone = options?.endWithDone ?? true;
-
-  if (shouldEndWithDone) {
-    res.write('data: [DONE]\n\n')
+export function writeAISDKDone(res: ServerResponse) {
+  if (res.destroyed) {
+    console.log('!!!! writeAISDKDone: res destroyed')
+    return
   }
-  res.end()
+  res.write('data: [DONE]\n\n')
 }
