@@ -599,7 +599,7 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
       await publishRunStreamEvent(runId, null, '[DONE]');
     });
 
-    console.error(`[terminateRun][${runId}] termination successful`);
+    console.log(`[terminateRun][${runId}] termination successful`);
 
   } catch (e) {
     console.error(`[terminateRun][${runId}] SEVERE ERROR!!!! Termination failed: ${e instanceof Error ? e.message : String(e)}`);

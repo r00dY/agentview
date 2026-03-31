@@ -90,7 +90,7 @@ app.onError((error, c) => {
     return c.json(payload, error.statusCode as any);
   }
   else if (error instanceof BetterAuthAPIError) {
-    console.log('[BetterAuthAPIError]', error.statusCode, error.message);
+    console.error('[BetterAuthAPIError]', error.statusCode, error.message);
     return c.json(error.body, error.statusCode as any); // "as any" because error.statusCode is "number" and hono expects some numeric literal union 
   }
   else if (error instanceof DrizzleQueryError) {

@@ -492,7 +492,7 @@ async function callAgentAPIAISDK(
         }
         else {
             const message = error instanceof Error ? error.message ?? 'Unknown error' : String(error);
-            console.log(`[ai-sdk][${currentRun.id}] SEVERE: unexpected error while streaming (not termination and not connection error): ${message}`);
+            console.error(`[ai-sdk][${currentRun.id}] SEVERE: unexpected error while streaming (not termination and not connection error): ${message}`);
 
             finalPatch = {
                 status: 'failed',

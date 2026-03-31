@@ -223,7 +223,7 @@ async function processAgentFetch(run: Run) {
      * This is severe error and always should be investigated. An unhandled error propagated from adapter here. The cleanup should be always graceful, so this is severe.
      */
     finalError = error instanceof Error ? error.message : String(error);
-    console.log(`[agentFetch][${run.id}] SEVERE, please investigate. Error: "${finalError}"`);
+    console.error(`[agentFetch][${run.id}] SEVERE, please investigate. Error: "${finalError}"`);
 
   } finally {
 
