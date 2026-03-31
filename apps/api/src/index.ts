@@ -1161,21 +1161,9 @@ app.openapi(runManualPATCHRoute, async (c) => {
   const body = await c.req.valid('json')
 
   return await withTenant(principal, async (tx) => {
-    const run = await requireRunBase(tx, run_id);
-    const session = await requireSessionBase(tx, run.sessionId);
+    const run = await applyRunPatch(tx, run_id, body, true);
 
-    authorize(principal, { action: "end-user:update", user: session.user });
-
-    // Guard: API can only cancel auto-fetch runs which are being auto-fetched
-    if (!run.manual) {
-      throw new AgentViewError("This endpoint is allowed only for manual runs.", 422);
-    }
-
-    const environment = await requireEnvironment(tx);
-
-    await applyRunPatch(tx, session.id, run.id, environment, body);
-
-    const updatedSession = await requireSession(tx, session.id); // TODO: optimize
+    const updatedSession = await requireSession(tx, run.sessionId); // TODO: optimize
     const newRun = getLastRun(updatedSession)!;
     return c.json(newRun, 201);
   })

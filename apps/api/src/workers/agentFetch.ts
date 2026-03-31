@@ -8,8 +8,9 @@ import { applyRunPatch, RunTerminationError, terminateRun } from '../runs';
 import { createRunTerminationReceiver } from '../runStream';
 import { environments, runs } from '../schemas/schema';
 import { activateSession, fetchSession } from '../sessions';
-import { withOrg } from '../withOrg';
+import { withOrg, withTenant } from '../withOrg';
 import { createWorker } from './utils';
+import type { ServicePrincipal } from '../authMiddleware';
 
 type Run = typeof runs.$inferSelect;
 
@@ -148,6 +149,12 @@ async function processAgentFetch(run: Run) {
 
     let isFirstEventSent = false;
 
+    const principal : ServicePrincipal = {
+      type: 'service',
+      organizationId: run.organizationId,
+      env: environment.handle,
+    };
+    
     // event handlers
     const send = async (event: { name: string, data: any }) => {
 
@@ -158,12 +165,10 @@ async function processAgentFetch(run: Run) {
           throw new Error(`[agentFetch][${run.id}] "run.patch" called before "run.discard" or "run.accept".`);
         }
 
-        await withOrg(run.organizationId, async (tx) => {
+        await withTenant(principal, async (tx) => {
           await applyRunPatch(
             tx,
-            session.id,
             run.id,
-            environment,
             event.data
           );
         })

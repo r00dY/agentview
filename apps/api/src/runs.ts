@@ -375,15 +375,24 @@ export class RunTerminationError extends Error {
  * Validates items, metadata, status transitions, inserts items, and updates the run.
  */
 export async function applyRunPatch(
-  tx: OrgTransaction,
-  sessionId: string,
+  tx: TenantTransaction,
   runId: string,
-  environment: Environment | null,
-  body: ManualRunUpdate
+  body: ManualRunUpdate,
+  mustBeManual?: boolean
 ) {
-  await tx.acquireLock({ type: "edit_session", sessionId });
+  const runPreLock = await requireRunBase(tx, runId);
+  
+  await tx.acquireLock({ type: "edit_session", sessionId: runPreLock.sessionId });
 
-  const run = await requireRunBase(tx, runId); // we must start with a lock for safety of concurrent writes!
+  const run = await requireRunBase(tx, runId);
+  const session = await requireSessionBase(tx, run.sessionId);
+
+  authorize(tx.principal, { action: "end-user:update", user: session.user });
+
+  // Guard: API can only cancel auto-fetch runs which are being auto-fetched
+  if (mustBeManual && !run.manual) {
+    throw new AgentViewError("This endpoint is allowed only for manual runs.", 422);
+  }
 
   if (!run) {
     throw new AgentViewError("Run not found.", 404);
@@ -392,6 +401,8 @@ export async function applyRunPatch(
   if (run.status === 'pending' || run.status === 'init') {
     throw new AgentViewError("You can't run apply patch on run in 'init' or 'pending' status.", 422);
   }
+
+  const environment = await requireEnvironment(tx);
 
   /** Find matching run config **/
   const inputItem = (await getRunInput(tx, runId))?.content;
@@ -493,14 +504,14 @@ export async function applyRunPatch(
     ).returning();
   }
 
-  await tx.update(runs).set({
+  const [updatedRun] = await tx.update(runs).set({
     status,
     metadata,
     failReason,
     finishedAt,
     expiresAt,
     updatedAt: nowIso,
-  }).where(eq(runs.id, run.id));
+  }).where(eq(runs.id, run.id)).returning();
 
   if (body.state !== undefined) {
     await tx.insert(sessionItems).values({
@@ -536,6 +547,8 @@ export async function applyRunPatch(
       await publishRunStreamEvent(runId, null, '[DONE]');
     }
   });
+
+  return updatedRun;
 }
 
 /**
