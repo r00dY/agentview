@@ -10,7 +10,7 @@ import { authorize } from './authMiddleware';
 import { getConfigFromEnvironment, requireEnvironment } from './environments';
 import { requireUUID } from './isUUID';
 import { parseMetadata } from './parseMetadata';
-import { publishRunStreamEvent } from './runStream';
+import { publishRunStreamEvent, publishRunTerminationEvent } from './runStream';
 import { agentRefs, channelMessages, runs, sessionItems, sessions, webhookJobs } from './schemas/schema';
 import { fetchSession, fetchSessionBase, requireSessionBase } from './sessions';
 import type { Transaction } from './types';
@@ -573,6 +573,8 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
     if ((runBase.status === 'pending' || runBase.status === 'init') && reason.status !== 'discarded') {
       reason = { status: 'discarded', failReason: { message: `Overriden for pending/init from: ${logText}` } };
     }
+
+    await publishRunTerminationEvent(runId, reason); // important to signal termination to the workers (the signal might have been sent before for cancel / timeout, but it's for discards and general sanity)
 
     console.log(`[terminateRun][${runId}] terminating, ${logText}`);
     const nowIso = new Date().toISOString();

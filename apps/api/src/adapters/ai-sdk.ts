@@ -142,6 +142,11 @@ async function callAgentAPIAISDK(
             })
         }));
 
+        // If run was discarded we don't need to discard it again (but response should be sent for sanity check)
+        if (error instanceof RunTerminationError && error.reason.status === 'discarded') {
+            return;
+        }
+
         await send({
             name: 'run.discard',
             data: {

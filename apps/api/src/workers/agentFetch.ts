@@ -143,7 +143,7 @@ async function processAgentFetch(run: Run) {
     // Abort fetch immediately when run is terminated (e.g. external cancellation).
 
     clearTerminationListener = runTerminationReceiver.listen(run.id, (reason) => {
-      console.log(`[agentFetch][${run.id}] run termination received`, reason);
+      console.log(`[agentFetch][${run.id}] run termination REDIS SIGNAL received`, reason);
       abortController.abort(new RunTerminationError(reason));
     });
 

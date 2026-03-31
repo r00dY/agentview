@@ -3,7 +3,7 @@ import { createStandardClient, configDefaults, type StandardAgentViewClient } fr
 import type { Channel, Environment } from 'agentview/apiTypes'
 import { z } from 'zod'
 import { seedUsers } from './seedUsers'
-import { createMockServer, writeAISDKStream } from './mockServer'
+import { createMockServer, writeAISDKChunks, writeAISDKDone, writeAISDKSuccessHeaders } from './mockServer'
 import type { MockServer } from './mockServer'
 
 configDefaults.__internal = {
@@ -321,14 +321,19 @@ describe('Channels', () => {
               .join(' '))
             .join(' | ')
 
-          const respond = () => {
-            writeAISDKStream(res, [
+          // we send headers quickly
+          writeAISDKSuccessHeaders(res);
+
+          const respond = () => { 
+            writeAISDKChunks(res, [
               { type: 'start', messageId: 'msg_1' },
               { type: 'text-start', id: 't1' },
               { type: 'text-delta', id: 't1', delta: reply },
               { type: 'text-end', id: 't1' },
               { type: 'finish', finishReason: 'stop' },
             ])
+            writeAISDKDone(res);
+            res.end();
           }
 
           if (opts?.delayMs) {

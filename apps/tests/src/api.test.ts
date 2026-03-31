@@ -1,17 +1,16 @@
-import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
 
-import { createStandardClient, configDefaults, type StandardAgentViewClient } from 'agentview/clientStandard'
-import type { StandardRun, StandardSession, SessionStreamEvent } from 'agentview/apiTypes';
 import { AgentViewError, createClient, type AgentViewClient, type User } from 'agentview';
+import type { SessionStreamEvent, StandardRun, StandardSession } from 'agentview/apiTypes';
+import { configDefaults, createStandardClient, type StandardAgentViewClient } from 'agentview/clientStandard';
 
 
 import { z } from 'zod';
+import type { MockServer } from './mockServer';
+import { createMockServer, writeAISDKChunks, writeAISDKDone, writeAISDKSuccessHeaders } from './mockServer';
 import { seedUsers } from './seedUsers';
-import { createMockServer, writeSSE, writeAISDKStream } from './mockServer';
-import type { MockServer, SSEEvent } from './mockServer';
 
-import { readUIMessageStream, DefaultChatTransport, type ChatTransport, type UIMessageChunk, type UIDataTypes, type UIMessage } from 'ai';
-import { tr } from 'zod/locales';
+import { type UIDataTypes, type UIMessage, type UIMessageChunk } from 'ai';
 
 // globally disable summaries for all tests
 configDefaults.__internal = {
@@ -2690,7 +2689,8 @@ describe('API', () => {
       const session = await avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
-        writeAISDKStream(res, [
+        writeAISDKSuccessHeaders(res);
+        writeAISDKChunks(res, [
           { type: "start", messageId: "msg_1" },
           { type: "text-start", id: "t1" },
           { type: "text-delta", id: "t1", delta: "Hello " },
@@ -2698,6 +2698,8 @@ describe('API', () => {
           { type: "text-end", id: "t1" },
           { type: "finish", finishReason: "stop" },
         ]);
+        writeAISDKDone(res);
+        res.end();
       });
 
       // Create run and get the native AI SDK stream
@@ -2738,7 +2740,8 @@ describe('API', () => {
       const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
-        writeAISDKStream(res, [
+        writeAISDKSuccessHeaders(res);
+        writeAISDKChunks(res, [
           { type: "start", messageId: "msg_1" },
           { type: "reasoning-start", id: "r1" },
           { type: "reasoning-delta", id: "r1", delta: "Let me think..." },
@@ -2748,6 +2751,8 @@ describe('API', () => {
           { type: "text-end", id: "t1" },
           { type: "finish", finishReason: "stop" },
         ]);
+        writeAISDKDone(res);
+        res.end();
       });
 
       const stream = await sendMessageViaTransport(
@@ -2813,7 +2818,8 @@ describe('API', () => {
       const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
-        writeAISDKStream(res, [
+        writeAISDKSuccessHeaders(res);
+        writeAISDKChunks(res, [
           { type: "start", messageId: "msg_1" },
           { type: "tool-input-start", toolCallId: "call_1", toolName: "getWeather" },
           { type: "tool-input-delta", toolCallId: "call_1", inputTextDelta: '{"city":"NYC"}' },
@@ -2824,6 +2830,8 @@ describe('API', () => {
           { type: "text-end", id: "t1" },
           { type: "finish", finishReason: "stop" },
         ]);
+        writeAISDKDone(res);
+        res.end();
       });
 
       // Create run and get the native AI SDK stream
@@ -2869,9 +2877,12 @@ describe('API', () => {
       const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
-        writeAISDKStream(res, [
+        writeAISDKSuccessHeaders(res);
+        writeAISDKChunks(res, [
           { type: "error", errorText: "Something went wrong" },
         ]);
+        writeAISDKDone(res);
+        res.end();
       });
 
       // Create run and consume the AI SDK stream
@@ -2900,7 +2911,8 @@ describe('API', () => {
       await updateConfigWithAiSdkUrl();
 
       mockAISDKServer!.setHandler((_body, res) => {
-        writeAISDKStream(res, [
+        writeAISDKSuccessHeaders(res);
+        writeAISDKChunks(res, [
           { type: "start", messageId: "msg_1" },
           { type: "text-start", id: "t1" },
           { type: "text-delta", id: "t1", delta: "Hello " },
@@ -2908,6 +2920,8 @@ describe('API', () => {
           { type: "text-end", id: "t1" },
           { type: "finish", finishReason: "stop" },
         ]);
+        writeAISDKDone(res);
+        res.end();
       });
 
       const session = await avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] }});
@@ -3032,18 +3046,19 @@ describe('API', () => {
 
 
 
-    test("stream ends without finish → run marked failed (validated via ai-sdk stream)", async () => {
+    test("stream aborted (no finish and no done) → run marked failed (validated via ai-sdk stream)", async () => {
       await updateConfigWithAiSdkUrl();
       const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
-        writeAISDKStream(res, [
+        writeAISDKSuccessHeaders(res);
+        writeAISDKChunks(res, [
           { type: "start", messageId: "msg_1" },
           { type: "text-start", id: "t1" },
           { type: "text-delta", id: "t1", delta: "Partial..." },
           { type: "text-end", id: "t1" },
-          // No finish event → stream ends without completing
-        ], { endWithDone: false });
+        ]);
+        res.end();
       });
 
       const stream = await sendMessageViaTransport(
@@ -3069,13 +3084,16 @@ describe('API', () => {
       const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
-        writeAISDKStream(res, [
+        writeAISDKSuccessHeaders(res);
+        writeAISDKChunks(res, [
           { type: "start", messageId: "msg_1" },
           { type: "text-start", id: "t1" },
           { type: "text-delta", id: "t1", delta: "Hi there" },
           { type: "text-end", id: "t1" },
           { type: "finish", finishReason: "stop" },
         ]);
+        writeAISDKDone(res);
+        res.end();
       });
 
       // Use createRunStream so we wait for the stream to complete
@@ -3105,13 +3123,16 @@ describe('API', () => {
 
       // First turn
       mockAISDKServer!.setHandler((_body, res) => {
-        writeAISDKStream(res, [
+        writeAISDKSuccessHeaders(res);
+        writeAISDKChunks(res, [
           { type: "start", messageId: "msg_1" },
           { type: "text-start", id: "t1" },
           { type: "text-delta", id: "t1", delta: "Hello!" },
           { type: "text-end", id: "t1" },
           { type: "finish", finishReason: "stop" },
         ]);
+        writeAISDKDone(res);
+        res.end();
       });
 
       const stream = await sendMessageViaTransport(
@@ -3126,13 +3147,16 @@ describe('API', () => {
       mockAISDKServer!.resetRequests();
 
       mockAISDKServer!.setHandler((_body, res) => {
-        writeAISDKStream(res, [
+        writeAISDKSuccessHeaders(res);
+        writeAISDKChunks(res, [
           { type: "start", messageId: "msg_2" },
           { type: "text-start", id: "t2" },
           { type: "text-delta", id: "t2", delta: "I'm fine!" },
           { type: "text-end", id: "t2" },
           { type: "finish", finishReason: "stop" },
         ]);
+        writeAISDKDone(res);
+        res.end();
       });
 
       const stream2 = await sendMessageViaTransport(
