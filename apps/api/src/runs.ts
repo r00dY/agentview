@@ -10,7 +10,8 @@ import { authorize } from './authMiddleware';
 import { getConfigFromEnvironment, requireEnvironment } from './environments';
 import { requireUUID } from './isUUID';
 import { parseMetadata } from './parseMetadata';
-import { publishRunStreamEvent, publishRunTerminationEvent } from './runStream';
+import { publishEvent } from './redisPubSub';
+import { publishRunStreamEvent } from './runStream';
 import { agentRefs, channelMessages, runs, sessionItems, sessions, webhookJobs } from './schemas/schema';
 import { fetchSession, fetchSessionBase, requireSession, requireSessionBase } from './sessions';
 import type { Transaction } from './types';
@@ -301,6 +302,11 @@ async function createRunCore(
     }
   }
 
+  // Notify event-driven workers immediately after commit for auto-fetch runs
+  tx.afterCommit(async () => {
+    await publishEvent({ type: 'run.created', runId: insertedRun.id });
+  });
+
   return insertedRun;
 }
 
@@ -571,7 +577,7 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
       reason = { status: 'discarded', failReason: { message: `Overriden for pending/init from: ${logText}` } };
     }
 
-    await publishRunTerminationEvent(runId, reason); // important to signal termination to the workers (the signal might have been sent before for cancel / timeout, but it's for discards and general sanity)
+    await publishEvent({ type: 'run.terminated', runId, reason }); // important to signal termination to the workers (the signal might have been sent before for cancel / timeout, but it's for discards and general sanity)
 
     console.log(`[terminateRun][${runId}] terminating, ${logText}`);
     const nowIso = new Date().toISOString();

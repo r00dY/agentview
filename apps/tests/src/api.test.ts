@@ -3156,7 +3156,6 @@ describe('API', () => {
           { type: "finish", finishReason: "stop" },
         ]);
         writeAISDKDone(res);
-        res.end();
       });
 
       const stream2 = await sendMessageViaTransport(

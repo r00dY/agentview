@@ -54,7 +54,8 @@ import { initDb } from './initDb';
 import { requireValidInvitation } from './invitations';
 import { requireUUID } from './isUUID';
 import { applyRunPatch, createAutoRun, createManualRun, DEFAULT_IDLE_TIME, getRunInput, getRunInputContent, isRunFinished, requireRunBase, terminateRun } from './runs';
-import { createRunStreamConsumer, publishRunTerminationEvent } from './runStream';
+import { publishEvent } from './redisPubSub';
+import { createRunStreamConsumer } from './runStream';
 import { organizations, users } from './schemas/auth-schema';
 import { commentMessages, endUsers, environments, inboxItems, runs, scores, sessions } from './schemas/schema';
 import { createSession, getSessionListFilter, getSessions, updateSession } from './sessions';
@@ -994,7 +995,7 @@ async function sessionStandardCancelHandler(c: Parameters<RouteHandler<typeof se
   // - Signal cancellation and schedule hard termination after 5s
   // - the setTimeout must be non-blocking. We don't want to wait 5s as it might potentially end much faster than that, when [DONE] is sent sooner.
   // - this 5s is just a safety net. termineRun inside it should be no-op in all cases.
-  await publishRunTerminationEvent(lastRun.id, { status: 'cancelled' });
+  await publishEvent({ type: 'run.terminated', runId: lastRun.id, reason: { status: 'cancelled' } });
 
   setTimeout(() => {
     withOrg(principal.organizationId, async (tx) => {

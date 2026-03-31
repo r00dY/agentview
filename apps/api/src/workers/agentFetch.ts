@@ -5,21 +5,25 @@ import { getAdapter } from '../adapters/adapters';
 import { db__dangerous } from '../db';
 import { getConfigFromEnvironment } from '../environments';
 import { applyRunPatch, RunTerminationError, terminateRun, acceptRun } from '../runs';
-import { createRunTerminationReceiver } from '../runStream';
+import { getEventReceiver } from '../redisPubSub';
 import { environments, runs } from '../schemas/schema';
 import { activateSession, fetchSession } from '../sessions';
 import { withOrg, withTenant } from '../withOrg';
-import { createWorker } from './utils';
+import { createEventDrivenWorker } from './utils';
 import type { ServicePrincipal } from '../authMiddleware';
 
 type Run = typeof runs.$inferSelect;
 
-const runTerminationReceiver = await createRunTerminationReceiver(); // one Redis connection per worker process
+const eventReceiver = await getEventReceiver(); // singleton — one Redis connection per worker process
 
-export const agentFetchWorker = createWorker<Run>({
+export const agentFetchWorker = createEventDrivenWorker<Run>({
   name: 'agent-fetch',
-  pollIntervalMs: 100,
-  maxConcurrency: 1000, // those are high priority events, so maxConcurrency is high
+  fallbackPollIntervalMs: 5000, // safety net — events drive the fast path
+  maxConcurrency: 1000,
+  subscribe(onEvent) {
+    const unsubscribe = eventReceiver.on('run.created', () => onEvent());
+    return { close: unsubscribe };
+  },
   async claim(limit) {
     // Atomic claim: FOR UPDATE SKIP LOCKED prevents concurrent workers from double-claiming
     return db__dangerous
@@ -142,9 +146,9 @@ async function processAgentFetch(run: Run) {
     
     // Abort fetch immediately when run is terminated (e.g. external cancellation).
 
-    clearTerminationListener = runTerminationReceiver.listen(run.id, (reason) => {
-      console.log(`[agentFetch][${run.id}] run termination REDIS SIGNAL received`, reason);
-      abortController.abort(new RunTerminationError(reason));
+    clearTerminationListener = eventReceiver.on('run.terminated', run.id, (event) => {
+      console.log(`[agentFetch][${run.id}] run termination REDIS SIGNAL received`, event.reason);
+      abortController.abort(new RunTerminationError(event.reason));
     });
 
     let isFirstEventSent = false;
