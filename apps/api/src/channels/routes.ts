@@ -1,10 +1,10 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { ChannelSchema } from 'agentview/apiTypes';
 import { eq } from 'drizzle-orm';
 import { authn, authorize } from '../authMiddleware';
-import { withOrg } from '../withOrg';
-import { channels, channelThreads, environments } from '../schemas/schema';
 import { response_data, response_error } from '../hono_utils';
-import { ChannelSchema } from 'agentview/apiTypes';
+import { channels, environments } from '../schemas/schema';
+import { withOrg } from '../withOrg';
 
 export const channelsApp = new OpenAPIHono();
 

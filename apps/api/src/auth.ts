@@ -1,17 +1,16 @@
-import { betterAuth } from "better-auth";
-import { createAuthMiddleware, APIError } from "better-auth/api";
-import { apiKey, organization, bearer } from "better-auth/plugins"
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { eq, and, sql } from "drizzle-orm";
-import { db__dangerous } from "./db";
-import { members, invitations } from "./schemas/auth-schema";
 import { colorValues } from "agentview/colors";
-import { requireValidInvitation } from "./invitations";
-import { getAllowedOrigin } from "./getAllowedOrigin";
+import { betterAuth } from "better-auth";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { APIError, createAuthMiddleware } from "better-auth/api";
+import { apiKey, bearer, organization } from "better-auth/plugins";
+import { and, eq, sql } from "drizzle-orm";
 import { Resend } from 'resend';
-import { getWebAppUrl } from "./getWebAppUrl";
-import { environments } from "./schemas/schema";
+import { db__dangerous } from "./db";
 import { createEnvironment } from "./environments";
+import { getAllowedOrigin } from "./getAllowedOrigin";
+import { getWebAppUrl } from "./getWebAppUrl";
+import { requireValidInvitation } from "./invitations";
+import { invitations, members } from "./schemas/auth-schema";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -53,7 +52,7 @@ export const auth = betterAuth({
                 const signupUrl = `${getWebAppUrl()}/accept-invitation?invitationId=${encodeURIComponent(invitation.id)}`;
                 const organization = invitation.organization;
 
-                const { data, error } = await resend.emails.send({
+                const { error } = await resend.emails.send({
                     from: 'AgentView <noreply@agentview.app>',
                     to: [invitation.email],
                     subject: `You're invited to join ${organization.name}`,

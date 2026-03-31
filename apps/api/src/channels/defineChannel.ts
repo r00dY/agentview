@@ -1,16 +1,15 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
-import type { WorkerHandle } from '../workers/utils';
-import { and, eq, inArray, isNull, not, or } from 'drizzle-orm';
-import { channels, channelThreads, channelMessages, endUsers, sessions, runs } from '../schemas/schema';
-import { withOrg, withTenant } from '../withOrg';
-import { db__dangerous } from '../db';
-import type { Transaction } from '../types';
-import { createAutoRunFromChannelMessages, isRunFinished, terminateRun } from '../runs';
-import { randomBytes } from 'crypto';
-import { createInactiveSession, activateSession } from '../sessions';
 import type { ChannelRef } from 'agentview/apiTypes';
-import { ensureUserForEmail } from '../users';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { ServicePrincipal } from 'src/authMiddleware';
+import { db__dangerous } from '../db';
+import { createAutoRunFromChannelMessages, terminateRun } from '../runs';
+import { channelMessages, channels, channelThreads, runs, sessions } from '../schemas/schema';
+import { createInactiveSession } from '../sessions';
+import type { Transaction } from '../types';
+import { ensureUserForEmail } from '../users';
+import { withOrg, withTenant } from '../withOrg';
+import type { WorkerHandle } from '../workers/utils';
 
 export type Channel = typeof channels.$inferSelect;
 type ChannelThread = typeof channelThreads.$inferSelect;

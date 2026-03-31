@@ -1,5 +1,4 @@
 import type { RunBody, StandardSession } from 'agentview/apiTypes';
-import { callAgentAPI, type AgentAPIEvent } from '../agentApi';
 import { aiSDKAdapter } from './ai-sdk';
 
 export interface Adapter {

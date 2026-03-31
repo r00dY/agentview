@@ -149,7 +149,7 @@ export function createGmailRoutes(gmail: EmailChannelProvider): OpenAPIHono {
       }
 
       const decoded = JSON.parse(Buffer.from(messageData, 'base64').toString('utf-8'));
-      const { emailAddress, historyId } = decoded;
+      const { emailAddress } = decoded;
 
       if (!emailAddress) {
         return c.json({ status: 'ok' }, 200);

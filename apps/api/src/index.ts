@@ -2,7 +2,6 @@ import { serve } from '@hono/node-server';
 import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 
-import type { User as BetterAuthUser } from "better-auth";
 import { APIError as BetterAuthAPIError } from "better-auth/api";
 import { cors } from 'hono/cors';
 import { streamSSE } from 'hono/streaming';
@@ -10,77 +9,62 @@ import type { StatusCode } from 'hono/utils/http-status';
 
 import { swaggerUI } from '@hono/swagger-ui';
 import { createRoute, OpenAPIHono, z, type RouteHandler } from '@hono/zod-openapi';
-import { and, countDistinct, desc, DrizzleQueryError, eq, inArray, isNull, or, sql, type InferSelectModel } from 'drizzle-orm';
-import { auth } from './auth';
-import { db__dangerous } from './db';
-import { body, response_data, response_error, response_no_content } from './hono_utils';
-import { requireUUID } from './isUUID';
-import { channelMessages, commentMentions, commentMessageEdits, commentMessages, environments, endUsers, events, inboxItems, runs, scores, sessionItems, sessions, starredSessions, webhookJobs } from './schemas/schema';
-import { withOrg, withTenant, type OrgTransaction, type TenantTransaction } from './withOrg';
 import { AgentViewError } from 'agentview/AgentViewError';
 import {
+  CommentMessageCreateSchema,
+  CommentMessageSchema,
   EnvironmentBaseSchema,
   EnvironmentCreateSchema,
   EnvironmentSchema,
-  SpaceSchema,
-  PublicSessionsGetQueryParamsSchema,
-  StandardRunCreateSchema,
+  InputTargetSchema,
   ManualRunCreateSchema,
-  StandardRunSchema,
   ManualRunUpdateSchema,
-  StandardSessionCreateSchema,
-  StandardSessionSchema,
+  RunCreateSchema,
+  ScoreCreateSchema,
+  ScoreSchema,
+  SessionCreateSchema,
+  SessionSchema,
   SessionsGetQueryParamsSchema,
   SessionsPaginatedResponseSchema,
   SessionUpdateSchema,
-  CommentMessageSchema,
-  ScoreSchema,
+  StandardRunCreateSchema,
+  StandardRunSchema,
+  StandardSessionCreateSchema,
+  StandardSessionSchema,
   UserCreateSchema,
   UserSchema,
-  type StandardSession, type SessionItem,
-  type SessionsGetQueryParams,
-  type User,
-  type Space,
-  CommentMessageCreateSchema,
-  ScoreCreateSchema,
-  InputTargetSchema,
-  type ChannelRef,
-  type Environment,
-  SessionSchema,
-  SessionCreateSchema,
   type Session,
-  RunCreateSchema,
-  RunBaseSchema,
-  RunSchema,
-  type RunBase,
+  type StandardSession
 } from 'agentview/apiTypes';
-import { type BaseAgentViewConfig, BaseConfigSchema, BaseConfigSchemaToZod } from 'agentview/baseConfigTypes';
-import { findChannelConfig, findItemConfigById, requireChannelConfig, requireRunConfig, getChannelAgent, requireAgentConfig, requireItemConfig, requireScoreConfig } from 'agentview/baseConfigUtils';
-import { getAllSessionItems, getLastRun } from 'agentview/sessionUtils';
+import { BaseConfigSchema } from 'agentview/baseConfigTypes';
+import { getChannelAgent, requireAgentConfig, requireChannelConfig, requireItemConfig, requireRunConfig, requireScoreConfig } from 'agentview/baseConfigUtils';
+import { getLastRun } from 'agentview/sessionUtils';
+import { and, countDistinct, DrizzleQueryError, eq, inArray, isNull, or, sql, type InferSelectModel } from 'drizzle-orm';
 import packageJson from '../package.json';
+import { adapters } from './adapters/adapters';
+import { createAISDKStreamConsumer, type AISDKResponseMeta, type AISDKStreamConsumer } from './adapters/ai-sdk-stream';
+import { auth } from './auth';
+import { authn, authnAllowAnon, authnAllowPublic, authorize, requireMemberPrincipal, type Principal } from './authMiddleware';
+import { db__dangerous } from './db';
+import { requireConfig, requireEnvironment } from './environments';
 import { equalJSON } from './equalJSON';
 import { getAllowedOrigin } from './getAllowedOrigin';
-import { requireEnvironment, requireConfig } from './environments';
+import { body, response_data, response_error, response_no_content } from './hono_utils';
 import { isInboxItemUnread } from './inboxItems';
 import { initDb } from './initDb';
 import { requireValidInvitation } from './invitations';
-import { members, organizations, users } from './schemas/auth-schema';
-import { createInactiveSession, activateSession, getSessions, getSessionListFilter, updateSession, createSession } from './sessions';
-import type { Transaction } from './types';
-import { updateInboxes } from './updateInboxes';
-import { createUser, requireUser, updateUser } from './users';
-import { randomBytes } from 'crypto';
-import { applyRunPatch, createAutoRun, createManualRun, DEFAULT_IDLE_TIME, getRunInputContent, terminateRun, getRunInput, isRunFinished, requireRunBase } from './runs';
+import { requireUUID } from './isUUID';
+import { applyRunPatch, createAutoRun, createManualRun, DEFAULT_IDLE_TIME, getRunInput, getRunInputContent, isRunFinished, requireRunBase, terminateRun } from './runs';
 import { createRunStreamConsumer, publishRunTerminationEvent } from './runStream';
-import { resolveAgentRef } from './agentRefs';
-import { adapters, getAdapter } from './adapters/adapters';
-import { createAISDKStreamConsumer, type AISDKStreamConsumer, type AISDKResponseMeta } from './adapters/ai-sdk-stream';
-import { parseMetadata } from './parseMetadata';
-import { authn, authorize, requireMemberPrincipal, type Principal, authnAllowPublic, authnAllowAnon } from './authMiddleware';
+import { organizations, users } from './schemas/auth-schema';
+import { commentMessages, endUsers, environments, inboxItems, runs, scores, sessions } from './schemas/schema';
+import { createSession, getSessionListFilter, getSessions, updateSession } from './sessions';
+import { createUser, requireUser, updateUser } from './users';
+import { withOrg, withTenant } from './withOrg';
 
-import { resolveTarget, resolveTargetWithObjects, targetFilter, type RunTarget, type SessionItemTarget, type Target, type TargetWithObjects } from './target';
+import { resolveTarget, resolveTargetWithObjects, targetFilter } from './target';
 
-import { createComment, updateComment, deleteComment, requireCommentMessage, requireCommentOwnership } from './comments';
+import { createComment, deleteComment, requireCommentMessage, requireCommentOwnership, updateComment } from './comments';
 import { requireSession, requireSessionBase } from './sessions';
 
 await initDb();
@@ -130,7 +114,7 @@ app.onError((error, c) => {
 
 app.use('*', cors({
   // origin: [getStudioURL()],
-  origin: (origin, c) => {
+  origin: (_, c) => {
     return getAllowedOrigin(c.req.raw.headers);
   },
   credentials: true,
@@ -938,7 +922,7 @@ const runsPOSTRoute = createRoute({
 })
 
 
-app.openapi(runsPOSTRoute, async (c) => {
+app.openapi(runsPOSTRoute, async (_c) => {
   throw new HTTPException(400, { message: 'Temporarily disabled.' });
   // const { run, session, stream } = await createRunHandler(c);
 
@@ -1087,7 +1071,7 @@ async function sessionStandardCancelHandler(c: Parameters<RouteHandler<typeof se
 
   try {
     streamConsumer = createRunStreamConsumer(lastRun.id, c.req.raw.signal);
-    for await (const data of streamConsumer!.entries()) {}
+    for await (const _ of streamConsumer!.entries()) {}
   } finally {
     streamConsumer?.close();
   }

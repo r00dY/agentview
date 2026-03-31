@@ -1,4 +1,4 @@
-import { z, createRoute, OpenAPIHono } from '@hono/zod-openapi'
+import { z } from '@hono/zod-openapi'
 
 export function response_data<T extends z.ZodTypeAny>(schema: T, description?: string) {
   return {
@@ -17,7 +17,7 @@ export function response_no_content(description?: string) {
   }
 }
 
-export function response_error<T extends z.ZodTypeAny>(description?: string) {
+export function response_error(description?: string) {
   return {
     content: {
       'application/json': {

@@ -1,3 +1,3 @@
-export function getStudioURL(organizationId: string) {
+export function getStudioURL(_organizationId: string) {
     return "http://localhost:1989" // TODO!!!
 }

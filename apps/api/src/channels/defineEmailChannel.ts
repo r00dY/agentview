@@ -99,7 +99,7 @@ async function resolveThreadId(
 }
 
 function buildSendMessageWrapper(
-  provider: ChannelProvider,
+  _: ChannelProvider,
   emailSendFn: EmailSendFn,
 ): SendMessageFn {
   return async ({ channelThread, channel, message }) => {

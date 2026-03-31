@@ -1,20 +1,20 @@
-import { eq, and, desc, not, inArray, asc, sql, isNull, or } from 'drizzle-orm';
-import { runs, sessionItems, sessions, webhookJobs, channelMessages, agentRefs } from './schemas/schema';
-import type { Transaction } from './types';
-import type { Environment, ManualRunCreate, ManualRunUpdate, Run } from 'agentview/apiTypes';
-import type { BaseAgentConfig, BaseRunConfig } from 'agentview/baseConfigTypes';
-import { requireRunConfig, findItemConfig, findChannelConfig, requireAgentConfig, getChannelAgent, requireChannelConfig } from 'agentview/baseConfigUtils';
 import { AgentViewError } from 'agentview/AgentViewError';
-import { parseMetadata } from './parseMetadata';
-import { resolveAgentRef } from './agentRefs';
+import type { Environment, ManualRunCreate, ManualRunUpdate } from 'agentview/apiTypes';
+import type { BaseAgentConfig, BaseRunConfig } from 'agentview/baseConfigTypes';
+import { findItemConfig, requireAgentConfig, requireChannelConfig, requireRunConfig } from 'agentview/baseConfigUtils';
 import { getLastRun } from 'agentview/sessionUtils';
-import { fetchSession, fetchSessionBase, requireSession, requireSessionBase } from './sessions';
-import { getConfigFromEnvironment, requireEnvironment } from './environments';
-import { publishRunStreamEvent, publishRunTerminationEvent } from './runStream';
-import { withOrg, type OrgTransaction, type TenantTransaction } from './withOrg';
+import { and, eq, inArray, isNull, not, or } from 'drizzle-orm';
 import { getAdapter } from './adapters/adapters';
-import { requireUUID } from './isUUID';
+import { resolveAgentRef } from './agentRefs';
 import { authorize } from './authMiddleware';
+import { getConfigFromEnvironment, requireEnvironment } from './environments';
+import { requireUUID } from './isUUID';
+import { parseMetadata } from './parseMetadata';
+import { publishRunStreamEvent } from './runStream';
+import { agentRefs, channelMessages, runs, sessionItems, sessions, webhookJobs } from './schemas/schema';
+import { fetchSession, fetchSessionBase, requireSessionBase } from './sessions';
+import type { Transaction } from './types';
+import { type OrgTransaction, type TenantTransaction } from './withOrg';
 
 export const DEFAULT_IDLE_TIME = 1000 * 60; // 60 seconds
 

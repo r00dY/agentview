@@ -1,7 +1,7 @@
 import { db__dangerous } from '../db';
 import { withOrg } from '../withOrg';
 import { channelMessages, channelThreads } from '../schemas/schema';
-import { eq, and, inArray, sql } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { createWorker } from './utils';
 import { channelApps } from '../channels/registry';
 

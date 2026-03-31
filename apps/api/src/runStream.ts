@@ -1,4 +1,3 @@
-import { AgentViewError } from 'agentview';
 import { redisPublisher } from './redis';
 import { createRedisStreamConsumer } from './redisStreamConsumer';
 import type { RunTerminationReason } from './runs';

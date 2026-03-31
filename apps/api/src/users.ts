@@ -1,13 +1,12 @@
-import { endUsers } from './schemas/schema'
-import { eq, and, sql } from 'drizzle-orm'
-import type { Transaction } from './types'
-import type { Environment, Space, UserCreate } from 'agentview/apiTypes'
 import { AgentViewError } from 'agentview'
-import { requireEnvironment } from './environments'
+import type { Environment, Space, UserCreate } from 'agentview/apiTypes'
 import { randomBytes } from 'crypto'
-import { authorize, type Principal } from './authMiddleware'
-import type { OrgTransaction, TenantTransaction } from './withOrg'
+import { and, eq } from 'drizzle-orm'
+import { authorize } from './authMiddleware'
+import { requireEnvironment } from './environments'
 import { requireUUID } from './isUUID'
+import { endUsers } from './schemas/schema'
+import type { OrgTransaction, TenantTransaction } from './withOrg'
 
 type FindUserByIdOptions = {
   id: string

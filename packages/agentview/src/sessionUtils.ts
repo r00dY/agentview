@@ -11,7 +11,7 @@ export function getActiveRuns<SessionT extends StandardSession>(session: Session
 export function getAllSessionItems<SessionT extends StandardSession>(session: SessionT, options?: { activeOnly?: boolean }): SessionT["runs"][number]["sessionItems"][number][] {
   const items: SessionT["runs"][number]["sessionItems"][number][] = []
   const activeRuns = options?.activeOnly ? getActiveRuns(session) : session.runs
-  activeRuns.map((run, index) => {
+  activeRuns.map((run) => {
     items.push(...run.sessionItems)
   })
   return items

@@ -1,21 +1,20 @@
-import { and, desc, eq, sql } from "drizzle-orm";
-import { endUsers, events, runs, sessionItems, sessions } from "./schemas/schema"
-import type { Transaction } from "./types";
-import { isUUID, requireUUID } from "./isUUID";
-import type { ChannelRef, Environment, SessionBase, SessionCreate, SessionsGetQueryParams, SessionsGetQueryParamsSchema, SessionUpdate, StandardSession, StandardSessionCreate } from "agentview/apiTypes";
-import { updateInboxes } from "./updateInboxes";
-import { parseMetadata } from "./parseMetadata";
-import { findChannelConfig, getChannelAgent, requireAgentConfig, requireChannelConfig } from "agentview/baseConfigUtils";
-import { getConfigFromEnvironment, requireConfig, requireEnvironment } from "./environments";
-import type { SessionStatus } from "agentview/apiTypes";
-import type { OrgTransaction, TenantTransaction } from "./withOrg";
-import { randomBytes } from "crypto";
 import { AgentViewError } from "agentview";
-import { authorize, type Principal } from "./authMiddleware";
+import type { ChannelRef, Environment, SessionBase, SessionsGetQueryParams, SessionsGetQueryParamsSchema, SessionStatus, SessionUpdate, StandardSession, StandardSessionCreate } from "agentview/apiTypes";
+import { findChannelConfig, getChannelAgent, requireAgentConfig, requireChannelConfig } from "agentview/baseConfigUtils";
+import { randomBytes } from "crypto";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type z from "zod";
-import { createUser, requireUser } from "./users";
 import { resolveAgentRef } from "./agentRefs";
+import { authorize } from "./authMiddleware";
+import { getConfigFromEnvironment, requireConfig, requireEnvironment } from "./environments";
+import { isUUID, requireUUID } from "./isUUID";
+import { parseMetadata } from "./parseMetadata";
 import { createAutoRun } from "./runs";
+import { endUsers, events, runs, sessionItems, sessions } from "./schemas/schema";
+import type { Transaction } from "./types";
+import { updateInboxes } from "./updateInboxes";
+import { createUser, requireUser } from "./users";
+import type { OrgTransaction, TenantTransaction } from "./withOrg";
 
 export type LastRunStatus = {
   id: string;

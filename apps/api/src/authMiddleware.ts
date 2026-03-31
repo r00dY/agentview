@@ -6,7 +6,6 @@ import { withOrg } from './withOrg';
 import { members, organizations } from './schemas/auth-schema';
 import { findUser } from './users';
 import type { User, Space } from 'agentview/apiTypes';
-import { requireEnvironment } from './environments';
 
 /** --------- TYPE INFERENCE HELPERS --------- */
 

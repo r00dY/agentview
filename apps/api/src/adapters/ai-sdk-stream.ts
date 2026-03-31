@@ -1,5 +1,5 @@
 import { redisPublisher } from '../redis';
-import { createRedisStreamConsumer, type RedisStreamConsumer } from '../redisStreamConsumer';
+import { createRedisStreamConsumer } from '../redisStreamConsumer';
 
 /**
  * AI SDK streaming bridge between the agent-fetch worker and HTTP response.

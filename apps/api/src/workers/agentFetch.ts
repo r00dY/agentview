@@ -1,16 +1,15 @@
-import { db__dangerous } from '../db';
-import { withOrg } from '../withOrg';
-import { runs, sessions, channelMessages, environments, sessionItems, channels } from '../schemas/schema';
-import { eq, and, inArray, sql, not, isNull } from 'drizzle-orm';
-import { getConfigFromEnvironment, getEnvironment } from '../environments';
-import { fetchSession, fetchSessionBase, activateSession } from '../sessions';
-import { getAdapter } from '../adapters/adapters';
+import type { RunBody } from 'agentview/apiTypes';
 import { findChannelConfig, getChannelAgent } from 'agentview/baseConfigUtils';
+import { eq, inArray, sql } from 'drizzle-orm';
+import { getAdapter } from '../adapters/adapters';
+import { db__dangerous } from '../db';
+import { getConfigFromEnvironment } from '../environments';
 import { applyRunPatch, RunTerminationError, terminateRun } from '../runs';
-import { resolveAgentRef } from '../agentRefs';
-import type { AgentRef, RunBody } from 'agentview/apiTypes';
-import { createWorker } from './utils';
 import { createRunTerminationReceiver } from '../runStream';
+import { environments, runs } from '../schemas/schema';
+import { activateSession, fetchSession } from '../sessions';
+import { withOrg } from '../withOrg';
+import { createWorker } from './utils';
 
 type Run = typeof runs.$inferSelect;
 

@@ -1,10 +1,9 @@
-import { environments } from "./schemas/schema";
-import { eq, isNull, and } from "drizzle-orm";
-import type { Transaction } from "./types";
-import { HTTPException } from "hono/http-exception";
-import { BaseConfigSchemaToZod, type BaseAgentViewConfig } from "agentview/baseConfigTypes";
 import type { Environment } from "agentview/apiTypes";
+import { BaseConfigSchemaToZod, type BaseAgentViewConfig } from "agentview/baseConfigTypes";
+import { eq } from "drizzle-orm";
+import { HTTPException } from "hono/http-exception";
 import { db__dangerous } from "./db";
+import { environments } from "./schemas/schema";
 import type { TenantTransaction } from "./withOrg";
 
 // export type ProdEnv = {
