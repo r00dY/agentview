@@ -590,67 +590,6 @@ const sessionsPOSTRoute = createRoute({
   },
 })
 
-// export async function createSessionHandler(c: Parameters<RouteHandler<typeof sessionsPOSTRoute>>[0]) {
-//   const principal = await authnAllowPublic(c.req.raw.headers)
-
-//   return withTenant(principal, async (tx) => {
-//     const body = await c.req.valid('json')
-//     const createdBy = principal.type === 'member' ? principal.session.user.id : null;
-
-//     const config = await requireConfig(tx)
-
-//     // in API channel and agent must exist
-//     const channelRef: ChannelRef = { type: 'api', name: body.agent }
-
-//     const channelConfig = requireChannelConfig(config, channelRef)
-//     const agentConfig = requireAgentConfig(config, getChannelAgent(channelConfig)?.name)
-
-//     // find user or create new one if not found
-//     const user = await (async () => {
-//       if (body.userId) {
-//         return await requireUser(tx, { id: body.userId });
-//       }
-
-//       if (principal.type === 'user') {
-//         return principal.user;
-//       }
-
-//       return await createUser(tx, { space: body.space, createdBy: body.createdBy });
-//     })()
-
-//     authorize(principal, { action: "end-user:update", user });
-
-//     const environment = await requireEnvironment(tx);
-
-//     // Resolve agent ref at session creation
-//     const agentRefWithId = await resolveAgentRef(tx, {
-//       agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
-//     });
-
-//     let newSessionRow = await createInactiveSession(tx, {
-//       environment,
-//       channelRef,
-//       userId: user.id,
-//       metadata: body.metadata,
-//       summary: body.summary,
-//       agentRefId: agentRefWithId.id,
-//       initialState: body.initialState,
-//       createdBy,
-//     });
-
-//     let newRun: Awaited<ReturnType<typeof createAutoRun>> | undefined = undefined;
-//     if (body.input) {
-//       newRun = await createAutoRun(tx, environment, newSessionRow.id, { input: body.input });
-//     } else {
-//       await activateSession(tx, newSessionRow.id);
-//     }
-
-//     const session = await requireSession(tx, newSessionRow.id);
-
-//     return { session, newRun, principal };
-//   })
-// }
-
 app.openapi(sessionsPOSTRoute, async (c) => {
   const principal = await authnAllowPublic(c.req.raw.headers)
   const body = await c.req.valid('json')
