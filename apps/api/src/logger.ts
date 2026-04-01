@@ -56,7 +56,10 @@ if (isDev) {
               return `[${log.fetchId}] ${msg}`;
             }
             else if (log.requestId) {
-              return `[${log.requestId}] ${log.method} ${log.path} → ${log.status} (${log.duration}ms) ${msg}`;
+              if (log.method && log.path && log.status && log.duration) {
+                return `[${log.requestId}] ${log.method} ${log.path} → ${log.status} (${log.duration}ms) ${msg}`;
+              }
+              return `[${log.requestId}] ${msg}`;
             }
             return msg;
           },
