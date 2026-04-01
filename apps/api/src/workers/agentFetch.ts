@@ -44,9 +44,13 @@ export const agentFetchWorker = createEventDrivenWorker<Run>({
 });
 
 
+let fetchCounter = 0;
 async function processAgentFetch(run: Run) {
-  setContext({ runId: run.id, sessionId: run.sessionId, organizationId: run.organizationId });
-  log.info('agent fetch start');
+  const fetchId = `f${++fetchCounter}`
+
+  setContext({ fetchId, runId: run.id, sessionId: run.sessionId, organizationId: run.organizationId });
+
+  log.info(`FETCH run:${run.id} session:${run.sessionId}`);
 
   const abortController = new AbortController();
 
@@ -149,8 +153,9 @@ async function processAgentFetch(run: Run) {
     // Abort fetch immediately when run is terminated (e.g. external cancellation).
 
     clearTerminationListener = eventReceiver.on('run.terminated', run.id, (event) => {
-      log.info({ reason: event.reason }, 'run termination REDIS SIGNAL received');
-      abortController.abort(new RunTerminationError(event.reason));
+      const terminationError = new RunTerminationError(event.reason);
+      log.debug('"run.terminated" signal received: ' + terminationError.toString());
+      abortController.abort(terminationError);
     });
 
     let isFirstEventSent = false;
@@ -163,12 +168,11 @@ async function processAgentFetch(run: Run) {
     
     // event handlers
     const send = async (event: { name: string, data: any }) => {
+      // log.debug('event received: ' + event.name);
 
       if (event.name === 'run.patch') {
-        log.debug({ patch: event.data }, 'run.patch');
-
         if (!isFirstEventSent) {
-          throw new Error(`[agentFetch][${run.id}] "run.patch" called before "run.discard" or "run.accept".`);
+          throw new Error("run.patch called as a first event");
         }
 
         await withTenant(principal, async (tx) => {
@@ -178,18 +182,14 @@ async function processAgentFetch(run: Run) {
             event.data
           );
         })
-
-        log.debug('run.patch successful');
       }
       /**
        * Discard and streaming started are only FIRST THINGS that should happen before streaming starts. Either run is discarded or streaming started, which means it becomes in_progress.
        * This is *INTERNAL* api, not public (like run.patch)
        */
       else if (event.name === 'run.discard') { // safe indempotent termination for cleanup
-        log.info('run discarded');
-
         if (isFirstEventSent) {
-          throw new Error(`[agentFetch][${run.id}] "run.discard" can be only called as a first event.`);
+          throw new Error(`run.discard called not as a first event`);
         }
         isFirstEventSent = true;
 
@@ -201,10 +201,8 @@ async function processAgentFetch(run: Run) {
         });
       }
       else if (event.name === 'run.accept') { // set run as in progress!
-        log.info('run accepted');
-
         if (isFirstEventSent) {
-          throw new Error(`[agentFetch][${run.id}] "run.accept" can be only called as a first event.`);
+          throw new Error(`run.discard called not as a first event`);
         }
         isFirstEventSent = true;
 
@@ -218,25 +216,19 @@ async function processAgentFetch(run: Run) {
       }
     }
 
-    log.info('calling agent API');
-
     await adapter.callAgent(body, agentUrl, send, abortController.signal);
-
-    log.info('agent API call finished');
 
   } catch (error) {
     /**
      * This is severe error and always should be investigated. An unhandled error propagated from adapter here. The cleanup should be always graceful, so this is severe.
      */
     finalError = error instanceof Error ? error.message : String(error);
-    log.error({ err: error }, `SEVERE, please investigate. Error: "${finalError}"`);
+    log.error({ err: error }, 'Unhanled error: ' + finalError);
 
   } finally {
 
     // best effort cleanup
     try {
-      log.info('cleaning up');
-
       await withOrg(run.organizationId, async (tx) => {
         await terminateRun(tx, run.sessionId, run.id, {
           status: 'failed',
@@ -247,5 +239,7 @@ async function processAgentFetch(run: Run) {
       clearTerminationListener?.();
 
     } catch {}
+
+    log.info('Finished');
   }
 }

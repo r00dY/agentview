@@ -126,12 +126,10 @@ app.use('*', async (c, next) => {
   const requestId = "r" + (++reqCounter).toString(10);
   const start = Date.now();
 
-  log.debug(`[${requestId}] ${c.req.method} ${c.req.path}`);
-
   return runWithContext({ requestId }, async () => {
     await next();
     const duration = Date.now() - start;
-    log.info(`[${requestId}] ${c.req.method} ${c.req.path} → ${c.res.status} (${duration}ms)`);
+    log.info({ method: c.req.method, path: c.req.path, status: c.res.status, duration }, 'request completed');
   });
 });
 

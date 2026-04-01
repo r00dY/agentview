@@ -44,7 +44,23 @@ if (isDev) {
   streams.push({
     level: level as pino.Level,
     stream: await import('pino-pretty').then((m) =>
-      m.default({ colorize: true, translateTime: 'SYS:HH:MM:ss.l', ignore: 'pid,hostname,service,requestId', customColors: 'message:white,info:green,warn:yellow,error:red,fatal:red,debug:blue,trace:gray,default:white' })
+      m.default({
+          colorize: true,
+          translateTime: 'SYS:HH:MM:ss.l',
+          ignore: 'pid,hostname,service,requestId,method,path,status,duration,runId,workerName,sessionId,organizationId,fetchId',
+          customColors: 'message:white,info:green,warn:yellow,error:red,fatal:red,debug:blue,trace:gray,default:white',
+          messageFormat(log: Record<string, unknown>, messageKey: string) {
+            const msg = log[messageKey] as string;
+
+            if (log.workerName === 'agent-fetch') {
+              return `[${log.fetchId}] ${msg}`;
+            }
+            else if (log.requestId) {
+              return `[${log.requestId}] ${log.method} ${log.path} → ${log.status} (${log.duration}ms) ${msg}`;
+            }
+            return msg;
+          },
+        })
     ),
   });
 } else {

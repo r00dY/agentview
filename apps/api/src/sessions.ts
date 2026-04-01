@@ -526,7 +526,7 @@ export async function activateSession(tx: OrgTransaction, sessionId: string) {
   }
 
   if (session.active) {
-    log.info({ sessionId }, 'session already active');
+    // log.info({ sessionId }, 'session already active');
     return;
   }
 
