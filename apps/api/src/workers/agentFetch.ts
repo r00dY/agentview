@@ -8,7 +8,7 @@ import { log, setContext } from '../logger';
 import { applyRunPatch, RunTerminationError, terminateRun, acceptRun } from '../runs';
 import { getEventReceiver } from '../redisPubSub';
 import { environments, runs } from '../schemas/schema';
-import { activateSession, requireSession, requireSessionBase } from '../sessions';
+import { activateSession, requireSession } from '../sessions';
 import { withOrg, withTenant } from '../withOrg';
 import { createEventDrivenWorker } from './utils';
 import type { ServicePrincipal } from '../authMiddleware';
@@ -61,8 +61,7 @@ async function processAgentFetch(run: Run) {
   try {
     const { agentUrl, session, environment } = await withOrg(run.organizationId, async (tx) => {
 
-      const session = await requireSession(tx, run.sessionId, { includeInitRun: true });
-
+      const session = await requireSession(tx, run.sessionId, { includeInitRun: true, includeDiscardedRun: true, includePendingRun: true });
       if (!run.environmentId) {
         throw new Error('Environment ID is required for auto-fetch');
       }
@@ -104,6 +103,18 @@ async function processAgentFetch(run: Run) {
     if (!session.agentRef) {
       throw new Error(`Session ${session.id} has no agent ref. It totally should have one at this point.`);
     }
+
+    const lastRun = session.runs[session.runs.length - 1];
+
+    if (lastRun.status === 'discarded') { // it's possible run is discarded between claim and session fetch
+      log.info(`Last run is discarded. Returning.`);
+      return;
+    }
+    else if (lastRun.status !== 'init') { // sanity check
+      throw new Error(`Last run in impossible status: ${lastRun.status}`);
+    }
+
+
     // const fullRun = session.runs.find(r => r.id === run.id);
     // if (!fullRun) {
     //   throw new Error(`Run ${run.id} not found`);

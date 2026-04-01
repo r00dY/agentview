@@ -146,23 +146,16 @@ async function markOutputItems(
   }).where(inArray(sessionItems.id, itemIds));
 }
 
-/**
- * IMPORTANT:
- * 
- * Most modifications of a run, especially run patch or terminate can be concurrent. Apply patch logic takes non-obvious amount of time to complete, so we must start with a lock for safety of concurrent writes.
- * That's why we use SELECT FOR UPDATE here on row and this function should be always called with a lock.
- */
+
 export async function getRunBase(tx: Transaction, runId: string) {
   requireUUID(runId);
 
-  // Build the run query — use select() API so we can append FOR UPDATE.
   const runRows = await tx
     .select()
     .from(runs)
     .leftJoin(agentRefs, eq(runs.agentRefId, agentRefs.id))
     .where(eq(runs.id, runId))
-    .limit(1)
-    .for('update', { of: runs });
+    .limit(1);
 
   const row = runRows[0];
   if (!row) return undefined;
@@ -530,9 +523,6 @@ export async function applyRunPatch(
     await markOutputItems(tx, run.id, outputItemCount, runConfig);
     await handleChannelReply(tx, run.id, run.sessionId, tx.organizationId, body.channelReply);
   }
-
-  //   return { insertedItems, nowIso, isFinished, run };
-  // });
 
   // Publish to Redis stream only after transaction finished successfully in DB
   const dataToStream = JSON.stringify({

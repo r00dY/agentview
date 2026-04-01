@@ -108,6 +108,7 @@ export async function fetchSessionBase(tx: Transaction, session_id: string): Pro
 export type FetchSessionOptions = {
   includeInitRun?: boolean;
   includePendingRun?: boolean;
+  includeDiscardedRun?: boolean;
 }
 
 export async function fetchSession(tx: Transaction, session_id: string, options?: FetchSessionOptions): Promise<StandardSession | undefined> {
@@ -186,6 +187,10 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
           }
 
           if (options?.includePendingRun && run.status === "pending") {
+            return true;
+          }
+
+          if (options?.includeDiscardedRun && run.status === "discarded") {
             return true;
           }
 
