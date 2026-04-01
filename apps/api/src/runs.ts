@@ -78,7 +78,7 @@ async function handleChannelReply(
   });
 
   if (!sessionRow) {
-    throw new AgentViewError("Unexpected error", 500);
+    throw new Error("Unexpected error. Session doesn't exist when handling channel reply.");
   }
 
   if (sessionRow.channelThreadId && channelReply) {
@@ -214,7 +214,7 @@ async function createRunCore(
     runConfig: BaseRunConfig;
     lastRun: ReturnType<typeof getLastRun>;
   }
-): Promise<typeof runs.$inferSelect> {  
+): Promise<typeof runs.$inferSelect> {
   const { parsedInput, parsedNonInputItems, status, failReason, expiresAt, finishedAt, metadata, agentRefId, manual, state, runConfig, lastRun, id } = params;
 
   const [insertedRun] = await tx.insert(runs).values({
@@ -459,7 +459,7 @@ export type FastPatchFailOp = {
 export type FastPatchCompleteOp = {
   type: "complete",
   outputItemCount: number,
-  channelReply: { text: string }
+  channelReply?: { text: string }
 }
 
 export type FastPatchOp = FastPatchItemOp | FastPatchStateOp | FastPatchMetadataOp | FastPatchCancelOp | FastPatchFailOp | FastPatchCompleteOp;
@@ -476,10 +476,10 @@ export async function fastApplyRunPatch(
 
   const run = await requireRunBase(tx, runId);
 
-  if (!run.manual) {
-    throw new AgentViewError("This endpoint is allowed only for auto runs.", 422);
+  if (run.manual) {
+    throw new AgentViewError("This endpoint is allowed only for auto-fetch runs.", 422);
   }
-  
+
   if (run.status === 'discarded') { // important for auto-fetch. When resource is discarded all "patch" operations should trigger this error to handle race conditions gracefully.
     throw new RunTerminationError({ status: run.status, failReason: run.failReason });
   }
@@ -488,9 +488,90 @@ export async function fastApplyRunPatch(
     throw new AgentViewError("Can't add item to run that is not in 'in_progress' status. Status: " + run.status, 422);
   }
 
+  const idleTimeout = runConfig.idleTimeout ?? DEFAULT_IDLE_TIME;
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
 
+  const updatedRun: { updatedAt: string, expiresAt: string, metadata?: Record<string, any>, status?: string, finishedAt?: string, failReason?: any } = {
+    updatedAt: nowIso,
+    expiresAt: new Date(now + idleTimeout).toISOString(),
+  };
 
+  let updatedItem: typeof sessionItems.$inferInsert | undefined = undefined;
 
+  const dbOps: Promise<any>[] = [];
+
+  if (op.type === 'item') {
+    updatedItem = {
+      id: op.id,
+      content: op.content,
+      runId,
+      sessionId,
+      organizationId: run.organizationId,
+      type: 'step' as const,
+    };
+  } else if (op.type === 'state') {
+    updatedItem = {
+      content: op.content,
+      isState: true,
+      runId,
+      sessionId,
+      organizationId: run.organizationId,
+    };
+  } else if (op.type === 'metadata') {
+    const metadata = parseMetadata(runConfig.metadata, runConfig.allowUnknownMetadata ?? true, op.metadata ?? {}, run.metadata ?? {});
+    updatedRun.metadata = metadata;
+
+  } else if (op.type === 'cancel') {
+    updatedRun.status = 'cancelled';
+    updatedRun.finishedAt = nowIso;
+
+  } else if (op.type === 'fail') {
+    updatedRun.status = 'failed';
+    updatedRun.failReason = op.failReason;
+    updatedRun.finishedAt = nowIso;
+
+  } else if (op.type === 'complete') {
+    updatedRun.status = 'completed';
+    updatedRun.finishedAt = nowIso;
+
+    dbOps.push(
+      markOutputItems(tx, run.id, op.outputItemCount ?? 1, runConfig), // validation inside
+      handleChannelReply(tx, run.id, run.sessionId, tx.organizationId, op.channelReply),
+    );
+  }
+
+  dbOps.push(tx.update(runs).set(updatedRun).where(eq(runs.id, run.id)));
+
+  if (updatedItem) {
+    dbOps.push(tx.insert(sessionItems).values(updatedItem).onConflictDoUpdate({
+      target: [sessionItems.id],
+      set: {
+        content: updatedItem.content,
+        updatedAt: nowIso
+      },
+    }));
+  }
+
+  await Promise.all(dbOps);
+
+  // TEMPORARY ONLY FOR BACKWARD COMPAT
+  const streamEvent: any = {
+    ...updatedRun
+  }
+  if (op.type === 'item') {
+    streamEvent.items = [op.content];
+  } else if (op.type === 'state') {
+    streamEvent.state = op.content;
+  }
+
+  tx.afterCommit(async () => {
+    await publishRunStreamEvent(runId, nowIso, JSON.stringify(streamEvent));
+
+    if (op.type === 'complete' || op.type === 'cancel' || op.type === 'fail') {
+      await publishRunStreamEvent(runId, null, '[DONE]');
+    }
+  });
 }
 
 
@@ -507,7 +588,7 @@ export async function applyRunPatch(
   mustBeManual?: boolean
 ) {
   const runPreLock = await requireRunBase(tx, runId);
-  
+
   await tx.acquireLock({ type: "edit_session", sessionId: runPreLock.sessionId });
 
   const run = await requireRunBase(tx, runId);
@@ -729,7 +810,7 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
 
   } catch (e) {
     log.error({ runId, err: e }, `SEVERE: termination failed: ${e instanceof Error ? e.message : String(e)}`);
-   }
+  }
 }
 
 export async function acceptRun(tx: TenantTransaction, sessionId: string, runId: string) {

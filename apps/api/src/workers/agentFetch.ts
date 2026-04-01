@@ -1,11 +1,11 @@
-import type { RunBody } from 'agentview/apiTypes';
-import { findChannelConfig, getChannelAgent } from 'agentview/baseConfigUtils';
+import type { ManualRunUpdate, RunBody } from 'agentview/apiTypes';
+import { findChannelConfig, getChannelAgent, requireRunConfig } from 'agentview/baseConfigUtils';
 import { eq, inArray, sql } from 'drizzle-orm';
 import { getAdapter } from '../adapters/adapters';
 import { db__dangerous } from '../db';
 import { getConfigFromEnvironment } from '../environments';
 import { log, setContext } from '../logger';
-import { applyRunPatch, RunTerminationError, terminateRun, acceptRun } from '../runs';
+import { applyRunPatch, RunTerminationError, terminateRun, acceptRun, fastApplyRunPatch, type FastPatchOp } from '../runs';
 import { getEventReceiver } from '../redisPubSub';
 import { environments, runs } from '../schemas/schema';
 import { activateSession, requireSession } from '../sessions';
@@ -59,7 +59,7 @@ async function processAgentFetch(run: Run) {
   let finalError: string | undefined = undefined;
 
   try {
-    const { agentUrl, session, environment } = await withOrg(run.organizationId, async (tx) => {
+    const { agentConfig, agentUrl, session, environment } = await withOrg(run.organizationId, async (tx) => {
 
       const session = await requireSession(tx, run.sessionId, { includeInitRun: true, includeDiscardedRun: true, includePendingRun: true });
       if (!run.environmentId) {
@@ -113,6 +113,9 @@ async function processAgentFetch(run: Run) {
     else if (lastRun.status !== 'init') { // sanity check
       throw new Error(`Last run in impossible status: ${lastRun.status}`);
     }
+
+    const runConfig = requireRunConfig(agentConfig, lastRun.sessionItems[0].content);
+
 
 
     // const fullRun = session.runs.find(r => r.id === run.id);
@@ -177,7 +180,13 @@ async function processAgentFetch(run: Run) {
     };
     
     // event handlers
-    const send = async (event: { name: string, data: any }) => {
+    type DiscardEvent = { name: 'run.discard', data: any };
+    type PatchEvent = { name: 'run.patch', data: ManualRunUpdate };
+    type FastPatchEvent = { name: 'fast.patch', data: FastPatchOp };
+    type AcceptEvent = { name: 'run.accept', data: any };
+    type SendEvent = DiscardEvent | PatchEvent | FastPatchEvent | AcceptEvent;
+
+    const send = async (event: SendEvent) => {
       // log.debug('event received: ' + event.name);
 
       if (event.name === 'run.patch') {
@@ -193,6 +202,29 @@ async function processAgentFetch(run: Run) {
           );
         })
       }
+
+      if (event.name === 'fast.patch') {
+        if (!isFirstEventSent) {
+          throw new Error("fast.patch called as a first event");
+        }
+
+        const start = Date.now();
+
+        await withTenant(principal, async (tx) => {
+          await fastApplyRunPatch(
+            tx,
+            run.id,
+            session.id,
+            runConfig,
+            event.data
+          );
+        })
+
+        const duration = Date.now() - start;
+        log.debug({ "patchtime": duration });
+      }
+
+
       /**
        * Discard and streaming started are only FIRST THINGS that should happen before streaming starts. Either run is discarded or streaming started, which means it becomes in_progress.
        * This is *INTERNAL* api, not public (like run.patch)
