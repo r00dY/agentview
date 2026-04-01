@@ -8,7 +8,7 @@ import { log, setContext } from '../logger';
 import { applyRunPatch, RunTerminationError, terminateRun, acceptRun } from '../runs';
 import { getEventReceiver } from '../redisPubSub';
 import { environments, runs } from '../schemas/schema';
-import { activateSession, fetchSession } from '../sessions';
+import { activateSession, requireSession, requireSessionBase } from '../sessions';
 import { withOrg, withTenant } from '../withOrg';
 import { createEventDrivenWorker } from './utils';
 import type { ServicePrincipal } from '../authMiddleware';
@@ -61,11 +61,7 @@ async function processAgentFetch(run: Run) {
   try {
     const { agentUrl, session, environment } = await withOrg(run.organizationId, async (tx) => {
 
-      const session = await fetchSession(tx, run.sessionId, { includeInitRun: true });
-
-      if (!session) {
-        throw new Error(`Session ${run.sessionId} not found`);
-      }
+      const session = await requireSession(tx, run.sessionId, { includeInitRun: true });
 
       if (!run.environmentId) {
         throw new Error('Environment ID is required for auto-fetch');
@@ -105,14 +101,17 @@ async function processAgentFetch(run: Run) {
       return { agentUrl, agentConfig, session, environment };
     });
 
-    const fullRun = session.runs.find(r => r.id === run.id);
-    if (!fullRun) {
-      throw new Error(`Run ${run.id} not found`);
+    if (!session.agentRef) {
+      throw new Error(`Session ${session.id} has no agent ref. It totally should have one at this point.`);
     }
+    // const fullRun = session.runs.find(r => r.id === run.id);
+    // if (!fullRun) {
+    //   throw new Error(`Run ${run.id} not found`);
+    // }
 
-    if (!fullRun.agentRef) {
-      throw new Error(`Run ${run.id} has no agent ref`);
-    }
+    // if (!fullRun.agentRef) {
+    //   throw new Error(`Run ${run.id} has no agent ref`);
+    // }
 
 
     /**
@@ -136,7 +135,7 @@ async function processAgentFetch(run: Run) {
 
 
     const body: RunBody = { session };
-    const adapter = getAdapter(fullRun.agentRef.adapter);
+    const adapter = getAdapter(session.agentRef.adapter);
 
     /**
      * STREAM TERMINATION (IMPORTANT)

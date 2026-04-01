@@ -639,6 +639,9 @@ export async function createAutoRunFromChannelMessages(
 
   log.info({ sessionId }, 'creating run from channel messages');
 
+  /**
+   * TODO: I'm not sure here... there might be no config in the environment. Then this function will be retried. So we probably must take this into account.
+   */
   const { lastRun, agentConfig, agentRefId, session } = await prepareRunCreation(tx, environment, sessionId);
   const adapter = getAdapter(agentConfig.adapter);
 

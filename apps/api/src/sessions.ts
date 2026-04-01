@@ -215,8 +215,8 @@ export async function requireSession(tx: Transaction, sessionId: string, options
   return session
 }
 
-export async function requireSessionBase(tx: Transaction, sessionId: string) {
-  const session = await fetchSessionBase(tx, sessionId);
+export async function requireSessionBase(tx: Transaction, sessionId: string, options?: FetchSessionOptions) {
+  const session = await fetchSession(tx, sessionId, options);
   if (!session) {
     throw new AgentViewError("Session not found", 404);
   }
