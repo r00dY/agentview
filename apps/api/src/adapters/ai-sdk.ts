@@ -1,5 +1,5 @@
 import type { RunBody, StandardSession, UIMessage } from 'agentview/apiTypes';
-import { log, setContext } from '../logger';
+import { log } from '../logger';
 import { isRunFinished, RunTerminationError } from '../runs';
 import { getSessionStatusFields } from '../sessions';
 import { type Adapter } from './adapters';
@@ -493,8 +493,13 @@ async function callAgentAPIAISDK(
                 },
             };
         }
-        else {
-            throw error; // those are unexpected errors
+        else { // streaming while
+            finalPatch = {
+                status: 'failed',
+                failReason: {
+                    message: error instanceof Error ? error.message : String(error),
+                },
+            };
         }
 
         if (!finalPatch) {
