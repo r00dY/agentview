@@ -5,6 +5,9 @@
   "scripts": {
     "dev:http": "tsx watch src/index.ts",
     "dev:worker": "tsx watch src/worker.ts",
+    "log:errors": "cat logs/api.log| jq 'select(.level >= 50)'",
+    "log:slow": "cat logs/api.log| jq 'select(.duration > 50 and (.path | startswith(\"/api/auth\") | not))'",
+    "log:runs": "tsx src/scripts/log-expired.ts",
     "dev": "concurrently \"npm run dev:http\" \"npm run dev:worker\"",
     "http": "tsx src/index.ts",
     "worker": "tsx src/worker.ts",
