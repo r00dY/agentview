@@ -368,6 +368,135 @@ export class RunTerminationError extends Error {
 
 
 /**
+ * Fast operations for agent-fetch
+ */
+
+export async function upsertItem(
+  tx: TenantTransaction,
+  options: {
+    runId: string,
+    sessionId: string,
+    runConfig: BaseRunConfig,
+    id: string,
+    content: any
+  }
+) {
+  await tx.acquireLock({ type: "edit_session", sessionId: options.sessionId });
+
+  const { runId, sessionId, runConfig, id, content } = options;
+
+  const run = await requireRunBase(tx, runId);
+
+  if (run.status === 'discarded') { // important for auto-fetch. When resource is discarded all "patch" operations should trigger this error to handle race conditions gracefully.
+    throw new RunTerminationError({ status: run.status, failReason: run.failReason });
+  }
+
+  if (run.status !== 'in_progress') {
+    throw new AgentViewError("Can't add item to run that is not in 'in_progress' status. Status: " + run.status, 422);
+  }
+
+  const idleTimeout = runConfig.idleTimeout ?? DEFAULT_IDLE_TIME;
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+
+  // Run both operations in parallel for speed.
+  await Promise.all([
+    tx.insert(sessionItems).values({
+      id,
+      sessionId,
+      content,
+      runId,
+      organizationId: run.organizationId
+    }).onConflictDoUpdate({
+      target: [sessionItems.id],
+      set: {
+        content,
+        updatedAt: nowIso,
+      },
+    }),
+    tx.update(runs).set({
+      expiresAt: new Date(now + idleTimeout).toISOString(),
+      updatedAt: nowIso,
+    }).where(eq(runs.id, run.id)),
+  ]);
+}
+
+// export const ManualRunUpdateSchema = z.object({
+//   items: z.array(z.record(z.string(), z.any())).optional(),
+//   metadata: z.record(z.string(), z.any()).optional(),
+//   status: z.enum(['in_progress', 'completed', 'cancelled', 'failed']).optional(),
+//   state: z.any().optional(),
+//   failReason: z.any().nullable().optional(),
+//   outputItemCount: z.number().int().min(0).optional(),
+//   channelReply: z.object({ text: z.string() }).optional(),
+// });
+
+export type FastPatchItemOp = {
+  type: "item",
+  id?: string,
+  content: any
+}
+
+export type FastPatchStateOp = {
+  type: "state",
+  content: any
+}
+
+export type FastPatchMetadataOp = {
+  type: "metadata",
+  metadata: Record<string, any>
+}
+
+export type FastPatchCancelOp = {
+  type: "cancel",
+}
+
+export type FastPatchFailOp = {
+  type: "fail",
+  failReason: { message: string, [key: string]: any }
+}
+
+export type FastPatchCompleteOp = {
+  type: "complete",
+  outputItemCount: number,
+  channelReply: { text: string }
+}
+
+export type FastPatchOp = FastPatchItemOp | FastPatchStateOp | FastPatchMetadataOp | FastPatchCancelOp | FastPatchFailOp | FastPatchCompleteOp;
+
+
+export async function fastApplyRunPatch(
+  tx: TenantTransaction,
+  runId: string,
+  sessionId: string,
+  runConfig: BaseRunConfig,
+  op: FastPatchOp
+) {
+  await tx.acquireLock({ type: "edit_session", sessionId });
+
+  const run = await requireRunBase(tx, runId);
+
+  if (!run.manual) {
+    throw new AgentViewError("This endpoint is allowed only for auto runs.", 422);
+  }
+  
+  if (run.status === 'discarded') { // important for auto-fetch. When resource is discarded all "patch" operations should trigger this error to handle race conditions gracefully.
+    throw new RunTerminationError({ status: run.status, failReason: run.failReason });
+  }
+
+  if (run.status !== 'in_progress') {
+    throw new AgentViewError("Can't add item to run that is not in 'in_progress' status. Status: " + run.status, 422);
+  }
+
+
+
+
+}
+
+
+
+
+/**
  * Core run-update logic shared between the PATCH handler and the worker.
  * Validates items, metadata, status transitions, inserts items, and updates the run.
  */
