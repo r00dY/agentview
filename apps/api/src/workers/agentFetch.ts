@@ -4,6 +4,7 @@ import { eq, inArray, sql } from 'drizzle-orm';
 import { getAdapter } from '../adapters/adapters';
 import { db__dangerous } from '../db';
 import { getConfigFromEnvironment } from '../environments';
+import { log, setContext } from '../logger';
 import { applyRunPatch, RunTerminationError, terminateRun, acceptRun } from '../runs';
 import { getEventReceiver } from '../redisPubSub';
 import { environments, runs } from '../schemas/schema';
@@ -44,7 +45,8 @@ export const agentFetchWorker = createEventDrivenWorker<Run>({
 
 
 async function processAgentFetch(run: Run) {
-  console.log(`[agentFetch][${run.id}] start`);
+  setContext({ runId: run.id, sessionId: run.sessionId, organizationId: run.organizationId });
+  log.info('agent fetch start');
 
   const abortController = new AbortController();
 
@@ -147,7 +149,7 @@ async function processAgentFetch(run: Run) {
     // Abort fetch immediately when run is terminated (e.g. external cancellation).
 
     clearTerminationListener = eventReceiver.on('run.terminated', run.id, (event) => {
-      console.log(`[agentFetch][${run.id}] run termination REDIS SIGNAL received`, event.reason);
+      log.info({ reason: event.reason }, 'run termination REDIS SIGNAL received');
       abortController.abort(new RunTerminationError(event.reason));
     });
 
@@ -163,7 +165,7 @@ async function processAgentFetch(run: Run) {
     const send = async (event: { name: string, data: any }) => {
 
       if (event.name === 'run.patch') {
-        console.log(`[agentFetch][${run.id}] run.patch`, event.data);
+        log.debug({ patch: event.data }, 'run.patch');
 
         if (!isFirstEventSent) {
           throw new Error(`[agentFetch][${run.id}] "run.patch" called before "run.discard" or "run.accept".`);
@@ -177,14 +179,14 @@ async function processAgentFetch(run: Run) {
           );
         })
 
-        console.log(`[agentFetch][${run.id}] run.patch successful`);
+        log.debug('run.patch successful');
       }
       /**
        * Discard and streaming started are only FIRST THINGS that should happen before streaming starts. Either run is discarded or streaming started, which means it becomes in_progress.
        * This is *INTERNAL* api, not public (like run.patch)
        */
       else if (event.name === 'run.discard') { // safe indempotent termination for cleanup
-        console.log(`[agentFetch][${run.id}] run discarded`);
+        log.info('run discarded');
 
         if (isFirstEventSent) {
           throw new Error(`[agentFetch][${run.id}] "run.discard" can be only called as a first event.`);
@@ -199,7 +201,7 @@ async function processAgentFetch(run: Run) {
         });
       }
       else if (event.name === 'run.accept') { // set run as in progress!
-        console.log(`[agentFetch][${run.id}] run accepted`);
+        log.info('run accepted');
 
         if (isFirstEventSent) {
           throw new Error(`[agentFetch][${run.id}] "run.accept" can be only called as a first event.`);
@@ -216,24 +218,24 @@ async function processAgentFetch(run: Run) {
       }
     }
 
-    console.log(`[agentFetch][${run.id}] calling agent API`);
+    log.info('calling agent API');
 
     await adapter.callAgent(body, agentUrl, send, abortController.signal);
 
-    console.log(`[agentFetch][${run.id}] agent API call finished`);
+    log.info('agent API call finished');
 
   } catch (error) {
     /**
      * This is severe error and always should be investigated. An unhandled error propagated from adapter here. The cleanup should be always graceful, so this is severe.
      */
     finalError = error instanceof Error ? error.message : String(error);
-    console.error(`[agentFetch][${run.id}] SEVERE, please investigate. Error: "${finalError}"`);
+    log.error({ err: error }, `SEVERE, please investigate. Error: "${finalError}"`);
 
   } finally {
 
     // best effort cleanup
     try {
-      console.log(`[agentFetch][${run.id}] cleaning up`);
+      log.info('cleaning up');
 
       await withOrg(run.organizationId, async (tx) => {
         await terminateRun(tx, run.sessionId, run.id, {

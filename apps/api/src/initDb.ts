@@ -1,9 +1,10 @@
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { db__dangerous } from './db';
+import { log } from './logger';
 import { sql } from 'drizzle-orm';
 
 export async function initDb() {
-    console.log("Initializing db...");
+    log.info("initializing db");
 
     // Use advisory lock to prevent concurrent init from HTTP server and worker
     const INIT_LOCK_ID = 123456789;
@@ -11,7 +12,7 @@ export async function initDb() {
 
     try {
       await migrate(db__dangerous, { migrationsFolder: './drizzle' });
-      console.log("✅ Database migrated successfully");
+      log.info("database migrated successfully");
 
       // App user role
       const appUserRole = process.env.POSTGRES_APP_USER;
@@ -26,7 +27,7 @@ export async function initDb() {
       }
 
       if (process.env.POSTGRES_SHOULD_CREATE_APP_USER === 'true') {
-        console.log(`⏳ Creating app user '${appUserRole}'...`);
+        log.info({ appUserRole }, 'creating app user');
 
         // Create role and grant privileges for RLS enforcement
         // DO blocks don't support bind parameters, so we use sql.raw()
@@ -45,7 +46,7 @@ export async function initDb() {
         await db__dangerous.execute(sql`GRANT USAGE ON SCHEMA public TO ${sql.raw(`"${appUserRole}"`)}`);
         await db__dangerous.execute(sql`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${sql.raw(`"${appUserRole}"`)}`);
         await db__dangerous.execute(sql`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${sql.raw(`"${appUserRole}"`)}`);
-        console.log(`✅ Created and granted privileges to '${appUserRole}'`);
+        log.info({ appUserRole }, 'created and granted privileges to app user');
       }
     } finally {
       await db__dangerous.execute(sql`SELECT pg_advisory_unlock(${INIT_LOCK_ID})`);

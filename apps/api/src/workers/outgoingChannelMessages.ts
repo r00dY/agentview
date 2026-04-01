@@ -2,6 +2,7 @@ import { db__dangerous } from '../db';
 import { withOrg } from '../withOrg';
 import { channelMessages, channelThreads } from '../schemas/schema';
 import { eq, inArray, sql } from 'drizzle-orm';
+import { log, setContext } from '../logger';
 import { createWorker } from './utils';
 import { channelApps } from '../channels/registry';
 
@@ -26,7 +27,8 @@ export const outgoingChannelMessageWorker = createWorker<ChannelMessage>({
       .returning();
   },
   async process(message) {
-    console.log(`[${NAME}] Processing message ${message.id}: ${message.text?.substring(0, 100) ?? '(empty)'}...`);
+    setContext({ channelMessageId: message.id, organizationId: message.organizationId });
+    log.info({ textPreview: message.text?.substring(0, 100) ?? '(empty)' }, 'processing outgoing message');
 
     try {
       // Look up the channel thread with its channel
@@ -49,11 +51,11 @@ export const outgoingChannelMessageWorker = createWorker<ChannelMessage>({
         throw new Error(`No send function registered for channel type '${channel.type}'`);
       }
 
-      console.log(`[${NAME}] Sending outgoing message`);
+      log.info('sending outgoing message');
 
       const result = await sendFn({ channel, channelThread, message });
 
-      console.log(`[${NAME}] sourceId: ${result.sourceId}`);
+      log.info({ sourceId: result.sourceId }, 'message sent');
 
       // On success: mark as sent, optionally store sourceId/providerData
       await withOrg(message.organizationId, async (tx) => {
@@ -65,10 +67,10 @@ export const outgoingChannelMessageWorker = createWorker<ChannelMessage>({
         }).where(eq(channelMessages.id, message.id));
       });
 
-      console.log(`[${NAME}] Outgoing message send and saved with sourceId: ${message.id}`);
+      log.info('outgoing message sent and saved');
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : String(e);
-      console.error(`[${NAME}] Failed to send message ${message.id}:`, errorMessage);
+      log.error({ err: e }, `failed to send message: ${errorMessage}`);
 
       await withOrg(message.organizationId, async (tx) => {
         await tx.update(channelMessages).set({

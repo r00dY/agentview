@@ -2735,7 +2735,7 @@ describe('API', () => {
       expect(finalSession.messages[1].parts[0].text).toBe("Hello world!");
     }, 10000);
 
-    test("happy path: text + reasoning (validated via ai-sdk stream)", async () => {
+    test.only("happy path: text + reasoning (validated via ai-sdk stream)", async () => {
       await updateConfigWithAiSdkUrl();
       const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 

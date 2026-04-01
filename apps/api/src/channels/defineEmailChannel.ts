@@ -1,5 +1,6 @@
 import { and, eq, inArray, not } from 'drizzle-orm';
 import { db__dangerous } from '../db';
+import { log } from '../logger';
 import { channelMessages, channelThreads } from '../schemas/schema';
 import {
   channelProvider,
@@ -178,7 +179,7 @@ export function defineEmailChannel(config: {
     // Look up channel to get channelId for thread resolution
     const channel = await provider.getChannel(address);
     if (!channel) {
-      console.log('[defineEmailChannel] Channel not found for address:', address);
+      log.info({ address }, 'channel not found for address');
       return { ingested: false, reason: 'Channel not found' };
     }
 
@@ -205,7 +206,7 @@ export function defineEmailChannel(config: {
     });
 
     if (duplicate.length > 0) {
-      console.log('[defineEmailChannel] Duplicate email, skipping:', params.email.messageId);
+      log.info({ messageId: params.email.messageId }, 'duplicate email, skipping');
       return { ingested: false, reason: 'Duplicate message' };
     }
 

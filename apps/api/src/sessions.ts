@@ -3,6 +3,7 @@ import type { ChannelRef, Environment, SessionBase, SessionsGetQueryParams, Sess
 import { findChannelConfig, getChannelAgent, requireAgentConfig, requireChannelConfig } from "agentview/baseConfigUtils";
 import { randomBytes } from "crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
+import { log } from "./logger";
 import type z from "zod";
 import { resolveAgentRef } from "./agentRefs";
 import { authorize } from "./authMiddleware";
@@ -525,7 +526,7 @@ export async function activateSession(tx: OrgTransaction, sessionId: string) {
   }
 
   if (session.active) {
-    console.log(`[activateSession][${sessionId}] Session is already active`);
+    log.info({ sessionId }, 'session already active');
     return;
   }
 

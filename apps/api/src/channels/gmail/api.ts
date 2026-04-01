@@ -1,4 +1,5 @@
 import { google } from 'googleapis';
+import { log } from '../../logger';
 import { createOAuth2Client } from './client';
 import type { GmailChannelConfig } from './types';
 
@@ -162,7 +163,7 @@ export async function sendEmail(
 
   const raw = encodeBase64Url(lines.join('\r\n'));
 
-  console.log(`[gmail][send] sending email to: ${params.to}, subject: ${params.subject}`);
+  log.info({ to: params.to, subject: params.subject }, 'sending gmail email');
 
   const res = await gmail.users.messages.send({
     userId: 'me',
@@ -176,7 +177,7 @@ export async function sendEmail(
     throw new Error('Gmail send returned no message ID');
   }
 
-  console.log(`[gmail][send] email sent successfully to: ${params.to}, subject: ${params.subject}`)
+  log.info({ to: params.to, subject: params.subject }, 'gmail email sent successfully')
 
   // Fetch the sent message to get the RFC 2822 Message-ID header
   const msg = await gmail.users.messages.get({

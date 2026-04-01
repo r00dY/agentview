@@ -9,6 +9,7 @@ import { db__dangerous } from "./db";
 import { createEnvironment } from "./environments";
 import { getAllowedOrigin } from "./getAllowedOrigin";
 import { getWebAppUrl } from "./getWebAppUrl";
+import { log } from "./logger";
 import { requireValidInvitation } from "./invitations";
 import { invitations, members } from "./schemas/auth-schema";
 
@@ -55,7 +56,7 @@ export const auth = betterAuth({
                 const subject = `You're invited to join ${organization.name}`;
 
                 if (process.env.RESEND_DISABLED === 'true') {
-                    console.log(`[resend-mock-mail] [${invitation.email}] ${subject}`);
+                    log.info({ email: invitation.email, subject }, 'resend mock mail');
                     return;
                 }
 
@@ -83,7 +84,7 @@ The AgentView Team`,
                 });
 
                 if (error) {
-                    console.error("Error sending invitation email", { error });
+                    log.error({ err: error }, 'error sending invitation email');
                 }
 
             },

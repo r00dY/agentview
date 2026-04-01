@@ -1,5 +1,6 @@
 import { setupWatch, createTokenRefreshHandler } from './api';
 import type { GmailChannelConfig } from './types';
+import { log } from '../../logger';
 import { createPeriodicWorker, type WorkerHandle } from '../../workers/utils';
 import { type ChannelProvider } from '../defineChannel';
 
@@ -40,13 +41,13 @@ export function createGmailWorkers(gmail: ChannelProvider): WorkerHandle[] {
             watchExpiresAt: watch.expiration,
           });
 
-          console.log(`[gmail] Renewed watch for ${channel.address}`);
+          log.info({ address: channel.address }, 'renewed gmail watch');
         } catch (error) {
-          console.error(`[gmail] Failed to renew watch for ${channel.address}:`, error);
+          log.error({ address: channel.address, err: error }, 'failed to renew gmail watch');
         }
       }
     } catch (error) {
-      console.error('[gmail] Error in watch renewal processor:', error);
+      log.error({ err: error }, 'error in gmail watch renewal processor');
     }
   }
 

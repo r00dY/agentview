@@ -1,6 +1,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { authn, authorize, requireMemberPrincipal } from '../../authMiddleware';
 import { response_data, response_error } from '../../hono_utils';
+import { log } from '../../logger';
 import type { EmailChannelProvider } from '../defineEmailChannel';
 import {
   createOAuth2Client,
@@ -130,7 +131,7 @@ export function createGmailRoutes(gmail: EmailChannelProvider): OpenAPIHono {
 
       return redirectToChannels(organizationId, { gmail: 'success' });
     } catch (err) {
-      console.error('[gmail callback] Error:', err);
+      log.error({ err }, 'gmail callback error');
       return redirectToChannels(organizationId, { gmail: 'error', message: 'Something went wrong connecting Gmail' });
     }
   });
@@ -159,14 +160,14 @@ export function createGmailRoutes(gmail: EmailChannelProvider): OpenAPIHono {
       const channel = await gmail.getChannel(emailAddress);
 
       if (!channel) {
-        console.log(`[gmail webhook] No channel found for ${emailAddress}`);
+        log.info({ emailAddress }, 'gmail webhook: no channel found');
         return c.json({ status: 'ok' }, 200);
       }
 
       const channelConfig = channel.config as GmailChannelConfig;
 
       if (!channelConfig.historyId) {
-        console.log(`[gmail webhook] No historyId stored for ${emailAddress}`);
+        log.info({ emailAddress }, 'gmail webhook: no historyId stored');
         return c.json({ status: 'ok' }, 200);
       }
 
@@ -216,7 +217,7 @@ export function createGmailRoutes(gmail: EmailChannelProvider): OpenAPIHono {
         });
       } else {
         // historyId too old, re-setup watch
-        console.log(`[gmail webhook] History expired for ${emailAddress}, re-setting up watch`);
+        log.info({ emailAddress }, 'gmail webhook: history expired, re-setting up watch');
         const watch = await setupWatch(
           channelConfig.accessToken,
           channelConfig.refreshToken,
@@ -231,7 +232,7 @@ export function createGmailRoutes(gmail: EmailChannelProvider): OpenAPIHono {
         });
       }
     } catch (error) {
-      console.error('[gmail webhook] Error processing webhook:', error);
+      log.error({ err: error }, 'gmail webhook: error processing webhook');
     }
 
     return c.json({ status: 'ok' }, 200);

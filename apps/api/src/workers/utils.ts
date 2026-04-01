@@ -1,3 +1,5 @@
+import { log, runWithContext } from '../logger';
+
 export interface WorkerHandle {
   start(): void;
   stop(): void;
@@ -30,16 +32,18 @@ export function createWorker<T>(config: WorkerConfig<T>): WorkerHandle {
       const items = await claim(available);
       for (const item of items) {
         inFlight++;
-        process(item)
-          .catch((error) => {
-            console.error(`[${name}] Unhandled error:`, error);
-          })
-          .finally(() => {
-            inFlight--;
-          });
+        runWithContext({ workerName: name }, () =>
+          process(item)
+            .catch((error) => {
+              log.error({ err: error, workerName: name }, 'unhandled error');
+            })
+            .finally(() => {
+              inFlight--;
+            })
+        );
       }
     } catch (error) {
-      console.error(`[${name}] Claim error:`, error);
+      log.error({ err: error, workerName: name }, 'claim error');
     } finally {
       isPolling = false;
     }
@@ -96,16 +100,18 @@ export function createEventDrivenWorker<T>(config: EventDrivenWorkerConfig<T>): 
       const items = await claim(available);
       for (const item of items) {
         inFlight++;
-        process(item)
-          .catch((error) => {
-            console.error(`[${name}] Unhandled error:`, error);
-          })
-          .finally(() => {
-            inFlight--;
-          });
+        runWithContext({ workerName: name }, () =>
+          process(item)
+            .catch((error) => {
+              log.error({ err: error, workerName: name }, 'unhandled error');
+            })
+            .finally(() => {
+              inFlight--;
+            })
+        );
       }
     } catch (error) {
-      console.error(`[${name}] Claim error:`, error);
+      log.error({ err: error, workerName: name }, 'claim error');
     } finally {
       isPolling = false;
       if (pendingWakeup) {
@@ -148,7 +154,7 @@ export function createPeriodicWorker(config: PeriodicWorkerConfig): WorkerHandle
     try {
       await run();
     } catch (error) {
-      console.error(`[${name}] Error:`, error);
+      log.error({ err: error, workerName: name }, 'periodic worker error');
     }
   }
 

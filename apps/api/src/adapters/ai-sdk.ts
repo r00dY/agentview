@@ -1,4 +1,5 @@
 import type { RunBody, StandardSession, UIMessage } from 'agentview/apiTypes';
+import { log, setContext } from '../logger';
 import { isRunFinished, RunTerminationError } from '../runs';
 import { getSessionStatusFields } from '../sessions';
 import { type Adapter } from './adapters';
@@ -87,7 +88,8 @@ async function callAgentAPIAISDK(
     signal?: AbortSignal
 ): Promise<void> {
     const currentRun = body.session.runs[body.session.runs.length - 1];
-    console.log(`[ai-sdk][${currentRun.id}] start`);
+    setContext({ runId: currentRun.id });
+    log.info('ai-sdk adapter start');
 
     /**
      * Build AI SDK request body
@@ -102,7 +104,7 @@ async function callAgentAPIAISDK(
      * Fetch the agent API response
      */
     let response: Response | undefined = undefined;
-    console.log(`[ai-sdk][${currentRun.id}] fetching`);
+    log.info('fetching agent endpoint');
 
     try {
         response = await fetch(url, {
@@ -210,7 +212,7 @@ async function callAgentAPIAISDK(
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined = undefined;
 
     try {
-        console.log(`[ai-sdk][${currentRun.id}] streaming`);
+        log.info('streaming started');
 
         await send({
             name: 'run.accept',
@@ -240,7 +242,7 @@ async function callAgentAPIAISDK(
 
         for await (const data of parseAISDKStream(reader)) {
             if (data === '[DONE]') { // done is end of stream. We send it ourselves in the finally block.
-                console.log(`[ai-sdk][${currentRun.id}] [DONE] received`);
+                log.debug('[DONE] received');
                 break;
             }
 
@@ -275,7 +277,7 @@ async function callAgentAPIAISDK(
                     emittedItemTypes.push('text');
                     outputTexts.push(text);
 
-                    console.log(`[ai-sdk][${currentRun.id}] yield run.patch for "text"`)
+                    log.debug('yield run.patch for text')
                     await send({
                         name: 'run.patch',
                         data: { items: [{ type: 'text', text }] },
@@ -299,7 +301,7 @@ async function callAgentAPIAISDK(
                     reasoningBuffers.delete(chunk.id);
                     emittedItemTypes.push('reasoning');
 
-                    console.log(`[ai-sdk][${currentRun.id}] yield run.patch for "reasoning"`)
+                    log.debug('yield run.patch for reasoning')
                     await send({
                         name: 'run.patch',
                         data: { items: [{ type: 'reasoning', text }] },
@@ -335,7 +337,7 @@ async function callAgentAPIAISDK(
                     const state = toolStates.get(chunk.toolCallId);
                     if (state) {
                         emittedItemTypes.push('tool-call');
-                        console.log(`[ai-sdk][${currentRun.id}] yield run.patch for "tool-output-available"`)
+                        log.debug('yield run.patch for tool-output-available')
                         await send({
                             name: 'run.patch',
                             data: {
@@ -358,7 +360,7 @@ async function callAgentAPIAISDK(
                     const state = toolStates.get(chunk.toolCallId);
                     if (state) {
                         emittedItemTypes.push('tool-call');
-                        console.log(`[ai-sdk][${currentRun.id}] yield run.patch for "tool-output-error"`)
+                        log.debug('yield run.patch for tool-output-error')
                         await send({
                             name: 'run.patch',
                             data: {
@@ -406,7 +408,7 @@ async function callAgentAPIAISDK(
 
                 case 'data-session-state': {
                     emittedItemTypes.push('data');
-                    console.log(`[ai-sdk][${currentRun.id}] yield run.patch for "data-session-state"`)
+                    log.debug('yield run.patch for data-session-state')
                     await send({
                         name: 'run.patch',
                         data: {
@@ -419,7 +421,7 @@ async function callAgentAPIAISDK(
                 // Ignore other events: start-step, finish-step, source-url, file, etc.
                 default:
                     if (chunk.type.startsWith('data-')) {
-                        console.log(`[ai-sdk][${currentRun.id}] yield run.patch for "data-${chunk.type}"`)
+                        log.debug(`yield run.patch for ${chunk.type}`)
                         emittedItemTypes.push('data');
                         await send({
                             name: 'run.patch',
@@ -428,17 +430,17 @@ async function callAgentAPIAISDK(
                             },
                         });
                     }
-                    console.log(`[ai-sdk][${currentRun.id}] ignored chunk: `, chunk.type);
+                    log.trace({ chunkType: chunk.type }, 'ignored chunk');
                     break;
             }
 
             // we just mirror native chunks to the stream.
-            console.log(`[ai-sdk][${currentRun.id}] stream event`, chunk.type)
+            log.trace({ chunkType: chunk.type }, 'stream event')
             await publishAISDKStreamEvent(currentRun.id, JSON.stringify(chunk));
         }
 
         if (!finalPatch) {
-            console.log(`[ai-sdk][${currentRun.id}] stream ended INCOMPLETE`);
+            log.warn('stream ended INCOMPLETE');
             finalPatch = {
                 status: 'failed',
                 failReason: {
@@ -447,7 +449,7 @@ async function callAgentAPIAISDK(
             };
         }
         else {
-            console.log(`[ai-sdk][${currentRun.id}] stream ended complete`);
+            log.info('stream ended complete');
         }
 
         /**
@@ -455,7 +457,7 @@ async function callAgentAPIAISDK(
          * Closing the run triggers [DONE] event on the stream, which will trigger `signal` to abort (with "run.finished" error code).
          * That's why after this command we must only clean up and not touch `reader` anymore.
          */
-        console.log(`[ai-sdk][${currentRun.id}] yield run.patch for completion`)
+        log.debug('yield run.patch for completion')
         await send({
             name: 'run.patch',
             data: finalPatch,
@@ -466,12 +468,12 @@ async function callAgentAPIAISDK(
 
         // Run terminated signal (we have 5s to clean up)
         if (error instanceof RunTerminationError) {
-            console.log(`[ai-sdk][${currentRun.id}] run terminated while streaming`)
+            log.info('run terminated while streaming')
 
             if (error.reason.status === 'discarded') { 
                 // this can happen for channels, when new messages pops in.
                 // We don't need to cleanup this, since discard is not a SIGNAL, the run is already closed. We can just safely return
-                console.log(`[ai-sdk][${currentRun.id}] run discarded, returning`)
+                log.info('run discarded, returning')
                 return;
             }
             else {
@@ -481,7 +483,7 @@ async function callAgentAPIAISDK(
             }
         }
         else if (error instanceof TypeError) {
-            console.log(`[ai-sdk][${currentRun.id}] connection error while streaming`);
+            log.warn('connection error while streaming');
 
             finalPatch = {
                 status: 'failed',
@@ -492,7 +494,7 @@ async function callAgentAPIAISDK(
         }
         else {
             const message = error instanceof Error ? error.message ?? 'Unknown error' : String(error);
-            console.error(`[ai-sdk][${currentRun.id}] SEVERE: unexpected error while streaming (not termination and not connection error): ${message}`);
+            log.error({ err: error }, `SEVERE: unexpected error while streaming: ${message}`);
 
             finalPatch = {
                 status: 'failed',

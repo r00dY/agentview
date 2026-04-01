@@ -8,6 +8,7 @@ import type { StatusCode } from 'hono/utils/http-status';
 
 import { swaggerUI } from '@hono/swagger-ui';
 import { createRoute, OpenAPIHono, z, type RouteHandler } from '@hono/zod-openapi';
+import { log, runWithContext } from './logger';
 import { AgentViewError } from 'agentview/AgentViewError';
 import {
   CommentMessageCreateSchema,
@@ -73,7 +74,7 @@ export const app = new OpenAPIHono({
   // custom error handler for zod validation errors
   defaultHook: (result, c) => {
     if (!result.success) {
-      console.log('Validation Error', result.error.issues);
+      log.warn({ issues: result.error.issues }, 'validation error');
       return c.json({
         message: 'Validation error',
         issues: result.error.issues
@@ -87,23 +88,23 @@ export const app = new OpenAPIHono({
 app.onError((error, c) => {
   if (error instanceof AgentViewError) {
     const payload = { message: error.message, ...(error.details ?? {}) }
-    console.log('[AgentViewError]', error.statusCode, error.message);
+    log.info({ errorType: 'AgentViewError', statusCode: error.statusCode }, error.message);
     return c.json(payload, error.statusCode as any);
   }
   else if (error instanceof BetterAuthAPIError) {
-    console.error('[BetterAuthAPIError]', error.statusCode, error.message);
-    return c.json(error.body, error.statusCode as any); // "as any" because error.statusCode is "number" and hono expects some numeric literal union 
+    log.error({ errorType: 'BetterAuthAPIError', statusCode: error.statusCode }, error.message);
+    return c.json(error.body, error.statusCode as any); // "as any" because error.statusCode is "number" and hono expects some numeric literal union
   }
   else if (error instanceof DrizzleQueryError) {
-    console.error('[DrizzleQueryError]', error);
+    log.error({ errorType: 'DrizzleQueryError', err: error }, 'DB error');
     return c.json({ ...error, message: "DB error" }, 400);
   }
   else if (error instanceof Error) {
-    console.error('[Error]', error);
+    log.error({ errorType: 'Error', err: error }, error.message);
     return c.json({ message: error.message }, 400);
   }
   else {
-    console.error('[Unexpected error]', error);
+    log.error({ errorType: 'UnexpectedError', err: error }, 'Unexpected error');
     return c.json({ message: "Unexpected error" }, 400);
   }
 });
@@ -117,6 +118,18 @@ app.use('*', cors({
   },
   credentials: true,
 }))
+
+/** --------- REQUEST LOGGING --------- */
+
+app.use('*', async (c, next) => {
+  const requestId = crypto.randomUUID();
+  const start = Date.now();
+  return runWithContext({ requestId }, async () => {
+    await next();
+    const duration = Date.now() - start;
+    log.info({ method: c.req.method, path: c.req.path, status: c.res.status, duration }, 'request completed');
+  });
+});
 
 /* --------- AUTH --------- */
 
@@ -1544,7 +1557,7 @@ app.openapi(environmentPATCHRoute, async (c) => {
   // validate & parse body.config
   const { data, success, error } = BaseConfigSchema.safeParse(body.config)
   if (!success) {
-    console.error(error.issues)
+    log.error({ issues: error.issues }, 'invalid config')
     return c.json({ message: "Invalid config", code: 'parse.schema', details: error.issues }, 422);
   }
 

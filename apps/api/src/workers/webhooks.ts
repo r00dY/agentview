@@ -3,6 +3,7 @@ import { withOrg } from '../withOrg';
 import { webhookJobs, environments } from '../schemas/schema';
 import { eq, inArray, sql } from 'drizzle-orm';
 import { generateSessionSummary } from '../summaries';
+import { log, setContext } from '../logger';
 import { createWorker } from './utils';
 
 // Webhook job retry delays: 5s, 30s, 2min
@@ -33,6 +34,7 @@ export const webhookWorker = createWorker<WebhookJob>({
 });
 
 async function processWebhookJob(job: WebhookJob) {
+  setContext({ webhookJobId: job.id, organizationId: job.organizationId });
   const now = new Date();
 
   try {
@@ -80,7 +82,7 @@ async function processWebhookJob(job: WebhookJob) {
         throw new Error(`Webhook returned ${response.status}: ${await response.text()}`);
       }
 
-      console.log(`Webhook job ${job.id} completed successfully`);
+      log.info('webhook job completed successfully');
     }
 
     // Success - mark as completed
@@ -107,7 +109,7 @@ async function processWebhookJob(job: WebhookJob) {
           .where(eq(webhookJobs.id, job.id));
       });
 
-      console.error(`Webhook job ${job.id} failed permanently after ${newAttempts} attempts: ${errorMessage}`);
+      log.error({ attempts: newAttempts }, `webhook job failed permanently: ${errorMessage}`);
     } else {
       // Schedule retry with backoff
       const delay = RETRY_DELAYS[Math.min(newAttempts - 1, RETRY_DELAYS.length - 1)];
@@ -125,7 +127,7 @@ async function processWebhookJob(job: WebhookJob) {
           .where(eq(webhookJobs.id, job.id));
       });
 
-      console.log(`Webhook job ${job.id} failed, scheduling retry ${newAttempts}/${job.maxAttempts} at ${nextAttemptAt}`);
+      log.warn({ attempts: newAttempts, maxAttempts: job.maxAttempts, nextAttemptAt }, `webhook job failed, scheduling retry`);
     }
   }
 }

@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import { zodTextFormat } from 'openai/helpers/zod';
 import { z } from 'zod';
 import { withOrg } from './withOrg';
+import { log } from './logger';
 import { sessions, sessionItems } from './schemas/schema';
 import { eq, and, asc } from 'drizzle-orm';
 
@@ -26,7 +27,7 @@ export async function generateSessionSummary(sessionId: string, organizationId: 
   });
 
   if (!firstItem) {
-    console.warn(`No session items found for session ${sessionId}`);
+    log.warn({ sessionId }, 'no session items found for summary generation');
     return undefined;
   }
 

@@ -4,6 +4,7 @@ import type { BaseAgentConfig, BaseRunConfig } from 'agentview/baseConfigTypes';
 import { findItemConfig, requireAgentConfig, requireChannelConfig, requireRunConfig } from 'agentview/baseConfigUtils';
 import { getLastRun } from 'agentview/sessionUtils';
 import { and, eq, inArray, isNull, not, or } from 'drizzle-orm';
+import { log } from './logger';
 import { getAdapter } from './adapters/adapters';
 import { resolveAgentRef } from './agentRefs';
 import { authorize } from './authMiddleware';
@@ -561,7 +562,7 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
     const runBase = await getRunBase(tx, runId); // we must start with a lock for safety of concurrent writes!
 
     if (!runBase) {
-      console.warn(`[terminateRun][${runId}] run not found`);
+      log.warn({ runId }, 'terminateRun: run not found');
       return;
     }
 
@@ -579,7 +580,7 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
 
     await publishEvent({ type: 'run.terminated', runId, reason }); // important to signal termination to the workers (the signal might have been sent before for cancel / timeout, but it's for discards and general sanity)
 
-    console.log(`[terminateRun][${runId}] terminating, ${logText}`);
+    log.info({ runId, reason: logText }, 'terminating run');
     const nowIso = new Date().toISOString();
 
     await tx.update(runs).set({
@@ -605,10 +606,10 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
       await publishRunStreamEvent(runId, null, '[DONE]');
     });
 
-    console.log(`[terminateRun][${runId}] termination successful`);
+    log.info({ runId }, 'termination successful');
 
   } catch (e) {
-    console.error(`[terminateRun][${runId}] SEVERE ERROR!!!! Termination failed: ${e instanceof Error ? e.message : String(e)}`);
+    log.error({ runId, err: e }, `SEVERE: termination failed: ${e instanceof Error ? e.message : String(e)}`);
    }
 }
 
@@ -636,7 +637,7 @@ export async function createAutoRunFromChannelMessages(
 ) {
   await tx.acquireLock({ type: "edit_session", sessionId });
 
-  console.log(`[createAutoRunFromChannelMessages][session:${sessionId}]: creating run from channel messages`);
+  log.info({ sessionId }, 'creating run from channel messages');
 
   const { lastRun, agentConfig, agentRefId, session } = await prepareRunCreation(tx, environment, sessionId);
   const adapter = getAdapter(agentConfig.adapter);
@@ -671,7 +672,7 @@ export async function createAutoRunFromChannelMessages(
     throw new AgentViewError("No incoming messages to create a run from.", 422);
   }
 
-  console.log(`[createAutoRunFromChannelMessages][session:${sessionId}]: incoming messages: ${incomingMessages.length}`);
+  log.info({ sessionId, count: incomingMessages.length }, 'incoming messages found');
 
 
   /**
@@ -680,7 +681,7 @@ export async function createAutoRunFromChannelMessages(
   const newRunId = crypto.randomUUID();
   const input = adapter.createDefaultInputForChannelMessages(incomingMessages, newRunId);
 
-  console.log(`[createAutoRunFromChannelMessages][session:${sessionId}]: input: ${JSON.stringify(input)}`);
+  log.debug({ sessionId, input }, 'channel run input');
 
   const { runConfig, parsedInput, idleTimeout } = await processInput(agentConfig, input);
 
