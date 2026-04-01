@@ -44,7 +44,7 @@ if (isDev) {
   streams.push({
     level: level as pino.Level,
     stream: await import('pino-pretty').then((m) =>
-      m.default({ colorize: true, translateTime: 'SYS:HH:MM:ss.l', ignore: 'pid,hostname,service' })
+      m.default({ colorize: true, translateTime: 'SYS:HH:MM:ss.l', ignore: 'pid,hostname,service,requestId', customColors: 'message:white,info:green,warn:yellow,error:red,fatal:red,debug:blue,trace:gray,default:white' })
     ),
   });
 } else {
