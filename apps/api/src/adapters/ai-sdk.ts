@@ -230,7 +230,7 @@ async function callAgentAPIAISDK(
             // no error -> app expects stream
         }));
 
-        // Parse AI SDK stream and convert to run.patch events
+        // Parse AI SDK stream and convert to fast.patch events
         const textBuffers = new Map<string, string>();
         const reasoningBuffers = new Map<string, string>();
         const toolStates = new Map<string, { toolName: string; inputText: string; input?: any }>();
@@ -306,7 +306,7 @@ async function callAgentAPIAISDK(
                     reasoningBuffers.delete(chunk.id);
                     emittedItemTypes.push('reasoning');
 
-                    log.debug('[ai-sdk] run.patch for "reasoning"')
+                    log.debug('[ai-sdk] fast.patch for "reasoning"')
                     await send({
                         name: 'fast.patch',
                         data: { type: 'item', content: { type: 'reasoning', text } },
@@ -342,7 +342,7 @@ async function callAgentAPIAISDK(
                     const state = toolStates.get(chunk.toolCallId);
                     if (state) {
                         emittedItemTypes.push('tool-call');
-                        log.debug('[ai-sdk] run.patch for "tool-output-available"')
+                        log.debug('[ai-sdk] fast.patch for "tool-output-available"')
                         await send({
                             name: 'fast.patch',
                             data: { type: 'item', content: { type: 'tool-call', toolCallId: chunk.toolCallId, toolName: state.toolName, state: 'output-available', input: state.input, output: chunk.output } },
@@ -356,7 +356,7 @@ async function callAgentAPIAISDK(
                     const state = toolStates.get(chunk.toolCallId);
                     if (state) {
                         emittedItemTypes.push('tool-call');
-                        log.debug('[ai-sdk] run.patch for "tool-output-error"')
+                        log.debug('[ai-sdk] fast.patch for "tool-output-error"')
                         await send({
                             name: 'fast.patch',
                             data: { type: 'item', content: { type: 'tool-call', toolCallId: chunk.toolCallId, toolName: state.toolName, state: 'output-error', input: state.input, errorText: chunk.errorText } },
@@ -394,10 +394,11 @@ async function callAgentAPIAISDK(
 
                 case 'data-session-state': {
                     emittedItemTypes.push('data');
-                    log.debug('[ai-sdk] run.patch for state')
+                    log.debug('[ai-sdk] fast.patch for state')
                     await send({
-                        name: 'run.patch',
+                        name: 'fast.patch',
                         data: {
+                            type: 'state',
                             state: chunk.data,
                         },
                     });
@@ -407,12 +408,13 @@ async function callAgentAPIAISDK(
                 // Ignore other events: start-step, finish-step, source-url, file, etc.
                 default:
                     if (chunk.type.startsWith('data-')) {
-                        log.debug(`[ai-sdk] run.patch for "${chunk.type}"`)
+                        log.debug(`[ai-sdk] fast.patch for "${chunk.type}"`)
                         emittedItemTypes.push('data');
                         await send({
-                            name: 'run.patch',
+                            name: 'fast.patch',
                             data: {
-                                items: [{ type: chunk.type, data: chunk.data }],
+                                type: 'item',
+                                content: chunk,
                             },
                         });
                     }
@@ -439,11 +441,11 @@ async function callAgentAPIAISDK(
         }
 
         /**
-         * This is the moment when we send final run.patch that will close the run internally.
+         * This is the moment when we send final fast.patch that will close the run internally.
          * Closing the run triggers [DONE] event on the stream, which will trigger `signal` to abort (with "run.finished" error code).
          * That's why after this command we must only clean up and not touch `reader` anymore.
          */
-        log.debug('[ai-sdk] run.patch for completion')
+        log.debug('[ai-sdk] fast.patch for completion')
 
         await send({
             name: 'fast.patch',
@@ -511,23 +513,6 @@ async function callAgentAPIAISDK(
             await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'error', errorText: finalOp.failReason?.message ?? 'Unknown error' }));
         }
 
-        // if (!finalOp) {
-        //     throw new Error(`[ai-sdk] unreachable, no finalOp set`);
-        // }
-
-        // log.info(`[ai-sdk] error while streaming, status: ${finalOp.status}, failReason: ${finalOp.failReason?.message ?? 'Unknown error'}`);
-
-        // await send({
-        //     name: 'run.patch',
-        //     data: finalOp,
-        // });
-
-        // if (finalOp.status === 'cancelled') {
-        //     await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));
-        // }
-        // else {
-        //     await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'error', errorText: finalOp.failReason?.message ?? 'Unknown error' }));
-        // }
 
     } finally { // best effort cleanup
         await reader?.cancel().catch(() => { }); // reader is potentially in error state ([done] already delivered)
