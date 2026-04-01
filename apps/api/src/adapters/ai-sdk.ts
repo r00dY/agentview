@@ -16,7 +16,7 @@ interface AISDKChunk {
  * Stream ends with `data: [DONE]\n\n`.
  */
 async function* parseAISDKStream(reader: ReadableStreamDefaultReader<Uint8Array>): AsyncGenerator<string, void, unknown> {
-    
+
     const decoder = new TextDecoder();
 
     let buffer = '';
@@ -213,8 +213,7 @@ async function callAgentAPIAISDK(
 
     // send response first
 
-    // let finalPatch: { status: 'completed' | 'failed' | 'cancelled', [key: string]: any } | undefined = undefined;
-    let finalFastPatch: FastPatchOp | undefined = undefined;
+    let finalOp: FastPatchOp | undefined = undefined;
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined = undefined;
 
     try {
@@ -283,11 +282,7 @@ async function callAgentAPIAISDK(
                     emittedItemTypes.push('text');
                     outputTexts.push(text);
 
-                    log.debug('[ai-sdk] run.patch for "text"')
-                    // await send({
-                    //     name: 'run.patch',
-                    //     data: { items: [{ type: 'text', text }] },
-                    // });
+                    log.debug('[ai-sdk] fast.patch for "text"')
                     await send({
                         name: 'fast.patch',
                         data: { type: 'item', content: { type: 'text', text } },
@@ -312,10 +307,6 @@ async function callAgentAPIAISDK(
                     emittedItemTypes.push('reasoning');
 
                     log.debug('[ai-sdk] run.patch for "reasoning"')
-                    // await send({
-                    //     name: 'run.patch',
-                    //     data: { items: [{ type: 'reasoning', text }] },
-                    // });
                     await send({
                         name: 'fast.patch',
                         data: { type: 'item', content: { type: 'reasoning', text } },
@@ -356,19 +347,6 @@ async function callAgentAPIAISDK(
                             name: 'fast.patch',
                             data: { type: 'item', content: { type: 'tool-call', toolCallId: chunk.toolCallId, toolName: state.toolName, state: 'output-available', input: state.input, output: chunk.output } },
                         });
-                        // await send({
-                        //     name: 'run.patch',
-                        //     data: {
-                        //         items: [{
-                        //             type: 'tool-call',
-                        //             toolCallId: chunk.toolCallId,
-                        //             toolName: state.toolName,
-                        //             state: 'output-available',
-                        //             input: state.input,
-                        //             output: chunk.output,
-                        //         }],
-                        //     },
-                        // });
                         toolStates.delete(chunk.toolCallId);
                     }
                     break;
@@ -383,19 +361,6 @@ async function callAgentAPIAISDK(
                             name: 'fast.patch',
                             data: { type: 'item', content: { type: 'tool-call', toolCallId: chunk.toolCallId, toolName: state.toolName, state: 'output-error', input: state.input, errorText: chunk.errorText } },
                         });
-                        // await send({
-                        //     name: 'run.patch',
-                        //     data: {
-                        //         items: [{
-                        //             type: 'tool-call',
-                        //             toolCallId: chunk.toolCallId,
-                        //             toolName: state.toolName,
-                        //             state: 'output-error',
-                        //             input: state.input,
-                        //             errorText: chunk.errorText,
-                        //         }],
-                        //     },
-                        // });
                         toolStates.delete(chunk.toolCallId);
                     }
                     break;
@@ -407,36 +372,22 @@ async function callAgentAPIAISDK(
                     }
                     const outputCount = computeOutputItemCount(emittedItemTypes);
 
-                    finalFastPatch = {
+                    finalOp = {
                         type: 'complete',
                         outputItemCount: outputCount,
                         channelReply: isChannelRun ? { text: outputTexts.filter(Boolean).join('\n\n') } : undefined,
-                        // ...(messageMetadata !== undefined ? { metadata: messageMetadata } : {}),
                     };
-
-                    // finalPatch = {
-                    //     status: 'completed',
-                    //     outputItemCount: outputCount,
-                    //     channelReply: isChannelRun ? { text: outputTexts.filter(Boolean).join('\n\n') } : undefined,
-                    //     ...(messageMetadata !== undefined ? { metadata: messageMetadata } : {}),
-                    // };
 
                     break;
                 }
 
                 case 'error': {
-                    finalFastPatch = {
+                    finalOp = {
                         type: 'fail',
                         failReason: {
                             message: chunk.errorText ?? 'Unknown error from AI SDK stream',
                         },
                     };
-                    // finalPatch = {
-                    //     status: 'failed',
-                    //     failReason: {
-                    //         message: chunk.errorText ?? 'Unknown error from AI SDK stream',
-                    //     },
-                    // };
 
                     break;
                 }
@@ -474,18 +425,9 @@ async function callAgentAPIAISDK(
             await publishAISDKStreamEvent(currentRun.id, JSON.stringify(chunk));
         }
 
-        // if (!finalPatch) {
-        //     log.info('[ai-sdk] stream ended incomplete');
-        //     finalPatch = {
-        //         status: 'failed',
-        //         failReason: {
-        //             message: 'Agent stream ended without completing',
-        //         },
-        //     };
-        // }
-        if (!finalFastPatch) {
+        if (!finalOp) {
             log.info('[ai-sdk] stream ended incomplete');
-            finalFastPatch = {
+            finalOp = {
                 type: 'fail',
                 failReason: {
                     message: 'Agent stream ended without completing',
@@ -502,54 +444,40 @@ async function callAgentAPIAISDK(
          * That's why after this command we must only clean up and not touch `reader` anymore.
          */
         log.debug('[ai-sdk] run.patch for completion')
-        // await send({
-        //     name: 'run.patch',
-        //     data: finalPatch,
-        // });
+
         await send({
             name: 'fast.patch',
-            data: finalFastPatch,
+            data: finalOp,
         });
 
-        // await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'data-session-patch', data: { status: finalPatch.status, failReason: finalPatch.failReason } }));
+        // await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'data-session-patch', data: { status: finalOp.status, failReason: finalOp.failReason } }));
 
     } catch (error: unknown) {
 
         // Run terminated signal (we have 5s to clean up)
         if (error instanceof RunTerminationError) {
-            if (error.reason.status === 'discarded') { 
+            if (error.reason.status === 'discarded') {
                 // this can happen for channels, when new messages pops in.
                 // We don't need to cleanup this, since discard is not a SIGNAL, the run is already closed. We can just safely return
                 log.info('[ai-sdk] run discarded, returning')
                 return;
             }
+            else if (error.reason.status === 'cancelled') {
+                finalOp = {
+                    type: 'cancel',
+                };
+            }
             else {
-                // finalPatch = {
-                //     ...error.reason,
-                // }
-                if (error.reason.status === 'cancelled') {
-                    finalFastPatch = {
-                        type: 'cancel',
-                    };
-                }
-                else {
-                    finalFastPatch = {
-                        type: 'fail',
-                        failReason: {
-                            message: error.message ?? 'Connection error',
-                        },
-                    };
-                }
+                finalOp = {
+                    type: 'fail',
+                    failReason: {
+                        message: error.message ?? 'Connection error',
+                    },
+                };
             }
         }
         else if (error instanceof TypeError) {
-            // finalPatch = {
-            //     status: 'failed',
-            //     failReason: {
-            //         message: error.message ?? 'Connection error',
-            //     },
-            // };
-            finalFastPatch = {
+            finalOp = {
                 type: 'fail',
                 failReason: {
                     message: error.message ?? 'Connection error',
@@ -557,13 +485,7 @@ async function callAgentAPIAISDK(
             };
         }
         else { // streaming while
-            // finalPatch = {
-            //     status: 'failed',
-            //     failReason: {
-            //         message: error instanceof Error ? error.message : String(error),
-            //     },
-            // };
-            finalFastPatch = {
+            finalOp = {
                 type: 'fail',
                 failReason: {
                     message: error instanceof Error ? error.message : String(error),
@@ -571,49 +493,49 @@ async function callAgentAPIAISDK(
             };
         }
 
-        if (!finalFastPatch) {
-            throw new Error(`[ai-sdk] unreachable, no finalFastPatch set`);
+        if (!finalOp) {
+            throw new Error(`[ai-sdk] unreachable, no finalOp set`);
         }
 
-        log.info(`[ai-sdk] error while streaming. finalFastPatch: ${JSON.stringify(finalFastPatch)}`);
+        log.info(`[ai-sdk] error while streaming. finalOp: ${JSON.stringify(finalOp)}`);
 
         await send({
             name: 'fast.patch',
-            data: finalFastPatch,
+            data: finalOp,
         });
 
-        if (finalFastPatch.type === 'cancel') {
+        if (finalOp.type === 'cancel') {
             await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));
         }
         else {
-            await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'error', errorText: finalFastPatch.failReason?.message ?? 'Unknown error' }));
+            await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'error', errorText: finalOp.failReason?.message ?? 'Unknown error' }));
         }
 
-        // if (!finalPatch) {
-        //     throw new Error(`[ai-sdk] unreachable, no finalPatch set`);
+        // if (!finalOp) {
+        //     throw new Error(`[ai-sdk] unreachable, no finalOp set`);
         // }
 
-        // log.info(`[ai-sdk] error while streaming, status: ${finalPatch.status}, failReason: ${finalPatch.failReason?.message ?? 'Unknown error'}`);
+        // log.info(`[ai-sdk] error while streaming, status: ${finalOp.status}, failReason: ${finalOp.failReason?.message ?? 'Unknown error'}`);
 
         // await send({
         //     name: 'run.patch',
-        //     data: finalPatch,
+        //     data: finalOp,
         // });
 
-        // if (finalPatch.status === 'cancelled') {
+        // if (finalOp.status === 'cancelled') {
         //     await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));
         // }
         // else {
-        //     await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'error', errorText: finalPatch.failReason?.message ?? 'Unknown error' }));
+        //     await publishAISDKStreamEvent(currentRun.id, JSON.stringify({ type: 'error', errorText: finalOp.failReason?.message ?? 'Unknown error' }));
         // }
 
     } finally { // best effort cleanup
-        await reader?.cancel().catch(() => {}); // reader is potentially in error state ([done] already delivered)
+        await reader?.cancel().catch(() => { }); // reader is potentially in error state ([done] already delivered)
 
         try {
             await publishAISDKStreamEvent(currentRun.id, "[DONE]");
             await expireAISDKStream(currentRun.id);
-        } catch (e) {}
+        } catch (e) { }
 
     }
 }
