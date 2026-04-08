@@ -1,22 +1,23 @@
 import { AgentViewError } from 'agentview/AgentViewError';
 import type { Environment, ManualRunCreate, ManualRunUpdate } from 'agentview/apiTypes';
 import type { BaseAgentConfig, BaseRunConfig } from 'agentview/baseConfigTypes';
-import { findItemConfig, requireAgentConfig, requireChannelConfig, requireRunConfig } from 'agentview/baseConfigUtils';
+import { findItemConfig, requireAgentConfig, requireChannelConfig, requireRunConfig, serializeRunConfig } from 'agentview/baseConfigUtils';
 import { getLastRun } from 'agentview/sessionUtils';
 import { and, eq, inArray, isNull, not, or } from 'drizzle-orm';
 import { log } from './logger';
 import { getAdapter } from './adapters/adapters';
 import { resolveAgentRef } from './agentRefs';
-import { authorize } from './authMiddleware';
+import { authorize, type Principal } from './authMiddleware';
 import { getConfigFromEnvironment, requireEnvironment } from './environments';
 import { requireUUID } from './isUUID';
 import { parseMetadata } from './parseMetadata';
 import { publishEvent } from './redisPubSub';
 import { publishRunStreamEvent } from './runStream';
 import { agentRefs, channelMessages, runs, sessionItems, sessions, webhookJobs } from './schemas/schema';
-import { fetchSessionBase, requireSession, requireSessionBase } from './sessions';
+import { activateSession, fetchSessionBase, requireSession, requireSessionBase } from './sessions';
 import type { Transaction } from './types';
-import { type OrgTransaction, type TenantTransaction } from './withOrg';
+import { withTenant, type OrgTransaction, type TenantTransaction } from './withOrg';
+import { standardToDefaultSession } from './standardToDefaultSession';
 
 export const DEFAULT_IDLE_TIME = 1000 * 60; // 60 seconds
 
@@ -919,11 +920,121 @@ export async function createAutoRunFromChannelMessages(
 
 
 
+
+
+
+export async function createAutoRun2(
+  principal: Principal,
+  sessionId: string,
+  body: { input: Record<string, any> },
+  signal: AbortSignal
+): Promise<{ runId: string, response: Response, success: boolean }> {
+
+  log.debug(`[${sessionId}] [createAutoRun2] start`);
+
+  // 1. Prepare run creation (authorization, validation, etc)
+  const { runId, standardSession, runConfig, agentUrl } = await withTenant(principal, async (tx) => {
+    const { run, runConfig, agentConfig } = await createAutoRun(tx, sessionId, body);
+
+    const agentUrl = agentConfig.url;
+    if (!agentUrl) {
+      throw new AgentViewError("Agent URL not provided", 400);
+    }
+
+    const standardSession = await requireSession(tx, sessionId);
+    return { runId: run.id, standardSession, runConfig, agentUrl }
+  });
+
+  const session = standardToDefaultSession(standardSession);
+  const messages = session.messages;
+
+  // 2. Make live connection to the streaming server, wait for response to know if we should discard or accept the run.
+  log.debug(`[${sessionId}] [createAutoRun2] establishing live connection...`);
+
+  try {
+    const response = await fetch('http://localhost:1999/connect', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        body: { messages, session },
+        agentUrl,
+        runConfig: serializeRunConfig(runConfig),
+        runId,
+        sessionId,
+        organizationId: principal.organizationId,
+      }),
+      signal,
+    });
+
+    // Response came but it's error.
+    if (!response.ok) {
+      log.debug(`[${sessionId}] [createAutoRun2] error response from AI Endpoint`);
+
+      // Discard run and return
+      await withTenant(principal, async (tx) => {
+        await terminateRun(tx, sessionId, runId, {
+          status: 'discarded',
+          failReason: {
+            message: "Error response from AI Endpoint"
+          },
+        });
+      });
+
+      return { response, runId, success: false };
+    }
+
+    // Stream established.
+    log.debug(`[${sessionId}] [createAutoRun2] stream established`);
+
+    await withTenant(principal, async (tx) => {
+      await tx.acquireLock({ type: "create_resource" }); // handles!
+      await tx.acquireLock({ type: "edit_session", sessionId: session.id });
+
+      // await acceptRun(tx, sessionId, runId);
+      await activateSession(tx, sessionId);
+    });
+
+    log.debug(`[${sessionId}] [createAutoRun2] run activated`);
+
+    return { response, runId, success: true }
+
+  } catch (err) {
+    log.debug({ err }, `[${sessionId}] [createAutoRun2] error`);
+    
+    const message = 'Failed to establish connection to the streaming server'
+
+    // best effort termination
+    await withTenant(principal, async (tx) => {
+      await terminateRun(tx, sessionId, runId, {
+        status: 'discarded',
+        failReason: {
+          message
+        },
+      });
+    });
+
+    throw new AgentViewError(message, 500);
+  }
+
+}
+
+
+
+
+
+
+
+
+
+
+
 export async function createAutoRun(
   tx: TenantTransaction,
   sessionId: string,
   body: { input: Record<string, any> }
-): Promise<typeof runs.$inferSelect> {
+) {
   await tx.acquireLock({ type: "edit_session", sessionId });
 
   const session = await requireSessionBase(tx, sessionId);
@@ -934,10 +1045,11 @@ export async function createAutoRun(
   const { lastRun, agentConfig, agentRefId } = await prepareRunCreation(tx, environment, sessionId);
   const { runConfig, parsedInput, idleTimeout } = await processInput(agentConfig, body.input);
 
-  return await createRunCore(tx, environment, sessionId, {
+  const run = await createRunCore(tx, environment, sessionId, {
     parsedInput,
     parsedNonInputItems: [],
-    status: 'pending',
+    // status: 'pending',
+    status: 'in_progress',
     failReason: null,
     expiresAt: new Date(Date.now() + idleTimeout).toISOString(),
     finishedAt: null,
@@ -948,6 +1060,8 @@ export async function createAutoRun(
     runConfig,
     lastRun,
   });
+
+  return { run, runConfig, agentConfig }
 }
 
 /**

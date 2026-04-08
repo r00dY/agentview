@@ -1,6 +1,6 @@
 import type { SessionItem, ChannelRef } from "./apiTypes.js";
 import type { BaseAgentViewConfig, BaseAgentConfig, BaseChannelConfig, BaseSessionItemConfig, BaseRunConfig } from "./baseConfigTypes.js";
-import { BaseConfigSchemaZodToJsonSchema } from "./baseConfigTypes.js";
+import { BaseConfigSchemaZodToJsonSchema, BaseRunSchemaZodToJsonSchema } from "./baseConfigTypes.js";
 import { z } from "zod";
 import { AgentViewError } from "./AgentViewError.js";
 
@@ -274,6 +274,14 @@ export function serializeConfig(config: any) {
     const { data, success, error } = BaseConfigSchemaZodToJsonSchema.safeParse(config);
     if (!success) {
         throw new AgentViewError("Invalid config", 422, { cause: error.issues });
+    }
+    return data;
+}
+
+export function serializeRunConfig(runConfig: any) {
+    const { data, success, error } = BaseRunSchemaZodToJsonSchema.safeParse(runConfig);
+    if (!success) {
+        throw new AgentViewError("Invalid run config", 422, { cause: error.issues });
     }
     return data;
 }

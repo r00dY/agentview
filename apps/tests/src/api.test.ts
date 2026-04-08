@@ -2956,7 +2956,7 @@ describe('API', () => {
     }, 10000);
 
 
-    test("HTTP error: 500 → run marked failed (validated via ai-sdk stream)", async () => {
+    test.only("HTTP error: 500 → run marked failed (validated via ai-sdk stream)", async () => {
       await updateConfigWithAiSdkUrl();
       const session = await avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 

@@ -16,7 +16,7 @@ await initDb();
  *   to enforce RLS as defense-in-depth
  */
 
-agentFetchWorker.start();
+// agentFetchWorker.start();
 expiredRunsWorker.start();
 webhookWorker.start();
 outgoingChannelMessageWorker.start();
@@ -26,5 +26,5 @@ for (const channel of channelApps) {
   }
 }
 
-import { printELU } from './performance';
-printELU('worker');
+// import { printELU } from './performance';
+// printELU('worker');

@@ -81,7 +81,8 @@ const ZodToJsonSchema = z.any()
     .transform((schema) => z.toJSONSchema(schema))
 
 
-function baseConfigSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
+
+function baseRunSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
     const BaseSessionItemConfigSchema = z.object({
         schema: jsonSchemaSchema,
         scores: z.array(z.object({
@@ -93,6 +94,36 @@ function baseConfigSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
     const BaseSessionItemConfigSchemaWithTools = BaseSessionItemConfigSchema.extend({
         callResult: BaseSessionItemConfigSchema.optional(),
     });
+
+    return z.object({
+        input: BaseSessionItemConfigSchema,
+        output: BaseSessionItemConfigSchema,
+        steps: z.array(BaseSessionItemConfigSchemaWithTools).optional(),
+        scores: z.array(z.object({
+            name: z.string(),
+            schema: jsonSchemaSchema,
+        })).optional(),
+        validateSteps: z.boolean().optional(),
+        metadata: z.record(z.string(), jsonSchemaSchema).optional(),
+        allowUnknownMetadata: z.boolean().optional(),
+        idleTimeout: z.number().optional(),
+    })
+}
+
+
+
+function baseConfigSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
+    // const BaseSessionItemConfigSchema = z.object({
+    //     schema: jsonSchemaSchema,
+    //     scores: z.array(z.object({
+    //         name: z.string(),
+    //         schema: jsonSchemaSchema,
+    //     })).optional(),
+    // });
+
+    // const BaseSessionItemConfigSchemaWithTools = BaseSessionItemConfigSchema.extend({
+    //     callResult: BaseSessionItemConfigSchema.optional(),
+    // });
 
     const apiChannelSchema = z.object({
         type: z.literal('api'),
@@ -116,19 +147,7 @@ function baseConfigSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
             version: z.string(),
             url: z.string().optional(),
             adapter: z.enum(['agentview', 'ai-sdk']).optional(),
-            runs: z.array(z.object({
-                input: BaseSessionItemConfigSchema,
-                output: BaseSessionItemConfigSchema,
-                steps: z.array(BaseSessionItemConfigSchemaWithTools).optional(),
-                scores: z.array(z.object({
-                    name: z.string(),
-                    schema: jsonSchemaSchema,
-                })).optional(),
-                validateSteps: z.boolean().optional(),
-                metadata: z.record(z.string(), jsonSchemaSchema).optional(),
-                allowUnknownMetadata: z.boolean().optional(),
-                idleTimeout: z.number().optional(),
-            })).optional(),
+            runs: z.array(baseRunSchema(jsonSchemaSchema)).optional(),
         })).optional(),
         channels: z.array(channelSchema).optional(),
         webhookUrl: z.string().optional(),
@@ -137,6 +156,10 @@ function baseConfigSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
         }).optional(),
     })
 }
+
+export const BaseRunSchema = baseRunSchema(JsonSchema)
+export const BaseRunSchemaToZod = baseRunSchema(JsonSchemaToZod)
+export const BaseRunSchemaZodToJsonSchema = baseRunSchema(ZodToJsonSchema)
 
 export const BaseConfigSchema = baseConfigSchema(JsonSchema)
 export const BaseConfigSchemaToZod = baseConfigSchema(JsonSchemaToZod)

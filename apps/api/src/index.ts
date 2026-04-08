@@ -37,7 +37,7 @@ import {
   type Session,
   type StandardSession
 } from 'agentview/apiTypes';
-import { BaseConfigSchema } from 'agentview/baseConfigTypes';
+import { BaseConfigSchema, BaseRunSchemaToZod } from 'agentview/baseConfigTypes';
 import { getChannelAgent, requireAgentConfig, requireChannelConfig, requireItemConfig, requireRunConfig, requireScoreConfig } from 'agentview/baseConfigUtils';
 import { getLastRun } from 'agentview/sessionUtils';
 import { and, countDistinct, DrizzleQueryError, eq, inArray, isNull, or, sql, type InferSelectModel } from 'drizzle-orm';
@@ -47,7 +47,7 @@ import { adapters } from './adapters/adapters';
 import { createAISDKStreamConsumer, type AISDKResponseMeta, type AISDKStreamConsumer } from './adapters/ai-sdk-stream';
 import { REDIS_URL } from './redis';
 import { auth } from './auth';
-import { authn, authnAllowAnon, authnAllowPublic, authorize, requireMemberPrincipal, type Principal } from './authMiddleware';
+import { authn, authnAllowAnon, authnAllowPublic, authorize, requireMemberPrincipal, type Principal, type ServicePrincipal } from './authMiddleware';
 import { db__dangerous } from './db';
 import { requireConfig, requireEnvironment } from './environments';
 import { equalJSON } from './equalJSON';
@@ -57,12 +57,12 @@ import { isInboxItemUnread } from './inboxItems';
 import { initDb } from './initDb';
 import { requireValidInvitation } from './invitations';
 import { requireUUID } from './isUUID';
-import { applyRunPatch, createAutoRun, createManualRun, DEFAULT_IDLE_TIME, getRunInput, getRunInputContent, isRunFinished, requireRunBase, terminateRun } from './runs';
+import { acceptRun, applyRunPatch, createAutoRun, createAutoRun2, createManualRun, DEFAULT_IDLE_TIME, fastApplyRunPatch, getRunInput, getRunInputContent, isRunFinished, requireRunBase, RunTerminationError, terminateRun } from './runs';
 import { publishEvent } from './redisPubSub';
 import { createRunStreamConsumer } from './runStream';
 import { organizations, users } from './schemas/auth-schema';
 import { commentMessages, endUsers, environments, inboxItems, runs, scores, sessions } from './schemas/schema';
-import { createSession, getSessionListFilter, getSessions, updateSession } from './sessions';
+import { activateSession, createSession, getSessionListFilter, getSessions, updateSession } from './sessions';
 import { createUser, requireUser, updateUser } from './users';
 import { withOrg, withTenant } from './withOrg';
 
@@ -72,7 +72,9 @@ import { createComment, deleteComment, requireCommentMessage, requireCommentOwne
 import { requireSession, requireSessionBase } from './sessions';
 
 import { printELU } from './performance';
-printELU('http');
+import { standardToDefaultSession } from './standardToDefaultSession';
+
+// printELU('http');
 
 await initDb();
 
@@ -626,14 +628,6 @@ app.openapi(sessionsPOSTRoute, async (c) => {
   })
 })
 
-
-function standardToDefaultSession(session: StandardSession): Session {
-  const adapter = adapters["ai-sdk"];
-  const aisdkFields = adapter.enrichSession(session);
-  const { runs, ...sessionBase } = session;
-  return { ...sessionBase, ...aisdkFields };
-}
-
 const sessionsAISDKPOSTRoute = createRoute({
   method: 'post',
   path: '/api/sessions',
@@ -1084,10 +1078,10 @@ function subscribeToStream(
  * Raw implementation: pooled Redis XREAD → outgoing.write(). No WebStreams, no consumer helpers.
  * The [RESPONSE] meta-event determines whether we stream SSE or return an error body.
  */
-function createRunAISDKHandler(c: Context, run: { id: string, sessionId: string }, stream: boolean, principal: Principal) {
+function createStreamResponse(c: Context, _response: Response, runId: string) {
   const outgoing = (c.env as any).outgoing as ServerResponse;
   const signal: AbortSignal = c.req.raw.signal;
-  const streamKey = `run-stream:ai-sdk:${run.id}`;
+  const streamKey = `run-stream:ai-sdk:${runId}`;
 
   let unsubscribe: (() => void) | null = null;
   let closed = false;
@@ -1101,41 +1095,48 @@ function createRunAISDKHandler(c: Context, run: { id: string, sessionId: string 
 
   signal.addEventListener('abort', cleanup, { once: true });
 
+  // IMPORTANT TODO: translate headers from Response!!!
+  outgoing.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+  });
+
   unsubscribe = subscribeToStream(
     streamKey,
     (data) => {
       if (closed) return false;
 
-      if (data.startsWith('[RESPONSE]')) {
-        const meta = JSON.parse(data.slice('[RESPONSE]'.length)) as AISDKResponseMeta;
+      // if (data.startsWith('[RESPONSE]')) {
+      //   const meta = JSON.parse(data.slice('[RESPONSE]'.length)) as AISDKResponseMeta;
 
-        if (meta.error !== undefined) {
-          outgoing.writeHead(meta.status, meta.headers);
-          outgoing.end(meta.error);
-          cleanup();
-          return false;
-        }
+      //   if (meta.error !== undefined) {
+      //     outgoing.writeHead(meta.status, meta.headers);
+      //     outgoing.end(meta.error);
+      //     cleanup();
+      //     return false;
+      //   }
 
-        if (!stream) {
-          cleanup();
-          withOrg(principal.organizationId, (tx) => requireSession(tx, run.sessionId)).then((session) => {
-            outgoing.writeHead(201, { 'Content-Type': 'application/json' });
-            outgoing.end(JSON.stringify(standardToDefaultSession(session)));
-          }).catch(() => {
-            if (!outgoing.headersSent) outgoing.writeHead(500);
-            outgoing.end();
-          });
-          return false;
-        }
+      //   if (!stream) {
+      //     cleanup();
+      //     withOrg(principal.organizationId, (tx) => requireSession(tx, run.sessionId)).then((session) => {
+      //       outgoing.writeHead(201, { 'Content-Type': 'application/json' });
+      //       outgoing.end(JSON.stringify(standardToDefaultSession(session)));
+      //     }).catch(() => {
+      //       if (!outgoing.headersSent) outgoing.writeHead(500);
+      //       outgoing.end();
+      //     });
+      //     return false;
+      //   }
 
-        outgoing.writeHead(200, {
-          ...meta.headers,
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        });
-        return true;
-      }
+      //   outgoing.writeHead(200, {
+      //     ...meta.headers,
+      //     'Content-Type': 'text/event-stream',
+      //     'Cache-Control': 'no-cache',
+      //     'Connection': 'keep-alive',
+      //   });
+      //   return true;
+      // }
 
       if (data === '[DONE]') {
         outgoing.end();
@@ -1157,16 +1158,144 @@ function createRunAISDKHandler(c: Context, run: { id: string, sessionId: string 
   return new Response(null, { headers: { 'x-hono-already-sent': '1' } });
 }
 
+// app.openapi(runsAISDKPOSTRoute, async (c) => {
+//   const principal = await authnAllowPublic(c.req.raw.headers)
+//   const body = await c.req.valid('json')
+//   const params = await c.req.param();
+
+//   const run = await withTenant(principal, async (tx) => {
+//     return await createAutoRun(tx, params.session_id, body);
+//   })
+
+//   return createRunAISDKHandler(c, run, body.stream ?? false, principal);
+// })
+
+app.post('/internal/fast-patch', async (c) => {
+  const body = await c.req.json()
+
+  const servicePrincipal: ServicePrincipal = {
+    type: 'service',
+    organizationId: body.organizationId
+  };
+
+  try {
+    await withTenant(servicePrincipal, async (tx) => {
+      await fastApplyRunPatch(
+        tx,
+        body.runId,
+        body.sessionId,
+        BaseRunSchemaToZod.parse(body.runConfig),
+        body.op
+      );
+    })
+  } catch (error) {
+    if (error instanceof RunTerminationError) {
+      return c.json({ terminated: true }, 409);
+    }
+    throw error;
+  }
+
+  return c.json({}, 201)
+})
+
+
+
 app.openapi(runsAISDKPOSTRoute, async (c) => {
   const principal = await authnAllowPublic(c.req.raw.headers)
   const body = await c.req.valid('json')
   const params = await c.req.param();
 
-  const run = await withTenant(principal, async (tx) => {
-    return await createAutoRun(tx, params.session_id, body);
-  })
+  const { response, runId, success } = await createAutoRun2(principal, params.session_id, body, c.req.raw.signal);
 
-  return createRunAISDKHandler(c, run, body.stream ?? false, principal);
+  if (!success) {
+    return response;
+  }
+
+  // no stream -> just return session
+  if (!body.stream) {
+    return await withTenant(principal, async (tx) => {
+      const standardSession = await requireSession(tx, params.session_id);
+      return standardToDefaultSession(standardSession)
+    })
+  }
+
+  return createStreamResponse(c, response, runId)
+
+  // // 1. Create pending run, prepare session 
+  // const { run, standardSession } = await withTenant(principal, async (tx) => {
+  //   const run = await createAutoRun(tx, params.session_id, body);
+  //   const standardSession = await requireSession(tx, params.session_id);
+  //   return { run, standardSession };
+  // })
+
+  // const session = standardToDefaultSession(standardSession);
+  // const messages = session.messages;
+
+  // // 2. Make live connection to the streaming server, wait for response to know if we should discard or accept the run.
+  // let errorMessage: string | null = null;
+
+  // try {
+  //   const response = await fetch('http://localhost:1999/connect', {
+  //     method: 'POST',
+  //     headers: {
+  //       'Content-Type': 'application/json',
+  //     },
+  //     body: JSON.stringify({ messages, session }),
+  //     signal: c.req.raw.signal,
+  //   });
+
+  //   if (!response.ok) {
+  //     errorMessage = "Error response from AI Endpoint";
+  //     return response;
+  //   }
+
+  //   await withTenant(principal, async (tx) => {
+  //     await tx.acquireLock({ type: "create_resource" }); // handles!
+  //     await tx.acquireLock({ type: "edit_session", sessionId: session.id });
+
+  //     await acceptRun(tx, session.id, run.id);
+  //     await activateSession(tx, session.id);
+  //   });
+
+  // } catch (err) {
+  //   errorMessage = 'Failed to establish connection to the streaming server'
+  //   throw new AgentViewError(errorMessage, 500);
+  // } finally {
+  //   // best effort termination
+  //   await withTenant(principal, async (tx) => {
+  //     await terminateRun(tx, session.id, run.id, {
+  //       status: 'discarded',
+  //       failReason: {
+  //         message: errorMessage
+  //       },
+  //     });
+  //   });
+  // }
+
+  // // For channel-based runs: we'll create run from incoming channel messages
+  // const incomingMessages = currentRun.channelMessages.filter(cm => cm.direction === 'incoming');
+  // const isChannelRun = incomingMessages.length > 0;
+
+  // /**
+  //  * Fetch the agent API response
+  //  */
+  // let response: Response | undefined = undefined;
+
+  // log.info('[ai-sdk] fetch');
+
+  // let fetchError: string | undefined = undefined;
+
+  // try {
+  //     response = await fetch(url, {
+  //         method: 'POST',
+  //         headers: {
+  //             'Content-Type': 'application/json',
+  //         },
+  //         body: JSON.stringify({ messages, session: body.session }),
+  //         signal,
+  //     });
+
+  // return createRunAISDKHandler(c, run, body.stream ?? false, principal);
 })
 
 
