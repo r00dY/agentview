@@ -93,6 +93,16 @@ app.post('/connect', async (c) => {
     });
   }
 
+  const forwarded = Object.fromEntries(response.headers.entries());
+  delete forwarded['transfer-encoding'];
+  delete forwarded['content-length'];
+
+  const headers: Record<string, string> = {
+    ...forwarded,
+    'X-Upstream-Response': 'true',
+    'Access-Control-Expose-Headers': 'x-upstream-response',
+  };
+
   // Check for error responses
   if (!response.body || !response.ok) {
     let errorText: string;
@@ -112,12 +122,6 @@ app.post('/connect', async (c) => {
     const forwarded = Object.fromEntries(response.headers.entries());
     delete forwarded['transfer-encoding'];
     delete forwarded['content-length'];
-
-    const headers: Record<string, string> = {
-      ...forwarded,
-      'X-Upstream-Response': 'true',
-      'Access-Control-Expose-Headers': 'x-upstream-response',
-    };
 
     log.info({ status: response.status, headers },`[streaming] error response ${response.status}: ${errorText}`);
 
@@ -151,7 +155,12 @@ app.post('/connect', async (c) => {
 
   log.info({ runId }, '[streaming] connection established');
 
-  return c.body(null, 200);
+  return new Response(null, {
+    status: response.status,
+    headers,
+  });
+
+  // return c.body(null, 200);
 });
 
 

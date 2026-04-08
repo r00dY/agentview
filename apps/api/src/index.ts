@@ -1208,7 +1208,11 @@ app.openapi(runsAISDKPOSTRoute, async (c) => {
   const { response, runId, success } = await createAutoRun2(principal, params.session_id, body, c.req.raw.signal);
 
   if (!success) {
-    return response;
+    // fetch() responses have immutable headers; Hono needs mutable headers to finalize the response
+    return new Response(response.body, {
+      status: response.status,
+      headers: Object.fromEntries(response.headers.entries()),
+    });
   }
 
   // no stream -> just return session
