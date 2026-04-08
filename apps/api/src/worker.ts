@@ -25,3 +25,6 @@ for (const channel of channelApps) {
     worker.start();
   }
 }
+
+import { printELU } from './performance';
+printELU('worker');

@@ -5,4 +5,6 @@ if (!process.env.REDIS_URL) {
 }
 
 export const REDIS_URL = process.env.REDIS_URL;
-export const redisPublisher = new Redis(REDIS_URL);
+export const redisPublisher = new Redis(REDIS_URL, {
+  enableAutoPipelining: true
+});

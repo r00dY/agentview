@@ -208,8 +208,6 @@ async function processAgentFetch(run: Run) {
           throw new Error("fast.patch called as a first event");
         }
 
-        const start = Date.now();
-
         await withTenant(principal, async (tx) => {
           await fastApplyRunPatch(
             tx,
@@ -219,9 +217,6 @@ async function processAgentFetch(run: Run) {
             event.data
           );
         })
-
-        const duration = Date.now() - start;
-        log.debug({ "patchtime": duration });
       }
 
 

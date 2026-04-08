@@ -61,14 +61,14 @@ describe('Channels', () => {
     //   environmentId: env.id
     // })
 
-  }, 30000)
+  }, 15000)
 
   afterAll(async () => {
     if (mockServer) {
       await mockServer.close()
       mockServer = null
     }
-  }, 30000)
+  }, 15000)
 
   test('mock channel created successfully', async () => {
     expect(channel.id).toBeDefined()
@@ -386,7 +386,7 @@ describe('Channels', () => {
 
         const entries = await waitForOutbox('single@test.com', 1)
         expect(entries[0].text).toBe('hello')
-      }, 20000)
+      }, 15000)
 
       test('two sequential messages → two outgoing replies with session history', async () => {
         setParrotHandler()
@@ -399,7 +399,7 @@ describe('Channels', () => {
         expect(entries[0].text).toBe('first')
         // Second reply sees full session history: first user msg + second user msg
         expect(entries[1].text).toBe('first | second')
-      }, 30000)
+      }, 15000)
 
       test('rapid messages while agent is processing → batched into single outgoing reply', async () => {
         // Agent takes 2s to respond, giving us time to send more messages
@@ -416,7 +416,7 @@ describe('Channels', () => {
         // First run gets cancelled, second run batches all 3 messages → single outgoing
         const entries = await waitForOutbox('rapid@test.com', 1)
         expect(entries[0].text).toBe('A B C')
-      }, 20000)
+      }, 15000)
 
       test('agent failure → no outgoing, next message retries with batch', async () => {
         // First message: agent fails
@@ -435,7 +435,7 @@ describe('Channels', () => {
 
         entries = await waitForOutbox('fail-retry@test.com', 1)
         expect(entries[0].text).toBe('X Y')
-      }, 20000)
+      }, 15000)
 
       test('rapid out-of-order messages → batched in date order', async () => {
         setParrotHandler({ delayMs: 4000 })
@@ -449,7 +449,7 @@ describe('Channels', () => {
         // Messages should be sorted by date, not insertion order
         const entries = await waitForOutbox('out-of-order@test.com', 1)
         expect(entries[0].text).toBe('A B C')
-      }, 20000)
+      }, 15000)
 
       test('out-of-order messages where first is already processed → preserves order', async () => {
         setParrotHandler()
@@ -464,7 +464,7 @@ describe('Channels', () => {
         // First outgoing is from B (processed first), second from A (arrived later)
         expect(entries[0].text).toBe('B')
         expect(entries[1].text).toBe('B | A')
-      }, 20000)
+      }, 15000)
 
     })
   })
