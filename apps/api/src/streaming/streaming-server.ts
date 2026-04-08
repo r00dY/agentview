@@ -106,8 +106,15 @@ app.post('/connect', async (c) => {
       errorText = errorText || 'No response body';
     }
 
+    // Strip hop-by-hop headers — they describe the upstream connection framing,
+    // not our new response. Forwarding them causes Content-Length + Transfer-Encoding
+    // to coexist, which violates HTTP/1.1 and makes strict clients (undici) reject the response.
+    const forwarded = Object.fromEntries(response.headers.entries());
+    delete forwarded['transfer-encoding'];
+    delete forwarded['content-length'];
+
     const headers: Record<string, string> = {
-      ...Object.fromEntries(response.headers.entries()),
+      ...forwarded,
       'X-Upstream-Response': 'true',
       'Access-Control-Expose-Headers': 'x-upstream-response',
     };
