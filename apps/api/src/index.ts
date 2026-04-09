@@ -931,255 +931,6 @@ const runsAISDKPOSTRoute = createRoute({
   },
 })
 
-/**
- * OLD HANDLER
- */
-
-async function createRunAISDKHandlerOLD(c: Context, run: { id: string, sessionId: string }, stream: boolean, principal: Principal) {
-  const consumer = createAISDKStreamConsumer(run.id, c.req.raw.signal);
-
-  // Wait for agent response. If anything throws or we don't need to stream,
-  // close the consumer here. The streaming path transfers ownership to
-  // streamAISDKEvents which handles close() in its own finally.
-  let response: AISDKResponseMeta;
-  try {
-    response = await consumer.waitForResponse();
-  } catch (e) {
-    consumer.close();
-    throw e;
-  }
-
-  if (response.error !== undefined) {
-    consumer.close();
-
-    c.status(response.status as StatusCode);
-    for (const [key, value] of Object.entries(response.headers)) {
-      c.header(key, value);
-    }
-
-    return c.body(response.error);
-  }
-
-  if (!stream) {
-    consumer.close();
-    return withOrg(principal.organizationId, async (tx) => {
-      const session = await requireSession(tx, run.sessionId);
-      return c.json(standardToDefaultSession(session), 201);
-    });
-  }
-
-  // Ownership of consumer transfers to streamAISDKEvents (closes in its finally)
-  return streamAISDKEvents(c, consumer);
-}
-
-/* --------- Redis Stream Connection Pool --------- */
-
-const MAX_STREAMS_PER_CONN = 200;
-const POOL_BLOCK_MS = 1000;
-
-/** Callback receives each stream entry's data. Return false to unsubscribe. */
-type StreamDataCallback = (data: string) => boolean;
-
-interface StreamSub {
-  streamKey: string;
-  lastId: string;
-  callback: StreamDataCallback;
-  onError: () => void;
-}
-
-class PooledRedisConnection {
-  private conn: Redis;
-  private subs = new Map<string, StreamSub>();
-  private polling = false;
-  private closed = false;
-
-  constructor() {
-    this.conn = new Redis(REDIS_URL);
-  }
-
-  get size() { return this.subs.size; }
-  get isClosed() { return this.closed; }
-
-  add(sub: StreamSub) {
-    this.subs.set(sub.streamKey, sub);
-    if (!this.polling) this.poll();
-  }
-
-  remove(streamKey: string) {
-    this.subs.delete(streamKey);
-  }
-
-  private poll() {
-    if (this.closed || this.subs.size === 0) {
-      this.polling = false;
-      if (this.subs.size === 0) this.destroy();
-      return;
-    }
-    this.polling = true;
-
-    const keys: string[] = [];
-    const ids: string[] = [];
-    for (const sub of this.subs.values()) {
-      keys.push(sub.streamKey);
-      ids.push(sub.lastId);
-    }
-
-    this.conn.xread('BLOCK', POOL_BLOCK_MS, 'STREAMS', ...keys, ...ids)
-      .then((results) => {
-        if (this.closed) return;
-        if (results) {
-          for (const [streamKey, entries] of results) {
-            const sub = this.subs.get(streamKey);
-            if (!sub) continue;
-            for (const [id, fields] of entries) {
-              sub.lastId = id;
-              const data = fields[1];
-              if (!sub.callback(data)) {
-                this.subs.delete(streamKey);
-                break;
-              }
-            }
-          }
-        }
-        this.poll();
-      })
-      .catch(() => {
-        for (const sub of this.subs.values()) sub.onError();
-        this.destroy();
-      });
-  }
-
-  private destroy() {
-    if (this.closed) return;
-    this.closed = true;
-    this.subs.clear();
-    this.conn.disconnect();
-    const idx = streamPool.indexOf(this);
-    if (idx !== -1) streamPool.splice(idx, 1);
-  }
-}
-
-const streamPool: PooledRedisConnection[] = [];
-
-function subscribeToStream(
-  streamKey: string,
-  callback: StreamDataCallback,
-  onError: () => void,
-): () => void {
-  let poolConn = streamPool.find(c => c.size < MAX_STREAMS_PER_CONN);
-  if (!poolConn) {
-    poolConn = new PooledRedisConnection();
-    streamPool.push(poolConn);
-  }
-
-  poolConn.add({ streamKey, lastId: '0-0', callback, onError });
-
-  const conn = poolConn;
-  return () => {
-    conn.remove(streamKey);
-    if (conn.size === 0 && !conn.isClosed) {
-      // destroy is handled by the next poll() cycle seeing 0 subs
-    }
-  };
-}
-
-/* --------- AI SDK Handler --------- */
-
-/**
- * Raw implementation: pooled Redis XREAD → outgoing.write(). No WebStreams, no consumer helpers.
- * The [RESPONSE] meta-event determines whether we stream SSE or return an error body.
- */
-function createStreamResponse(c: Context, runId: string, _options?: { headers?: Headers, status?: number }) {
-  const outgoing = (c.env as any).outgoing as ServerResponse;
-  const signal: AbortSignal = c.req.raw.signal;
-  const streamKey = `run-stream:ai-sdk:${runId}`;
-
-  let unsubscribe: (() => void) | null = null;
-  let closed = false;
-
-  function cleanup() {
-    if (closed) return;
-    closed = true;
-    signal.removeEventListener('abort', cleanup);
-    unsubscribe?.();
-  }
-
-  signal.addEventListener('abort', cleanup, { once: true });
-
-  // IMPORTANT TODO: translate headers from Response!!!
-  outgoing.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
-  });
-
-  unsubscribe = subscribeToStream(
-    streamKey,
-    (data) => {
-      if (closed) return false;
-
-      // if (data.startsWith('[RESPONSE]')) {
-      //   const meta = JSON.parse(data.slice('[RESPONSE]'.length)) as AISDKResponseMeta;
-
-      //   if (meta.error !== undefined) {
-      //     outgoing.writeHead(meta.status, meta.headers);
-      //     outgoing.end(meta.error);
-      //     cleanup();
-      //     return false;
-      //   }
-
-      //   if (!stream) {
-      //     cleanup();
-      //     withOrg(principal.organizationId, (tx) => requireSession(tx, run.sessionId)).then((session) => {
-      //       outgoing.writeHead(201, { 'Content-Type': 'application/json' });
-      //       outgoing.end(JSON.stringify(standardToDefaultSession(session)));
-      //     }).catch(() => {
-      //       if (!outgoing.headersSent) outgoing.writeHead(500);
-      //       outgoing.end();
-      //     });
-      //     return false;
-      //   }
-
-      //   outgoing.writeHead(200, {
-      //     ...meta.headers,
-      //     'Content-Type': 'text/event-stream',
-      //     'Cache-Control': 'no-cache',
-      //     'Connection': 'keep-alive',
-      //   });
-      //   return true;
-      // }
-
-      if (data === '[DONE]') {
-        outgoing.end();
-        cleanup();
-        return false;
-      }
-
-      outgoing.write(`data: ${data}\n\n`);
-      return true;
-    },
-    () => {
-      if (!closed) {
-        outgoing.end();
-        cleanup();
-      }
-    },
-  );
-
-  return new Response(null, { headers: { 'x-hono-already-sent': '1' } });
-}
-
-// app.openapi(runsAISDKPOSTRoute, async (c) => {
-//   const principal = await authnAllowPublic(c.req.raw.headers)
-//   const body = await c.req.valid('json')
-//   const params = await c.req.param();
-
-//   const run = await withTenant(principal, async (tx) => {
-//     return await createAutoRun(tx, params.session_id, body);
-//   })
-
-//   return createRunAISDKHandler(c, run, body.stream ?? false, principal);
-// })
 
 app.post('/internal/fast-patch', async (c) => {
   const body = await c.req.json()
@@ -1209,8 +960,6 @@ app.post('/internal/fast-patch', async (c) => {
   return c.json({}, 201)
 })
 
-
-
 app.openapi(runsAISDKPOSTRoute, async (c) => {
   const principal = await authnAllowPublic(c.req.raw.headers)
   const body = await c.req.valid('json')
@@ -1219,7 +968,7 @@ app.openapi(runsAISDKPOSTRoute, async (c) => {
   const { response, runId, success } = await createAutoRun2(principal, params.session_id, body.input, c.req.raw.signal);
 
   if (!success) {
-    return response;
+    return response as any; // as any because we have no idea what the response is
   }
 
   // no stream -> just return session
@@ -1231,82 +980,6 @@ app.openapi(runsAISDKPOSTRoute, async (c) => {
   }
 
   return createStreamResponse(c, runId, response)
-
-  // // 1. Create pending run, prepare session 
-  // const { run, standardSession } = await withTenant(principal, async (tx) => {
-  //   const run = await createAutoRun(tx, params.session_id, body);
-  //   const standardSession = await requireSession(tx, params.session_id);
-  //   return { run, standardSession };
-  // })
-
-  // const session = standardToDefaultSession(standardSession);
-  // const messages = session.messages;
-
-  // // 2. Make live connection to the streaming server, wait for response to know if we should discard or accept the run.
-  // let errorMessage: string | null = null;
-
-  // try {
-  //   const response = await fetch('http://localhost:1999/connect', {
-  //     method: 'POST',
-  //     headers: {
-  //       'Content-Type': 'application/json',
-  //     },
-  //     body: JSON.stringify({ messages, session }),
-  //     signal: c.req.raw.signal,
-  //   });
-
-  //   if (!response.ok) {
-  //     errorMessage = "Error response from AI Endpoint";
-  //     return response;
-  //   }
-
-  //   await withTenant(principal, async (tx) => {
-  //     await tx.acquireLock({ type: "create_resource" }); // handles!
-  //     await tx.acquireLock({ type: "edit_session", sessionId: session.id });
-
-  //     await acceptRun(tx, session.id, run.id);
-  //     await activateSession(tx, session.id);
-  //   });
-
-  // } catch (err) {
-  //   errorMessage = 'Failed to establish connection to the streaming server'
-  //   throw new AgentViewError(errorMessage, 500);
-  // } finally {
-  //   // best effort termination
-  //   await withTenant(principal, async (tx) => {
-  //     await terminateRun(tx, session.id, run.id, {
-  //       status: 'discarded',
-  //       failReason: {
-  //         message: errorMessage
-  //       },
-  //     });
-  //   });
-  // }
-
-  // // For channel-based runs: we'll create run from incoming channel messages
-  // const incomingMessages = currentRun.channelMessages.filter(cm => cm.direction === 'incoming');
-  // const isChannelRun = incomingMessages.length > 0;
-
-  // /**
-  //  * Fetch the agent API response
-  //  */
-  // let response: Response | undefined = undefined;
-
-  // log.info('[ai-sdk] fetch');
-
-  // let fetchError: string | undefined = undefined;
-
-  // try {
-  //     response = await fetch(url, {
-  //         method: 'POST',
-  //         headers: {
-  //             'Content-Type': 'application/json',
-  //         },
-  //         body: JSON.stringify({ messages, session: body.session }),
-  //         signal,
-  //     });
-
-  // return createRunAISDKHandler(c, run, body.stream ?? false, principal);
 })
 
 
@@ -1350,51 +1023,12 @@ async function sessionStandardCancelHandler(c: Parameters<RouteHandler<typeof se
     return { lastRun }
   });
 
-  // Phase 2. 
-  // - Signal cancellation and schedule hard termination after 5s
-  // - the setTimeout must be non-blocking. We don't want to wait 5s as it might potentially end much faster than that, when [DONE] is sent sooner.
-  // - this 5s is just a safety net. termineRun inside it should be no-op in all cases.
+  // this function contract is that it takes max 5s to complete, should return almost immediately after proper cleanup and termination
+  await sendRunTerminationSignal(lastRun.id, { status: 'cancelled' }, { graceful: true });
 
-  await sendRunTerminationSignal(lastRun.id, { status: 'cancelled' }, { graceful: true }); // it's blocking, max 5s
-
-  // safe termination in case sendRunTerminationSignal failed
-  withOrg(principal.organizationId, async (tx) => {
-    await terminateRun(tx, session_id, lastRun.id, { status: 'cancelled' });
-  });
-
-
-  // const forceTerminationPromise = new Promise((resolve) => {
-  //   setTimeout(() => {
-  //     withOrg(principal.organizationId, async (tx) => {
-  //       await terminateRun(tx, session_id, lastRun.id, { status: 'cancelled' });
-  //     });
-  //     resolve(null);
-  //   }, 5000);
-  // });
-
-  // await Promise.race([properTerminationPromise, forceTerminationPromise]);
-
-
-  // await publishEvent({ type: 'run.terminated', runId: lastRun.id, reason: { status: 'cancelled' } });
-
-  // setTimeout(() => {
-  //   withOrg(principal.organizationId, async (tx) => {
-  //     await terminateRun(tx, session_id, lastRun.id, { status: 'cancelled' });
-  //   });
-  // }, 5000);
-
-  // // Phase 3. Wait for stream to end (this is expected behaviour).
-  // let streamConsumer: ReturnType<typeof createRunStreamConsumer> | undefined = undefined;
-
-  // try {
-  //   streamConsumer = createRunStreamConsumer(lastRun.id, c.req.raw.signal);
-  //   for await (const _ of streamConsumer!.entries()) { }
-  // } finally {
-  //   streamConsumer?.close();
-  // }
-
-  // Phase 4. Return session to the client (must be updated by now)
   return await withOrg(principal.organizationId, async (tx) => {
+    await terminateRun(tx, session_id, lastRun.id, { status: 'cancelled' }); // idempotent cleanup (if above didn't work)
+
     return await requireSession(tx, session_id);
   });
 };
@@ -1860,24 +1494,6 @@ app.openapi(environmentsListRoute, async (c) => {
     });
 
     return c.json(environments, 200);
-
-    // const rows = await tx
-    //   .select({
-    //     id: environments.id,
-    //     userId: environments.userId,
-    //     createdAt: environments.createdAt,
-    //     email: users.email,
-    //   })
-    //   .from(environments)
-    //   .leftJoin(users, eq(environments.userId, users.id))
-    //   .orderBy(environments.createdAt);
-
-    // return c.json(rows.map(row => ({
-    //   id: row.id,
-    //   userId: row.userId,
-    //   name: row.email ? `dev:${row.email}` : "prod",
-    //   createdAt: row.createdAt,
-    // })), 200)
   })
 })
 
@@ -1983,6 +1599,7 @@ for (const channel of channelApps) {
 
 // Generic channel routes stay separate, mounted after channel-specific apps
 import { channelsApp } from './channels/routes';
+import { createStreamResponse } from './createStreamResponse';
 
 app.route('', channelsApp);
 
