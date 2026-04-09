@@ -1,6 +1,6 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
 import type { ChannelRef } from 'agentview/apiTypes';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import type { ServicePrincipal } from 'src/authMiddleware';
 import { log } from '../logger';
 import { db__dangerous } from '../db';
@@ -238,7 +238,7 @@ export function channelProvider(type: string) {
             eq(runs.status, 'in_progress')
           )
         })
-        
+
         if (activeRun) {
           log.info({ sourceId: params.sourceId, runId: activeRun.id }, 'active run found, terminating');
           await terminateRun(tx, session.id, activeRun.id, { status: 'discarded', failReason: { message: 'New message ingested, discarding active run' } });
@@ -320,10 +320,6 @@ export function channelProvider(type: string) {
     ingestMessage,
   };
 }
-
-
-
-
 
 
 async function getOrCreateThread(tx: Transaction, channel: Channel, params: IngestMessageParams) {

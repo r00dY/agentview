@@ -4,27 +4,12 @@ import { log, setContext } from '../logger';
 import { parseAISDKStream, computeOutputItemCount, type AISDKChunk } from '../adapters/ai-sdk-utils';
 import { publishAISDKStreamEvent, expireAISDKStream } from '../adapters/ai-sdk-stream';
 import { RunTerminationError, type RunTerminationReason } from '../runs';
-
-// // Lightweight termination error (avoids importing ../runs which pulls in DB/Redis)
-// class StreamTerminationError extends Error {
-//   constructor(public reason: { status: string; failReason?: any }) {
-//     super(reason.status);
-//     this.name = 'StreamTerminationError';
-//   }
-// }
+import { type FastPatchOp } from '../runs';
 
 // signal to shut down streaming gracefully (to distinguish from normal RunTerminationError)
 class GracefulRunTerminationError extends RunTerminationError {}
 
-type FastPatchOp =
-  | { type: 'item'; id?: string; content: any }
-  | { type: 'state'; content: any }
-  | { type: 'metadata'; metadata: Record<string, any> }
-  | { type: 'cancel' }
-  | { type: 'fail'; failReason: { message: string; [key: string]: any } }
-  | { type: 'complete'; outputItemCount: number; channelReply?: { text: string } };
-
-const MAIN_API_URL = `http://localhost:${process.env.HTTP_SERVER_PORT ?? '80'}`;
+const HTTP_SERVER_BASE_URL = `http://localhost:${process.env.HTTP_SERVER_PORT ?? '80'}`;
 
 interface LiveConnection {
   reader: ReadableStreamDefaultReader<Uint8Array>;
@@ -33,8 +18,6 @@ interface LiveConnection {
   sessionId: string;
   runId: string
   organizationId: string;
-  // environmentHandle: string;
-  // isChannelRun: boolean;
 
   state: {
     textBuffers: Map<string, string>,
@@ -58,28 +41,11 @@ let fetchCounter = 0;
 app.post('/connect', async (c) => {
   const fetchId = `f${++fetchCounter}`
 
-  // const originalUrl = c.req.header('X-Original-Url');
-  // const runId = c.req.header('X-Run-Id');
-  // const sessionId = c.req.header('X-Session-Id');
-  // const organizationId = c.req.header('X-Organization-Id');
-  // const environmentHandle = c.req.header('X-Environment-Handle');
-
-  // if (!originalUrl || !runId || !sessionId || !organizationId || !environmentHandle) {
-  //   return c.json({ message: 'Missing required headers' }, 400);
-  // }
-
   const { body, runConfig, agentUrl, sessionId, runId, organizationId } = await c.req.json();
 
   setContext({ fetchId, runId, sessionId, organizationId });
 
   log.info(`LIVE CONNECTION run:${runId} session:${sessionId}`);
-
-  // const isChannelRun = (() => {
-  //   const lastRun = session?.runs?.[session.runs.length - 1];
-  //   if (!lastRun) return false;
-  //   const incomingMessages = lastRun.channelMessages?.filter((cm: any) => cm.direction === 'incoming') ?? [];
-  //   return incomingMessages.length > 0;
-  // })();
 
   // Fetch agent endpoint
   const abortController = new AbortController();
@@ -163,10 +129,6 @@ app.post('/connect', async (c) => {
       emittedItemTypes: [],
       outputTexts: [],
     }
-
-    // organizationId,
-    // environmentHandle,
-    // isChannelRun,
   };
 
   liveConnections.set(runId, connection);
@@ -182,8 +144,6 @@ app.post('/connect', async (c) => {
     status: response.status,
     headers,
   });
-
-  // return c.body(null, 200);
 });
 
 
@@ -236,7 +196,7 @@ async function callFastPatch(
   conn: LiveConnection,
   op: FastPatchOp,
 ) {
-  const resp = await fetch(`${MAIN_API_URL}/internal/fast-patch`, {
+  const resp = await fetch(`${HTTP_SERVER_BASE_URL}/internal/fast-patch`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -504,7 +464,6 @@ async function processStream(conn: LiveConnection) {
     log.info({ runId }, '[streaming] connection cleaned up');
   }
 }
-
 
 // Prevent unhandled rejections from crashing the process
 process.on('unhandledRejection', (reason) => {
