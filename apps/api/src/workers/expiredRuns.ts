@@ -24,7 +24,7 @@ export const expiredRunsWorker = createWorker<Run>({
       .where(
         inArray(
           runs.id,
-          sql`(SELECT ${runs.id} FROM ${runs} WHERE ${runs.status} IN ('init', 'pending', 'in_progress') AND ${runs.expiresAt} < ${now} LIMIT ${sql.raw(String(limit))} FOR UPDATE SKIP LOCKED)`
+          sql`(SELECT ${runs.id} FROM ${runs} WHERE ${runs.status} IN ('in_progress') AND ${runs.expiresAt} < ${now} LIMIT ${sql.raw(String(limit))} FOR UPDATE SKIP LOCKED)`
         )
       )
       .returning();

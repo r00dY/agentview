@@ -4,7 +4,7 @@ import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { ServicePrincipal } from 'src/authMiddleware';
 import { log } from '../logger';
 import { db__dangerous } from '../db';
-import { createAutoRun2, createAutoRunFromChannelMessages, terminateRun } from '../runs';
+import { createAutoRun2, terminateRun } from '../runs';
 import { channelMessages, channels, channelThreads, runs, sessions } from '../schemas/schema';
 import { activateSession, createInactiveSession } from '../sessions';
 import type { Transaction } from '../types';
@@ -235,9 +235,10 @@ export function channelProvider(type: string) {
         const activeRun = await tx.query.runs.findFirst({
           where: and(
             eq(runs.sessionId, session?.id),
-            inArray(runs.status, ['pending', 'init', 'in_progress']),
+            eq(runs.status, 'in_progress')
           )
         })
+        
         if (activeRun) {
           log.info({ sourceId: params.sourceId, runId: activeRun.id }, 'active run found, terminating');
           await terminateRun(tx, session.id, activeRun.id, { status: 'discarded', failReason: { message: 'New message ingested, discarding active run' } });
@@ -303,23 +304,9 @@ export function channelProvider(type: string) {
       return result; // if not ingested, return
     }
 
-    /**
-     * Create a run from channel messages
-     * IMPORTANT: this might be concurrent, 2 channel messages might be ingested at the same time. Error about "run already in progress" is correct state.
-     */
-
     createAutoRun2(principal, result.sessionId, undefined).catch((error) => {
       log.warn({ sourceId: params.sourceId, err: error }, 'failed to create run from channel messages');
     });
-
-    // try {
-    //   await createAutoRun2(principal, result.sessionId, undefined);
-    //   // await withOrg(channel.organizationId, async (tx) => {
-    //   //   await createAutoRunFromChannelMessages(tx, environment, result.sessionId);
-    //   // });
-    // } catch (error) {
-    //   log.warn({ sourceId: params.sourceId, err: error }, 'failed to create run from channel messages');
-    // }
 
     return result;
   }

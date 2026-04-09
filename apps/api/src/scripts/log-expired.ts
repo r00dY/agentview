@@ -4,7 +4,7 @@ import { runs } from '../schemas/schema';
 import { sql } from 'drizzle-orm';
 
 const result = await db__dangerous.execute<{ status: string; count: string }>(
-  sql`SELECT ${runs.status}, COUNT(*) as count FROM ${runs} WHERE ${runs.status} IN ('init', 'pending', 'in_progress') GROUP BY ${runs.status}`
+  sql`SELECT ${runs.status}, COUNT(*) as count FROM ${runs} WHERE ${runs.status} IN ('in_progress') GROUP BY ${runs.status}`
 );
 
 const total = result.rows.reduce((sum, r) => sum + Number(r.count), 0);

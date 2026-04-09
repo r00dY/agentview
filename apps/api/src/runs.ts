@@ -610,10 +610,6 @@ export async function applyRunPatch(
     throw new AgentViewError("This endpoint is allowed only for manual runs.", 422);
   }
 
-  if (run.status === 'pending' || run.status === 'init') {
-    throw new AgentViewError("You can't run apply patch on run in 'init' or 'pending' status.", 422);
-  }
-
   const environment = await requireEnvironment(tx);
 
   /** Find matching run config **/
@@ -798,13 +794,6 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
     // logs
     const logText = terminationReasonText(reason);
 
-    // When we get termination for pending/init run, we override to discard.
-    if ((runBase.status === 'pending' || runBase.status === 'init') && reason.status !== 'discarded') {
-      reason = { status: 'discarded', failReason: { message: `Overriden for pending/init from: ${logText}` } };
-    }
-
-    // await publishEvent({ type: 'run.terminated', runId, reason }); // important to signal termination to the workers (the signal might have been sent before for cancel / timeout, but it's for discards and general sanity)
-
     log.info({ runId, reason: logText }, 'terminating run');
 
     const nowIso = new Date().toISOString();
@@ -825,7 +814,7 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
 
     // this is important, we must send the last run patch event to the stream
     tx.afterCommit(async () => {
-      await sendRunTerminationSignal(runId, reason, { graceful: false }) // super important
+      sendRunTerminationSignal(runId, reason, { graceful: false }) // super important
 
       await publishRunStreamEvent(runId, nowIso, JSON.stringify({
         ...reason,
@@ -841,117 +830,6 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
   }
 
 }
-
-
-
-
-
-export async function acceptRun(tx: TenantTransaction, sessionId: string, runId: string) {
-  await tx.acquireLock({ type: "edit_session", sessionId });
-
-  const run = await requireRunBase(tx, runId);
-
-  if (run.status === 'discarded') { // important for auto-fetch. When resource is discarded all "patch" operations should trigger this error to handle race conditions gracefully.
-    throw new RunTerminationError({ status: run.status, failReason: run.failReason });
-  }
-
-  if (run?.status !== 'init') {
-    throw new AgentViewError("You can't accept run that is not in 'init' status. Status: " + run.status, 422);
-  }
-
-  await tx.update(runs).set({ status: 'in_progress' }).where(eq(runs.id, runId));
-}
-
-
-export async function createAutoRunFromChannelMessages(
-  tx: OrgTransaction,
-  environment: Environment,
-  sessionId: string
-) {
-  await tx.acquireLock({ type: "edit_session", sessionId });
-
-  log.info({ sessionId }, 'creating run from channel messages');
-
-  /**
-   * TODO: I'm not sure here... there might be no config in the environment. Then this function will be retried. So we probably must take this into account.
-   */
-  const { lastRun, agentConfig, agentRefId, session } = await prepareRunCreation(tx, environment, sessionId);
-  const adapter = getAdapter(agentConfig.adapter);
-
-  /**
-   * Find channel thread id for the session
-   */
-  const channelThreadId = (await tx.query.sessions.findFirst({
-    where: eq(sessions.id, sessionId),
-    columns: {
-      channelThreadId: true,
-    },
-  }))?.channelThreadId;
-
-  if (typeof channelThreadId !== 'string') {
-    throw new AgentViewError("Session has no channel thread.", 422);
-  }
-
-  // we take either incoming messages without run_id or messages from the last run that was failed/cancelled/discarded (not completed)
-  const incomingMessages = await tx.query.channelMessages.findMany({
-    where: and(
-      eq(channelMessages.channelThreadId, channelThreadId),
-      or(
-        isNull(channelMessages.runId),
-        (lastRun && lastRun.status !== 'completed') ? eq(channelMessages.runId, lastRun.id) : undefined,
-      )
-    ),
-    orderBy: (cm, { asc }) => [asc(cm.date)],
-  });
-
-  if (incomingMessages.length === 0) {
-    throw new AgentViewError("No incoming messages to create a run from.", 422);
-  }
-
-  log.info({ sessionId, count: incomingMessages.length }, 'incoming messages found');
-
-
-  /**
-   * Let's create a new run
-   */
-  const newRunId = crypto.randomUUID();
-  const input = adapter.createDefaultInputForChannelMessages(incomingMessages, newRunId);
-
-  log.debug({ sessionId, input }, 'channel run input');
-
-  const { runConfig, parsedInput, idleTimeout } = await processInput(agentConfig, input);
-
-  // session version might be totally not set yet
-  if (!session.agentRef) {
-    await tx.update(sessions).set({
-      agentRefId,
-    }).where(eq(sessions.id, sessionId));
-  }
-
-  await createRunCore(tx, environment, sessionId, {
-    id: newRunId,
-    parsedInput,
-    parsedNonInputItems: [],
-    status: 'pending',
-    failReason: null,
-    expiresAt: new Date(Date.now() + idleTimeout).toISOString(),
-    finishedAt: null,
-    metadata: undefined,
-    agentRefId,
-    manual: false,
-    state: undefined,
-    runConfig,
-    lastRun,
-  });
-
-  await tx.update(channelMessages).set({
-    runId: newRunId,
-    updatedAt: new Date().toISOString(),
-  }).where(inArray(channelMessages.id, incomingMessages.map(m => m.id)));
-}
-
-
-
 
 
 
@@ -1116,16 +994,6 @@ export async function createAutoRun2(
     // Stream established.
     log.debug(`[${sessionId}] [createAutoRun2] stream established`);
 
-    // await withTenant(principal, async (tx) => {
-    //   await tx.acquireLock({ type: "create_resource" }); // handles!
-    //   await tx.acquireLock({ type: "edit_session", sessionId: session.id });
-
-    //   // await acceptRun(tx, sessionId, runId);
-    //   await activateSession(tx, sessionId);
-    // });
-
-    // log.debug(`[${sessionId}] [createAutoRun2] run activated`);
-
     return { response: responseCopy, runId, success: true }
 
   } catch (err) {
@@ -1147,50 +1015,6 @@ export async function createAutoRun2(
   }
 
 }
-
-
-
-
-
-
-
-
-
-
-
-// export async function createAutoRun(
-//   tx: TenantTransaction,
-//   sessionId: string,
-//   body: { input: Record<string, any> }
-// ) {
-//   await tx.acquireLock({ type: "edit_session", sessionId });
-
-//   const session = await requireSessionBase(tx, sessionId);
-//   authorize(tx.principal, { action: "end-user:update", user: session.user });
-
-//   const environment = await requireEnvironment(tx);
-
-//   const { lastRun, agentConfig, agentRefId } = await prepareRunCreation(tx, environment, sessionId);
-//   const { runConfig, parsedInput, idleTimeout } = await processInput(agentConfig, body.input);
-
-//   const run = await createRunCore(tx, environment, sessionId, {
-//     parsedInput,
-//     parsedNonInputItems: [],
-//     // status: 'pending',
-//     status: 'in_progress',
-//     failReason: null,
-//     expiresAt: new Date(Date.now() + idleTimeout).toISOString(),
-//     finishedAt: null,
-//     metadata: undefined,
-//     agentRefId,
-//     manual: false,
-//     state: undefined,
-//     runConfig,
-//     lastRun,
-//   });
-
-//   return { run, runConfig, agentConfig }
-// }
 
 
 
