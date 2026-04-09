@@ -12,7 +12,13 @@ printELU('streaming-server');
 // signal to shut down streaming gracefully (to distinguish from normal RunTerminationError)
 class GracefulRunTerminationError extends RunTerminationError {}
 
-const HTTP_SERVER_BASE_URL = `http://localhost:${process.env.HTTP_SERVER_PORT ?? '80'}`;
+if (!process.env.HTTP_SERVER_PORT) {
+  throw new Error('HTTP_SERVER_PORT is not set');
+}
+
+if (!process.env.STREAMING_SERVER_PORT) {
+  throw new Error('STREAMING_SERVER_PORT is not set');
+}
 
 interface LiveConnection {
   reader: ReadableStreamDefaultReader<Uint8Array>;
@@ -283,7 +289,7 @@ async function callFastPatch(
   conn: LiveConnection,
   op: FastPatchOp,
 ) {
-  const resp = await fetch(`${HTTP_SERVER_BASE_URL}/internal/fast-patch`, {
+  const resp = await fetch(`${process.env.HTTP_SERVER_URL}/internal/fast-patch`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -563,6 +569,6 @@ process.on('uncaughtException', (error) => {
   log.error({ err: error }, '[streaming-server] Uncaught exception');
 });
 
-const port = Number(process.env.STREAMING_SERVER_PORT ?? '1999');
+const port = Number(process.env.STREAMING_SERVER_PORT);
 serve({ fetch: app.fetch, port });
 log.info(`[streaming-server] listening on port ${port}`);

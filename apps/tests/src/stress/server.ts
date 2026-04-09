@@ -8,7 +8,7 @@ const TOKENS_PER_SECOND = 100;
 const STREAM_DURATION_S = 30;
 const TOTAL_TOKENS = TOKENS_PER_SECOND * STREAM_DURATION_S;
 const BASE_INTERVAL_MS = 1000 / TOKENS_PER_SECOND; // 10ms
-const JITTER_MS = 2;
+const JITTER_MS = 3;
 
 let connections = 0;
 
