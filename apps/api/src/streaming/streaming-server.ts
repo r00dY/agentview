@@ -231,6 +231,10 @@ app.get('/stream/:runId', async (c) => {
     async start(controller) {
       const encoder = new TextEncoder();
       let cursor = 0;
+      let pendingResolve: (() => void) | null = null;
+
+      const onAbort = () => { pendingResolve?.(); };
+      signal.addEventListener('abort', onAbort, { once: true });
 
       try {
         while (!signal.aborted) {
@@ -251,9 +255,11 @@ app.get('/stream/:runId', async (c) => {
 
           // Wait for new data or abort
           await new Promise<void>(resolve => {
+            pendingResolve = resolve;
             conn.streamNotify.push(resolve);
-            signal.addEventListener('abort', () => resolve(), { once: true });
+            if (signal.aborted) resolve();
           });
+          pendingResolve = null;
         }
       } catch {
         // Stream cancelled by consumer
