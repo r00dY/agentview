@@ -3,14 +3,18 @@ import { serve } from '@hono/node-server';
 import { log, setContext } from '../logger';
 import { parseAISDKStream, computeOutputItemCount, type AISDKChunk } from '../adapters/ai-sdk-utils';
 import { publishAISDKStreamEvent, expireAISDKStream } from '../adapters/ai-sdk-stream';
+import { RunTerminationError, type RunTerminationReason } from '../runs';
 
-// Lightweight termination error (avoids importing ../runs which pulls in DB/Redis)
-class StreamTerminationError extends Error {
-  constructor(public reason: { status: string; failReason?: any }) {
-    super(reason.status);
-    this.name = 'StreamTerminationError';
-  }
-}
+// // Lightweight termination error (avoids importing ../runs which pulls in DB/Redis)
+// class StreamTerminationError extends Error {
+//   constructor(public reason: { status: string; failReason?: any }) {
+//     super(reason.status);
+//     this.name = 'StreamTerminationError';
+//   }
+// }
+
+// signal to shut down streaming gracefully (to distinguish from normal RunTerminationError)
+class GracefulRunTerminationError extends RunTerminationError {}
 
 type FastPatchOp =
   | { type: 'item'; id?: string; content: any }
@@ -31,7 +35,17 @@ interface LiveConnection {
   organizationId: string;
   // environmentHandle: string;
   // isChannelRun: boolean;
+
+  state: {
+    textBuffers: Map<string, string>,
+    reasoningBuffers: Map<string, string>,
+    toolStates: Map<string, { toolName: string; inputText: string; input?: any }>,
+    emittedItemTypes: string[],
+    outputTexts: string[],
+    finalOp?: FastPatchOp
+  }
 }
+
 
 const liveConnections = new Map<string, LiveConnection>();
 
@@ -140,7 +154,16 @@ app.post('/connect', async (c) => {
     runConfig,
     sessionId,
     runId,
-    organizationId
+    organizationId,
+
+    state: {
+      textBuffers: new Map<string, string>(),
+      reasoningBuffers: new Map<string, string>(),
+      toolStates: new Map<string, { toolName: string; inputText: string; input?: any }>(),
+      emittedItemTypes: [],
+      outputTexts: [],
+    }
+
     // organizationId,
     // environmentHandle,
     // isChannelRun,
@@ -164,20 +187,33 @@ app.post('/connect', async (c) => {
 });
 
 
-app.post('/cancel', async (c) => {
-  const runId = c.req.header('X-Run-Id') ?? c.req.query('runId');
+app.post('/terminate', async (c) => {
+  const { runId, reason, graceful } : { runId: string, reason: RunTerminationReason, graceful: boolean } = await c.req.json()
 
   if (!runId) {
     return c.json({ message: 'Missing runId' }, 400);
   }
 
   const connection = liveConnections.get(runId);
-  if (connection) {
-    log.info({ runId }, '[streaming] cancelling connection');
-    connection.abortController.abort(new StreamTerminationError({ status: 'cancelled' }));
-  } else {
-    log.debug({ runId }, '[streaming] cancel: connection not found (already finished or never existed)');
+
+  if (!connection) {
+    return c.json({ message: 'Connection not found' }, 404);
   }
+
+  if (graceful) {
+    connection.abortController.abort(new GracefulRunTerminationError(reason));
+  } else {
+    connection.abortController.abort(new RunTerminationError(reason));
+  }
+
+  // connection.abortController.abort(new GracefulRunTerminationError(reason));
+
+  // if (connection) {
+  //   log.info({ runId }, '[streaming] cancelling connection');
+  //   connection.abortController.abort(new StreamTerminationError({ status: 'cancelled' }));
+  // } else {
+  //   log.debug({ runId }, '[streaming] cancel: connection not found (already finished or never existed)');
+  // }
 
   return c.json({ ok: true });
 });
@@ -186,34 +222,28 @@ app.post('/cancel', async (c) => {
 async function callFastPatch(
   conn: LiveConnection,
   op: FastPatchOp,
-): Promise<{ terminated: boolean }> {
-  try {
-    const resp = await fetch(`${MAIN_API_URL}/internal/fast-patch`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        runId: conn.runId,
-        sessionId: conn.sessionId,
-        organizationId: conn.organizationId,
-        // environmentHandle: conn.environmentHandle,
-        runConfig: conn.runConfig,
-        op,
-      }),
-    });
+) {
+  const resp = await fetch(`${MAIN_API_URL}/internal/fast-patch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      runId: conn.runId,
+      sessionId: conn.sessionId,
+      organizationId: conn.organizationId,
+      runConfig: conn.runConfig,
+      op,
+    }),
+  });
 
-    if (resp.status === 409) {
-      return { terminated: true };
-    }
+  const body = await resp.json()
 
-    if (!resp.ok) {
-      const text = await resp.text().catch(() => 'unknown');
-      log.error({ runId: conn.runId, status: resp.status, text }, '[streaming] fast-patch failed');
-    }
+  if (resp.status === 409) {
+    throw new RunTerminationError(body.reason);
+  }
 
-    return { terminated: false };
-  } catch (error) {
-    log.error({ runId: conn.runId, err: error }, '[streaming] fast-patch call failed');
-    return { terminated: false };
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => 'unknown');
+    throw new Error(`[streaming] fast-patch failed: ${text}`);
   }
 }
 
@@ -221,16 +251,16 @@ async function callFastPatch(
 async function processStream(conn: LiveConnection) {
   const { reader, runId /*, isChannelRun*/ } = conn;
 
-  let finalOp: FastPatchOp | undefined = undefined;
+  // let finalOp: FastPatchOp | undefined = undefined;
 
   try {
     log.info({ runId }, '[streaming] streaming started');
 
-    const textBuffers = new Map<string, string>();
-    const reasoningBuffers = new Map<string, string>();
-    const toolStates = new Map<string, { toolName: string; inputText: string; input?: any }>();
-    const emittedItemTypes: string[] = [];
-    const outputTexts: string[] = [];
+    // const textBuffers = new Map<string, string>();
+    // const reasoningBuffers = new Map<string, string>();
+    // const toolStates = new Map<string, { toolName: string; inputText: string; input?: any }>();
+    // const emittedItemTypes: string[] = [];
+    // const outputTexts: string[] = [];
 
     for await (const data of parseAISDKStream(reader)) {
       if (data === '[DONE]') {
@@ -249,52 +279,50 @@ async function processStream(conn: LiveConnection) {
         }
 
         case 'text-start': {
-          textBuffers.set(chunk.id, '');
+          conn.state.textBuffers.set(chunk.id, '');
           break;
         }
 
         case 'text-delta': {
-          const current = textBuffers.get(chunk.id) ?? '';
-          textBuffers.set(chunk.id, current + chunk.delta);
+          const current = conn.state.textBuffers.get(chunk.id) ?? '';
+          conn.state.textBuffers.set(chunk.id, current + chunk.delta);
           break;
         }
 
         case 'text-end': {
-          const text = textBuffers.get(chunk.id) ?? '';
-          textBuffers.delete(chunk.id);
-          emittedItemTypes.push('text');
-          outputTexts.push(text);
+          const text = conn.state.textBuffers.get(chunk.id) ?? '';
+          conn.state.textBuffers.delete(chunk.id);
+          conn.state.emittedItemTypes.push('text');
+          conn.state.outputTexts.push(text);
 
           log.debug({ runId }, '[streaming] fast.patch for "text"');
-          const { terminated } = await callFastPatch(conn, { type: 'item', content: { type: 'text', text } });
-          if (terminated) throw new StreamTerminationError({ status: 'discarded', failReason: { message: 'Run terminated' } });
+          await callFastPatch(conn, { type: 'item', content: { type: 'text', text } });
           break;
         }
 
         case 'reasoning-start': {
-          reasoningBuffers.set(chunk.id, '');
+          conn.state.reasoningBuffers.set(chunk.id, '');
           break;
         }
 
         case 'reasoning-delta': {
-          const current = reasoningBuffers.get(chunk.id) ?? '';
-          reasoningBuffers.set(chunk.id, current + chunk.delta);
+          const current = conn.state.reasoningBuffers.get(chunk.id) ?? '';
+          conn.state.reasoningBuffers.set(chunk.id, current + chunk.delta);
           break;
         }
 
         case 'reasoning-end': {
-          const text = reasoningBuffers.get(chunk.id) ?? '';
-          reasoningBuffers.delete(chunk.id);
-          emittedItemTypes.push('reasoning');
+          const text = conn.state.reasoningBuffers.get(chunk.id) ?? '';
+          conn.state.reasoningBuffers.delete(chunk.id);
+          conn.state.emittedItemTypes.push('reasoning');
 
           log.debug({ runId }, '[streaming] fast.patch for "reasoning"');
-          const { terminated } = await callFastPatch(conn, { type: 'item', content: { type: 'reasoning', text } });
-          if (terminated) throw new StreamTerminationError({ status: 'discarded', failReason: { message: 'Run terminated' } });
+          await callFastPatch(conn, { type: 'item', content: { type: 'reasoning', text } });
           break;
         }
 
         case 'tool-input-start': {
-          toolStates.set(chunk.toolCallId, {
+          conn.state.toolStates.set(chunk.toolCallId, {
             toolName: chunk.toolName,
             inputText: '',
           });
@@ -302,7 +330,7 @@ async function processStream(conn: LiveConnection) {
         }
 
         case 'tool-input-delta': {
-          const state = toolStates.get(chunk.toolCallId);
+          const state = conn.state.toolStates.get(chunk.toolCallId);
           if (state) {
             state.inputText += chunk.inputTextDelta;
           }
@@ -310,7 +338,7 @@ async function processStream(conn: LiveConnection) {
         }
 
         case 'tool-input-available': {
-          const state = toolStates.get(chunk.toolCallId);
+          const state = conn.state.toolStates.get(chunk.toolCallId);
           if (state) {
             state.input = chunk.input;
           }
@@ -318,48 +346,45 @@ async function processStream(conn: LiveConnection) {
         }
 
         case 'tool-output-available': {
-          const state = toolStates.get(chunk.toolCallId);
+          const state = conn.state.toolStates.get(chunk.toolCallId);
           if (state) {
-            emittedItemTypes.push('tool-call');
+            conn.state.emittedItemTypes.push('tool-call');
             log.debug({ runId }, '[streaming] fast.patch for "tool-output-available"');
-            const { terminated } = await callFastPatch(conn, {
+            await callFastPatch(conn, {
               type: 'item',
               content: { type: 'tool-call', toolCallId: chunk.toolCallId, toolName: state.toolName, state: 'output-available', input: state.input, output: chunk.output },
             });
-            if (terminated) throw new StreamTerminationError({ status: 'discarded', failReason: { message: 'Run terminated' } });
-            toolStates.delete(chunk.toolCallId);
+            conn.state.toolStates.delete(chunk.toolCallId);
           }
           break;
         }
 
         case 'tool-output-error': {
-          const state = toolStates.get(chunk.toolCallId);
+          const state = conn.state.toolStates.get(chunk.toolCallId);
           if (state) {
-            emittedItemTypes.push('tool-call');
+            conn.state.emittedItemTypes.push('tool-call');
             log.debug({ runId }, '[streaming] fast.patch for "tool-output-error"');
-            const { terminated } = await callFastPatch(conn, {
+            await callFastPatch(conn, {
               type: 'item',
               content: { type: 'tool-call', toolCallId: chunk.toolCallId, toolName: state.toolName, state: 'output-error', input: state.input, errorText: chunk.errorText },
             });
-            if (terminated) throw new StreamTerminationError({ status: 'discarded', failReason: { message: 'Run terminated' } });
-            toolStates.delete(chunk.toolCallId);
+            conn.state.toolStates.delete(chunk.toolCallId);
           }
           break;
         }
 
         case 'finish': {
-          const outputCount = computeOutputItemCount(emittedItemTypes);
+          const outputCount = computeOutputItemCount(conn.state.emittedItemTypes);
 
-          finalOp = {
+          conn.state.finalOp = {
             type: 'complete',
             outputItemCount: outputCount,
-            // channelReply: isChannelRun ? { text: outputTexts.filter(Boolean).join('\n\n') } : undefined,
           };
           break;
         }
 
         case 'error': {
-          finalOp = {
+          conn.state.finalOp = {
             type: 'fail',
             failReason: {
               message: chunk.errorText ?? 'Unknown error from AI SDK stream',
@@ -369,25 +394,23 @@ async function processStream(conn: LiveConnection) {
         }
 
         case 'data-session-state': {
-          emittedItemTypes.push('data');
+          conn.state.emittedItemTypes.push('data');
           log.debug({ runId }, '[streaming] fast.patch for state');
-          const { terminated } = await callFastPatch(conn, {
+          await callFastPatch(conn, {
             type: 'state',
             content: chunk.data,
           });
-          if (terminated) throw new StreamTerminationError({ status: 'discarded', failReason: { message: 'Run terminated' } });
           break;
         }
 
         default:
           if (chunk.type.startsWith('data-')) {
             log.debug({ runId }, `[streaming] fast.patch for "${chunk.type}"`);
-            emittedItemTypes.push('data');
-            const { terminated } = await callFastPatch(conn, {
+            conn.state.emittedItemTypes.push('data');
+            await callFastPatch(conn, {
               type: 'item',
               content: chunk,
             });
-            if (terminated) throw new StreamTerminationError({ status: 'discarded', failReason: { message: 'Run terminated' } });
           }
           log.trace(chunk, 'ignored chunk');
           break;
@@ -398,9 +421,9 @@ async function processStream(conn: LiveConnection) {
       await publishAISDKStreamEvent(runId, JSON.stringify(chunk));
     }
 
-    if (!finalOp) {
+    if (!conn.state.finalOp) {
       log.info({ runId }, '[streaming] stream ended incomplete');
-      finalOp = {
+      conn.state.finalOp = {
         type: 'fail',
         failReason: {
           message: 'Agent stream ended without completing',
@@ -411,42 +434,52 @@ async function processStream(conn: LiveConnection) {
     }
 
     log.debug({ runId }, '[streaming] fast.patch for completion');
-    await callFastPatch(conn, finalOp);
+    await callFastPatch(conn, conn.state.finalOp);
 
   } catch (error: unknown) {
-    if (error instanceof StreamTerminationError) {
-      if (error.reason.status === 'discarded') {
-        log.info({ runId }, '[streaming] run discarded, returning');
-        return;
-      } else if (error.reason.status === 'cancelled') {
-        finalOp = { type: 'cancel' };
-      } else {
-        finalOp = {
+
+    if (error instanceof GracefulRunTerminationError) { // graceful termination (aka sigterm)
+      if (error.reason.status === 'cancelled') {
+        conn.state.finalOp = { type: 'cancel' };
+      } 
+      else if (error.reason.status === 'failed') {
+        conn.state.finalOp = {
           type: 'fail',
           failReason: { message: error.message ?? 'Connection error' },
         };
       }
-    } else if (error instanceof TypeError) {
-      finalOp = {
+    }
+    else if (error instanceof RunTerminationError) { // run killed
+      log.info({ runId }, '[streaming] run killed, returning');
+      return;
+    }
+    else if (error instanceof TypeError) { // connection error while streaming
+      conn.state.finalOp = {
         type: 'fail',
         failReason: { message: error.message ?? 'Connection error' },
       };
-    } else {
-      finalOp = {
+    } else { // unexpected error while streaming      
+      conn.state.finalOp = {
         type: 'fail',
         failReason: { message: error instanceof Error ? error.message : String(error) },
       };
     }
 
-    log.info({ runId, finalOp }, `[streaming] error while streaming`);
-    await callFastPatch(conn, finalOp);
+    if (!conn.state.finalOp) {
+      log.error({ runId, error }, 'Unreachable: no finalOp set');
+      return;
+    }
 
-    if (finalOp.type === 'cancel') {
+    log.info({ runId, error }, `[streaming] error while streaming`);
+
+    if (conn.state.finalOp.type === 'cancel') {
       await publishAISDKStreamEvent(runId, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));
-    } else {
-      const failReason = (finalOp as any).failReason?.message ?? 'Unknown error';
+    } else if (conn.state.finalOp.type === 'fail') {
+      const failReason = conn.state.finalOp.failReason.message ?? 'Unknown error';
       await publishAISDKStreamEvent(runId, JSON.stringify({ type: 'error', errorText: failReason }));
     }
+
+    await callFastPatch(conn, conn.state.finalOp);
 
   } finally {
     await reader?.cancel().catch(() => {});

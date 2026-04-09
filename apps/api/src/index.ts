@@ -1203,7 +1203,7 @@ app.post('/internal/fast-patch', async (c) => {
     })
   } catch (error) {
     if (error instanceof RunTerminationError) {
-      return c.json({ terminated: true }, 409);
+      return c.json({ reason: error.reason }, 409); // if run terminated -> just return 409
     }
     throw error;
   }

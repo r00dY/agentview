@@ -372,55 +372,55 @@ export class RunTerminationError extends Error {
  * Fast operations for agent-fetch
  */
 
-export async function upsertItem(
-  tx: TenantTransaction,
-  options: {
-    runId: string,
-    sessionId: string,
-    runConfig: BaseRunConfig,
-    id: string,
-    content: any
-  }
-) {
-  await tx.acquireLock({ type: "edit_session", sessionId: options.sessionId });
+// export async function upsertItem(
+//   tx: TenantTransaction,
+//   options: {
+//     runId: string,
+//     sessionId: string,
+//     runConfig: BaseRunConfig,
+//     id: string,
+//     content: any
+//   }
+// ) {
+//   await tx.acquireLock({ type: "edit_session", sessionId: options.sessionId });
 
-  const { runId, sessionId, runConfig, id, content } = options;
+//   const { runId, sessionId, runConfig, id, content } = options;
 
-  const run = await requireRunBase(tx, runId);
+//   const run = await requireRunBase(tx, runId);
 
-  if (run.status === 'discarded') { // important for auto-fetch. When resource is discarded all "patch" operations should trigger this error to handle race conditions gracefully.
-    throw new RunTerminationError({ status: run.status, failReason: run.failReason });
-  }
+//   if (run.status === 'discarded') { // important for auto-fetch. When resource is discarded all "patch" operations should trigger this error to handle race conditions gracefully.
+//     throw new RunTerminationError({ status: run.status, failReason: run.failReason });
+//   }
 
-  if (run.status !== 'in_progress') {
-    throw new AgentViewError("Can't add item to run that is not in 'in_progress' status. Status: " + run.status, 422);
-  }
+//   if (run.status !== 'in_progress') {
+//     throw new AgentViewError("Can't add item to run that is not in 'in_progress' status. Status: " + run.status, 422);
+//   }
 
-  const idleTimeout = runConfig.idleTimeout ?? DEFAULT_IDLE_TIME;
-  const now = Date.now();
-  const nowIso = new Date(now).toISOString();
+//   const idleTimeout = runConfig.idleTimeout ?? DEFAULT_IDLE_TIME;
+//   const now = Date.now();
+//   const nowIso = new Date(now).toISOString();
 
-  // Run both operations in parallel for speed.
-  await Promise.all([
-    tx.insert(sessionItems).values({
-      id,
-      sessionId,
-      content,
-      runId,
-      organizationId: run.organizationId
-    }).onConflictDoUpdate({
-      target: [sessionItems.id],
-      set: {
-        content,
-        updatedAt: nowIso,
-      },
-    }),
-    tx.update(runs).set({
-      expiresAt: new Date(now + idleTimeout).toISOString(),
-      updatedAt: nowIso,
-    }).where(eq(runs.id, run.id)),
-  ]);
-}
+//   // Run both operations in parallel for speed.
+//   await Promise.all([
+//     tx.insert(sessionItems).values({
+//       id,
+//       sessionId,
+//       content,
+//       runId,
+//       organizationId: run.organizationId
+//     }).onConflictDoUpdate({
+//       target: [sessionItems.id],
+//       set: {
+//         content,
+//         updatedAt: nowIso,
+//       },
+//     }),
+//     tx.update(runs).set({
+//       expiresAt: new Date(now + idleTimeout).toISOString(),
+//       updatedAt: nowIso,
+//     }).where(eq(runs.id, run.id)),
+//   ]);
+// }
 
 // export const ManualRunUpdateSchema = z.object({
 //   items: z.array(z.record(z.string(), z.any())).optional(),
@@ -481,13 +481,13 @@ export async function fastApplyRunPatch(
     throw new AgentViewError("This endpoint is allowed only for auto-fetch runs.", 422);
   }
 
-  if (run.status === 'discarded') { // important for auto-fetch. When resource is discarded all "patch" operations should trigger this error to handle race conditions gracefully.
-    throw new RunTerminationError({ status: run.status, failReason: run.failReason });
+  if (run.status !== 'in_progress') { // important for auto-fetch. When resource is discarded all "patch" operations should trigger this error to handle race conditions gracefully.
+    throw new RunTerminationError({ status: run.status as 'cancelled' | 'failed' | 'discarded', failReason: run.failReason });
   }
 
-  if (run.status !== 'in_progress') {
-    throw new AgentViewError("Can't add item to run that is not in 'in_progress' status. Status: " + run.status, 422);
-  }
+  // if (run.status !== 'in_progress') {
+  //   throw new AgentViewError("Can't add item to run that is not in 'in_progress' status. Status: " + run.status, 422);
+  // }
 
   const idleTimeout = runConfig.idleTimeout ?? DEFAULT_IDLE_TIME;
   const now = Date.now();
@@ -755,6 +755,7 @@ export async function applyRunPatch(
 
 /**
  * Best-effort run clean-up (for finally {} blocks, timeouts, discards etc)
+ * It unconditionally KILLS run. No grace period.
  */
 export async function terminateRun(tx: OrgTransaction, sessionId: string, runId: string, reason: RunTerminationReason) {
   await tx.acquireLock({ type: "edit_session", sessionId });
