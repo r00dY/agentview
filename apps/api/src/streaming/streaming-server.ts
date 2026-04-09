@@ -451,6 +451,8 @@ async function processStream(conn: LiveConnection) {
   } finally {
     await reader?.cancel().catch(() => {});
 
+    log.info({ runId }, '[streaming] sending [DONE]');
+
     try {
       await publishAISDKStreamEvent(runId, '[DONE]');
       await expireAISDKStream(runId);

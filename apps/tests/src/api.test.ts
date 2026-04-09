@@ -2909,52 +2909,66 @@ describe('API', () => {
      * - reconnect to the stream
      * - consume the stream
      */
-    test("happy path: text response, creating run via session input", async () => {
+    test("happy path: text response, creating run via session input -> reconnect to stream", async () => {
       await updateConfigWithAiSdkUrl();
 
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKSuccessHeaders(res);
         writeAISDKChunks(res, [
           { type: "start", messageId: "msg_1" },
-          { type: "text-start", id: "t1" },
-          { type: "text-delta", id: "t1", delta: "Hello " },
-          { type: "text-delta", id: "t1", delta: "world!" },
-          { type: "text-end", id: "t1" },
-          { type: "finish", finishReason: "stop" },
         ]);
-        writeAISDKDone(res);
-        res.end();
+
+        // 2s wait so that we're sure when we reconnect the stream still exists
+        setTimeout(() => {
+          writeAISDKChunks(res, [
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "Hello " },
+            { type: "text-delta", id: "t1", delta: "world!" },
+            { type: "text-end", id: "t1" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+
+          writeAISDKDone(res);
+          res.end();
+        }, 2000)
       });
 
       const session = await avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] }});
       expect(session.status).toBe("in_progress");
       expect(session.messages.length).toBe(1);
+      expect(session.messages[0]).toMatchObject({
+        role: "user",
+        parts: [{ type: "text", text: "What is the answer?" }]
+      });
 
+      // reconnect to stream
+      const transport = avAISDK.createTransport()
+      const stream = await transport.reconnectToStream({ chatId: session.id })
+      if (!stream) {
+        throw new Error("No stream to reconnect");
+      }
 
-      // const chunks = await consumeChunksFromTransportStream(stream);
+      const chunks = await consumeChunksFromTransportStream(stream);
 
-      // // Validate we received the native AI SDK chunk types
-      // const chunkTypes = chunks.map(c => c.type);
-      // expect(chunkTypes).toContain("start");
-      // expect(chunkTypes).toContain("text-start");
-      // expect(chunkTypes).toContain("text-delta");
-      // expect(chunkTypes).toContain("text-end");
-      // expect(chunkTypes).toContain("finish");
+      const chunkTypes = chunks.map(c => c.type);
+      expect(chunkTypes).toContain("start");
+      expect(chunkTypes).toContain("text-start");
+      expect(chunkTypes).toContain("text-delta");
+      expect(chunkTypes).toContain("text-end");
+      expect(chunkTypes).toContain("finish");
 
-      // // Validate text deltas
-      // const textDeltas = chunks.filter(c => c.type === "text-delta");
-      // expect(textDeltas.map(d => d.delta).join("")).toBe("Hello world!");
+      const updatedSession = await avAISDK.getSession({ id: session.id });
+      expect(updatedSession.status).toBe("idle");
+      expect(updatedSession.messages.length).toBe(2);
+      expect(updatedSession.messages[1].parts.length).toBe(1);
+      expect(updatedSession.messages[1].parts[0]).toMatchObject({
+        type: "text",
+        text: "Hello world!"
+      });
 
-      // // Verify final run state via API
-      // const finalSession = await avAISDK.getSession({ id: session.id });
+      const streamAfterCompletion = await transport.reconnectToStream({ chatId: session.id })
+      expect(streamAfterCompletion).toBeNull();
 
-      // expect(finalSession.status).toBe("idle");
-      // expect(finalSession.messages.length).toBe(2);
-      // expect(finalSession.messages[0].role).toBe("user");
-      // expect(finalSession.messages[1].role).toBe("assistant");
-      // expect(finalSession.messages[1].parts.length).toBe(1);
-      // expect(finalSession.messages[1].parts[0].type).toBe("text");
-      // expect(finalSession.messages[1].parts[0].text).toBe("Hello world!");
     }, 10000);
 
 

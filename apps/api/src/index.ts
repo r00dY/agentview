@@ -810,12 +810,11 @@ app.openapi(sessionAISDKStreamRoute, async (c) => {
     return c.body(null, 204);
   }
 
-  const consumer = createAISDKStreamConsumer(lastRun.id, c.req.raw.signal);
-  return streamAISDKEvents(c, consumer);
+  return createStreamResponse(c, lastRun.id);
+
+  // const consumer = createAISDKStreamConsumer(lastRun.id, c.req.raw.signal);
+  // return streamAISDKEvents(c, consumer);
 });
-
-
-
 
 
 
@@ -1092,7 +1091,7 @@ function subscribeToStream(
  * Raw implementation: pooled Redis XREAD → outgoing.write(). No WebStreams, no consumer helpers.
  * The [RESPONSE] meta-event determines whether we stream SSE or return an error body.
  */
-function createStreamResponse(c: Context, _response: Response, runId: string) {
+function createStreamResponse(c: Context, runId: string, _options?: { headers?: Headers, status?: number }) {
   const outgoing = (c.env as any).outgoing as ServerResponse;
   const signal: AbortSignal = c.req.raw.signal;
   const streamKey = `run-stream:ai-sdk:${runId}`;
@@ -1233,7 +1232,7 @@ app.openapi(runsAISDKPOSTRoute, async (c) => {
     })
   }
 
-  return createStreamResponse(c, response, runId)
+  return createStreamResponse(c, runId, response)
 
   // // 1. Create pending run, prepare session 
   // const { run, standardSession } = await withTenant(principal, async (tx) => {
