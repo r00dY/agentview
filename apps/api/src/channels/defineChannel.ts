@@ -4,9 +4,9 @@ import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { ServicePrincipal } from 'src/authMiddleware';
 import { log } from '../logger';
 import { db__dangerous } from '../db';
-import { createAutoRunFromChannelMessages, terminateRun } from '../runs';
+import { createAutoRun2, createAutoRunFromChannelMessages, terminateRun } from '../runs';
 import { channelMessages, channels, channelThreads, runs, sessions } from '../schemas/schema';
-import { createInactiveSession } from '../sessions';
+import { activateSession, createInactiveSession } from '../sessions';
 import type { Transaction } from '../types';
 import { ensureUserForEmail } from '../users';
 import { withOrg, withTenant } from '../withOrg';
@@ -197,13 +197,13 @@ export function channelProvider(type: string) {
 
     log.info({ sourceId: params.sourceId, env: environment.user?.email ?? 'production' }, 'environment resolved');
 
-    const servicePrincipal : ServicePrincipal = {
+    const principal : ServicePrincipal = {
       type: 'service',
       organizationId: channel.organizationId,
       env: environment.handle,
     };
 
-    const result: IngestMessageResult = await withTenant(servicePrincipal, async (tx) => {
+    const result: IngestMessageResult = await withTenant(principal, async (tx) => {
       await tx.acquireLock({ type: "create_resource" });
 
       /**
@@ -283,6 +283,7 @@ export function channelProvider(type: string) {
           userId,
           channelThreadId: thread.id,
         });
+        await activateSession(tx, session.id); // channel sessions should be active immediately
 
         log.info({ sourceId: params.sourceId, sessionId: session.id }, 'new session created');
       }
@@ -306,13 +307,19 @@ export function channelProvider(type: string) {
      * Create a run from channel messages
      * IMPORTANT: this might be concurrent, 2 channel messages might be ingested at the same time. Error about "run already in progress" is correct state.
      */
-    try {
-      await withOrg(channel.organizationId, async (tx) => {
-        await createAutoRunFromChannelMessages(tx, environment, result.sessionId);
-      });
-    } catch (error) {
+
+    createAutoRun2(principal, result.sessionId, undefined).catch((error) => {
       log.warn({ sourceId: params.sourceId, err: error }, 'failed to create run from channel messages');
-    }
+    });
+
+    // try {
+    //   await createAutoRun2(principal, result.sessionId, undefined);
+    //   // await withOrg(channel.organizationId, async (tx) => {
+    //   //   await createAutoRunFromChannelMessages(tx, environment, result.sessionId);
+    //   // });
+    // } catch (error) {
+    //   log.warn({ sourceId: params.sourceId, err: error }, 'failed to create run from channel messages');
+    // }
 
     return result;
   }

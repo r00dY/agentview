@@ -264,16 +264,8 @@ async function callFastPatch(
 async function processStream(conn: LiveConnection) {
   const { reader, runId /*, isChannelRun*/ } = conn;
 
-  // let finalOp: FastPatchOp | undefined = undefined;
-
   try {
     log.info({ runId }, '[streaming] streaming started');
-
-    // const textBuffers = new Map<string, string>();
-    // const reasoningBuffers = new Map<string, string>();
-    // const toolStates = new Map<string, { toolName: string; inputText: string; input?: any }>();
-    // const emittedItemTypes: string[] = [];
-    // const outputTexts: string[] = [];
 
     for await (const data of parseAISDKStream(reader)) {
       if (data === '[DONE]') {
@@ -392,6 +384,7 @@ async function processStream(conn: LiveConnection) {
           conn.state.finalOp = {
             type: 'complete',
             outputItemCount: outputCount,
+            channelReply: { text: conn.state.outputTexts.filter(Boolean).join('\n\n') }, // we can always send channel reply, even for non-channel runs, who cares
           };
           break;
         }
@@ -465,7 +458,7 @@ async function processStream(conn: LiveConnection) {
       }
     }
     else if (error instanceof RunTerminationError) { // run already killed
-      log.error({ runId }, '[streaming] run killed while streaming');
+      log.info({ runId }, '[streaming] run killed while streaming');
       return;
     }
     else if (error instanceof TypeError) { // connection error while streaming

@@ -82,7 +82,11 @@ async function handleChannelReply(
     throw new Error("Unexpected error. Session doesn't exist when handling channel reply.");
   }
 
-  if (sessionRow.channelThreadId && channelReply) {
+  if (sessionRow.channelThreadId) {
+    if (!channelReply) {
+      throw new AgentViewError("No channel reply for a session that has a channel thread.", 400);
+    }
+
     await tx.insert(channelMessages).values({
       organizationId,
       channelThreadId: sessionRow.channelThreadId,
@@ -93,15 +97,15 @@ async function handleChannelReply(
       runId,
     });
   }
-  else if (!sessionRow.channelThreadId && channelReply) {
-    throw new AgentViewError("You can't set channel reply for a session that doesn't have a channel thread.", 400);
-  }
-  else if (sessionRow.channelThreadId && !channelReply) {
-    throw new AgentViewError("No channel reply for a session that has a channel thread.", 400);
-  }
-  else if (!sessionRow.channelThreadId && !channelReply) {
-    // no-op
-  }
+  // else if (!sessionRow.channelThreadId && channelReply) {
+  //   throw new AgentViewError("You can't set channel reply for a session that doesn't have a channel thread.", 400);
+  // }
+  // else if (sessionRow.channelThreadId && !channelReply) {
+  //   throw new AgentViewError("No channel reply for a session that has a channel thread.", 400);
+  // }
+  // else if (!sessionRow.channelThreadId && !channelReply) {
+  //   // no-op
+  // }
 }
 
 
@@ -803,8 +807,6 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
 
     log.info({ runId, reason: logText }, 'terminating run');
 
-    sendRunTerminationSignal(runId, reason, { graceful: false })
-
     const nowIso = new Date().toISOString();
 
     await tx.update(runs).set({
@@ -835,6 +837,8 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
   } catch (e) {
     log.error({ runId, err: e }, `SEVERE: termination failed: ${e instanceof Error ? e.message : String(e)}`);
   }
+
+  await sendRunTerminationSignal(runId, reason, { graceful: false })
 }
 
 export async function acceptRun(tx: TenantTransaction, sessionId: string, runId: string) {
@@ -949,8 +953,8 @@ export async function createAutoRunFromChannelMessages(
 export async function createAutoRun2(
   principal: Principal,
   sessionId: string,
-  body: { input: Record<string, any> },
-  signal: AbortSignal
+  input_?: Record<string, any>,
+  signal?: AbortSignal
 ): Promise<{ runId: string, response: Response, success: boolean }> {
 
   log.debug(`[${sessionId}] [createAutoRun2] start`);
@@ -965,9 +969,63 @@ export async function createAutoRun2(
     const environment = await requireEnvironment(tx);
   
     const { lastRun, agentConfig, agentRefId } = await prepareRunCreation(tx, environment, sessionId);
-    const { runConfig, parsedInput, idleTimeout } = await processInput(agentConfig, body.input);
+    
+    const newRunId = crypto.randomUUID();
+
+    // calculate input
+    const input = await (async () => {
+      // normal input from API
+      if (input_ && session.channel.type === 'api') {
+        return input_
+      }
+      // input from non-api channel -> based on channel messags
+      else if (!input_ && session.channel.type !== 'api') {
+
+        const channelThreadId = (await tx.query.sessions.findFirst({
+          where: eq(sessions.id, sessionId),
+          columns: {
+            channelThreadId: true,
+          },
+        }))?.channelThreadId;
+      
+        if (typeof channelThreadId !== 'string') {
+          throw new AgentViewError("Session has no channel thread.", 422);
+        }
+      
+        // we take either incoming messages without run_id or messages from the last run that was failed/cancelled/discarded (not completed)
+        const incomingMessages = await tx.query.channelMessages.findMany({
+          where: and(
+            eq(channelMessages.channelThreadId, channelThreadId),
+            or(
+              isNull(channelMessages.runId),
+              (lastRun && lastRun.status !== 'completed') ? eq(channelMessages.runId, lastRun.id) : undefined,
+            )
+          ),
+          orderBy: (cm, { asc }) => [asc(cm.date)],
+        });
+      
+        if (incomingMessages.length === 0) {
+          throw new AgentViewError("No incoming messages to create a run from.", 422);
+        }
+      
+        log.info({ sessionId, count: incomingMessages.length }, 'incoming messages found');
+      
+        /**
+         * Let's create a new run
+         */
+        const adapter = getAdapter(agentConfig.adapter);
+        return adapter.createDefaultInputForChannelMessages(incomingMessages, newRunId);
+      }
+      else {
+        throw new AgentViewError("createAutoRun can be called only with input for api channels, or without input for non-api channels.", 500);
+      }
+    })();
+
+
+    const { runConfig, parsedInput, idleTimeout } = await processInput(agentConfig, input);
   
     const run = await createRunCore(tx, environment, sessionId, {
+      id: newRunId,
       parsedInput,
       parsedNonInputItems: [],
       status: 'in_progress',
