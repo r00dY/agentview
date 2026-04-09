@@ -977,11 +977,14 @@ export async function createAutoRun2(
     
     const newRunId = crypto.randomUUID();
 
-    // calculate input
-    const input = await (async () => {
+    /**
+     * PROCESS INPUT
+     * - differently for API and non-API channels
+     */
+    const { input, consumedChannelMessageIds } = await (async () => {
       // normal input from API
       if (input_ && session.channel.type === 'api') {
-        return input_
+        return { input: input_, consumedChannelMessageIds: [] as string[] }
       }
       // input from non-api channel -> based on channel messags
       else if (!input_ && session.channel.type !== 'api') {
@@ -992,11 +995,11 @@ export async function createAutoRun2(
             channelThreadId: true,
           },
         }))?.channelThreadId;
-      
+
         if (typeof channelThreadId !== 'string') {
           throw new AgentViewError("Session has no channel thread.", 422);
         }
-      
+
         // we take either incoming messages without run_id or messages from the last run that was failed/cancelled/discarded (not completed)
         const incomingMessages = await tx.query.channelMessages.findMany({
           where: and(
@@ -1008,18 +1011,21 @@ export async function createAutoRun2(
           ),
           orderBy: (cm, { asc }) => [asc(cm.date)],
         });
-      
+
         if (incomingMessages.length === 0) {
           throw new AgentViewError("No incoming messages to create a run from.", 422);
         }
-      
+
         log.info({ sessionId, count: incomingMessages.length }, 'incoming messages found');
-      
+
         /**
          * Let's create a new run
          */
         const adapter = getAdapter(agentConfig.adapter);
-        return adapter.createDefaultInputForChannelMessages(incomingMessages, newRunId);
+        return {
+          input: adapter.createDefaultInputForChannelMessages(incomingMessages, newRunId),
+          consumedChannelMessageIds: incomingMessages.map(m => m.id),
+        }
       }
       else {
         throw new AgentViewError("createAutoRun can be called only with input for api channels, or without input for non-api channels.", 500);
@@ -1044,6 +1050,13 @@ export async function createAutoRun2(
       runConfig,
       lastRun,
     });
+
+    if (consumedChannelMessageIds.length > 0) {
+      await tx.update(channelMessages).set({
+        runId: newRunId,
+        updatedAt: new Date().toISOString(),
+      }).where(inArray(channelMessages.id, consumedChannelMessageIds));
+    }
 
     const agentUrl = agentConfig.url;
     if (!agentUrl) {
