@@ -168,11 +168,8 @@ app.post('/terminate', async (c) => {
   }
 
   /**
-   * Here we wait 10s for run to be closed (check is liveConnections.has(runId)).
-   * But this is TOTAL EXCEPTION AND THIS CODE *HAS TO* WORK.
-   * Basically if this code doesn't work then termination of live connections doesn't work at all.
-   * 
-   * Above abort was triggered, so connection must be dead. The only thing we wait for is last fast patch.
+   * Here we wait 5s for termination to be completed.
+   * - those 5s are "the contract" for the caller
    */
   let time = 0;
   const TOTAL_WAIT_TIME = 5000;
@@ -181,7 +178,7 @@ app.post('/terminate', async (c) => {
   while (liveConnections.has(runId)) {
     if (time > TOTAL_WAIT_TIME) {
       log.error({ runId }, '[streaming] run not closed after 5 seconds after cancellation');
-      return c.json({ message: 'Run not closed after 10 seconds after cancellation' }, 500);
+      return c.json({ message: 'Run not closed after 5 seconds after cancellation' }, 500);
     }
     
     await new Promise(resolve => setTimeout(resolve, INTERVAL));
