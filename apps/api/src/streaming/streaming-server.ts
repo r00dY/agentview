@@ -449,7 +449,7 @@ async function processStream(conn: LiveConnection) {
         };
       }
     }
-    else if (error instanceof RunTerminationError) { // run killed
+    else if (error instanceof RunTerminationError) { // run already killed
       log.info({ runId }, '[streaming] run killed, returning');
       return;
     }
