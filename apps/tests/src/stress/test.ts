@@ -9,8 +9,7 @@ import { z } from 'zod';
 const N = 250;
 const RAMP_UP_S = 10;
 const MEASURE_S = 25; // only collect samples for this long after first stream starts
-const AGENT_PORT = 3500;
-const AGENT_URL = `http://localhost:${AGENT_PORT}/agent`;
+const AGENT_URL = `http://localhost:3500/agent`;
 const API_BASE = process.env.VITE_AGENTVIEW_API_URL ?? 'http://localhost:1990';
 
 configDefaults.__internal = { disableSummaries: true };

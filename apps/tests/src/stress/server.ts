@@ -3,7 +3,7 @@ import { performance } from 'node:perf_hooks';
 
 const elu = performance.eventLoopUtilization();
 
-const PORT = Number(process.argv[2]) || 3500;
+const PORT = 3500;
 const TOKENS_PER_SECOND = 100;
 const STREAM_DURATION_S = 30;
 const TOTAL_TOKENS = TOKENS_PER_SECOND * STREAM_DURATION_S;
