@@ -825,6 +825,8 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
 
     // this is important, we must send the last run patch event to the stream
     tx.afterCommit(async () => {
+      await sendRunTerminationSignal(runId, reason, { graceful: false }) // super important
+
       await publishRunStreamEvent(runId, nowIso, JSON.stringify({
         ...reason,
         updatedAt: nowIso,
@@ -838,8 +840,11 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
     log.error({ runId, err: e }, `SEVERE: termination failed: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  await sendRunTerminationSignal(runId, reason, { graceful: false })
 }
+
+
+
+
 
 export async function acceptRun(tx: TenantTransaction, sessionId: string, runId: string) {
   await tx.acquireLock({ type: "edit_session", sessionId });
