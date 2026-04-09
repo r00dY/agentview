@@ -157,14 +157,6 @@ async function main() {
   });
 
   const avAISDK = createClient({ apiKey, env: `dev:${adminEmail}` });
-  const sessionIds: string[] = [];
-
-  console.log(`Creating ${N} sessions...`);
-  for (let i = 0; i < N; i++) {
-    const session = await avAISDK.createSession({ agent: 'stress-agent' });
-    sessionIds.push(session.id);
-  }
-  console.log(`${N} sessions created.\n`);
 
   // ELU monitor
   const eluInterval = setInterval(() => {
@@ -183,8 +175,11 @@ async function main() {
   await new Promise<void>((resolve) => {
     const tick = () => {
       const i = launched++;
-      console.log(`[test] Starting run ${i + 1}/${N}`);
-      streamPromises.push(consumeRunStream(sessionIds[i], authHeaders));
+      console.log(`[test] Creating session + starting run ${i + 1}/${N}`);
+      const p = avAISDK.createSession({ agent: 'stress-agent' }).then((session) =>
+        consumeRunStream(session.id, authHeaders)
+      );
+      streamPromises.push(p);
       if (launched < N) {
         setTimeout(tick, rampIntervalMs);
       } else {
