@@ -968,6 +968,12 @@ export async function createAutoRun2(
       signal,
     });
 
+    // fetch() responses have immutable headers; Hono needs mutable headers to finalize the response, so we create a copy.
+    const responseCopy = new Response(response.body, {
+      status: response.status,
+      headers: Object.fromEntries(response.headers.entries()),
+    });
+
     // Response came but it's error.
     if (!response.ok) {
       log.debug(`[${sessionId}] [createAutoRun2] error response from AI Endpoint`);
@@ -982,23 +988,23 @@ export async function createAutoRun2(
         });
       });
 
-      return { response, runId, success: false };
+      return { response: responseCopy, runId, success: false };
     }
 
     // Stream established.
     log.debug(`[${sessionId}] [createAutoRun2] stream established`);
 
-    await withTenant(principal, async (tx) => {
-      await tx.acquireLock({ type: "create_resource" }); // handles!
-      await tx.acquireLock({ type: "edit_session", sessionId: session.id });
+    // await withTenant(principal, async (tx) => {
+    //   await tx.acquireLock({ type: "create_resource" }); // handles!
+    //   await tx.acquireLock({ type: "edit_session", sessionId: session.id });
 
-      // await acceptRun(tx, sessionId, runId);
-      await activateSession(tx, sessionId);
-    });
+    //   // await acceptRun(tx, sessionId, runId);
+    //   await activateSession(tx, sessionId);
+    // });
 
-    log.debug(`[${sessionId}] [createAutoRun2] run activated`);
+    // log.debug(`[${sessionId}] [createAutoRun2] run activated`);
 
-    return { response, runId, success: true }
+    return { response: responseCopy, runId, success: true }
 
   } catch (err) {
     log.debug({ err }, `[${sessionId}] [createAutoRun2] error`);

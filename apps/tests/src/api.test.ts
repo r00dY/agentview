@@ -2906,6 +2906,8 @@ describe('API', () => {
     /**
      * TODO: This test is not yet working as expected.
      * - createSession 
+     * - reconnect to the stream
+     * - consume the stream
      */
     test("happy path: text response, creating run via session input", async () => {
       await updateConfigWithAiSdkUrl();

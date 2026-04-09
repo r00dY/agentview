@@ -410,7 +410,7 @@ export async function getSessions(tx: TenantTransaction, params: SessionsGetQuer
  * Mutations. Locks required.
  */
 
-export async function createSession(tx: TenantTransaction, body: StandardSessionCreate) {
+export async function createSession(tx: TenantTransaction, body: StandardSessionCreate, options: { active: boolean }) {
   await tx.acquireLock({ type: "create_resource" });
 
   const createdBy = tx.principal.type === 'member' ? tx.principal.session.user.id : null;
@@ -445,7 +445,7 @@ export async function createSession(tx: TenantTransaction, body: StandardSession
     agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
   });
 
-  let newSessionRow = await createInactiveSession(tx, {
+  const newSessionRow = await createInactiveSession(tx, {
     environment,
     channelRef,
     userId: user.id,
@@ -456,14 +456,11 @@ export async function createSession(tx: TenantTransaction, body: StandardSession
     createdBy,
   });
 
-  let newRun: Awaited<ReturnType<typeof createAutoRun>> | undefined = undefined;
-  if (body.input) {
-    newRun = await createAutoRun(tx, newSessionRow.id, { input: body.input });
-  } else {
+  if (options.active) {
     await activateSession(tx, newSessionRow.id);
   }
 
-  return { session: newSessionRow, run: newRun };
+  return newSessionRow;
 }
 
 

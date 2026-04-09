@@ -620,10 +620,8 @@ app.openapi(sessionsPOSTRoute, async (c) => {
   }
 
   return withTenant(principal, async (tx) => {
-    const { session } = await createSession(tx, body);
-
-    const fullSession = await requireSession(tx, session.id);
-
+    const newSession = await createSession(tx, body, { active: true });
+    const fullSession = await requireSession(tx, newSession.id);
     return c.json(fullSession, 201);
   })
 })
@@ -656,18 +654,34 @@ app.openapi(sessionsAISDKPOSTRoute, async (c) => {
   const principal = await authnAllowPublic(c.req.raw.headers)
   const body = await c.req.valid('json')
 
-  const { session, run } = await withTenant(principal, async (tx) => {
-    return await createSession(tx, body);
-  })
-
-  if (!run) {
-    const fullSession = await withTenant(principal, async (tx) => {
-      return await requireSession(tx, session.id);
+  // session without run - just create active session and return it
+  if (!body.input) {
+    return await withTenant(principal, async (tx) => {
+      const newSession = await createSession(tx, body, { active: true });
+      const fullSession = await requireSession(tx, newSession.id);
+      return c.json(standardToDefaultSession(fullSession), 201);
     })
-    return c.json(standardToDefaultSession(fullSession), 201);
   }
+  // inactive session -> create run -> activate if successful
+  else {
+    const newSession = await withTenant(principal, async (tx) => {
+      return await createSession(tx, body, { active: false });
+    })
 
-  return createRunAISDKHandler(c, run, false, principal);
+    const { response, success } = await createAutoRun2(principal, newSession.id, { input: body.input }, c.req.raw.signal);
+
+    // on success -> just return new session
+    if (success) {
+      return await withTenant(principal, async (tx) => {
+        await activateSession(tx, newSession.id);
+        const fullSession = await requireSession(tx, newSession.id);
+        return c.json(standardToDefaultSession(fullSession), 201);
+      })
+    }
+    else {
+      return response;
+    }
+  }
 })
 
 
@@ -1208,11 +1222,7 @@ app.openapi(runsAISDKPOSTRoute, async (c) => {
   const { response, runId, success } = await createAutoRun2(principal, params.session_id, body, c.req.raw.signal);
 
   if (!success) {
-    // fetch() responses have immutable headers; Hono needs mutable headers to finalize the response
-    return new Response(response.body, {
-      status: response.status,
-      headers: Object.fromEntries(response.headers.entries()),
-    });
+    return response;
   }
 
   // no stream -> just return session
