@@ -5,6 +5,10 @@ import { parseAISDKStream, computeOutputItemCount, type AISDKChunk } from '../ad
 import { publishAISDKStreamEvent, expireAISDKStream } from '../adapters/ai-sdk-stream';
 import { RunTerminationError, type RunTerminationReason } from '../runs';
 import { type FastPatchOp } from '../runs';
+import { printELU } from '../performance';
+
+printELU('streaming-server');
+
 
 // signal to shut down streaming gracefully (to distinguish from normal RunTerminationError)
 class GracefulRunTerminationError extends RunTerminationError {}

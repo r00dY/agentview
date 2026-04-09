@@ -72,7 +72,7 @@ import { requireSession, requireSessionBase } from './sessions';
 import { printELU } from './performance';
 import { standardToDefaultSession } from './standardToDefaultSession';
 
-// printELU('http');
+printELU('http');
 
 await initDb();
 
