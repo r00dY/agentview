@@ -2,7 +2,6 @@ import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { log, setContext } from '../logger';
 import { parseAISDKStream, computeOutputItemCount, type AISDKChunk } from '../adapters/ai-sdk-utils';
-import { publishAISDKStreamEvent, expireAISDKStream } from '../adapters/ai-sdk-stream';
 import { RunTerminationError, type RunTerminationReason } from '../runs';
 import { type FastPatchOp } from '../runs';
 import { printELU } from '../performance';
@@ -31,6 +30,25 @@ interface LiveConnection {
     outputTexts: string[],
     finalOp?: FastPatchOp
   }
+
+  // In-memory stream buffer for GET /stream consumers
+  streamBuffer: string[];
+  streamDone: boolean;
+  streamNotify: (() => void)[];
+}
+
+// --- Buffer helpers ---
+
+function pushToBuffer(conn: LiveConnection, data: string) {
+  conn.streamBuffer.push(data);
+  const waiters = conn.streamNotify.splice(0);
+  for (const resolve of waiters) resolve();
+}
+
+function markStreamDone(conn: LiveConnection) {
+  conn.streamDone = true;
+  const waiters = conn.streamNotify.splice(0);
+  for (const resolve of waiters) resolve();
 }
 
 
@@ -132,7 +150,11 @@ app.post('/connect', async (c) => {
       toolStates: new Map<string, { toolName: string; inputText: string; input?: any }>(),
       emittedItemTypes: [],
       outputTexts: [],
-    }
+    },
+
+    streamBuffer: [],
+    streamDone: false,
+    streamNotify: [],
   };
 
   liveConnections.set(runId, connection);
@@ -179,17 +201,75 @@ app.post('/terminate', async (c) => {
   const TOTAL_WAIT_TIME = 5000;
   const INTERVAL = 100;
 
-  while (liveConnections.has(runId)) {
+  while (!connection.streamDone) {
     if (time > TOTAL_WAIT_TIME) {
       log.error({ runId }, '[streaming] run not closed after 5 seconds after cancellation');
       return c.json({ message: 'Run not closed after 5 seconds after cancellation' }, 500);
     }
-    
+
     await new Promise(resolve => setTimeout(resolve, INTERVAL));
     time += INTERVAL;
   }
 
   return c.json({ ok: true });
+});
+
+
+// --- SSE stream endpoint ---
+
+app.get('/stream/:runId', async (c) => {
+  const runId = c.req.param('runId');
+  const conn = liveConnections.get(runId);
+
+  if (!conn) {
+    return c.json({ message: 'Stream not found' }, 404);
+  }
+
+  const signal = c.req.raw.signal;
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      const encoder = new TextEncoder();
+      let cursor = 0;
+
+      try {
+        while (!signal.aborted) {
+          // Drain all buffered chunks
+          while (cursor < conn.streamBuffer.length) {
+            const data = conn.streamBuffer[cursor++];
+            if (data === '[DONE]') {
+              controller.close();
+              return;
+            }
+            controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+          }
+
+          if (conn.streamDone) {
+            controller.close();
+            return;
+          }
+
+          // Wait for new data or abort
+          await new Promise<void>(resolve => {
+            conn.streamNotify.push(resolve);
+            signal.addEventListener('abort', () => resolve(), { once: true });
+          });
+        }
+      } catch {
+        // Stream cancelled by consumer
+      }
+
+      try { controller.close(); } catch {}
+    }
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  });
 });
 
 
@@ -383,9 +463,9 @@ async function processStream(conn: LiveConnection) {
           break;
       }
 
-      // Mirror native chunks to Redis stream
+      // Buffer chunk for GET /stream consumers
       log.trace(chunk, 'stream event');
-      await publishAISDKStreamEvent(runId, JSON.stringify(chunk));
+      pushToBuffer(conn, JSON.stringify(chunk));
     }
 
     if (!conn.state.finalOp) {
@@ -410,7 +490,7 @@ async function processStream(conn: LiveConnection) {
 
       if (error.reason.status === 'cancelled') {
         conn.state.finalOp = { type: 'cancel' };
-      } 
+      }
       else if (error.reason.status === 'failed') {
         conn.state.finalOp = {
           type: 'fail',
@@ -429,7 +509,7 @@ async function processStream(conn: LiveConnection) {
         type: 'fail',
         failReason: { message: error.message ?? 'Connection error' },
       };
-    } else { // unexpected error while streaming    
+    } else { // unexpected error while streaming
       log.error({ runId }, '[streaming] unexpected error while streaming');
       conn.state.finalOp = {
         type: 'fail',
@@ -443,10 +523,10 @@ async function processStream(conn: LiveConnection) {
     }
 
     if (conn.state.finalOp.type === 'cancel') {
-      await publishAISDKStreamEvent(runId, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));
+      pushToBuffer(conn, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));
     } else if (conn.state.finalOp.type === 'fail') {
       const failReason = conn.state.finalOp.failReason.message ?? 'Unknown error';
-      await publishAISDKStreamEvent(runId, JSON.stringify({ type: 'error', errorText: failReason }));
+      pushToBuffer(conn, JSON.stringify({ type: 'error', errorText: failReason }));
     }
 
     await callFastPatch(conn, conn.state.finalOp);
@@ -456,12 +536,14 @@ async function processStream(conn: LiveConnection) {
 
     log.info({ runId }, '[streaming] sending [DONE]');
 
-    try {
-      await publishAISDKStreamEvent(runId, '[DONE]');
-      await expireAISDKStream(runId);
-    } catch (e) {}
+    pushToBuffer(conn, '[DONE]');
+    markStreamDone(conn);
 
-    liveConnections.delete(runId);
+    // Keep buffer available for late-connecting consumers, clean up after 60s
+    setTimeout(() => {
+      liveConnections.delete(runId);
+    }, 60_000);
+
     log.info({ runId }, '[streaming] connection cleaned up');
   }
 }
