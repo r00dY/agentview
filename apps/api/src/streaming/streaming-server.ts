@@ -200,20 +200,33 @@ app.post('/terminate', async (c) => {
     return c.json({ message: 'Connection not found' }, 404);
   }
 
-  if (graceful) {
-    connection.abortController.abort(new GracefulRunTerminationError(reason));
-  } else {
+  if (!graceful) {
     connection.abortController.abort(new RunTerminationError(reason));
   }
+  else {
+    connection.abortController.abort(new GracefulRunTerminationError(reason));
+  }
 
-  // connection.abortController.abort(new GracefulRunTerminationError(reason));
+  /**
+   * Here we wait 10s for run to be closed (check is liveConnections.has(runId)).
+   * But this is TOTAL EXCEPTION AND THIS CODE *HAS TO* WORK.
+   * Basically if this code doesn't work then termination of live connections doesn't work at all.
+   * 
+   * Above abort was triggered, so connection must be dead. The only thing we wait for is last fast patch.
+   */
+  let time = 0;
+  const TOTAL_WAIT_TIME = 5000;
+  const INTERVAL = 100;
 
-  // if (connection) {
-  //   log.info({ runId }, '[streaming] cancelling connection');
-  //   connection.abortController.abort(new StreamTerminationError({ status: 'cancelled' }));
-  // } else {
-  //   log.debug({ runId }, '[streaming] cancel: connection not found (already finished or never existed)');
-  // }
+  while (liveConnections.has(runId)) {
+    if (time > TOTAL_WAIT_TIME) {
+      log.error({ runId }, '[streaming] run not closed after 5 seconds after cancellation');
+      return c.json({ message: 'Run not closed after 10 seconds after cancellation' }, 500);
+    }
+    
+    await new Promise(resolve => setTimeout(resolve, INTERVAL));
+    time += INTERVAL;
+  }
 
   return c.json({ ok: true });
 });
@@ -439,6 +452,8 @@ async function processStream(conn: LiveConnection) {
   } catch (error: unknown) {
 
     if (error instanceof GracefulRunTerminationError) { // graceful termination (aka sigterm)
+      log.info({ runId }, '[streaming] graceful termination');
+
       if (error.reason.status === 'cancelled') {
         conn.state.finalOp = { type: 'cancel' };
       } 
@@ -450,15 +465,18 @@ async function processStream(conn: LiveConnection) {
       }
     }
     else if (error instanceof RunTerminationError) { // run already killed
-      log.info({ runId }, '[streaming] run killed, returning');
+      log.error({ runId }, '[streaming] run killed while streaming');
       return;
     }
     else if (error instanceof TypeError) { // connection error while streaming
+      log.info({ runId }, '[streaming] connection error while streaming');
+
       conn.state.finalOp = {
         type: 'fail',
         failReason: { message: error.message ?? 'Connection error' },
       };
-    } else { // unexpected error while streaming      
+    } else { // unexpected error while streaming    
+      log.error({ runId }, '[streaming] unexpected error while streaming');
       conn.state.finalOp = {
         type: 'fail',
         failReason: { message: error instanceof Error ? error.message : String(error) },
@@ -469,8 +487,6 @@ async function processStream(conn: LiveConnection) {
       log.error({ runId, error }, 'Unreachable: no finalOp set');
       return;
     }
-
-    log.info({ runId, error }, `[streaming] error while streaming`);
 
     if (conn.state.finalOp.type === 'cancel') {
       await publishAISDKStreamEvent(runId, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));

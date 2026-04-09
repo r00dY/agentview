@@ -3227,7 +3227,7 @@ describe('API', () => {
           if (!res.closed) {
             res.write(`data: ${JSON.stringify({ type: "text-delta", id: "t2", delta: "." })}\n\n`);
           }
-        }, 2);
+        }, 10);
 
         res.on('close', () => {
           clearInterval(interval);
@@ -3260,7 +3260,7 @@ describe('API', () => {
       expect(updatedSession.lastRun?.sessionItems[1].content.text).toBe("First chunk");
 
       // Wait for the worker to detect cancellation and abort the connection
-      await new Promise(r => setTimeout(r, 3000));
+      await new Promise(r => setTimeout(r, 500));
       expect(connectionClosed).toBe(true);
 
       // Ensure stream promise settles

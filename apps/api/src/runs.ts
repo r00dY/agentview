@@ -753,6 +753,25 @@ export async function applyRunPatch(
   return updatedRun;
 }
 
+export async function sendRunTerminationSignal(runId: string, reason: RunTerminationReason, options: { graceful: boolean }) {
+  try {
+    await fetch('http://localhost:1999/terminate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        runId,
+        reason,
+        graceful: options.graceful,
+      }),
+    }); 
+  } catch (error) {
+    log.error({ runId, error }, 'Failed to send run termination signal');
+    return false;
+  }
+}
+
 /**
  * Best-effort run clean-up (for finally {} blocks, timeouts, discards etc)
  * It unconditionally KILLS run. No grace period.
@@ -780,9 +799,12 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
       reason = { status: 'discarded', failReason: { message: `Overriden for pending/init from: ${logText}` } };
     }
 
-    await publishEvent({ type: 'run.terminated', runId, reason }); // important to signal termination to the workers (the signal might have been sent before for cancel / timeout, but it's for discards and general sanity)
+    // await publishEvent({ type: 'run.terminated', runId, reason }); // important to signal termination to the workers (the signal might have been sent before for cancel / timeout, but it's for discards and general sanity)
 
     log.info({ runId, reason: logText }, 'terminating run');
+
+    sendRunTerminationSignal(runId, reason, { graceful: false })
+
     const nowIso = new Date().toISOString();
 
     await tx.update(runs).set({

@@ -57,7 +57,7 @@ import { isInboxItemUnread } from './inboxItems';
 import { initDb } from './initDb';
 import { requireValidInvitation } from './invitations';
 import { requireUUID } from './isUUID';
-import { acceptRun, applyRunPatch, createAutoRun, createAutoRun2, createManualRun, DEFAULT_IDLE_TIME, fastApplyRunPatch, getRunInput, getRunInputContent, isRunFinished, requireRunBase, RunTerminationError, terminateRun } from './runs';
+import { acceptRun, applyRunPatch, createAutoRun, createAutoRun2, createManualRun, DEFAULT_IDLE_TIME, fastApplyRunPatch, getRunInput, getRunInputContent, isRunFinished, requireRunBase, RunTerminationError, sendRunTerminationSignal, terminateRun } from './runs';
 import { publishEvent } from './redisPubSub';
 import { createRunStreamConsumer } from './runStream';
 import { organizations, users } from './schemas/auth-schema';
@@ -1356,23 +1356,44 @@ async function sessionStandardCancelHandler(c: Parameters<RouteHandler<typeof se
   // - Signal cancellation and schedule hard termination after 5s
   // - the setTimeout must be non-blocking. We don't want to wait 5s as it might potentially end much faster than that, when [DONE] is sent sooner.
   // - this 5s is just a safety net. termineRun inside it should be no-op in all cases.
-  await publishEvent({ type: 'run.terminated', runId: lastRun.id, reason: { status: 'cancelled' } });
 
-  setTimeout(() => {
-    withOrg(principal.organizationId, async (tx) => {
-      await terminateRun(tx, session_id, lastRun.id, { status: 'cancelled' });
-    });
-  }, 5000);
+  await sendRunTerminationSignal(lastRun.id, { status: 'cancelled' }, { graceful: true }); // it's blocking, max 5s
 
-  // Phase 3. Wait for stream to end (this is expected behaviour).
-  let streamConsumer: ReturnType<typeof createRunStreamConsumer> | undefined = undefined;
+  // safe termination in case sendRunTerminationSignal failed
+  withOrg(principal.organizationId, async (tx) => {
+    await terminateRun(tx, session_id, lastRun.id, { status: 'cancelled' });
+  });
 
-  try {
-    streamConsumer = createRunStreamConsumer(lastRun.id, c.req.raw.signal);
-    for await (const _ of streamConsumer!.entries()) { }
-  } finally {
-    streamConsumer?.close();
-  }
+
+  // const forceTerminationPromise = new Promise((resolve) => {
+  //   setTimeout(() => {
+  //     withOrg(principal.organizationId, async (tx) => {
+  //       await terminateRun(tx, session_id, lastRun.id, { status: 'cancelled' });
+  //     });
+  //     resolve(null);
+  //   }, 5000);
+  // });
+
+  // await Promise.race([properTerminationPromise, forceTerminationPromise]);
+
+
+  // await publishEvent({ type: 'run.terminated', runId: lastRun.id, reason: { status: 'cancelled' } });
+
+  // setTimeout(() => {
+  //   withOrg(principal.organizationId, async (tx) => {
+  //     await terminateRun(tx, session_id, lastRun.id, { status: 'cancelled' });
+  //   });
+  // }, 5000);
+
+  // // Phase 3. Wait for stream to end (this is expected behaviour).
+  // let streamConsumer: ReturnType<typeof createRunStreamConsumer> | undefined = undefined;
+
+  // try {
+  //   streamConsumer = createRunStreamConsumer(lastRun.id, c.req.raw.signal);
+  //   for await (const _ of streamConsumer!.entries()) { }
+  // } finally {
+  //   streamConsumer?.close();
+  // }
 
   // Phase 4. Return session to the client (must be updated by now)
   return await withOrg(principal.organizationId, async (tx) => {

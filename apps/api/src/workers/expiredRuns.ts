@@ -2,9 +2,8 @@ import { db__dangerous } from '../db';
 import { runs } from '../schemas/schema';
 import { inArray, sql } from 'drizzle-orm';
 import { createWorker } from './utils';
-import { terminateRun, type RunTerminationReason } from '../runs';
+import { sendRunTerminationSignal, terminateRun, type RunTerminationReason } from '../runs';
 import { withOrg } from '../withOrg';
-import { publishEvent } from '../redisPubSub';
 
 type Run = typeof runs.$inferSelect;
 
@@ -32,9 +31,7 @@ export const expiredRunsWorker = createWorker<Run>({
   },
   async process(run) {
     if (!run.manual) {
-      // we send signal for auto-fetcher, it should clean up the run.
-      await publishEvent({ type: 'run.terminated', runId: run.id, reason: TERMINATION_REASON }); // signal timeout
-      await new Promise((resolve) => setTimeout(resolve, TERMINATION_DELAY_MS));
+      await sendRunTerminationSignal(run.id, TERMINATION_REASON, { graceful: true }); // max 5s
     }
 
     await withOrg(run.organizationId, async (tx) => {
