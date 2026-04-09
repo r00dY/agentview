@@ -3,14 +3,12 @@ import type { ChannelRef, Environment, SessionBase, SessionsGetQueryParams, Sess
 import { findChannelConfig, getChannelAgent, requireAgentConfig, requireChannelConfig } from "agentview/baseConfigUtils";
 import { randomBytes } from "crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { log } from "./logger";
 import type z from "zod";
 import { resolveAgentRef } from "./agentRefs";
 import { authorize } from "./authMiddleware";
 import { getConfigFromEnvironment, requireConfig, requireEnvironment } from "./environments";
 import { isUUID, requireUUID } from "./isUUID";
 import { parseMetadata } from "./parseMetadata";
-import { createAutoRun } from "./runs";
 import { endUsers, events, runs, sessionItems, sessions } from "./schemas/schema";
 import type { Transaction } from "./types";
 import { updateInboxes } from "./updateInboxes";

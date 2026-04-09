@@ -957,7 +957,30 @@ export async function createAutoRun2(
 
   // 1. Prepare run creation (authorization, validation, etc)
   const { runId, standardSession, runConfig, agentUrl } = await withTenant(principal, async (tx) => {
-    const { run, runConfig, agentConfig } = await createAutoRun(tx, sessionId, body);
+    await tx.acquireLock({ type: "edit_session", sessionId });
+
+    const session = await requireSessionBase(tx, sessionId);
+    authorize(tx.principal, { action: "end-user:update", user: session.user });
+  
+    const environment = await requireEnvironment(tx);
+  
+    const { lastRun, agentConfig, agentRefId } = await prepareRunCreation(tx, environment, sessionId);
+    const { runConfig, parsedInput, idleTimeout } = await processInput(agentConfig, body.input);
+  
+    const run = await createRunCore(tx, environment, sessionId, {
+      parsedInput,
+      parsedNonInputItems: [],
+      status: 'in_progress',
+      failReason: null,
+      expiresAt: new Date(Date.now() + idleTimeout).toISOString(),
+      finishedAt: null,
+      metadata: undefined,
+      agentRefId,
+      manual: false,
+      state: undefined,
+      runConfig,
+      lastRun,
+    });
 
     const agentUrl = agentConfig.url;
     if (!agentUrl) {
@@ -1059,39 +1082,41 @@ export async function createAutoRun2(
 
 
 
-export async function createAutoRun(
-  tx: TenantTransaction,
-  sessionId: string,
-  body: { input: Record<string, any> }
-) {
-  await tx.acquireLock({ type: "edit_session", sessionId });
+// export async function createAutoRun(
+//   tx: TenantTransaction,
+//   sessionId: string,
+//   body: { input: Record<string, any> }
+// ) {
+//   await tx.acquireLock({ type: "edit_session", sessionId });
 
-  const session = await requireSessionBase(tx, sessionId);
-  authorize(tx.principal, { action: "end-user:update", user: session.user });
+//   const session = await requireSessionBase(tx, sessionId);
+//   authorize(tx.principal, { action: "end-user:update", user: session.user });
 
-  const environment = await requireEnvironment(tx);
+//   const environment = await requireEnvironment(tx);
 
-  const { lastRun, agentConfig, agentRefId } = await prepareRunCreation(tx, environment, sessionId);
-  const { runConfig, parsedInput, idleTimeout } = await processInput(agentConfig, body.input);
+//   const { lastRun, agentConfig, agentRefId } = await prepareRunCreation(tx, environment, sessionId);
+//   const { runConfig, parsedInput, idleTimeout } = await processInput(agentConfig, body.input);
 
-  const run = await createRunCore(tx, environment, sessionId, {
-    parsedInput,
-    parsedNonInputItems: [],
-    // status: 'pending',
-    status: 'in_progress',
-    failReason: null,
-    expiresAt: new Date(Date.now() + idleTimeout).toISOString(),
-    finishedAt: null,
-    metadata: undefined,
-    agentRefId,
-    manual: false,
-    state: undefined,
-    runConfig,
-    lastRun,
-  });
+//   const run = await createRunCore(tx, environment, sessionId, {
+//     parsedInput,
+//     parsedNonInputItems: [],
+//     // status: 'pending',
+//     status: 'in_progress',
+//     failReason: null,
+//     expiresAt: new Date(Date.now() + idleTimeout).toISOString(),
+//     finishedAt: null,
+//     metadata: undefined,
+//     agentRefId,
+//     manual: false,
+//     state: undefined,
+//     runConfig,
+//     lastRun,
+//   });
 
-  return { run, runConfig, agentConfig }
-}
+//   return { run, runConfig, agentConfig }
+// }
+
+
 
 /**
  * Manual run creation. Used by POST /api/sessions/{id}/runs/manual.

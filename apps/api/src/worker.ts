@@ -1,7 +1,6 @@
 import { initDb } from './initDb';
 import { expiredRunsWorker } from './workers/expiredRuns';
 import { webhookWorker } from './workers/webhooks';
-import { agentFetchWorker } from './workers/agentFetch';
 import { outgoingChannelMessageWorker } from './workers/outgoingChannelMessages';
 import { channelApps } from './channels/registry';
 
@@ -16,7 +15,6 @@ await initDb();
  *   to enforce RLS as defense-in-depth
  */
 
-// agentFetchWorker.start();
 expiredRunsWorker.start();
 webhookWorker.start();
 outgoingChannelMessageWorker.start();
