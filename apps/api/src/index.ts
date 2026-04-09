@@ -946,7 +946,7 @@ app.post('/internal/fast-patch', async (c) => {
         tx,
         body.runId,
         body.sessionId,
-        BaseRunSchemaToZod.parse(body.runConfig),
+        BaseRunSchemaToZod.parse(JSON.parse(body.runConfig)),
         body.op
       );
     })

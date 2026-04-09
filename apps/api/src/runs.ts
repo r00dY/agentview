@@ -958,12 +958,12 @@ export async function createAutoRun2(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        body: { messages, session },
         agentUrl,
-        runConfig: serializeRunConfig(runConfig),
         runId,
         sessionId,
         organizationId: principal.organizationId,
+        body: JSON.stringify({ messages, session }), // as string, no unnecessary parsing on the other end
+        runConfig: JSON.stringify(serializeRunConfig(runConfig)), // as string, no unnecessary parsing on the other end
       }),
       signal,
     });

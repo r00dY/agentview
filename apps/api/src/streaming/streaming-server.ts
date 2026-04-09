@@ -14,7 +14,7 @@ const HTTP_SERVER_BASE_URL = `http://localhost:${process.env.HTTP_SERVER_PORT ??
 interface LiveConnection {
   reader: ReadableStreamDefaultReader<Uint8Array>;
   abortController: AbortController;
-  runConfig: any;
+  runConfig: string;
   sessionId: string;
   runId: string
   organizationId: string;
@@ -57,7 +57,7 @@ app.post('/connect', async (c) => {
     response = await fetch(agentUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body,
       signal: abortController.signal,
     });
   } catch (error: unknown) {
@@ -168,8 +168,8 @@ app.post('/terminate', async (c) => {
   }
 
   /**
-   * Here we wait 5s for termination to be completed.
-   * - those 5s are "the contract" for the caller
+   * Here we wait max 5s for termination to be completed.
+   * If it doesn't happen, we treat it as an error state. This should be immediate.
    */
   let time = 0;
   const TOTAL_WAIT_TIME = 5000;
