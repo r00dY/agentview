@@ -1,7 +1,6 @@
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { log, setContext } from '../logger';
-import { parseAISDKStream, computeOutputItemCount, type AISDKChunk } from '../adapters/ai-sdk-utils';
 import { RunTerminationError, type RunTerminationReason } from '../runs';
 import { type FastPatchOp } from '../runs';
 import { startMeasuring } from '../performance';
@@ -22,21 +21,12 @@ if (!process.env.STREAMING_SERVER_PORT) {
 }
 
 interface LiveConnection {
-  reader: ReadableStreamDefaultReader<Uint8Array>;
+  stream: ReadableStream<Uint8Array>;
   abortController: AbortController;
   runConfig: string;
   sessionId: string;
   runId: string
   organizationId: string;
-
-  state: {
-    textBuffers: Map<string, string>,
-    reasoningBuffers: Map<string, string>,
-    toolStates: Map<string, { toolName: string; inputText: string; input?: any }>,
-    emittedItemTypes: string[],
-    outputTexts: string[],
-    finalOp?: FastPatchOp
-  }
 
   // In-memory stream buffer for GET /stream consumers
   streamBuffer: string[];
@@ -153,23 +143,13 @@ app.post('/connect', async (c) => {
   }
 
   // Success - store connection and start streaming in background
-  const reader = response.body.getReader();
-
   const connection: LiveConnection = {
-    reader,
+    stream: response.body,
     abortController,
     runConfig,
     sessionId,
     runId,
     organizationId,
-
-    state: {
-      textBuffers: new Map<string, string>(),
-      reasoningBuffers: new Map<string, string>(),
-      toolStates: new Map<string, { toolName: string; inputText: string; input?: any }>(),
-      emittedItemTypes: [],
-      outputTexts: [],
-    },
 
     streamBuffer: [],
     streamDone: false,
@@ -328,236 +308,37 @@ async function callFastPatch(
 
 
 async function processStream(conn: LiveConnection) {
-  const { reader, runId } = conn;
+  const { runId } = conn;
 
   try {
     log.info({ runId }, '[streaming] streaming started');
 
-    for await (const data of parseAISDKStream(reader)) {
-      if (data === '[DONE]') {
-        log.debug({ runId }, '[streaming] [DONE] received');
-        break;
+    const chunkStream = parseJsonEventStream({
+      stream: conn.stream,
+      schema: uiMessageChunkSchema,
+    });
+
+    for await (const result of chunkStream) {
+      if (!result.success) {
+        throw result.error;
       }
-
-      const chunk = JSON.parse(data) as AISDKChunk;
-      if (chunk.type === 'start' && !chunk.messageId) {
-        chunk.messageId = runId;
-      }
-
-      switch (chunk.type) {
-        case 'start': {
-          break;
-        }
-
-        case 'text-start': {
-          conn.state.textBuffers.set(chunk.id, '');
-          break;
-        }
-
-        case 'text-delta': {
-          const current = conn.state.textBuffers.get(chunk.id) ?? '';
-          conn.state.textBuffers.set(chunk.id, current + chunk.delta);
-          break;
-        }
-
-        case 'text-end': {
-          const text = conn.state.textBuffers.get(chunk.id) ?? '';
-          conn.state.textBuffers.delete(chunk.id);
-          conn.state.emittedItemTypes.push('text');
-          conn.state.outputTexts.push(text);
-
-          log.debug({ runId }, '[streaming] fast.patch for "text"');
-          await callFastPatch(conn, { type: 'item', content: { type: 'text', text } });
-          break;
-        }
-
-        case 'reasoning-start': {
-          conn.state.reasoningBuffers.set(chunk.id, '');
-          break;
-        }
-
-        case 'reasoning-delta': {
-          const current = conn.state.reasoningBuffers.get(chunk.id) ?? '';
-          conn.state.reasoningBuffers.set(chunk.id, current + chunk.delta);
-          break;
-        }
-
-        case 'reasoning-end': {
-          const text = conn.state.reasoningBuffers.get(chunk.id) ?? '';
-          conn.state.reasoningBuffers.delete(chunk.id);
-          conn.state.emittedItemTypes.push('reasoning');
-
-          log.debug({ runId }, '[streaming] fast.patch for "reasoning"');
-          await callFastPatch(conn, { type: 'item', content: { type: 'reasoning', text } });
-          break;
-        }
-
-        case 'tool-input-start': {
-          conn.state.toolStates.set(chunk.toolCallId, {
-            toolName: chunk.toolName,
-            inputText: '',
-          });
-          break;
-        }
-
-        case 'tool-input-delta': {
-          const state = conn.state.toolStates.get(chunk.toolCallId);
-          if (state) {
-            state.inputText += chunk.inputTextDelta;
-          }
-          break;
-        }
-
-        case 'tool-input-available': {
-          const state = conn.state.toolStates.get(chunk.toolCallId);
-          if (state) {
-            state.input = chunk.input;
-          }
-          break;
-        }
-
-        case 'tool-output-available': {
-          const state = conn.state.toolStates.get(chunk.toolCallId);
-          if (state) {
-            conn.state.emittedItemTypes.push('tool-call');
-            log.debug({ runId }, '[streaming] fast.patch for "tool-output-available"');
-            await callFastPatch(conn, {
-              type: 'item',
-              content: { type: 'tool-call', toolCallId: chunk.toolCallId, toolName: state.toolName, state: 'output-available', input: state.input, output: chunk.output },
-            });
-            conn.state.toolStates.delete(chunk.toolCallId);
-          }
-          break;
-        }
-
-        case 'tool-output-error': {
-          const state = conn.state.toolStates.get(chunk.toolCallId);
-          if (state) {
-            conn.state.emittedItemTypes.push('tool-call');
-            log.debug({ runId }, '[streaming] fast.patch for "tool-output-error"');
-            await callFastPatch(conn, {
-              type: 'item',
-              content: { type: 'tool-call', toolCallId: chunk.toolCallId, toolName: state.toolName, state: 'output-error', input: state.input, errorText: chunk.errorText },
-            });
-            conn.state.toolStates.delete(chunk.toolCallId);
-          }
-          break;
-        }
-
-        case 'finish': {
-          const outputCount = computeOutputItemCount(conn.state.emittedItemTypes);
-
-          conn.state.finalOp = {
-            type: 'complete',
-            outputItemCount: outputCount,
-            channelReply: { text: conn.state.outputTexts.filter(Boolean).join('\n\n') }, // we can always send channel reply, even for non-channel runs, who cares
-          };
-          break;
-        }
-
-        case 'error': {
-          conn.state.finalOp = {
-            type: 'fail',
-            failReason: {
-              message: chunk.errorText ?? 'Unknown error from AI SDK stream',
-            },
-          };
-          break;
-        }
-
-        case 'data-session-state': {
-          conn.state.emittedItemTypes.push('data');
-          log.debug({ runId }, '[streaming] fast.patch for state');
-          await callFastPatch(conn, {
-            type: 'state',
-            content: chunk.data,
-          });
-          break;
-        }
-
-        default:
-          if (chunk.type.startsWith('data-')) {
-            log.debug({ runId }, `[streaming] fast.patch for "${chunk.type}"`);
-            conn.state.emittedItemTypes.push('data');
-            await callFastPatch(conn, {
-              type: 'item',
-              content: chunk,
-            });
-          }
-          log.trace(chunk, 'ignored chunk');
-          break;
-      }
-
-      // Buffer chunk for GET /stream consumers
+      const chunk = result.value;
       log.trace(chunk, 'stream event');
       pushToBuffer(conn, JSON.stringify(chunk));
     }
 
-    if (!conn.state.finalOp) {
-      log.info({ runId }, '[streaming] stream ended incomplete');
-      conn.state.finalOp = {
-        type: 'fail',
-        failReason: {
-          message: 'Agent stream ended without completing',
-        },
-      };
-    } else {
-      log.info({ runId }, '[streaming] stream ended complete');
-    }
-
-    log.debug({ runId }, '[streaming] fast.patch for completion');
-    await callFastPatch(conn, conn.state.finalOp);
+    log.info({ runId }, '[streaming] stream ended');
 
   } catch (error: unknown) {
-
-    if (error instanceof GracefulRunTerminationError) { // graceful termination (aka sigterm)
-      log.info({ runId }, '[streaming] graceful termination');
-
-      if (error.reason.status === 'cancelled') {
-        conn.state.finalOp = { type: 'cancel' };
-      }
-      else if (error.reason.status === 'failed') {
-        conn.state.finalOp = {
-          type: 'fail',
-          failReason: { message: error.message ?? 'Connection error' },
-        };
-      }
-    }
-    else if (error instanceof RunTerminationError) { // run already killed
-      log.info({ runId }, '[streaming] run killed while streaming');
-      return;
-    }
-    else if (error instanceof TypeError) { // connection error while streaming
-      log.info({ runId }, '[streaming] connection error while streaming');
-
-      conn.state.finalOp = {
-        type: 'fail',
-        failReason: { message: error.message ?? 'Connection error' },
-      };
-    } else { // unexpected error while streaming
-      log.error({ runId }, '[streaming] unexpected error while streaming');
-      conn.state.finalOp = {
-        type: 'fail',
-        failReason: { message: error instanceof Error ? error.message : String(error) },
-      };
-    }
-
-    if (!conn.state.finalOp) {
-      log.error({ runId, error }, 'Unreachable: no finalOp set');
-      return;
-    }
-
-    if (conn.state.finalOp.type === 'cancel') {
-      pushToBuffer(conn, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));
-    } else if (conn.state.finalOp.type === 'fail') {
-      const failReason = conn.state.finalOp.failReason.message ?? 'Unknown error';
-      pushToBuffer(conn, JSON.stringify({ type: 'error', errorText: failReason }));
-    }
-
-    await callFastPatch(conn, conn.state.finalOp);
-
+    log.error({ err: error, runId }, '[streaming] error while streaming');
   } finally {
-    await reader?.cancel().catch(() => {});
+    // Nothing fancy: always call fast-patch with fail at the end.
+    await callFastPatch(conn, {
+      type: 'fail',
+      failReason: { message: 'not implemented' },
+    }).catch((err) => {
+      log.error({ err, runId }, '[streaming] fast-patch failed');
+    });
 
     log.info({ runId }, '[streaming] sending [DONE]');
 

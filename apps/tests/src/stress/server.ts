@@ -47,7 +47,7 @@ const server = createServer((req, res) => {
           type: 'text-delta',
           id: 't1',
           delta: `tok${i} `,
-          providerMetadata: { time: `${Date.now()}` },
+          providerMetadata: { agentview: { time: `${Date.now()}` } },
         };
         /**
          * IMPORTANT: *NO* BACKPRESSURE
