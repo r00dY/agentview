@@ -11,7 +11,7 @@
     "log:slow": "cat logs/api.log| jq 'select(.duration > 50 and (.path | startswith(\"/api/auth\") | not))'",
     "log:runs": "tsx src/scripts/log-expired.ts",
     "log:patchtime": "cat logs/api.log | jq -s '[.[] | select(.patchtime) | .patchtime] | add / length'",
-    "dev": "concurrently \"npm run dev:http\" \"npm run dev:worker\" \"npm run dev:proxy\"",
+    "dev": "concurrently \"npm run dev:http\" \"npm run dev:worker\" \"npm run dev:proxy\" \"npm run dev:streaming\"",
     "http": "tsx src/index.ts",
     "worker": "tsx src/worker.ts",
     "build": "tsc --noEmit && tsc",

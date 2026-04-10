@@ -9,7 +9,6 @@ import { startMeasuring } from '../performance';
 const perf = startMeasuring();
 perf.startPrinting('streaming-server');
 
-
 // signal to shut down streaming gracefully (to distinguish from normal RunTerminationError)
 class GracefulRunTerminationError extends RunTerminationError {}
 
@@ -77,6 +76,7 @@ app.get('/health', (c) => {
 });
 
 let fetchCounter = 0;
+
 
 app.post('/connect', async (c) => {
   const fetchId = `f${++fetchCounter}`
@@ -327,7 +327,7 @@ async function callFastPatch(
 
 
 async function processStream(conn: LiveConnection) {
-  const { reader, runId /*, isChannelRun*/ } = conn;
+  const { reader, runId } = conn;
 
   try {
     log.info({ runId }, '[streaming] streaming started');
