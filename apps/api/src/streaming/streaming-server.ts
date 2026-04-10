@@ -4,7 +4,7 @@ import { log, setContext } from '../logger';
 import { parseAISDKStream, computeOutputItemCount, type AISDKChunk } from '../adapters/ai-sdk-utils';
 import { RunTerminationError, type RunTerminationReason } from '../runs';
 import { type FastPatchOp } from '../runs';
-import { printELU } from '../performance';
+import { printELU, getELU } from '../performance';
 
 printELU('streaming-server');
 
@@ -62,7 +62,22 @@ const liveConnections = new Map<string, LiveConnection>();
 
 const app = new Hono();
 
-app.get('/health', (c) => c.json({ ok: true, connections: liveConnections.size }));
+app.get('/health', (c) => {
+  const elu = getELU();
+  const mem = process.memoryUsage();
+  return c.json({
+    ok: true,
+    connections: liveConnections.size,
+    elu: {
+      window: elu.window,   // last 1s sampling window
+      instant: elu.instant, // since last sample tick
+    },
+    memory: {
+      rss: mem.rss,
+      heapUsed: mem.heapUsed,
+    },
+  });
+});
 
 let fetchCounter = 0;
 
