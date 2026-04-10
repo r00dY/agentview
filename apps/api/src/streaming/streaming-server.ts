@@ -18,9 +18,166 @@ if (!process.env.STREAMING_SERVER_PORT) {
 // Resolve the LazySchema once — gives us a Schema with a `.validate()` method.
 const uiMessageChunkValidator = uiMessageChunkSchema();
 
+async function parseChunk(data: string) {
+  const obj = JSON.parse(data);
 
+  // simplified parsing for text-delta
+  if (obj.type === 'text-delta') {
+    if (typeof obj.delta !== 'string' || typeof obj.id !== 'string') {
+      throw new Error('Invalid text-delta chunk');
+    }
+    return obj;
+  }
 
+  const validationResult = await uiMessageChunkValidator.validate!(JSON.parse(data));
+  if (!validationResult.success) {
+    throw validationResult.error;
+  }
+  return validationResult.value;
+}
 
+async function processChunk(conn: LiveConnection, chunk: Awaited<ReturnType<typeof parseChunk>>) {
+  if (chunk.type === 'start' && !chunk.messageId) {
+    chunk.messageId = conn.runId;
+  }
+
+  switch (chunk.type) {
+    case 'start': {
+      break;
+    }
+
+    case 'text-start': {
+      conn.state.textBuffers.set(chunk.id, '');
+      break;
+    }
+
+    case 'text-delta': {
+      const current = conn.state.textBuffers.get(chunk.id) ?? '';
+      conn.state.textBuffers.set(chunk.id, current + chunk.delta);
+      break;
+    }
+
+    case 'text-end': {
+      const text = conn.state.textBuffers.get(chunk.id) ?? '';
+      conn.state.textBuffers.delete(chunk.id);
+      conn.state.emittedItemTypes.push('text');
+      conn.state.outputTexts.push(text);
+
+      await callFastPatch(conn, { type: 'item', content: { type: 'text', text } });
+      break;
+    }
+
+    case 'reasoning-start': {
+      conn.state.reasoningBuffers.set(chunk.id, '');
+      break;
+    }
+
+    case 'reasoning-delta': {
+      const current = conn.state.reasoningBuffers.get(chunk.id) ?? '';
+      conn.state.reasoningBuffers.set(chunk.id, current + chunk.delta);
+      break;
+    }
+
+    case 'reasoning-end': {
+      const text = conn.state.reasoningBuffers.get(chunk.id) ?? '';
+      conn.state.reasoningBuffers.delete(chunk.id);
+      conn.state.emittedItemTypes.push('reasoning');
+
+      await callFastPatch(conn, { type: 'item', content: { type: 'reasoning', text } });
+      break;
+    }
+
+    case 'tool-input-start': {
+      conn.state.toolStates.set(chunk.toolCallId, {
+        toolName: chunk.toolName,
+        inputText: '',
+      });
+      break;
+    }
+
+    case 'tool-input-delta': {
+      const state = conn.state.toolStates.get(chunk.toolCallId);
+      if (state) {
+        state.inputText += chunk.inputTextDelta;
+      }
+      break;
+    }
+
+    case 'tool-input-available': {
+      const state = conn.state.toolStates.get(chunk.toolCallId);
+      if (state) {
+        state.input = chunk.input;
+      }
+      break;
+    }
+
+    case 'tool-output-available': {
+      const state = conn.state.toolStates.get(chunk.toolCallId);
+      if (state) {
+        conn.state.emittedItemTypes.push('tool-call');
+        await callFastPatch(conn, {
+          type: 'item',
+          content: { type: 'tool-call', toolCallId: chunk.toolCallId, toolName: state.toolName, state: 'output-available', input: state.input, output: chunk.output },
+        });
+        conn.state.toolStates.delete(chunk.toolCallId);
+      }
+      break;
+    }
+
+    case 'tool-output-error': {
+      const state = conn.state.toolStates.get(chunk.toolCallId);
+      if (state) {
+        conn.state.emittedItemTypes.push('tool-call');
+        await callFastPatch(conn, {
+          type: 'item',
+          content: { type: 'tool-call', toolCallId: chunk.toolCallId, toolName: state.toolName, state: 'output-error', input: state.input, errorText: chunk.errorText },
+        });
+        conn.state.toolStates.delete(chunk.toolCallId);
+      }
+      break;
+    }
+
+    case 'finish': {
+      const outputCount = computeOutputItemCount(conn.state.emittedItemTypes);
+
+      conn.state.finalOp = {
+        type: 'complete',
+        outputItemCount: outputCount,
+        channelReply: { text: conn.state.outputTexts.filter(Boolean).join('\n\n') }, // we can always send channel reply, even for non-channel runs, who cares
+      };
+      break;
+    }
+
+    case 'error': {
+      conn.state.finalOp = {
+        type: 'fail',
+        failReason: {
+          message: chunk.errorText ?? 'Unknown error from AI SDK stream',
+        },
+      };
+      break;
+    }
+
+    case 'data-session-state': {
+      conn.state.emittedItemTypes.push('data');
+      await callFastPatch(conn, {
+        type: 'state',
+        content: chunk.data,
+      });
+      break;
+    }
+
+    default:
+      if (chunk.type.startsWith('data-')) {
+        conn.state.emittedItemTypes.push('data');
+        await callFastPatch(conn, {
+          type: 'item',
+          content: chunk,
+        });
+      }
+      break;
+  }
+}
 
 
 const perf = startMeasuring();
@@ -390,165 +547,21 @@ async function processStream(conn: LiveConnection) {
         break;
       }
 
-      const validationResult = await uiMessageChunkValidator.validate!(JSON.parse(data));
-      if (!validationResult.success) {
-        throw validationResult.error;
-      }
-      const chunk = validationResult.value as AISDKChunk;
+      // parse
+      const chunk = await parseChunk(data);
 
-      // const chunk = JSON.parse(data) as AISDKChunk;
-
+      // update chunk (rare)
+      let chunkUpdated = false;
       if (chunk.type === 'start' && !chunk.messageId) {
-        chunk.messageId = runId;
+        chunk.messageId = conn.runId;
+        chunkUpdated = true;
       }
-
-      switch (chunk.type) {
-        case 'start': {
-          break;
-        }
-
-        case 'text-start': {
-          conn.state.textBuffers.set(chunk.id, '');
-          break;
-        }
-
-        case 'text-delta': {
-          const current = conn.state.textBuffers.get(chunk.id) ?? '';
-          conn.state.textBuffers.set(chunk.id, current + chunk.delta);
-          break;
-        }
-
-        case 'text-end': {
-          const text = conn.state.textBuffers.get(chunk.id) ?? '';
-          conn.state.textBuffers.delete(chunk.id);
-          conn.state.emittedItemTypes.push('text');
-          conn.state.outputTexts.push(text);
-
-          log.debug({ runId }, '[streaming] fast.patch for "text"');
-          await callFastPatch(conn, { type: 'item', content: { type: 'text', text } });
-          break;
-        }
-
-        case 'reasoning-start': {
-          conn.state.reasoningBuffers.set(chunk.id, '');
-          break;
-        }
-
-        case 'reasoning-delta': {
-          const current = conn.state.reasoningBuffers.get(chunk.id) ?? '';
-          conn.state.reasoningBuffers.set(chunk.id, current + chunk.delta);
-          break;
-        }
-
-        case 'reasoning-end': {
-          const text = conn.state.reasoningBuffers.get(chunk.id) ?? '';
-          conn.state.reasoningBuffers.delete(chunk.id);
-          conn.state.emittedItemTypes.push('reasoning');
-
-          log.debug({ runId }, '[streaming] fast.patch for "reasoning"');
-          await callFastPatch(conn, { type: 'item', content: { type: 'reasoning', text } });
-          break;
-        }
-
-        case 'tool-input-start': {
-          conn.state.toolStates.set(chunk.toolCallId, {
-            toolName: chunk.toolName,
-            inputText: '',
-          });
-          break;
-        }
-
-        case 'tool-input-delta': {
-          const state = conn.state.toolStates.get(chunk.toolCallId);
-          if (state) {
-            state.inputText += chunk.inputTextDelta;
-          }
-          break;
-        }
-
-        case 'tool-input-available': {
-          const state = conn.state.toolStates.get(chunk.toolCallId);
-          if (state) {
-            state.input = chunk.input;
-          }
-          break;
-        }
-
-        case 'tool-output-available': {
-          const state = conn.state.toolStates.get(chunk.toolCallId);
-          if (state) {
-            conn.state.emittedItemTypes.push('tool-call');
-            log.debug({ runId }, '[streaming] fast.patch for "tool-output-available"');
-            await callFastPatch(conn, {
-              type: 'item',
-              content: { type: 'tool-call', toolCallId: chunk.toolCallId, toolName: state.toolName, state: 'output-available', input: state.input, output: chunk.output },
-            });
-            conn.state.toolStates.delete(chunk.toolCallId);
-          }
-          break;
-        }
-
-        case 'tool-output-error': {
-          const state = conn.state.toolStates.get(chunk.toolCallId);
-          if (state) {
-            conn.state.emittedItemTypes.push('tool-call');
-            log.debug({ runId }, '[streaming] fast.patch for "tool-output-error"');
-            await callFastPatch(conn, {
-              type: 'item',
-              content: { type: 'tool-call', toolCallId: chunk.toolCallId, toolName: state.toolName, state: 'output-error', input: state.input, errorText: chunk.errorText },
-            });
-            conn.state.toolStates.delete(chunk.toolCallId);
-          }
-          break;
-        }
-
-        case 'finish': {
-          const outputCount = computeOutputItemCount(conn.state.emittedItemTypes);
-
-          conn.state.finalOp = {
-            type: 'complete',
-            outputItemCount: outputCount,
-            channelReply: { text: conn.state.outputTexts.filter(Boolean).join('\n\n') }, // we can always send channel reply, even for non-channel runs, who cares
-          };
-          break;
-        }
-
-        case 'error': {
-          conn.state.finalOp = {
-            type: 'fail',
-            failReason: {
-              message: chunk.errorText ?? 'Unknown error from AI SDK stream',
-            },
-          };
-          break;
-        }
-
-        case 'data-session-state': {
-          conn.state.emittedItemTypes.push('data');
-          log.debug({ runId }, '[streaming] fast.patch for state');
-          await callFastPatch(conn, {
-            type: 'state',
-            content: chunk.data,
-          });
-          break;
-        }
-
-        default:
-          if (chunk.type.startsWith('data-')) {
-            log.debug({ runId }, `[streaming] fast.patch for "${chunk.type}"`);
-            conn.state.emittedItemTypes.push('data');
-            await callFastPatch(conn, {
-              type: 'item',
-              content: chunk,
-            });
-          }
-          // log.trace(chunk, 'ignored chunk');
-          break;
-      }
+      
+      // update state
+      await processChunk(conn, chunk);
 
       // Buffer chunk for GET /stream consumers
-      // log.trace(chunk, 'stream event');
-      pushToBuffer(conn, JSON.stringify(chunk));
+      pushToBuffer(conn, chunkUpdated ? JSON.stringify(chunk) : data); // strinfiy only updated chunks
     }
 
     if (!conn.state.finalOp) {
