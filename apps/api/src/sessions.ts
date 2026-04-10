@@ -531,31 +531,31 @@ export async function activateSession(tx: OrgTransaction, sessionId: string) {
   }
 
   // handle!
-  const handleSuffix = session.user.createdBy ? "s" : "";
+  // const handleSuffix = session.user.createdBy ? "s" : "";
 
-  const sessionWithHighestHandleNumber = await tx.query.sessions.findFirst({
-    orderBy: (sessions, { desc }) => [desc(sessions.handleNumber)],
-    where: and(eq(sessions.handleSuffix, handleSuffix), eq(sessions.active, true)),
-  });
+  // const sessionWithHighestHandleNumber = await tx.query.sessions.findFirst({
+  //   orderBy: (sessions, { desc }) => [desc(sessions.handleNumber)],
+  //   where: and(eq(sessions.handleSuffix, handleSuffix), eq(sessions.active, true)),
+  // });
 
-  const newHandleNumber = sessionWithHighestHandleNumber ? sessionWithHighestHandleNumber.handleNumber + 1 : 1;
+  // const newHandleNumber = sessionWithHighestHandleNumber ? sessionWithHighestHandleNumber.handleNumber + 1 : 1;
 
   await tx.update(sessions).set({
     active: true,
-    handleNumber: newHandleNumber,
-    handleSuffix: handleSuffix,
+    // handleNumber: newHandleNumber,
+    // handleSuffix: handleSuffix,
   }).where(eq(sessions.id, session.id));
 
-  const [event] = await tx.insert(events).values({
-    organizationId: tx.organizationId,
-    type: 'session_created',
-    authorId: session.createdBy ?? null,
-    payload: {
-      session_id: session.id,
-    }
-  }).returning();
+  // const [event] = await tx.insert(events).values({
+  //   organizationId: tx.organizationId,
+  //   type: 'session_created',
+  //   authorId: session.createdBy ?? null,
+  //   payload: {
+  //     session_id: session.id,
+  //   }
+  // }).returning();
 
-  await updateInboxes(tx, event);
+  // await updateInboxes(tx, event);
 }
 
 export async function updateSession(tx: TenantTransaction, session_id: string, body: SessionUpdate) {

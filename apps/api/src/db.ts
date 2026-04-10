@@ -6,6 +6,9 @@ import { getDatabaseURL } from './getDatabaseURL';
 const pool = new Pool({
   connectionString: getDatabaseURL(),
   max: 20,
+  connectionTimeoutMillis: 5_000, // fail instead of hanging forever
+  idleTimeoutMillis: 30_000,
+  statement_timeout: 10_000,      // via options or SET
 });
 
 /**
@@ -21,3 +24,11 @@ const pool = new Pool({
 export const db__dangerous = drizzle(pool, {
   schema
 });
+
+// setInterval(() => {
+//   log.warn({
+//     total: pool.totalCount,
+//     idle: pool.idleCount,
+//     waiting: pool.waitingCount,
+//   }, 'pg pool');
+// }, 3000);

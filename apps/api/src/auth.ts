@@ -147,12 +147,14 @@ The AgentView Team`,
             }
         }),
         after: createAuthMiddleware(async (ctx) => {
-            // extract headers
-            const headers = new Headers();
-            const setCookie = ctx.context.responseHeaders?.get("set-cookie");
-            headers.set("cookie", setCookie?.split(";")[0] || ""); // Extract just the cookie value
 
             if (ctx.path === "/sign-up/email") {
+
+                // extract headers
+                const headers = new Headers();
+                const setCookie = ctx.context.responseHeaders?.get("set-cookie");
+                headers.set("cookie", setCookie?.split(";")[0] || ""); // Extract just the cookie value
+
                 // Generate image property: ${color}:${firstLetterFromName}
                 const randomColor = colorValues[Math.floor(Math.random() * colorValues.length)];
                 const firstLetter = ctx.body.name ? ctx.body.name.charAt(0).toUpperCase() : "A";

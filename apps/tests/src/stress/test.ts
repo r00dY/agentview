@@ -1,4 +1,4 @@
-import { request as httpRequest } from 'node:http';
+import http from 'node:http';
 import { performance } from 'node:perf_hooks';
 import { createClient } from 'agentview';
 import { configDefaults, createStandardClient } from 'agentview/clientStandard';
@@ -51,27 +51,33 @@ function filterLatencies(lo: number, hi: number): Float64Array {
 
 // ---- Raw HTTP stream consumer ----
 
+const TEST_INPUT: any = { role: 'user', parts: [{ type: 'text', text: 'stress' }] };
+
 function consumeRunStream(
   sessionId: string,
   headers: Record<string, string>,
+  i: number
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const url = new URL(`/api/sessions/${sessionId}/runs`, API_BASE);
     const body = JSON.stringify({
-      input: { role: 'user', parts: [{ type: 'text', text: 'stress' }] },
+      input: TEST_INPUT,
       stream: true,
     });
 
-    const req = httpRequest(
+    const req = http.request(
       {
         hostname: url.hostname,
         port: url.port,
         path: url.pathname,
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+        timeout: 5000
       },
       (res) => {
+        console.log(`[test][${i}] run status: ${res.statusCode}`);
         if (res.statusCode !== 200) {
+          console.log('WRONG STATUS CODE in POST/run!!!!!!: ', res.statusCode);
           let buf = '';
           res.on('data', (c: Buffer) => (buf += c.toString()));
           res.on('end', () => {
@@ -109,10 +115,16 @@ function consumeRunStream(
           }
         });
 
+        res.on('timeout', () => {
+          // console.error(`[test][${i}] run timeout`);
+          res.destroy();
+          reject('timeout');
+        });
+
         res.on('end', () => { activeStreams--; resolve(); });
         res.on('error', (err) => {
           activeStreams--;
-          console.error(`[test] Stream error: ${err.message}`);
+          // console.error(`[test] Stream error: ${err.message}`);
           reject(err);
         });
       }
@@ -182,20 +194,36 @@ async function main() {
   measureDeadline = Date.now() + MEASURE_S * 1000;
   console.log(`Ramping up: 1 new stream every ${rampIntervalMs.toFixed(0)}ms over ${RAMP_UP_S}s (measuring for ${MEASURE_S}s)`);
 
-  let launched = 0;
+  async function runTest(i: number) {
+    console.log(`[t${i}] starting test`);
+    const session = await avAISDK.createSession({ agent: 'stress-agent' });
+    console.log(`[t${i}] session created: ${session.id}`);
+    // const run = await avAISDK.createRun({ sessionId: session.id, input: TEST_INPUT });
+    return consumeRunStream(session.id, authHeaders, i);
+  }
+
+  let i = 0;
+
   await new Promise<void>((resolve) => {
     const tick = () => {
-      const i = launched++;
-      console.log(`[test] Creating session + starting run ${i + 1}/${N}`);
-      const p = avAISDK
-        .createSession({ agent: 'stress-agent' })
-        .catch((err) => {
-          console.error(`[test] createSession failed (stream ${i + 1}): ${err?.message ?? err}`);
-          throw err;
-        })
-        .then((session) => consumeRunStream(session.id, authHeaders));
-      streamPromises.push(p);
-      if (launched < N) {
+      i++;
+
+      const promise = runTest(i).catch((err) => {
+        console.error(`[t${i}] ERROR`, err);
+        throw err;
+      });
+      streamPromises.push(promise);
+      
+      // console.log(`[test] Creating session + starting run ${i}/${N}`);
+      // const p = avAISDK
+      //   .createSession({ agent: 'stress-agent' })
+      //   .catch((err) => {
+      //     console.error(`[test] createSession failed (stream ${i}): ${err?.message ?? err}`);
+      //     throw err;
+      //   })
+      //   .then((session) => consumeRunStream(session.id, authHeaders));
+      // streamPromises.push(p);
+      if (i < N) {
         setTimeout(tick, rampIntervalMs);
       } else {
         resolve();
@@ -206,21 +234,21 @@ async function main() {
 
   console.log(`All ${N} streams started. Waiting for completion...`);
 
-  const results = await Promise.allSettled(streamPromises);
+  const results = await Promise.all(streamPromises);
   clearInterval(eluInterval);
 
-  const failed = results.filter((r) => r.status === 'rejected');
-  if (failed.length > 0) {
-    console.log(`${failed.length}/${N} streams failed:`);
-    for (const f of failed.slice(0, 5)) {
-      console.log(`  ${(f as PromiseRejectedResult).reason}`);
-    }
-  }
+  // const failed = results.filter((r) => r.status === 'rejected');
+  // if (failed.length > 0) {
+  //   console.log(`${failed.length}/${N} streams failed:`);
+  //   for (const f of failed.slice(0, 5)) {
+  //     console.log(`  ${(f as PromiseRejectedResult).reason}`);
+  //   }
+  // }
 
   // Report
   console.log(`\n=== Stress Test Results ===`);
   console.log(`Total samples: ${sampleCount}`);
-  console.log(`Streams: ${N - failed.length}/${N} succeeded\n`);
+  // console.log(`Streams: ${N - failed.length}/${N} succeeded\n`);
 
   report('Overall', latencies.subarray(0, sampleCount));
 
