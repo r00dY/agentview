@@ -6,7 +6,7 @@ import { seedUsers } from '../seedUsers';
 import { z } from 'zod';
 
 // ---- Config ----
-const N = 250;
+const N = 400;
 const RAMP_UP_S = 10;
 const MEASURE_S = 25; // only collect samples for this long after first stream starts
 const AGENT_URL = `http://localhost:3500/agent`;
@@ -74,7 +74,11 @@ function consumeRunStream(
         if (res.statusCode !== 200) {
           let buf = '';
           res.on('data', (c: Buffer) => (buf += c.toString()));
-          res.on('end', () => reject(new Error(`Run failed ${res.statusCode}: ${buf.slice(0, 300)}`)));
+          res.on('end', () => {
+            const err = new Error(`Run create failed ${res.statusCode}: ${buf.slice(0, 300)}`);
+            console.error(`[test] ${err.message}`);
+            reject(err);
+          });
           return;
         }
 
@@ -106,11 +110,18 @@ function consumeRunStream(
         });
 
         res.on('end', () => { activeStreams--; resolve(); });
-        res.on('error', (err) => { activeStreams--; reject(err); });
+        res.on('error', (err) => {
+          activeStreams--;
+          console.error(`[test] Stream error: ${err.message}`);
+          reject(err);
+        });
       }
     );
 
-    req.on('error', reject);
+    req.on('error', (err) => {
+      console.error(`[test] Run request error: ${err.message}`);
+      reject(err);
+    });
     req.end(body);
   });
 }
@@ -176,9 +187,13 @@ async function main() {
     const tick = () => {
       const i = launched++;
       console.log(`[test] Creating session + starting run ${i + 1}/${N}`);
-      const p = avAISDK.createSession({ agent: 'stress-agent' }).then((session) =>
-        consumeRunStream(session.id, authHeaders)
-      );
+      const p = avAISDK
+        .createSession({ agent: 'stress-agent' })
+        .catch((err) => {
+          console.error(`[test] createSession failed (stream ${i + 1}): ${err?.message ?? err}`);
+          throw err;
+        })
+        .then((session) => consumeRunStream(session.id, authHeaders));
       streamPromises.push(p);
       if (launched < N) {
         setTimeout(tick, rampIntervalMs);
