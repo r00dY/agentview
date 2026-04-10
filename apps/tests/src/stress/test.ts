@@ -195,8 +195,6 @@ async function main() {
   measureDeadline = Date.now() + MEASURE_S * 1000;
   console.log(`Ramping up: 1 new stream every ${rampIntervalMs.toFixed(0)}ms over ${RAMP_UP_S}s (measuring for ${MEASURE_S}s)`);
 
-  await profilerPost('/profile/start');
-
   async function runTest(i: number) {
     const session = await avAISDK.createSession({ agent: 'stress-agent' });
     return consumeRunStream(session.id, authHeaders, i);
@@ -224,11 +222,16 @@ async function main() {
 
   console.log(`All ${N} streams started. Waiting for completion...`);
 
+  // profile at maximum concurrency
+  await profilerPost('/profile/start');
+  await new Promise<void>((resolve) => setTimeout(resolve, 10000));
+  await profilerPost('/profile/stop');
+
+
   // errors shouldn't happen so Promise.all is fine
   await Promise.all(streamPromises);
   clearInterval(eluInterval);
 
-  await profilerPost('/profile/stop');
 
   // Report
   console.log(`\n=== Stress Test Results ===`);

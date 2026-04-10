@@ -1,21 +1,11 @@
-import { Hono } from 'hono';
-import { serve } from '@hono/node-server';
+import http from 'node:http';
 import { log, setContext } from '../logger';
-import { parseAISDKStream, computeOutputItemCount, type AISDKChunk } from '../adapters/ai-sdk-utils';
-import { RunTerminationError, type RunTerminationReason } from '../runs';
-import { type FastPatchOp } from '../runs';
 import { startMeasuring } from '../performance';
-import { parseJsonEventStream, uiMessageChunkSchema } from "ai";
 import { startCpuProfiling, stopCpuProfiling } from './profiler';
 
-// Resolve the LazySchema once — gives us a Schema with a `.validate()` method.
-const uiMessageChunkValidator = uiMessageChunkSchema();
-
-const perf = startMeasuring();
-perf.startPrinting('streaming-server');
-
-// signal to shut down streaming gracefully (to distinguish from normal RunTerminationError)
-class GracefulRunTerminationError extends RunTerminationError {}
+import { RunTerminationError, type RunTerminationReason } from '../runs';
+import { type FastPatchOp } from '../runs';
+import { parseJsonEventStream, uiMessageChunkSchema } from "ai";
 
 if (!process.env.HTTP_SERVER_PORT) {
   throw new Error('HTTP_SERVER_PORT is not set');
@@ -24,6 +14,21 @@ if (!process.env.HTTP_SERVER_PORT) {
 if (!process.env.STREAMING_SERVER_PORT) {
   throw new Error('STREAMING_SERVER_PORT is not set');
 }
+
+// Resolve the LazySchema once — gives us a Schema with a `.validate()` method.
+const uiMessageChunkValidator = uiMessageChunkSchema();
+
+
+
+
+
+
+const perf = startMeasuring();
+perf.startPrinting('streaming-server');
+
+// signal to shut down streaming gracefully (to distinguish from normal RunTerminationError)
+class GracefulRunTerminationError extends RunTerminationError {}
+
 
 interface LiveConnection {
   reader: ReadableStreamDefaultReader<Uint8Array>;
@@ -65,11 +70,38 @@ function markStreamDone(conn: LiveConnection) {
 
 const liveConnections = new Map<string, LiveConnection>();
 
-const app = new Hono();
+// --- HTTP helpers ---
 
-app.get('/health', (c) => {
+function readJsonBody(req: http.IncomingMessage): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    req.on('end', () => {
+      try {
+        const raw = Buffer.concat(chunks).toString('utf8');
+        resolve(raw ? JSON.parse(raw) : {});
+      } catch (err) {
+        reject(err);
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+function sendJson(res: http.ServerResponse, status: number, body: unknown) {
+  const payload = JSON.stringify(body);
+  res.writeHead(status, {
+    'Content-Type': 'application/json',
+    'Content-Length': Buffer.byteLength(payload),
+  });
+  res.end(payload);
+}
+
+// --- Route handlers ---
+
+function handleHealth(res: http.ServerResponse) {
   const snap = perf.get();
-  return c.json({
+  sendJson(res, 200, {
     ok: true,
     connections: liveConnections.size,
     elu: snap.elu,
@@ -78,25 +110,24 @@ app.get('/health', (c) => {
       heapUsed: snap.memory.heapUsed,
     },
   });
-});
+}
 
-app.post('/profile/start', async (c) => {
+async function handleProfileStart(res: http.ServerResponse) {
   await startCpuProfiling();
-  return c.json({ ok: true });
-});
+  sendJson(res, 200, { ok: true });
+}
 
-app.post('/profile/stop', async (c) => {
+async function handleProfileStop(res: http.ServerResponse) {
   const filepath = await stopCpuProfiling();
-  return c.json({ ok: true, filepath });
-});
+  sendJson(res, 200, { ok: true, filepath });
+}
 
 let fetchCounter = 0;
 
+async function handleConnect(req: http.IncomingMessage, res: http.ServerResponse) {
+  const fetchId = `f${++fetchCounter}`;
 
-app.post('/connect', async (c) => {
-  const fetchId = `f${++fetchCounter}`
-
-  const { body, runConfig, agentUrl, sessionId, runId, organizationId } = await c.req.json();
+  const { body, runConfig, agentUrl, sessionId, runId, organizationId } = await readJsonBody(req);
 
   setContext({ fetchId, runId, sessionId, organizationId });
 
@@ -122,21 +153,21 @@ app.post('/connect', async (c) => {
 
     log.info({ error }, `[streaming] fetch error: ${fetchError}`);
 
-    return new Response(JSON.stringify({ message: fetchError }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    sendJson(res, 400, { message: fetchError });
+    return;
   }
 
-  const forwarded = Object.fromEntries(response.headers.entries());
-  delete forwarded['transfer-encoding'];
-  delete forwarded['content-length'];
-
-  const headers: Record<string, string> = {
-    ...forwarded,
-    'X-Upstream-Response': 'true',
-    'Access-Control-Expose-Headers': 'x-upstream-response',
-  };
+  // Strip hop-by-hop headers — they describe the upstream connection framing,
+  // not our new response. Forwarding them causes Content-Length + Transfer-Encoding
+  // to coexist, which violates HTTP/1.1 and makes strict clients (undici) reject the response.
+  const headers: Record<string, string> = {};
+  response.headers.forEach((value, key) => {
+    if (key !== 'transfer-encoding' && key !== 'content-length') {
+      headers[key] = value;
+    }
+  });
+  headers['X-Upstream-Response'] = 'true';
+  headers['Access-Control-Expose-Headers'] = 'x-upstream-response';
 
   // Check for error responses
   if (!response.body || !response.ok) {
@@ -151,19 +182,11 @@ app.post('/connect', async (c) => {
       errorText = errorText || 'No response body';
     }
 
-    // Strip hop-by-hop headers — they describe the upstream connection framing,
-    // not our new response. Forwarding them causes Content-Length + Transfer-Encoding
-    // to coexist, which violates HTTP/1.1 and makes strict clients (undici) reject the response.
-    const forwarded = Object.fromEntries(response.headers.entries());
-    delete forwarded['transfer-encoding'];
-    delete forwarded['content-length'];
+    log.info({ status: response.status, headers }, `[streaming] error response ${response.status}: ${errorText}`);
 
-    log.info({ status: response.status, headers },`[streaming] error response ${response.status}: ${errorText}`);
-
-    return new Response(errorText, {
-      status: response.status,
-      headers,
-    });
+    res.writeHead(response.status, headers);
+    res.end(errorText);
+    return;
   }
 
   // Success - store connection and start streaming in background
@@ -199,24 +222,23 @@ app.post('/connect', async (c) => {
 
   log.info({ runId }, '[streaming] connection established');
 
-  return new Response(null, {
-    status: response.status,
-    headers,
-  });
-});
+  res.writeHead(response.status, headers);
+  res.end();
+}
 
-
-app.post('/terminate', async (c) => {
-  const { runId, reason, graceful } : { runId: string, reason: RunTerminationReason, graceful: boolean } = await c.req.json()
+async function handleTerminate(req: http.IncomingMessage, res: http.ServerResponse) {
+  const { runId, reason, graceful }: { runId: string; reason: RunTerminationReason; graceful: boolean } = await readJsonBody(req);
 
   if (!runId) {
-    return c.json({ message: 'Missing runId' }, 400);
+    sendJson(res, 400, { message: 'Missing runId' });
+    return;
   }
 
   const connection = liveConnections.get(runId);
 
   if (!connection) {
-    return c.json({ message: 'Connection not found' }, 404);
+    sendJson(res, 404, { message: 'Connection not found' });
+    return;
   }
 
   if (!graceful) {
@@ -237,79 +259,123 @@ app.post('/terminate', async (c) => {
   while (!connection.streamDone) {
     if (time > TOTAL_WAIT_TIME) {
       log.error({ runId }, '[streaming] run not closed after 5 seconds after cancellation');
-      return c.json({ message: 'Run not closed after 5 seconds after cancellation' }, 500);
+      sendJson(res, 500, { message: 'Run not closed after 5 seconds after cancellation' });
+      return;
     }
 
     await new Promise(resolve => setTimeout(resolve, INTERVAL));
     time += INTERVAL;
   }
 
-  return c.json({ ok: true });
-});
+  sendJson(res, 200, { ok: true });
+}
 
 
 // --- SSE stream endpoint ---
 
-app.get('/stream/:runId', async (c) => {
-  const runId = c.req.param('runId');
+async function handleStream(req: http.IncomingMessage, res: http.ServerResponse, runId: string) {
   const conn = liveConnections.get(runId);
 
   if (!conn) {
-    return c.json({ message: 'Stream not found' }, 404);
+    sendJson(res, 404, { message: 'Stream not found' });
+    return;
   }
 
-  const signal = c.req.raw.signal;
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+  });
+  res.flushHeaders();
 
-  const stream = new ReadableStream({
-    async start(controller) {
-      const encoder = new TextEncoder();
-      let cursor = 0;
-      let pendingResolve: (() => void) | null = null;
+  let cursor = 0;
+  let pendingResolve: (() => void) | null = null;
+  let aborted = false;
 
-      const onAbort = () => { pendingResolve?.(); };
-      signal.addEventListener('abort', onAbort, { once: true });
+  const onClose = () => {
+    aborted = true;
+    pendingResolve?.();
+  };
+  req.once('close', onClose);
 
-      try {
-        while (!signal.aborted) {
-          // Drain all buffered chunks
-          while (cursor < conn.streamBuffer.length) {
-            const data = conn.streamBuffer[cursor++];
-            if (data === '[DONE]') {
-              controller.close();
-              return;
-            }
-            controller.enqueue(encoder.encode(`data: ${data}\n\n`));
-          }
-
-          if (conn.streamDone) {
-            controller.close();
-            return;
-          }
-
-          // Wait for new data or abort
-          await new Promise<void>(resolve => {
-            pendingResolve = resolve;
-            conn.streamNotify.push(resolve);
-            if (signal.aborted) resolve();
-          });
-          pendingResolve = null;
+  try {
+    while (!aborted) {
+      // Drain all buffered chunks
+      while (cursor < conn.streamBuffer.length) {
+        const data = conn.streamBuffer[cursor++];
+        if (data === '[DONE]') {
+          res.end();
+          return;
         }
-      } catch {
-        // Stream cancelled by consumer
+        res.write(`data: ${data}\n\n`);
       }
 
-      try { controller.close(); } catch {}
-    }
-  });
+      if (conn.streamDone) {
+        res.end();
+        return;
+      }
 
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-    },
-  });
-});
+      // Wait for new data or abort
+      await new Promise<void>(resolve => {
+        pendingResolve = resolve;
+        conn.streamNotify.push(resolve);
+        if (aborted) resolve();
+      });
+      pendingResolve = null;
+    }
+  } catch {
+    // Stream cancelled by consumer
+  }
+
+  try { res.end(); } catch {}
+}
+
+
+// --- Request router ---
+
+const requestHandler: http.RequestListener = async (req, res) => {
+  const rawUrl = req.url ?? '/';
+  const qIdx = rawUrl.indexOf('?');
+  const path = qIdx === -1 ? rawUrl : rawUrl.slice(0, qIdx);
+  const method = req.method;
+
+  try {
+    if (method === 'GET' && path === '/health') {
+      handleHealth(res);
+      return;
+    }
+    if (method === 'POST' && path === '/profile/start') {
+      await handleProfileStart(res);
+      return;
+    }
+    if (method === 'POST' && path === '/profile/stop') {
+      await handleProfileStop(res);
+      return;
+    }
+    if (method === 'POST' && path === '/connect') {
+      await handleConnect(req, res);
+      return;
+    }
+    if (method === 'POST' && path === '/terminate') {
+      await handleTerminate(req, res);
+      return;
+    }
+    if (method === 'GET' && path.startsWith('/stream/')) {
+      const runId = decodeURIComponent(path.slice('/stream/'.length));
+      await handleStream(req, res, runId);
+      return;
+    }
+
+    sendJson(res, 404, { message: 'Not found' });
+  } catch (err) {
+    log.error({ err }, '[streaming-server] request handler error');
+    if (!res.headersSent) {
+      sendJson(res, 500, { message: 'Internal server error' });
+    } else {
+      try { res.end(); } catch {}
+    }
+  }
+};
 
 
 async function processStream(conn: LiveConnection) {
@@ -570,7 +636,6 @@ async function callFastPatch(
   conn: LiveConnection,
   op: FastPatchOp,
 ) {
-  return;
   const resp = await fetch(`${process.env.HTTP_SERVER_URL}/internal/fast-patch`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -606,5 +671,77 @@ process.on('uncaughtException', (error) => {
 });
 
 const port = Number(process.env.STREAMING_SERVER_PORT);
-serve({ fetch: app.fetch, port });
-log.info(`[streaming-server] listening on port ${port}`);
+const server = http.createServer(requestHandler);
+server.listen(port, () => {
+  log.info(`[streaming-server] listening on port ${port}`);
+});
+
+
+
+
+
+export interface AISDKChunk {
+  type: string;
+  [key: string]: any;
+}
+
+/**
+* Parse an AI SDK SSE stream.
+* AI SDK uses `data: <json>\n\n` format (no `event:` field).
+* Stream ends with `data: [DONE]\n\n`.
+*/
+async function* parseAISDKStream(reader: ReadableStreamDefaultReader<Uint8Array>): AsyncGenerator<string, void, unknown> {
+
+  const decoder = new TextDecoder();
+
+  let buffer = '';
+
+  while (true) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+          // Process remaining buffer
+          if (buffer.trim()) {
+              const lines = buffer.split('\n\n');
+              for (const block of lines) {
+                  const chunk = parseDataLine(block.trim());
+                  if (chunk) yield chunk;
+              }
+          }
+          break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      const blocks = buffer.split('\n\n');
+      buffer = blocks.pop() || '';
+
+      for (const block of blocks) {
+          const trimmed = block.trim();
+          if (!trimmed) continue;
+          const chunk = parseDataLine(trimmed);
+          if (chunk) yield chunk;
+      }
+  }
+}
+
+function parseDataLine(line: string): string | null {
+  if (!line.startsWith('data: ')) return null;
+  const payload = line.substring(6).trim();
+  return payload;
+}
+
+/**
+ * Counts consecutive 'text' items from the end of the emitted item types array.
+ * This determines how many items should be marked as output on completion.
+ */
+function computeOutputItemCount(emittedItemTypes: string[]): number {
+  let count = 0;
+  for (let i = emittedItemTypes.length - 1; i >= 0; i--) {
+      if (emittedItemTypes[i] === 'text') {
+          count++;
+      } else {
+          break;
+      }
+  }
+  return Math.max(count, 1); // at least 1
+}
