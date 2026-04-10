@@ -75,9 +75,7 @@ function consumeRunStream(
         timeout: 5000
       },
       (res) => {
-        console.log(`[test][${i}] run status: ${res.statusCode}`);
         if (res.statusCode !== 200) {
-          console.log('WRONG STATUS CODE in POST/run!!!!!!: ', res.statusCode);
           let buf = '';
           res.on('data', (c: Buffer) => (buf += c.toString()));
           res.on('end', () => {
@@ -195,10 +193,7 @@ async function main() {
   console.log(`Ramping up: 1 new stream every ${rampIntervalMs.toFixed(0)}ms over ${RAMP_UP_S}s (measuring for ${MEASURE_S}s)`);
 
   async function runTest(i: number) {
-    console.log(`[t${i}] starting test`);
     const session = await avAISDK.createSession({ agent: 'stress-agent' });
-    console.log(`[t${i}] session created: ${session.id}`);
-    // const run = await avAISDK.createRun({ sessionId: session.id, input: TEST_INPUT });
     return consumeRunStream(session.id, authHeaders, i);
   }
 
@@ -213,16 +208,6 @@ async function main() {
         throw err;
       });
       streamPromises.push(promise);
-      
-      // console.log(`[test] Creating session + starting run ${i}/${N}`);
-      // const p = avAISDK
-      //   .createSession({ agent: 'stress-agent' })
-      //   .catch((err) => {
-      //     console.error(`[test] createSession failed (stream ${i}): ${err?.message ?? err}`);
-      //     throw err;
-      //   })
-      //   .then((session) => consumeRunStream(session.id, authHeaders));
-      // streamPromises.push(p);
       if (i < N) {
         setTimeout(tick, rampIntervalMs);
       } else {
@@ -234,16 +219,9 @@ async function main() {
 
   console.log(`All ${N} streams started. Waiting for completion...`);
 
-  const results = await Promise.all(streamPromises);
+  // errors shouldn't happen so Promise.all is fine
+  await Promise.all(streamPromises);
   clearInterval(eluInterval);
-
-  // const failed = results.filter((r) => r.status === 'rejected');
-  // if (failed.length > 0) {
-  //   console.log(`${failed.length}/${N} streams failed:`);
-  //   for (const f of failed.slice(0, 5)) {
-  //     console.log(`  ${(f as PromiseRejectedResult).reason}`);
-  //   }
-  // }
 
   // Report
   console.log(`\n=== Stress Test Results ===`);
