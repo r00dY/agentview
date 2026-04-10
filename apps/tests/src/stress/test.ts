@@ -6,7 +6,7 @@ import { seedUsers } from '../seedUsers';
 import { z } from 'zod';
 
 // ---- Config ----
-const N = 400;
+const N = Number(process.argv[2]) || 100;
 const RAMP_UP_S = 10;
 const MEASURE_S = 25; // only collect samples for this long after first stream starts
 const AGENT_URL = `http://localhost:3500/agent`;
