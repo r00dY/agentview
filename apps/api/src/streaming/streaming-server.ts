@@ -4,9 +4,10 @@ import { log, setContext } from '../logger';
 import { parseAISDKStream, computeOutputItemCount, type AISDKChunk } from '../adapters/ai-sdk-utils';
 import { RunTerminationError, type RunTerminationReason } from '../runs';
 import { type FastPatchOp } from '../runs';
-import { printELU, getELU } from '../performance';
+import { startMeasuring } from '../performance';
 
-printELU('streaming-server');
+const perf = startMeasuring();
+perf.startPrinting('streaming-server');
 
 
 // signal to shut down streaming gracefully (to distinguish from normal RunTerminationError)
@@ -63,18 +64,14 @@ const liveConnections = new Map<string, LiveConnection>();
 const app = new Hono();
 
 app.get('/health', (c) => {
-  const elu = getELU();
-  const mem = process.memoryUsage();
+  const snap = perf.get();
   return c.json({
     ok: true,
     connections: liveConnections.size,
-    elu: {
-      window: elu.window,   // last 1s sampling window
-      instant: elu.instant, // since last sample tick
-    },
+    elu: snap.elu,
     memory: {
-      rss: mem.rss,
-      heapUsed: mem.heapUsed,
+      rss: snap.memory.rss,
+      heapUsed: snap.memory.heapUsed,
     },
   });
 });

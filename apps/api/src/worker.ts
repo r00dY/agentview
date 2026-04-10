@@ -24,5 +24,5 @@ for (const channel of channelApps) {
   }
 }
 
-import { printELU } from './performance';
-printELU('worker');
+import { startMeasuring } from './performance';
+startMeasuring().startPrinting('worker');
