@@ -5,7 +5,7 @@ import { startCpuProfiling, stopCpuProfiling } from './profiler';
 
 import { RunTerminationError, type RunTerminationReason } from '../runs';
 import { type FastPatchOp } from '../runs';
-import { parseJsonEventStream, uiMessageChunkSchema } from "ai";
+import { uiMessageChunkSchema } from "ai";
 
 if (!process.env.HTTP_SERVER_PORT) {
   throw new Error('HTTP_SERVER_PORT is not set');
@@ -188,12 +188,10 @@ class GracefulRunTerminationError extends RunTerminationError {}
 
 
 interface LiveConnection {
+  runId: string;
   reader: ReadableStreamDefaultReader<Uint8Array>;
   abortController: AbortController;
-  runConfig: string;
-  sessionId: string;
-  runId: string
-  organizationId: string;
+  metadata: string;
 
   state: {
     textBuffers: Map<string, string>,
@@ -281,14 +279,14 @@ async function handleProfileStop(res: http.ServerResponse) {
 
 let fetchCounter = 0;
 
-async function handleConnect(req: http.IncomingMessage, res: http.ServerResponse) {
+async function handleCreateStream(req: http.IncomingMessage, res: http.ServerResponse) {
   const fetchId = `f${++fetchCounter}`;
 
-  const { body, runConfig, agentUrl, sessionId, runId, organizationId } = await readJsonBody(req);
+  const { runId, url, body, metadata } = await readJsonBody(req);
 
-  setContext({ fetchId, runId, sessionId, organizationId });
+  setContext({ fetchId, runId });
 
-  log.info(`LIVE CONNECTION run:${runId} session:${sessionId}`);
+  log.info(`LIVE CONNECTION run:${runId}`);
 
   // Fetch agent endpoint
   const abortController = new AbortController();
@@ -297,7 +295,7 @@ async function handleConnect(req: http.IncomingMessage, res: http.ServerResponse
   log.info(`started!`);
 
   try {
-    response = await fetch(agentUrl, {
+    response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body,
@@ -350,12 +348,11 @@ async function handleConnect(req: http.IncomingMessage, res: http.ServerResponse
   const reader = response.body.getReader();
 
   const connection: LiveConnection = {
+    runId,
+    metadata,
+
     reader,
     abortController,
-    runConfig,
-    sessionId,
-    runId,
-    organizationId,
 
     state: {
       textBuffers: new Map<string, string>(),
@@ -383,8 +380,8 @@ async function handleConnect(req: http.IncomingMessage, res: http.ServerResponse
   res.end();
 }
 
-async function handleTerminate(req: http.IncomingMessage, res: http.ServerResponse) {
-  const { runId, reason, graceful }: { runId: string; reason: RunTerminationReason; graceful: boolean } = await readJsonBody(req);
+async function handleDeleteStream(req: http.IncomingMessage, res: http.ServerResponse, runId: string) {
+  const { reason, graceful }: { reason: RunTerminationReason; graceful: boolean } = await readJsonBody(req);
 
   if (!runId) {
     sendJson(res, 400, { message: 'Missing runId' });
@@ -430,7 +427,7 @@ async function handleTerminate(req: http.IncomingMessage, res: http.ServerRespon
 
 // --- SSE stream endpoint ---
 
-async function handleStream(req: http.IncomingMessage, res: http.ServerResponse, runId: string) {
+async function handleGetStream(req: http.IncomingMessage, res: http.ServerResponse, runId: string) {
   const conn = liveConnections.get(runId);
 
   if (!conn) {
@@ -509,18 +506,20 @@ const requestHandler: http.RequestListener = async (req, res) => {
       await handleProfileStop(res);
       return;
     }
-    if (method === 'POST' && path === '/connect') {
-      await handleConnect(req, res);
+    if (method === 'POST' && path === '/streams') {
+      await handleCreateStream(req, res);
       return;
     }
-    if (method === 'POST' && path === '/terminate') {
-      await handleTerminate(req, res);
-      return;
-    }
-    if (method === 'GET' && path.startsWith('/stream/')) {
-      const runId = decodeURIComponent(path.slice('/stream/'.length));
-      await handleStream(req, res, runId);
-      return;
+    if (path.startsWith('/streams/')) {
+      const runId = decodeURIComponent(path.slice('/streams/'.length));
+      if (method === 'GET') {
+        await handleGetStream(req, res, runId);
+        return;
+      }
+      if (method === 'DELETE') {
+        await handleDeleteStream(req, res, runId);
+        return;
+      }
     }
 
     sendJson(res, 404, { message: 'Not found' });
@@ -654,9 +653,7 @@ async function callFastPatch(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       runId: conn.runId,
-      sessionId: conn.sessionId,
-      organizationId: conn.organizationId,
-      runConfig: conn.runConfig,
+      metadata: conn.metadata,
       op,
     }),
   });

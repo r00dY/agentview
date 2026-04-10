@@ -933,9 +933,14 @@ const runsAISDKPOSTRoute = createRoute({
 app.post('/internal/fast-patch', async (c) => {
   const body = await c.req.json()
 
+  const metadata = JSON.parse(body.metadata);
+  const sessionId = metadata.sessionId;
+  const organizationId = metadata.organizationId;
+  const runConfig = BaseRunSchemaToZod.parse(metadata.runConfig)
+
   const servicePrincipal: ServicePrincipal = {
     type: 'service',
-    organizationId: body.organizationId
+    organizationId
   };
 
   try {
@@ -943,8 +948,8 @@ app.post('/internal/fast-patch', async (c) => {
       await fastApplyRunPatch(
         tx,
         body.runId,
-        body.sessionId,
-        BaseRunSchemaToZod.parse(JSON.parse(body.runConfig)),
+        sessionId,
+        runConfig,
         body.op
       );
     })

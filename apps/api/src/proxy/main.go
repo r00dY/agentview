@@ -49,7 +49,7 @@ func main() {
 		resp.Header.Del("X-Run-Stream-Id")
 
 		// Connect to streaming server
-		streamURL := fmt.Sprintf("http://127.0.0.1:%s/stream/%s", streamingPort, streamId)
+		streamURL := fmt.Sprintf("http://127.0.0.1:%s/streams/%s", streamingPort, streamId)
 		req, err := http.NewRequestWithContext(resp.Request.Context(), "GET", streamURL, nil)
 		if err != nil {
 			resp.StatusCode = 502

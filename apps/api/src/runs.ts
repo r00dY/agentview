@@ -755,13 +755,12 @@ export async function applyRunPatch(
 
 export async function sendRunTerminationSignal(runId: string, reason: RunTerminationReason, options: { graceful: boolean }) {
   try {
-    await fetch('http://localhost:1999/terminate', {
-      method: 'POST',
+    await fetch(`http://localhost:1999/streams/${runId}`, {
+      method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        runId,
         reason,
         graceful: options.graceful,
       }),
@@ -952,18 +951,20 @@ export async function createAutoRun2(
   log.debug(`[${sessionId}] [createAutoRun2] establishing live connection...`);
 
   try {
-    const response = await fetch('http://localhost:1999/connect', {
+    const response = await fetch('http://localhost:1999/streams', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        agentUrl,
+        url: agentUrl,
         runId,
-        sessionId,
-        organizationId: principal.organizationId,
         body: JSON.stringify({ messages, session }), // as string, no unnecessary parsing on the other end
-        runConfig: JSON.stringify(serializeRunConfig(runConfig)), // as string, no unnecessary parsing on the other end
+        metadata: JSON.stringify({
+          sessionId,
+          organizationId: principal.organizationId,
+          runConfig: serializeRunConfig(runConfig), // as string, no unnecessary parsing on the other end
+        })
       }),
       signal,
     });
