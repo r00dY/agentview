@@ -11,6 +11,17 @@ const RAMP_UP_S = 10;
 const MEASURE_S = 25; // only collect samples for this long after first stream starts
 const AGENT_URL = `http://localhost:3500/agent`;
 const API_BASE = process.env.VITE_AGENTVIEW_API_URL ?? 'http://localhost:1990';
+const STREAMING_BASE = process.env.STREAMING_SERVER_URL ?? 'http://localhost:1999';
+
+// ---- Profiler control ----
+async function profilerPost(path: string): Promise<void> {
+  const res = await fetch(`${STREAMING_BASE}${path}`, { method: 'POST' });
+  if (!res.ok) {
+    throw new Error(`profiler ${path} failed: ${res.status} ${await res.text()}`);
+  }
+  const body = await res.json().catch(() => ({}));
+  console.log(`[profiler] ${path}`, body);
+}
 
 configDefaults.__internal = { disableSummaries: true };
 
@@ -184,6 +195,8 @@ async function main() {
   measureDeadline = Date.now() + MEASURE_S * 1000;
   console.log(`Ramping up: 1 new stream every ${rampIntervalMs.toFixed(0)}ms over ${RAMP_UP_S}s (measuring for ${MEASURE_S}s)`);
 
+  await profilerPost('/profile/start');
+
   async function runTest(i: number) {
     const session = await avAISDK.createSession({ agent: 'stress-agent' });
     return consumeRunStream(session.id, authHeaders, i);
@@ -214,6 +227,8 @@ async function main() {
   // errors shouldn't happen so Promise.all is fine
   await Promise.all(streamPromises);
   clearInterval(eluInterval);
+
+  await profilerPost('/profile/stop');
 
   // Report
   console.log(`\n=== Stress Test Results ===`);

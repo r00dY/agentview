@@ -6,6 +6,10 @@ import { RunTerminationError, type RunTerminationReason } from '../runs';
 import { type FastPatchOp } from '../runs';
 import { startMeasuring } from '../performance';
 import { parseJsonEventStream, uiMessageChunkSchema } from "ai";
+import { startCpuProfiling, stopCpuProfiling } from './profiler';
+
+// Resolve the LazySchema once — gives us a Schema with a `.validate()` method.
+const uiMessageChunkValidator = uiMessageChunkSchema();
 
 const perf = startMeasuring();
 perf.startPrinting('streaming-server');
@@ -74,6 +78,16 @@ app.get('/health', (c) => {
       heapUsed: snap.memory.heapUsed,
     },
   });
+});
+
+app.post('/profile/start', async (c) => {
+  await startCpuProfiling();
+  return c.json({ ok: true });
+});
+
+app.post('/profile/stop', async (c) => {
+  const filepath = await stopCpuProfiling();
+  return c.json({ ok: true, filepath });
 });
 
 let fetchCounter = 0;
@@ -298,35 +312,6 @@ app.get('/stream/:runId', async (c) => {
 });
 
 
-async function callFastPatch(
-  conn: LiveConnection,
-  op: FastPatchOp,
-) {
-  const resp = await fetch(`${process.env.HTTP_SERVER_URL}/internal/fast-patch`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      runId: conn.runId,
-      sessionId: conn.sessionId,
-      organizationId: conn.organizationId,
-      runConfig: conn.runConfig,
-      op,
-    }),
-  });
-
-  const body = await resp.json()
-
-  if (resp.status === 409) {
-    throw new RunTerminationError(body.reason);
-  }
-
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => 'unknown');
-    throw new Error(`[streaming] fast-patch failed: ${text}`);
-  }
-}
-
-
 async function processStream(conn: LiveConnection) {
   const { reader, runId } = conn;
 
@@ -339,7 +324,14 @@ async function processStream(conn: LiveConnection) {
         break;
       }
 
-      const chunk = JSON.parse(data) as AISDKChunk;
+      const validationResult = await uiMessageChunkValidator.validate!(JSON.parse(data));
+      if (!validationResult.success) {
+        throw validationResult.error;
+      }
+      const chunk = validationResult.value as AISDKChunk;
+
+      // const chunk = JSON.parse(data) as AISDKChunk;
+
       if (chunk.type === 'start' && !chunk.messageId) {
         chunk.messageId = runId;
       }
@@ -484,12 +476,12 @@ async function processStream(conn: LiveConnection) {
               content: chunk,
             });
           }
-          log.trace(chunk, 'ignored chunk');
+          // log.trace(chunk, 'ignored chunk');
           break;
       }
 
       // Buffer chunk for GET /stream consumers
-      log.trace(chunk, 'stream event');
+      // log.trace(chunk, 'stream event');
       pushToBuffer(conn, JSON.stringify(chunk));
     }
 
@@ -572,6 +564,37 @@ async function processStream(conn: LiveConnection) {
     log.info({ runId }, '[streaming] connection cleaned up');
   }
 }
+
+
+async function callFastPatch(
+  conn: LiveConnection,
+  op: FastPatchOp,
+) {
+  return;
+  const resp = await fetch(`${process.env.HTTP_SERVER_URL}/internal/fast-patch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      runId: conn.runId,
+      sessionId: conn.sessionId,
+      organizationId: conn.organizationId,
+      runConfig: conn.runConfig,
+      op,
+    }),
+  });
+
+  const body = await resp.json()
+
+  if (resp.status === 409) {
+    throw new RunTerminationError(body.reason);
+  }
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => 'unknown');
+    throw new Error(`[streaming] fast-patch failed: ${text}`);
+  }
+}
+
 
 // Prevent unhandled rejections from crashing the process
 process.on('unhandledRejection', (reason) => {
