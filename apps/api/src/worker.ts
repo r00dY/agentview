@@ -23,6 +23,3 @@ for (const channel of channelApps) {
     worker.start();
   }
 }
-
-import { startMeasuring } from './performance';
-startMeasuring().startPrinting('worker');

@@ -69,10 +69,8 @@ import { resolveTarget, resolveTargetWithObjects, targetFilter } from './target'
 import { createComment, deleteComment, requireCommentMessage, requireCommentOwnership, updateComment } from './comments';
 import { requireSession, requireSessionBase } from './sessions';
 
-import { startMeasuring } from './performance';
 import { standardToDefaultSession } from './standardToDefaultSession';
 
-startMeasuring().startPrinting('http');
 
 await initDb();
 
