@@ -72,7 +72,6 @@ function consumeRunStream(
         path: url.pathname,
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
-        timeout: 5000
       },
       (res) => {
         if (res.statusCode !== 200) {
@@ -113,16 +112,9 @@ function consumeRunStream(
           }
         });
 
-        res.on('timeout', () => {
-          // console.error(`[test][${i}] run timeout`);
-          res.destroy();
-          reject('timeout');
-        });
-
         res.on('end', () => { activeStreams--; resolve(); });
         res.on('error', (err) => {
           activeStreams--;
-          // console.error(`[test] Stream error: ${err.message}`);
           reject(err);
         });
       }
