@@ -5,7 +5,8 @@ import { startCpuProfiling, stopCpuProfiling } from './profiler';
 
 import { RunTerminationError, type RunTerminationReason } from '../runs';
 import { type FastPatchOp } from '../runs';
-import { uiMessageChunkSchema } from "ai";
+import { processEvent, type State } from './processEvent';
+import { parseAISDKStream } from './parseSSE';
 
 if (!process.env.HTTP_SERVER_PORT) {
   throw new Error('HTTP_SERVER_PORT is not set');
@@ -14,171 +15,6 @@ if (!process.env.HTTP_SERVER_PORT) {
 if (!process.env.STREAMING_SERVER_PORT) {
   throw new Error('STREAMING_SERVER_PORT is not set');
 }
-
-// Resolve the LazySchema once — gives us a Schema with a `.validate()` method.
-const uiMessageChunkValidator = uiMessageChunkSchema();
-
-async function parseChunk(data: string) {
-  const obj = JSON.parse(data);
-
-  // simplified parsing for text-delta
-  if (obj.type === 'text-delta') {
-    if (typeof obj.delta !== 'string' || typeof obj.id !== 'string') {
-      throw new Error('Invalid text-delta chunk');
-    }
-    return obj;
-  }
-
-  const validationResult = await uiMessageChunkValidator.validate!(JSON.parse(data));
-  if (!validationResult.success) {
-    throw validationResult.error;
-  }
-  return validationResult.value;
-}
-
-async function processChunk(conn: LiveConnection, chunk: Awaited<ReturnType<typeof parseChunk>>) {
-  if (chunk.type === 'start' && !chunk.messageId) {
-    chunk.messageId = conn.runId;
-  }
-
-  switch (chunk.type) {
-    case 'start': {
-      break;
-    }
-
-    case 'text-start': {
-      conn.state.textBuffers.set(chunk.id, '');
-      break;
-    }
-
-    case 'text-delta': {
-      const current = conn.state.textBuffers.get(chunk.id) ?? '';
-      conn.state.textBuffers.set(chunk.id, current + chunk.delta);
-      break;
-    }
-
-    case 'text-end': {
-      const text = conn.state.textBuffers.get(chunk.id) ?? '';
-      conn.state.textBuffers.delete(chunk.id);
-      conn.state.emittedItemTypes.push('text');
-      conn.state.outputTexts.push(text);
-
-      await callFastPatch(conn, { type: 'item', content: { type: 'text', text } });
-      break;
-    }
-
-    case 'reasoning-start': {
-      conn.state.reasoningBuffers.set(chunk.id, '');
-      break;
-    }
-
-    case 'reasoning-delta': {
-      const current = conn.state.reasoningBuffers.get(chunk.id) ?? '';
-      conn.state.reasoningBuffers.set(chunk.id, current + chunk.delta);
-      break;
-    }
-
-    case 'reasoning-end': {
-      const text = conn.state.reasoningBuffers.get(chunk.id) ?? '';
-      conn.state.reasoningBuffers.delete(chunk.id);
-      conn.state.emittedItemTypes.push('reasoning');
-
-      await callFastPatch(conn, { type: 'item', content: { type: 'reasoning', text } });
-      break;
-    }
-
-    case 'tool-input-start': {
-      conn.state.toolStates.set(chunk.toolCallId, {
-        toolName: chunk.toolName,
-        inputText: '',
-      });
-      break;
-    }
-
-    case 'tool-input-delta': {
-      const state = conn.state.toolStates.get(chunk.toolCallId);
-      if (state) {
-        state.inputText += chunk.inputTextDelta;
-      }
-      break;
-    }
-
-    case 'tool-input-available': {
-      const state = conn.state.toolStates.get(chunk.toolCallId);
-      if (state) {
-        state.input = chunk.input;
-      }
-      break;
-    }
-
-    case 'tool-output-available': {
-      const state = conn.state.toolStates.get(chunk.toolCallId);
-      if (state) {
-        conn.state.emittedItemTypes.push('tool-call');
-        await callFastPatch(conn, {
-          type: 'item',
-          content: { type: 'tool-call', toolCallId: chunk.toolCallId, toolName: state.toolName, state: 'output-available', input: state.input, output: chunk.output },
-        });
-        conn.state.toolStates.delete(chunk.toolCallId);
-      }
-      break;
-    }
-
-    case 'tool-output-error': {
-      const state = conn.state.toolStates.get(chunk.toolCallId);
-      if (state) {
-        conn.state.emittedItemTypes.push('tool-call');
-        await callFastPatch(conn, {
-          type: 'item',
-          content: { type: 'tool-call', toolCallId: chunk.toolCallId, toolName: state.toolName, state: 'output-error', input: state.input, errorText: chunk.errorText },
-        });
-        conn.state.toolStates.delete(chunk.toolCallId);
-      }
-      break;
-    }
-
-    case 'finish': {
-      const outputCount = computeOutputItemCount(conn.state.emittedItemTypes);
-
-      conn.state.finalOp = {
-        type: 'complete',
-        outputItemCount: outputCount,
-        channelReply: { text: conn.state.outputTexts.filter(Boolean).join('\n\n') }, // we can always send channel reply, even for non-channel runs, who cares
-      };
-      break;
-    }
-
-    case 'error': {
-      conn.state.finalOp = {
-        type: 'fail',
-        failReason: {
-          message: chunk.errorText ?? 'Unknown error from AI SDK stream',
-        },
-      };
-      break;
-    }
-
-    case 'data-session-state': {
-      conn.state.emittedItemTypes.push('data');
-      await callFastPatch(conn, {
-        type: 'state',
-        content: chunk.data,
-      });
-      break;
-    }
-
-    default:
-      if (chunk.type.startsWith('data-')) {
-        conn.state.emittedItemTypes.push('data');
-        await callFastPatch(conn, {
-          type: 'item',
-          content: chunk,
-        });
-      }
-      break;
-  }
-}
-
 
 const perf = startMeasuring();
 perf.startPrinting('streaming-server');
@@ -193,14 +29,7 @@ interface LiveConnection {
   abortController: AbortController;
   metadata: string;
 
-  state: {
-    textBuffers: Map<string, string>,
-    reasoningBuffers: Map<string, string>,
-    toolStates: Map<string, { toolName: string; inputText: string; input?: any }>,
-    emittedItemTypes: string[],
-    outputTexts: string[],
-    finalOp?: FastPatchOp
-  }
+  state: State
 
   // In-memory stream buffer for GET /stream consumers
   streamBuffer: string[];
@@ -535,7 +364,7 @@ const requestHandler: http.RequestListener = async (req, res) => {
 
 
 async function processStream(conn: LiveConnection) {
-  const { reader, runId } = conn;
+  const { reader, runId, state } = conn;
 
   try {
     log.info({ runId }, '[streaming] streaming started');
@@ -547,25 +376,18 @@ async function processStream(conn: LiveConnection) {
       }
 
       // parse
-      const chunk = await parseChunk(data);
+      const { data: processedData, op } = await processEvent(runId, state, data);
 
-      // update chunk (rare)
-      let chunkUpdated = false;
-      if (chunk.type === 'start' && !chunk.messageId) {
-        chunk.messageId = conn.runId;
-        chunkUpdated = true;
+      if (op) {
+        await callFastPatch(conn, op);
       }
-      
-      // update state
-      await processChunk(conn, chunk);
-
       // Buffer chunk for GET /stream consumers
-      pushToBuffer(conn, chunkUpdated ? JSON.stringify(chunk) : data); // strinfiy only updated chunks
+      pushToBuffer(conn, processedData); // strinfiy only updated chunks
     }
 
-    if (!conn.state.finalOp) {
+    if (!state.finalOp) {
       log.info({ runId }, '[streaming] stream ended incomplete');
-      conn.state.finalOp = {
+      state.finalOp = {
         type: 'fail',
         failReason: {
           message: 'Agent stream ended without completing',
@@ -576,7 +398,7 @@ async function processStream(conn: LiveConnection) {
     }
 
     log.debug({ runId }, '[streaming] fast.patch for completion');
-    await callFastPatch(conn, conn.state.finalOp);
+    await callFastPatch(conn, state.finalOp);
 
   } catch (error: unknown) {
 
@@ -687,71 +509,3 @@ server.listen(port, () => {
 });
 
 
-
-
-
-export interface AISDKChunk {
-  type: string;
-  [key: string]: any;
-}
-
-/**
-* Parse an AI SDK SSE stream.
-* AI SDK uses `data: <json>\n\n` format (no `event:` field).
-* Stream ends with `data: [DONE]\n\n`.
-*/
-async function* parseAISDKStream(reader: ReadableStreamDefaultReader<Uint8Array>): AsyncGenerator<string, void, unknown> {
-
-  const decoder = new TextDecoder();
-
-  let buffer = '';
-
-  while (true) {
-      const { done, value } = await reader.read();
-
-      if (done) {
-          // Process remaining buffer
-          if (buffer.trim()) {
-              const lines = buffer.split('\n\n');
-              for (const block of lines) {
-                  const chunk = parseDataLine(block.trim());
-                  if (chunk) yield chunk;
-              }
-          }
-          break;
-      }
-
-      buffer += decoder.decode(value, { stream: true });
-      const blocks = buffer.split('\n\n');
-      buffer = blocks.pop() || '';
-
-      for (const block of blocks) {
-          const trimmed = block.trim();
-          if (!trimmed) continue;
-          const chunk = parseDataLine(trimmed);
-          if (chunk) yield chunk;
-      }
-  }
-}
-
-function parseDataLine(line: string): string | null {
-  if (!line.startsWith('data: ')) return null;
-  const payload = line.substring(6).trim();
-  return payload;
-}
-
-/**
- * Counts consecutive 'text' items from the end of the emitted item types array.
- * This determines how many items should be marked as output on completion.
- */
-function computeOutputItemCount(emittedItemTypes: string[]): number {
-  let count = 0;
-  for (let i = emittedItemTypes.length - 1; i >= 0; i--) {
-      if (emittedItemTypes[i] === 'text') {
-          count++;
-      } else {
-          break;
-      }
-  }
-  return Math.max(count, 1); // at least 1
-}
