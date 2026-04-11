@@ -120,7 +120,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
     log.info({ error }, `[streaming] fetch error: ${fetchError}`);
 
-    sendJson(res, 400, { message: fetchError });
+    sendJson(res, 502, { message: fetchError });
     return;
   }
 
