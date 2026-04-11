@@ -4,9 +4,10 @@ import { startMeasuring } from '../performance';
 import { startCpuProfiling, stopCpuProfiling } from './profiler';
 
 import { RunTerminationError, type RunTerminationReason } from '../runs';
-import { type FastPatchOp } from '../runs';
-import { processEvent, type State } from './processEvent';
+import { processEvent } from './processEvent';
 import { parseAISDKStream } from './parseSSE';
+import { GracefulRunTerminationError, type LiveConnection } from './types';
+import { saveData } from './saveData';
 
 if (!process.env.HTTP_SERVER_PORT) {
   throw new Error('HTTP_SERVER_PORT is not set');
@@ -18,24 +19,6 @@ if (!process.env.STREAMING_SERVER_PORT) {
 
 const perf = startMeasuring();
 perf.startPrinting('streaming-server');
-
-// signal to shut down streaming gracefully (to distinguish from normal RunTerminationError)
-class GracefulRunTerminationError extends RunTerminationError {}
-
-
-interface LiveConnection {
-  runId: string;
-  reader: ReadableStreamDefaultReader<Uint8Array>;
-  abortController: AbortController;
-  metadata: string;
-
-  state: State
-
-  // In-memory stream buffer for GET /stream consumers
-  streamBuffer: string[];
-  streamDone: boolean;
-  streamNotify: (() => void)[];
-}
 
 // --- Buffer helpers ---
 
@@ -379,7 +362,7 @@ async function processStream(conn: LiveConnection) {
       const { data: processedData, op } = await processEvent(runId, state, data);
 
       if (op) {
-        await callFastPatch(conn, op);
+        await saveData(conn, op);
       }
       // Buffer chunk for GET /stream consumers
       pushToBuffer(conn, processedData); // strinfiy only updated chunks
@@ -398,7 +381,7 @@ async function processStream(conn: LiveConnection) {
     }
 
     log.debug({ runId }, '[streaming] fast.patch for completion');
-    await callFastPatch(conn, state.finalOp);
+    await saveData(conn, state.finalOp);
 
   } catch (error: unknown) {
 
@@ -446,7 +429,7 @@ async function processStream(conn: LiveConnection) {
       pushToBuffer(conn, JSON.stringify({ type: 'error', errorText: failReason }));
     }
 
-    await callFastPatch(conn, conn.state.finalOp);
+    await saveData(conn, conn.state.finalOp);
 
   } finally {
     await reader?.cancel().catch(() => {});
@@ -465,32 +448,6 @@ async function processStream(conn: LiveConnection) {
   }
 }
 
-
-async function callFastPatch(
-  conn: LiveConnection,
-  op: FastPatchOp,
-) {
-  const resp = await fetch(`${process.env.HTTP_SERVER_URL}/internal/fast-patch`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      runId: conn.runId,
-      metadata: conn.metadata,
-      op,
-    }),
-  });
-
-  const body = await resp.json()
-
-  if (resp.status === 409) {
-    throw new RunTerminationError(body.reason);
-  }
-
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => 'unknown');
-    throw new Error(`[streaming] fast-patch failed: ${text}`);
-  }
-}
 
 
 // Prevent unhandled rejections from crashing the process
