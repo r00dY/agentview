@@ -212,7 +212,10 @@ async function main() {
       });
       streamPromises.push(promise);
       if (i < N) {
-        setTimeout(tick, rampIntervalMs);
+        // Add ±50% jitter to the ramp interval
+        const jitter = 1 + (Math.random() - 0.5); // range: 0.5 to 1.5
+        setTimeout(tick, rampIntervalMs * jitter);
+
       } else {
         resolve();
       }

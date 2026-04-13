@@ -3031,7 +3031,7 @@ describe('API', () => {
 
     }, 10000);
 
-    test("HTTP error: 400 + empty body → client.createSession with input. No run is created", async () => {
+    test("HTTP error 400: empty body in response → client.createSession with input. No run is created", async () => {
       await updateConfigWithAiSdkUrl();
 
       mockAISDKServer!.setHandler((_body, res) => {
@@ -3053,7 +3053,7 @@ describe('API', () => {
 
       await expect(promise).rejects.toBeInstanceOf(AgentViewError);
       await expect(promise).rejects.toThrowError(expect.objectContaining({
-        statusCode: 400
+        statusCode: 502
       }));
     }, 10000);
 
