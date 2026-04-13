@@ -32,11 +32,11 @@ index d8109eaf7487ce1cb2cb33cae15bbf4406dbe849..ad72d618912a5396c164c07191389a97
 +} from './process-ui-message-stream__modified';
 diff --git a/src/ui/process-ui-message-stream__modified.ts b/src/ui/process-ui-message-stream__modified.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..3378e755ebabc79ffdca897c3ed278cd50144541
+index 0000000000000000000000000000000000000000..b8db1e2d8317f923e626f5deeaeed530b2ddcc16
 --- /dev/null
 +++ b/src/ui/process-ui-message-stream__modified.ts
-@@ -0,0 +1,829 @@
-+import { FlexibleSchema, validateTypes } from '@ai-sdk/provider-utils';
+@@ -0,0 +1,830 @@
++import { FlexibleSchema/*, validateTypes*/ } from '@ai-sdk/provider-utils';
 +import { UIMessageStreamError } from '../error/ui-message-stream-error';
 +import { ProviderMetadata } from '../types';
 +import { FinishReason } from '../types/language-model';
@@ -47,7 +47,7 @@ index 0000000000000000000000000000000000000000..3378e755ebabc79ffdca897c3ed278cd
 +} from '../ui-message-stream/ui-message-chunks';
 +import { ErrorHandler } from '../util/error-handler';
 +import { mergeObjects } from '../util/merge-objects';
-+import { parsePartialJson } from '../util/parse-partial-json';
++// import { parsePartialJson } from '../util/parse-partial-json';
 +import { UIDataTypesToSchemas } from './chat';
 +import {
 +  DataUIPart,
@@ -109,11 +109,11 @@ index 0000000000000000000000000000000000000000..3378e755ebabc79ffdca897c3ed278cd
 +  };
 +}
 +
-+export async function processUIMessageStream__modified<UI_MESSAGE extends UIMessage>({
-+  messageMetadataSchema,
++export function processUIMessageStream__modified<UI_MESSAGE extends UIMessage>({
++  // messageMetadataSchema,
 +  dataPartSchemas,
 +  onError,
-+  onToolCall,
++  // onToolCall,
 +  onData,
 +  state,
 +  chunk,
@@ -129,7 +129,7 @@ index 0000000000000000000000000000000000000000..3378e755ebabc79ffdca897c3ed278cd
 +  state: StreamingUIMessageState<UI_MESSAGE>;
 +  chunk: UIMessageChunk;
 +  write: () => void;
-+}): Promise<void> {
++}): void {
 +          function getToolInvocation(toolCallId: string) {
 +            const toolInvocations = state.message.parts.filter(isToolUIPart);
 +
@@ -354,23 +354,23 @@ index 0000000000000000000000000000000000000000..3378e755ebabc79ffdca897c3ed278cd
 +            }
 +          }
 +
-+          async function updateMessageMetadata(metadata: unknown) {
++          function updateMessageMetadata(metadata: unknown) {
 +            if (metadata != null) {
 +              const mergedMetadata =
 +                state.message.metadata != null
 +                  ? mergeObjects(state.message.metadata, metadata)
 +                  : metadata;
 +
-+              if (messageMetadataSchema != null) {
-+                await validateTypes({
-+                  value: mergedMetadata,
-+                  schema: messageMetadataSchema,
-+                  context: {
-+                    field: 'message.metadata',
-+                    entityId: state.message.id,
-+                  },
-+                });
-+              }
++              // if (messageMetadataSchema != null) {
++              //   await validateTypes({
++              //     value: mergedMetadata,
++              //     schema: messageMetadataSchema,
++              //     context: {
++              //       field: 'message.metadata',
++              //       entityId: state.message.id,
++              //     },
++              //   });
++              // }
 +
 +              state.message.metadata =
 +                mergedMetadata as InferUIMessageMetadata<UI_MESSAGE>;
@@ -573,9 +573,10 @@ index 0000000000000000000000000000000000000000..3378e755ebabc79ffdca897c3ed278cd
 +
 +              partialToolCall.text += chunk.inputTextDelta;
 +
-+              const { value: partialArgs } = await parsePartialJson(
-+                partialToolCall.text,
-+              );
++              // const { value: partialArgs } = await parsePartialJson(
++              //   partialToolCall.text,
++              // );
++              const partialArgs = partialToolCall.text;
 +
 +              if (partialToolCall.dynamic) {
 +                updateDynamicToolPart({
@@ -628,11 +629,11 @@ index 0000000000000000000000000000000000000000..3378e755ebabc79ffdca897c3ed278cd
 +              // In the future we should make this non-blocking, which
 +              // requires additional state management for error handling etc.
 +              // Skip calling onToolCall for provider-executed tools since they are already executed
-+              if (onToolCall && !chunk.providerExecuted) {
-+                await onToolCall({
-+                  toolCall: chunk as InferUIMessageToolCall<UI_MESSAGE>,
-+                });
-+              }
++              // if (onToolCall && !chunk.providerExecuted) {
++              //   await onToolCall({
++              //     toolCall: chunk as InferUIMessageToolCall<UI_MESSAGE>,
++              //   });
++              // }
 +              break;
 +            }
 +
@@ -773,7 +774,7 @@ index 0000000000000000000000000000000000000000..3378e755ebabc79ffdca897c3ed278cd
 +                state.message.id = chunk.messageId;
 +              }
 +
-+              await updateMessageMetadata(chunk.messageMetadata);
++              updateMessageMetadata(chunk.messageMetadata);
 +
 +              if (chunk.messageId != null || chunk.messageMetadata != null) {
 +                write();
@@ -785,7 +786,7 @@ index 0000000000000000000000000000000000000000..3378e755ebabc79ffdca897c3ed278cd
 +              if (chunk.finishReason != null) {
 +                state.finishReason = chunk.finishReason;
 +              }
-+              await updateMessageMetadata(chunk.messageMetadata);
++              updateMessageMetadata(chunk.messageMetadata);
 +              if (chunk.messageMetadata != null) {
 +                write();
 +              }
@@ -793,7 +794,7 @@ index 0000000000000000000000000000000000000000..3378e755ebabc79ffdca897c3ed278cd
 +            }
 +
 +            case 'message-metadata': {
-+              await updateMessageMetadata(chunk.messageMetadata);
++              updateMessageMetadata(chunk.messageMetadata);
 +              if (chunk.messageMetadata != null) {
 +                write();
 +              }
@@ -808,27 +809,27 @@ index 0000000000000000000000000000000000000000..3378e755ebabc79ffdca897c3ed278cd
 +            default: {
 +              if (isDataUIMessageChunk(chunk)) {
 +                // validate data chunk if dataPartSchemas is provided
-+                if (dataPartSchemas?.[chunk.type] != null) {
-+                  const partIdx = state.message.parts.findIndex(
-+                    p =>
-+                      'id' in p &&
-+                      'data' in p &&
-+                      p.id === chunk.id &&
-+                      p.type === chunk.type,
-+                  );
-+                  const actualPartIdx =
-+                    partIdx >= 0 ? partIdx : state.message.parts.length;
-+
-+                  await validateTypes({
-+                    value: chunk.data,
-+                    schema: dataPartSchemas[chunk.type],
-+                    context: {
-+                      field: `message.parts[${actualPartIdx}].data`,
-+                      entityName: chunk.type,
-+                      entityId: chunk.id,
-+                    },
-+                  });
-+                }
++                // if (dataPartSchemas?.[chunk.type] != null) {
++                //   const partIdx = state.message.parts.findIndex(
++                //     p =>
++                //       'id' in p &&
++                //       'data' in p &&
++                //       p.id === chunk.id &&
++                //       p.type === chunk.type,
++                //   );
++                //   const actualPartIdx =
++                //     partIdx >= 0 ? partIdx : state.message.parts.length;
++                //
++                //   await validateTypes({
++                //     value: chunk.data,
++                //     schema: dataPartSchemas[chunk.type],
++                //     context: {
++                //       field: `message.parts[${actualPartIdx}].data`,
++                //       entityName: chunk.type,
++                //       entityId: chunk.id,
++                //     },
++                //   });
++                // }
 +
 +                // cast, validation is done above
 +                const dataChunk = chunk as DataUIMessageChunk<

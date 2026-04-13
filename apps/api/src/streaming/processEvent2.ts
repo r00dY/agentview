@@ -15,14 +15,11 @@ export function createState(messageId: string): StreamingUIMessageState<UIMessag
     });
 }
 
-export function processEvent(args: {
+export function processEvent2(args: {
     state: StreamingUIMessageState<UIMessage>;
     data: string;
-    onWrite: () => void;
-    onEnd: () => void;
-    onError: (error: unknown) => void;
 }) {
-    const { state, data, onWrite, onEnd, onError } = args;
+    const { state, data } = args;
 
     // parse
     const chunk = JSON.parse(data);
@@ -43,15 +40,11 @@ export function processEvent(args: {
     processUIMessageStream__modified({
         state,
         chunk,
-        write: onWrite,
+        write: () => {},
         onError: (err) => {
             throw err;
         }
-    }).then(() => {
-        onEnd();
-    }).catch((error) => {
-        onError(error);
-    });
+    })
 
     // update chunk (rare)
     // let chunkUpdated = false;

@@ -5,7 +5,7 @@ import { startMeasuring } from '../performance';
 import { startCpuProfiling, stopCpuProfiling } from './profiler';
 
 import { RunTerminationError, type RunTerminationReason } from '../runs';
-import { createState, processEvent } from './processEvent2';
+import { createState, processEvent2 } from './processEvent2';
 import { GracefulRunTerminationError, type LiveConnection } from './types';
 import { saveData } from './saveData';
 import { createParser, type EventSourceMessage } from 'eventsource-parser';
@@ -160,24 +160,24 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
           return;
         }
 
-        processEvent({
-          state,
-          data,
-          onWrite: () => {
-            // save here?
-          },
-          onEnd: () => {
-            pushToBuffer(conn, data);
-          },
-          onError: (error) => {
-            if (error instanceof UIMessageStreamError) {
-              log.error({ runId, error }, '[streaming] error processing event');
-            }
-            else {
-              throw error;
-            }
-          }
-        });
+        try {
+          processEvent2({
+            state,
+            data
+          });
+        } catch (error) {
+          // TODO: error handling!!!!!!!!!
+          // log.error({ runId, error }, '[streaming] error processing event');
+
+          upstreamRes.destroy(error as Error);
+
+          // if (error instanceof UIMessageStreamError) {
+
+          // }
+          // else {
+
+          // }
+        }
 
         // // parse
         // const { data: processedData, op } = processEvent(runId, state, data);
@@ -186,8 +186,8 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
         //   saveData(conn, op); // todo: this is fire & forget -> we need better handling
         // }
 
-        // // Buffer chunk for GET /stream consumers
-        // pushToBuffer(conn, processedData);
+        // Buffer chunk for GET /stream consumers
+        pushToBuffer(conn, data);
       },
     });
 
@@ -196,54 +196,58 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     });
 
     upstreamRes.on('error', function onError(error) {
+      let type : 'abort' | 'error' = 'error';
+      let message: string = 'Unknown error';
+      
       if (error instanceof GracefulRunTerminationError) { // graceful termination (aka sigterm)
         log.info({ runId, error }, '[streaming] graceful termination');
 
         if (error.reason.status === 'cancelled') {
-          conn.state.finalOp = { type: 'cancel' };
+          type = 'abort';
+          message = 'Cancelled by user';
         }
         else if (error.reason.status === 'failed') {
-          conn.state.finalOp = {
-            type: 'fail',
-            failReason: { message: error.message ?? 'Connection error' },
-          };
+          type = 'error';
+          message = error.message
         }
       }
       else if (error instanceof RunTerminationError) { // run already killed
         log.info({ runId, error }, '[streaming] run killed while streaming');
         return;
       }
-      else if (error instanceof TypeError) { // connection error while streaming
-        log.info({ runId, error }, '[streaming] connection error while streaming');
-
-        conn.state.finalOp = {
-          type: 'fail',
-          failReason: { message: error.message ?? 'Connection error' },
-        };
-      } else { // unexpected error while streaming
-        log.error({ runId, error }, '[streaming] unexpected error while streaming');
-        conn.state.finalOp = {
-          type: 'fail',
-          failReason: { message: error instanceof Error ? error.message : String(error) },
-        };
+      else { // unexpected error while streaming
+        log.info({ runId, error }, '[streaming] unexpected error while streaming');
+        type = 'error';
+        message = error instanceof Error ? error.message : String(error);
       }
+      /**
+       * Todo: we should distinguish errors:
+       * 1. Network errors
+       * 2. AI SDK errors (bad chunk, etc)
+       * 3. 'error' chunk (from user's stream)
+       */
 
-      if (!conn.state.finalOp) {
-        log.error({ runId, error }, 'Unreachable: no finalOp set');
-        return;
-      }
 
-      if (conn.state.finalOp.type === 'cancel') {
+      // The only case when we push to buffer ourselves.
+      if (type === 'abort') {
         pushToBuffer(conn, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));
-      } else if (conn.state.finalOp.type === 'fail') {
-        const failReason = conn.state.finalOp.failReason.message ?? 'Unknown error';
-        pushToBuffer(conn, JSON.stringify({ type: 'error', errorText: failReason }));
       }
+      else if (type === 'error') {
+        pushToBuffer(conn, JSON.stringify({ type: 'error', errorText: message }));
+      }
+
+      // if (conn.state.finalOp.type === 'cancel') {
+      //   pushToBuffer(conn, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));
+      // } else if (conn.state.finalOp.type === 'fail') {
+      //   const failReason = conn.state.finalOp.failReason.message ?? 'Unknown error';
+      //   pushToBuffer(conn, JSON.stringify({ type: 'error', errorText: failReason }));
+      // }
 
     });
 
+    // Lack of [done] is treated as unfinished stream -> therefore error.
     upstreamRes.on('end', () => {
-      endWithoutError();
+      res.destroy(new Error("Stream ended incomplete"));
     });
 
     function cleanup(conn: LiveConnection) {
@@ -260,12 +264,19 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
       log.info({ runId }, '[streaming] connection cleaned up');
     }
 
-
+    /**
+     * At this point the state of buffer is as follows:
+     * - last chunk: 'error' -> there was error (of any kind)
+     * - last chunk 'abort' -> user cancelled the stream
+     * - last chunk: [done] -> nice finish -> complete.
+     * 
+     * If stream ended without [done] and without error, we trigger error in on('end')
+     */
     upstreamRes.on('close', () => {
       upstreamRes.destroy();
 
       log.info({ runId }, '[streaming] connection closed, sending final op');
-      const finalOp = conn.state.finalOp;
+      // const finalOp = conn.state.finalOp;
 
       if (finalOp) {
         setTimeout(() => {
