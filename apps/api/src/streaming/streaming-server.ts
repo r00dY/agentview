@@ -135,16 +135,33 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
     upstreamRes.setEncoding('utf-8'); // automatic decoding of stream to the string
 
+
+    function endWithoutError() {
+      if (!state.finalOp) {
+        log.info({ runId }, '[streaming] stream ended incomplete');
+        state.finalOp = {
+          type: 'fail',
+          failReason: {
+            message: 'Agent stream ended without completing',
+          },
+        };
+      } else {
+        log.info({ runId }, '[streaming] stream ended complete');
+      }
+
+      log.debug({ runId }, '[streaming] fast.patch for completion');
+    }
+
+
+
     const sseParser = createParser({
       onEvent: function onSSEEvent(event: EventSourceMessage) {
         const data = event.data;
 
         if (data === '[DONE]') {
           log.debug({ runId }, '[streaming] [DONE] received');
-
-          // After done we just drain the stream and close the connection
-          upstreamRes.removeAllListeners('data');
-          upstreamRes.resume();
+          endWithoutError();
+          upstreamRes.destroy(); // will trigger 'close'
           return;
         }
 
@@ -166,7 +183,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
     upstreamRes.on('error', function onError(error) {
       if (error instanceof GracefulRunTerminationError) { // graceful termination (aka sigterm)
-        log.info({ runId }, '[streaming] graceful termination');
+        log.info({ runId, error }, '[streaming] graceful termination');
 
         if (error.reason.status === 'cancelled') {
           conn.state.finalOp = { type: 'cancel' };
@@ -179,18 +196,18 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
         }
       }
       else if (error instanceof RunTerminationError) { // run already killed
-        log.info({ runId }, '[streaming] run killed while streaming');
+        log.info({ runId, error }, '[streaming] run killed while streaming');
         return;
       }
       else if (error instanceof TypeError) { // connection error while streaming
-        log.info({ runId }, '[streaming] connection error while streaming');
+        log.info({ runId, error }, '[streaming] connection error while streaming');
 
         conn.state.finalOp = {
           type: 'fail',
           failReason: { message: error.message ?? 'Connection error' },
         };
       } else { // unexpected error while streaming
-        log.error({ runId }, '[streaming] unexpected error while streaming');
+        log.error({ runId, error }, '[streaming] unexpected error while streaming');
         conn.state.finalOp = {
           type: 'fail',
           failReason: { message: error instanceof Error ? error.message : String(error) },
@@ -212,19 +229,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     });
 
     upstreamRes.on('end', () => {
-      if (!state.finalOp) {
-        log.info({ runId }, '[streaming] stream ended incomplete');
-        state.finalOp = {
-          type: 'fail',
-          failReason: {
-            message: 'Agent stream ended without completing',
-          },
-        };
-      } else {
-        log.info({ runId }, '[streaming] stream ended complete');
-      }
-
-      log.debug({ runId }, '[streaming] fast.patch for completion');
+      endWithoutError();
     });
 
     upstreamRes.on('close', () => {
@@ -278,9 +283,12 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
   upstreamReq.on('error', (err) => {
     log.info({ err }, '[streaming] upstream request error');
 
+    // Destroying upstreamRes (e.g. on cancellation) kills the shared socket,
+    // which also triggers this error — but res is already finished by then.
+    if (res.headersSent) return;
+
     const code = 'code' in err ? (err as NodeJS.ErrnoException).code : undefined;
     sendJson(res, 502, { code, message: err.message });
-    return;
   });
 
   upstreamReq.write(body);
