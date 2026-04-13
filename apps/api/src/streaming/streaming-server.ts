@@ -232,33 +232,11 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
       endWithoutError();
     });
 
-    upstreamRes.on('close', () => {
-      upstreamRes.destroy();
-
+    function cleanup(conn: LiveConnection) {
       log.info({ runId }, '[streaming] sending [DONE]');
 
-      const finalOp = conn.state.finalOp;
-
-      if (finalOp) {
-        setTimeout(() => {
-
-          saveData(conn, finalOp).then(() => {
-            pushToBuffer(conn, '[DONE]');
-            markStreamDone(conn);
-          }).catch((err) => {
-            log.error({ runId, err }, '[streaming] error saving final op');
-          });
-
-        }, 2000) // TODO: FIX IT!!!
-      }
-      else {
-        log.error({ runId }, '[streaming] no final op set');
-        pushToBuffer(conn, '[DONE]');
-        markStreamDone(conn);
-      }
-
-      // pushToBuffer(conn, '[DONE]');
-      // markStreamDone(conn);
+      pushToBuffer(conn, '[DONE]');
+      markStreamDone(conn);
 
       // Keep buffer available for late-connecting consumers, clean up after 60s
       setTimeout(() => {
@@ -266,6 +244,32 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
       }, 60_000);
 
       log.info({ runId }, '[streaming] connection cleaned up');
+    }
+
+    upstreamRes.on('close', () => {
+      upstreamRes.destroy();
+
+      log.info({ runId }, '[streaming] connection closed, sending final op');
+      const finalOp = conn.state.finalOp;
+
+      if (finalOp) {
+        setTimeout(() => {
+
+          saveData(conn, finalOp)
+            .then(() => { })
+            .catch((err) => {
+              log.error({ runId, err }, '[streaming] error saving final op');
+            })
+            .finally(() => {
+              cleanup(conn);
+            });
+
+        }, 2000) // TODO: FIX IT!!!
+      }
+      else {
+        log.error({ runId }, '[streaming] no final op set');
+        cleanup(conn);
+      }
     });
 
     conn = {
