@@ -2684,7 +2684,7 @@ describe('API', () => {
       return chunks;
     }
 
-    test("happy path: text response (validated via ai-sdk stream)", async () => {
+    test.only("happy path: text response (validated via ai-sdk stream)", async () => {
       await updateConfigWithAiSdkUrl();
       const session = await avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 

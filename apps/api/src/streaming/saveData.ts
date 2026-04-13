@@ -29,3 +29,46 @@ export async function saveData(
     }
   }
   
+
+  export async function saveDataAll(
+    conn: LiveConnection,
+    streamError: { type: 'error', message: string } | { type: 'abort' } | undefined,
+  ) {
+    const parts = conn.state.message.parts;
+
+    for (const part of parts) {
+      await saveData(conn, {
+        type: 'item',
+        content: part,
+      });
+    }
+
+    if (streamError?.type === 'error') {
+      await saveData(conn, {
+        type: 'fail',
+        failReason: { message: streamError.message },
+      });
+    }
+    else if (streamError?.type === 'abort') {
+      await saveData(conn, {
+        type: 'cancel',
+      });
+    }
+    else {
+      // TODO: make this algo better
+      const textParts : { type: 'text', text: string }[] = [];
+
+      for (const part of parts.reverse()) {
+        if (part.type === 'text') {
+          textParts.push(part);
+        }
+      }
+
+      await saveData(conn, {
+        type: 'complete',
+        outputItemCount: textParts.length,
+        channelReply: { text: textParts.map(part => part.text).join('\n\n') },
+      });
+    }
+  }
+  

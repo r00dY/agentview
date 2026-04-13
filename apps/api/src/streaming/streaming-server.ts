@@ -7,7 +7,7 @@ import { startCpuProfiling, stopCpuProfiling } from './profiler';
 import { RunTerminationError, type RunTerminationReason } from '../runs';
 import { createState, processEvent2 } from './processEvent2';
 import { GracefulRunTerminationError, type LiveConnection } from './types';
-import { saveData } from './saveData';
+import { saveData, saveDataAll } from './saveData';
 import { createParser, type EventSourceMessage } from 'eventsource-parser';
 import { UIMessageStreamError } from 'ai';
 
@@ -153,7 +153,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
         const data = event.data;
 
         if (data === DONE_MSG) {
-          log.debug({ runId }, `[streaming] ${DONE_MSG} received`);
+          log.info({ runId }, `[streaming] ${DONE_MSG} received`);
           // endWithoutError();
           upstreamRes.destroy(); // will trigger 'close' event without 'error' event
           return;
@@ -238,6 +238,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
     // Lack of [done] is treated as unfinished stream -> therefore error.
     upstreamRes.on('end', () => {
+      log.info({ runId }, '[streaming] stream ended incomplete');
       streamError = { type: 'error', message: "Stream ended incomplete" };
     });
 
@@ -276,27 +277,38 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
         pushToBuffer(conn, JSON.stringify({ type: 'error', errorText: streamError.message }));
       }
 
-
-      // const finalOp = conn.state.finalOp;
-
-      if (finalOp) {
-        setTimeout(() => {
-
-          saveData(conn, finalOp)
-            .then(() => { })
-            .catch((err) => {
-              log.error({ runId, err }, '[streaming] error saving final op');
-            })
-            .finally(() => {
-              cleanup(conn);
-            });
-
-        }, 2000) // TODO: FIX IT!!!
-      }
-      else {
-        log.error({ runId }, '[streaming] no final op set');
+      saveDataAll(conn, streamError).then(() => {
         cleanup(conn);
-      }
+      }).catch((err) => {
+        log.error({ runId, err }, '[streaming] error saving data');
+      });
+
+
+
+
+      // // const finalOp = conn.state.finalOp;
+
+      // if (finalOp) {
+      //   setTimeout(() => {
+
+
+
+
+      //     saveData(conn, finalOp)
+      //       .then(() => { })
+      //       .catch((err) => {
+      //         log.error({ runId, err }, '[streaming] error saving final op');
+      //       })
+      //       .finally(() => {
+      //         cleanup(conn);
+      //       });
+
+      //   }, 2000) // TODO: FIX IT!!!
+      // }
+      // else {
+      //   log.error({ runId }, '[streaming] no final op set');
+      //   cleanup(conn);
+      // }
     });
 
     conn = {
