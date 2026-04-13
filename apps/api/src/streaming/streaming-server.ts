@@ -5,10 +5,11 @@ import { startMeasuring } from '../performance';
 import { startCpuProfiling, stopCpuProfiling } from './profiler';
 
 import { RunTerminationError, type RunTerminationReason } from '../runs';
-import { processEvent, type State } from './processEvent';
+import { createState, processEvent } from './processEvent2';
 import { GracefulRunTerminationError, type LiveConnection } from './types';
 import { saveData } from './saveData';
 import { createParser, type EventSourceMessage } from 'eventsource-parser';
+import { UIMessageStreamError } from 'ai';
 
 if (!process.env.HTTP_SERVER_PORT) {
   throw new Error('HTTP_SERVER_PORT is not set');
@@ -125,32 +126,26 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
      */
     let conn: LiveConnection;
 
-    const state: State = {
-      textBuffers: new Map<string, string>(),
-      reasoningBuffers: new Map<string, string>(),
-      toolStates: new Map<string, { toolName: string; inputText: string; input?: any }>(),
-      emittedItemTypes: [],
-      outputTexts: [],
-    }
+    const state = createState(runId);
 
     upstreamRes.setEncoding('utf-8'); // automatic decoding of stream to the string
 
 
-    function endWithoutError() {
-      if (!state.finalOp) {
-        log.info({ runId }, '[streaming] stream ended incomplete');
-        state.finalOp = {
-          type: 'fail',
-          failReason: {
-            message: 'Agent stream ended without completing',
-          },
-        };
-      } else {
-        log.info({ runId }, '[streaming] stream ended complete');
-      }
+    // function endWithoutError() {
+    //   if (!state.finalOp) {
+    //     log.info({ runId }, '[streaming] stream ended incomplete');
+    //     state.finalOp = {
+    //       type: 'fail',
+    //       failReason: {
+    //         message: 'Agent stream ended without completing',
+    //       },
+    //     };
+    //   } else {
+    //     log.info({ runId }, '[streaming] stream ended complete');
+    //   }
 
-      log.debug({ runId }, '[streaming] fast.patch for completion');
-    }
+    //   log.debug({ runId }, '[streaming] fast.patch for completion');
+    // }
 
 
 
@@ -160,20 +155,39 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
         if (data === DONE_MSG) {
           log.debug({ runId }, `[streaming] ${DONE_MSG} received`);
-          endWithoutError();
-          upstreamRes.destroy(); // will trigger 'close'
+          // endWithoutError();
+          upstreamRes.destroy(); // will trigger 'close' event without 'error' event
           return;
         }
 
-        // parse
-        const { data: processedData, op } = processEvent(runId, state, data);
+        processEvent({
+          state,
+          data,
+          onWrite: () => {
+            // save here?
+          },
+          onEnd: () => {
+            pushToBuffer(conn, data);
+          },
+          onError: (error) => {
+            if (error instanceof UIMessageStreamError) {
+              log.error({ runId, error }, '[streaming] error processing event');
+            }
+            else {
+              throw error;
+            }
+          }
+        });
 
-        if (op) {
-          saveData(conn, op); // todo: this is fire & forget -> we need better handling
-        }
+        // // parse
+        // const { data: processedData, op } = processEvent(runId, state, data);
 
-        // Buffer chunk for GET /stream consumers
-        pushToBuffer(conn, processedData);
+        // if (op) {
+        //   saveData(conn, op); // todo: this is fire & forget -> we need better handling
+        // }
+
+        // // Buffer chunk for GET /stream consumers
+        // pushToBuffer(conn, processedData);
       },
     });
 
@@ -245,6 +259,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
       log.info({ runId }, '[streaming] connection cleaned up');
     }
+
 
     upstreamRes.on('close', () => {
       upstreamRes.destroy();

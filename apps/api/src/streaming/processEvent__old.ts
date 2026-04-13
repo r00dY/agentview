@@ -1,5 +1,10 @@
 import type { FastPatchOp } from "../runs";
-
+import {
+    processUIMessageStream__modified,
+    createStreamingUIMessageState,
+    type StreamingUIMessageState,
+  } from 'ai/process-ui-message-stream__modified';
+  
 export type State = {
     textBuffers: Map<string, string>,
     reasoningBuffers: Map<string, string>,
@@ -7,6 +12,16 @@ export type State = {
     emittedItemTypes: string[],
     outputTexts: string[],
     finalOp?: FastPatchOp
+}
+
+export function createState(): State {
+    return {
+        textBuffers: new Map<string, string>(),
+        reasoningBuffers: new Map<string, string>(),
+        toolStates: new Map<string, { toolName: string; inputText: string; input?: any }>(),
+        emittedItemTypes: [],
+        outputTexts: [],
+    }
 }
 
 export function processEvent(runId: string, state: State, data: string) {
@@ -197,3 +212,25 @@ function computeOutputItemCount(emittedItemTypes: string[]): number {
     return Math.max(count, 1); // at least 1
   }
   
+
+// Resolve the LazySchema once — gives us a Schema with a `.validate()` method.
+// const uiMessageChunkValidator = uiMessageChunkSchema();
+
+// async function parseChunk(data: string) {
+//     const obj = JSON.parse(data);
+
+//     // simplified parsing for text-delta
+//     if (obj.type === 'text-delta') {
+//         if (typeof obj.delta !== 'string' || typeof obj.id !== 'string') {
+//             throw new Error('Invalid text-delta chunk');
+//         }
+//         return obj;
+//     }
+
+//     const validationResult = await uiMessageChunkValidator.validate!(JSON.parse(data));
+//     if (!validationResult.success) {
+//         throw validationResult.error;
+//     }
+
+//     return validationResult.value;
+// }
