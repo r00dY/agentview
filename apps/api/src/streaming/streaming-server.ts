@@ -237,13 +237,19 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
       log.info({ runId }, '[streaming] sending [DONE]');
 
-      if (conn.state.finalOp) {
-        saveData(conn, conn.state.finalOp).then(() => {
-          pushToBuffer(conn, '[DONE]');
-          markStreamDone(conn);
-        }).catch((err) => {
-          log.error({ runId, err }, '[streaming] error saving final op');
-        });
+      const finalOp = conn.state.finalOp;
+
+      if (finalOp) {
+        setTimeout(() => {
+
+          saveData(conn, finalOp).then(() => {
+            pushToBuffer(conn, '[DONE]');
+            markStreamDone(conn);
+          }).catch((err) => {
+            log.error({ runId, err }, '[streaming] error saving final op');
+          });
+
+        }, 2000) // TODO: FIX IT!!!
       }
       else {
         log.error({ runId }, '[streaming] no final op set');
