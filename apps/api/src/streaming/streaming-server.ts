@@ -148,7 +148,6 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     // }
 
 
-
     const sseParser = createParser({
       onEvent: function onSSEEvent(event: EventSourceMessage) {
         const data = event.data;
@@ -195,30 +194,25 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
       sseParser.feed(chunk);
     });
 
+    let streamError : { type: 'error', message: string } | { type: 'abort' } | undefined = undefined;
+
     upstreamRes.on('error', function onError(error) {
-      let type : 'abort' | 'error' = 'error';
-      let message: string = 'Unknown error';
+      // let type : 'abort' | 'error' = 'error';
+      // let message: string = 'Unknown error';
       
       if (error instanceof GracefulRunTerminationError) { // graceful termination (aka sigterm)
         log.info({ runId, error }, '[streaming] graceful termination');
 
         if (error.reason.status === 'cancelled') {
-          type = 'abort';
-          message = 'Cancelled by user';
+          streamError = { type: 'abort' };
         }
         else if (error.reason.status === 'failed') {
-          type = 'error';
-          message = error.message
+          streamError = { type: 'error', message: error.message };
         }
       }
       else if (error instanceof RunTerminationError) { // run already killed
         log.info({ runId, error }, '[streaming] run killed while streaming');
         return;
-      }
-      else { // unexpected error while streaming
-        log.info({ runId, error }, '[streaming] unexpected error while streaming');
-        type = 'error';
-        message = error instanceof Error ? error.message : String(error);
       }
       /**
        * Todo: we should distinguish errors:
@@ -226,15 +220,12 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
        * 2. AI SDK errors (bad chunk, etc)
        * 3. 'error' chunk (from user's stream)
        */
+      else { // unexpected error while streaming
+        log.info({ runId, error }, '[streaming] unexpected error while streaming');
+        streamError = { type: 'error', message: error instanceof Error ? error.message : String(error) };
+      }
 
 
-      // The only case when we push to buffer ourselves.
-      if (type === 'abort') {
-        pushToBuffer(conn, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));
-      }
-      else if (type === 'error') {
-        pushToBuffer(conn, JSON.stringify({ type: 'error', errorText: message }));
-      }
 
       // if (conn.state.finalOp.type === 'cancel') {
       //   pushToBuffer(conn, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));
@@ -247,7 +238,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
     // Lack of [done] is treated as unfinished stream -> therefore error.
     upstreamRes.on('end', () => {
-      res.destroy(new Error("Stream ended incomplete"));
+      streamError = { type: 'error', message: "Stream ended incomplete" };
     });
 
     function cleanup(conn: LiveConnection) {
@@ -275,7 +266,17 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     upstreamRes.on('close', () => {
       upstreamRes.destroy();
 
-      log.info({ runId }, '[streaming] connection closed, sending final op');
+      log.info({ runId }, '[streaming] connection closed, closing');
+
+      // The only case when we push to buffer ourselves.
+      if (streamError?.type === 'abort') {
+        pushToBuffer(conn, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));
+      }
+      else if (streamError?.type === 'error') {
+        pushToBuffer(conn, JSON.stringify({ type: 'error', errorText: streamError.message }));
+      }
+
+
       // const finalOp = conn.state.finalOp;
 
       if (finalOp) {
