@@ -17,5 +17,6 @@ export interface LiveConnection {
   // In-memory stream buffer for GET /stream consumers
   streamBuffer: string[];
   streamDone: boolean;
-  streamNotify: (() => void)[];
+  streamListeners: Set<(data: string) => void>;
+  streamDoneListeners: Set<() => void>;
 }

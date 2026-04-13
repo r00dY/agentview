@@ -27,14 +27,12 @@ perf.startPrinting('streaming-server');
 
 function pushToBuffer(conn: LiveConnection, data: string) {
   conn.streamBuffer.push(data);
-  const waiters = conn.streamNotify.splice(0);
-  for (const resolve of waiters) resolve();
+  for (const listener of conn.streamListeners) listener(data);
 }
 
 function markStreamDone(conn: LiveConnection) {
   conn.streamDone = true;
-  const waiters = conn.streamNotify.splice(0);
-  for (const resolve of waiters) resolve();
+  for (const listener of conn.streamDoneListeners) listener();
 }
 
 
@@ -284,7 +282,8 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
       streamBuffer: [],
       streamDone: false,
-      streamNotify: [],
+      streamListeners: new Set(),
+      streamDoneListeners: new Set(),
     };
 
     liveConnections.set(runId, conn);
@@ -354,7 +353,7 @@ async function handleDeleteStream(req: http.IncomingMessage, res: http.ServerRes
 
 // --- SSE stream endpoint ---
 
-async function handleGetStream(req: http.IncomingMessage, res: http.ServerResponse, runId: string) {
+function handleGetStream(req: http.IncomingMessage, res: http.ServerResponse, runId: string) {
   const conn = liveConnections.get(runId);
 
   if (!conn) {
@@ -369,46 +368,39 @@ async function handleGetStream(req: http.IncomingMessage, res: http.ServerRespon
   });
   res.flushHeaders();
 
-  let cursor = 0;
-  let pendingResolve: (() => void) | null = null;
-  let aborted = false;
-
-  const onClose = () => {
-    aborted = true;
-    pendingResolve?.();
-  };
-  req.once('close', onClose);
-
-  try {
-    while (!aborted) {
-      // Drain all buffered chunks
-      while (cursor < conn.streamBuffer.length) {
-        const data = conn.streamBuffer[cursor++];
-        if (data === DONE_MSG) {
-          res.end();
-          return;
-        }
-        res.write(`data: ${data}\n\n`);
-      }
-
-      if (conn.streamDone) {
-        res.end();
-        return;
-      }
-
-      // Wait for new data or abort
-      await new Promise<void>(resolve => {
-        pendingResolve = resolve;
-        conn.streamNotify.push(resolve);
-        if (aborted) resolve();
-      });
-      pendingResolve = null;
-    }
-  } catch {
-    // Stream cancelled by consumer
+  function cleanup() {
+    conn!.streamListeners.delete(onChunk);
+    conn!.streamDoneListeners.delete(onDone);
+    try { res.end(); } catch { }
   }
 
-  try { res.end(); } catch { }
+  function writeChunk(data: string): boolean {
+    if (data === DONE_MSG) {
+      cleanup();
+      return false;
+    }
+    res.write(`data: ${data}\n\n`);
+    return true;
+  }
+
+  const onChunk = (data: string) => writeChunk(data);
+  const onDone = () => cleanup();
+
+  // Drain existing buffer
+  for (const data of conn.streamBuffer) {
+    if (!writeChunk(data)) return;
+  }
+
+  if (conn.streamDone) {
+    cleanup();
+    return;
+  }
+
+  // Listen for new chunks
+  conn.streamListeners.add(onChunk);
+  conn.streamDoneListeners.add(onDone);
+
+  req.once('close', cleanup);
 }
 
 
@@ -440,7 +432,7 @@ const requestHandler: http.RequestListener = async (req, res) => {
     if (path.startsWith('/streams/')) {
       const runId = decodeURIComponent(path.slice('/streams/'.length));
       if (method === 'GET') {
-        await handleGetStream(req, res, runId);
+        handleGetStream(req, res, runId);
         return;
       }
       if (method === 'DELETE') {
