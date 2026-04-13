@@ -18,6 +18,8 @@ if (!process.env.STREAMING_SERVER_PORT) {
   throw new Error('STREAMING_SERVER_PORT is not set');
 }
 
+const DONE_MSG = '[DONE]';
+
 const perf = startMeasuring();
 perf.startPrinting('streaming-server');
 
@@ -158,8 +160,8 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
       onEvent: function onSSEEvent(event: EventSourceMessage) {
         const data = event.data;
 
-        if (data === '[DONE]') {
-          log.debug({ runId }, '[streaming] [DONE] received');
+        if (data === DONE_MSG) {
+          log.debug({ runId }, `[streaming] ${DONE_MSG} received`);
           endWithoutError();
           upstreamRes.destroy(); // will trigger 'close'
           return;
@@ -233,9 +235,9 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     });
 
     function cleanup(conn: LiveConnection) {
-      log.info({ runId }, '[streaming] sending [DONE]');
+      log.info({ runId }, `[streaming] sending ${DONE_MSG}`);
 
-      pushToBuffer(conn, '[DONE]');
+      pushToBuffer(conn, DONE_MSG);
       markStreamDone(conn);
 
       // Keep buffer available for late-connecting consumers, clean up after 60s
@@ -382,7 +384,7 @@ async function handleGetStream(req: http.IncomingMessage, res: http.ServerRespon
       // Drain all buffered chunks
       while (cursor < conn.streamBuffer.length) {
         const data = conn.streamBuffer[cursor++];
-        if (data === '[DONE]') {
+        if (data === DONE_MSG) {
           res.end();
           return;
         }
