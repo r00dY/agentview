@@ -28,7 +28,7 @@ export async function stopCpuProfiling(): Promise<string | null> {
   session.disconnect();
   session = null;
 
-  const dir = resolvePath(process.cwd(), 'cpu-profiles');
+  const dir = resolvePath(process.cwd(), 'logs', 'cpu-profiles');
   mkdirSync(dir, { recursive: true });
   const filepath = resolvePath(dir, `streaming-${Date.now()}.cpuprofile`);
   writeFileSync(filepath, JSON.stringify(profile));
