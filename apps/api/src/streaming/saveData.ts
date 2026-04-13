@@ -32,7 +32,7 @@ export async function saveData(
 
   export async function saveDataAll(
     conn: LiveConnection,
-    streamError: { type: 'error', message: string } | { type: 'abort' } | undefined,
+    streamFinishReason: { type: 'error', message: string } | { type: 'abort' } | { type: 'complete' },
   ) {
     const parts = conn.state.message.parts;
 
@@ -43,13 +43,13 @@ export async function saveData(
       });
     }
 
-    if (streamError?.type === 'error') {
+    if (streamFinishReason.type === 'error') {
       await saveData(conn, {
         type: 'fail',
-        failReason: { message: streamError.message },
+        failReason: { message: streamFinishReason.message },
       });
     }
-    else if (streamError?.type === 'abort') {
+    else if (streamFinishReason.type === 'abort') {
       await saveData(conn, {
         type: 'cancel',
       });

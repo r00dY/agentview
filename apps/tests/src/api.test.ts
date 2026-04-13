@@ -2684,7 +2684,7 @@ describe('API', () => {
       return chunks;
     }
 
-    test.only("happy path: text response (validated via ai-sdk stream)", async () => {
+    test("happy path: text response (validated via ai-sdk stream)", async () => {
       await updateConfigWithAiSdkUrl();
       const session = await avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
@@ -2862,8 +2862,7 @@ describe('API', () => {
       const completedRun = finalSession.lastRun!;
       expect(completedRun.status).toBe("completed");
       expect(completedRun.sessionItems.length).toBe(3);
-      expect(completedRun.sessionItems[1].content.type).toBe("tool-call");
-      expect(completedRun.sessionItems[1].content.toolName).toBe("getWeather");
+      expect(completedRun.sessionItems[1].content.type).toBe("tool-getWeather");
       expect(completedRun.sessionItems[1].content.state).toBe("output-available");
       expect(completedRun.sessionItems[1].content.input).toEqual({ city: "NYC" });
       expect(completedRun.sessionItems[1].content.output).toEqual({ temp: 72 });
@@ -3091,7 +3090,7 @@ describe('API', () => {
 
       const updatedSession = await av.getSession({ id: session.id });
       expect(updatedSession.lastRun!.status).toBe("failed");
-      expect(updatedSession.lastRun!.failReason.message).toContain("Agent stream ended without completing");
+      expect(updatedSession.lastRun!.failReason.message).toContain("Stream ended incomplete");
     }, 10000);
 
 
@@ -3255,9 +3254,12 @@ describe('API', () => {
       const updatedSession = await av.getSession({ id: session.id });
       expect(updatedSession.lastRun?.status).toBe("cancelled");
       expect(updatedSession.lastRun?.finishedAt).toBeDefined();
-      expect(updatedSession.lastRun?.sessionItems.length).toBe(2);
+      expect(updatedSession.lastRun?.sessionItems.length).toBe(3);
       expect(updatedSession.lastRun?.sessionItems[1].content.type).toBe("text");
       expect(updatedSession.lastRun?.sessionItems[1].content.text).toBe("First chunk");
+
+      expect(updatedSession.lastRun?.sessionItems[2].content.type).toBe("text");
+      expect(updatedSession.lastRun?.sessionItems[2].content.text).toMatch(/^\.+$/); // just "...."
 
       // Wait for the worker to detect cancellation and abort the connection
       await new Promise(r => setTimeout(r, 500));

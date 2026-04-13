@@ -130,6 +130,8 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
     upstreamRes.setEncoding('utf-8'); // automatic decoding of stream to the string
 
+    let streamFinishReason : { type: 'error', message: string } | { type: 'abort' } | { type: 'complete' } | undefined = undefined;
+
 
     // function endWithoutError() {
     //   if (!state.finalOp) {
@@ -154,6 +156,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
         if (data === DONE_MSG) {
           log.info({ runId }, `[streaming] ${DONE_MSG} received`);
+          streamFinishReason = { type: 'complete' };
           // endWithoutError();
           upstreamRes.destroy(); // will trigger 'close' event without 'error' event
           return;
@@ -194,7 +197,6 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
       sseParser.feed(chunk);
     });
 
-    let streamError : { type: 'error', message: string } | { type: 'abort' } | undefined = undefined;
 
     upstreamRes.on('error', function onError(error) {
       // let type : 'abort' | 'error' = 'error';
@@ -204,10 +206,10 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
         log.info({ runId, error }, '[streaming] graceful termination');
 
         if (error.reason.status === 'cancelled') {
-          streamError = { type: 'abort' };
+          streamFinishReason = { type: 'abort' };
         }
         else if (error.reason.status === 'failed') {
-          streamError = { type: 'error', message: error.message };
+          streamFinishReason = { type: 'error', message: error.message };
         }
       }
       else if (error instanceof RunTerminationError) { // run already killed
@@ -222,7 +224,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
        */
       else { // unexpected error while streaming
         log.info({ runId, error }, '[streaming] unexpected error while streaming');
-        streamError = { type: 'error', message: error instanceof Error ? error.message : String(error) };
+        streamFinishReason = { type: 'error', message: error instanceof Error ? error.message : String(error) };
       }
 
 
@@ -238,8 +240,11 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
     // Lack of [done] is treated as unfinished stream -> therefore error.
     upstreamRes.on('end', () => {
+      if (streamFinishReason) { // prevent's race condition with [done]
+        return;
+      }
       log.info({ runId }, '[streaming] stream ended incomplete');
-      streamError = { type: 'error', message: "Stream ended incomplete" };
+      streamFinishReason = { type: 'error', message: "Stream ended incomplete" };
     });
 
     function cleanup(conn: LiveConnection) {
@@ -269,15 +274,21 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
       log.info({ runId }, '[streaming] connection closed, closing');
 
-      // The only case when we push to buffer ourselves.
-      if (streamError?.type === 'abort') {
-        pushToBuffer(conn, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));
-      }
-      else if (streamError?.type === 'error') {
-        pushToBuffer(conn, JSON.stringify({ type: 'error', errorText: streamError.message }));
+      // Can't happen.
+      if (!streamFinishReason) {
+        log.error({ runId }, '[streaming] unknown finish reason, setting to error');
+        streamFinishReason = { type: 'error', message: "Unknown finish reason. It's internal error, please report." };
       }
 
-      saveDataAll(conn, streamError).then(() => {
+      // The only case when we push to buffer ourselves.
+      if (streamFinishReason.type === 'abort') {
+        pushToBuffer(conn, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));
+      }
+      else if (streamFinishReason.type === 'error') {
+        pushToBuffer(conn, JSON.stringify({ type: 'error', errorText: streamFinishReason.message }));
+      }
+
+      saveDataAll(conn, streamFinishReason).then(() => {
         cleanup(conn);
       }).catch((err) => {
         log.error({ runId, err }, '[streaming] error saving data');
