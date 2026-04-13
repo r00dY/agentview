@@ -11,9 +11,51 @@ export type State = {
     finalOp?: FastPatchOp
 }
 
-export async function processEvent(runId: string, state: State, data: string) {
+// export async function processEvent(runId: string, state: State, data: string) {
+//     // parse
+//     const chunk = await parseChunk(data);
+
+//     // update chunk (rare)
+//     let chunkUpdated = false;
+//     if (chunk.type === 'start' && !chunk.messageId) {
+//         chunk.messageId = runId;
+//         chunkUpdated = true;
+//     }
+
+//     // update state
+//     const op = processChunk(state, chunk);
+
+//     return {
+//         data: chunkUpdated ? JSON.stringify(chunk) : data, 
+//         op 
+//     };
+// }
+
+// Resolve the LazySchema once — gives us a Schema with a `.validate()` method.
+// const uiMessageChunkValidator = uiMessageChunkSchema();
+
+// async function parseChunk(data: string) {
+//     const obj = JSON.parse(data);
+
+//     // simplified parsing for text-delta
+//     if (obj.type === 'text-delta') {
+//         if (typeof obj.delta !== 'string' || typeof obj.id !== 'string') {
+//             throw new Error('Invalid text-delta chunk');
+//         }
+//         return obj;
+//     }
+
+//     const validationResult = await uiMessageChunkValidator.validate!(JSON.parse(data));
+//     if (!validationResult.success) {
+//         throw validationResult.error;
+//     }
+
+//     return validationResult.value;
+// }
+
+export function processEvent(runId: string, state: State, data: string) {
     // parse
-    const chunk = await parseChunk(data);
+    const chunk = parseChunk(data);
 
     // update chunk (rare)
     let chunkUpdated = false;
@@ -31,10 +73,8 @@ export async function processEvent(runId: string, state: State, data: string) {
     };
 }
 
-// Resolve the LazySchema once — gives us a Schema with a `.validate()` method.
-const uiMessageChunkValidator = uiMessageChunkSchema();
 
-async function parseChunk(data: string) {
+function parseChunk(data: string) {
     const obj = JSON.parse(data);
 
     // simplified parsing for text-delta
@@ -45,12 +85,9 @@ async function parseChunk(data: string) {
         return obj;
     }
 
-    const validationResult = await uiMessageChunkValidator.validate!(JSON.parse(data));
-    if (!validationResult.success) {
-        throw validationResult.error;
-    }
+    // TO DO: validate chunks!!!
 
-    return validationResult.value;
+    return obj;
 }
 
 function processChunk(state: State, chunk: Awaited<ReturnType<typeof parseChunk>>) : FastPatchOp | undefined {

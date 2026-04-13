@@ -1,13 +1,13 @@
 import http from 'node:http';
-import { log, setContext } from '../logger';
+import { log } from '../logger';
 import { startMeasuring } from '../performance';
 import { startCpuProfiling, stopCpuProfiling } from './profiler';
 
 import { RunTerminationError, type RunTerminationReason } from '../runs';
-import { processEvent } from './processEvent';
-import { parseAISDKStream } from './parseSSE';
+import { processEvent, type State } from './processEvent';
 import { GracefulRunTerminationError, type LiveConnection } from './types';
 import { saveData } from './saveData';
+import { createParser, type EventSourceMessage } from 'eventsource-parser';
 
 if (!process.env.HTTP_SERVER_PORT) {
   throw new Error('HTTP_SERVER_PORT is not set');
@@ -89,107 +89,180 @@ async function handleProfileStop(res: http.ServerResponse) {
   sendJson(res, 200, { ok: true, filepath });
 }
 
-let fetchCounter = 0;
-
 async function handleCreateStream(req: http.IncomingMessage, res: http.ServerResponse) {
-  const fetchId = `f${++fetchCounter}`;
-
   const { runId, url, body, metadata } = await readJsonBody(req);
-
-  setContext({ fetchId, runId });
 
   log.info(`LIVE CONNECTION run:${runId}`);
 
-  // Fetch agent endpoint
-  const abortController = new AbortController();
-  let response: Response;
 
-  log.info(`started!`);
-
-  try {
-    response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body,
-      signal: abortController.signal,
-    });
-  } catch (error: unknown) {
-    const fetchError = error instanceof TypeError
-      ? (error.message ?? 'Connection error')
-      : (error instanceof Error ? error.message : 'Connection error');
-
-    log.info({ error }, `[streaming] fetch error: ${fetchError}`);
-
-    sendJson(res, 502, { message: fetchError });
-    return;
-  }
-
-  // Strip hop-by-hop headers — they describe the upstream connection framing,
-  // not our new response. Forwarding them causes Content-Length + Transfer-Encoding
-  // to coexist, which violates HTTP/1.1 and makes strict clients (undici) reject the response.
-  const headers: Record<string, string> = {};
-  response.headers.forEach((value, key) => {
-    if (key !== 'transfer-encoding' && key !== 'content-length') {
-      headers[key] = value;
+  const upstreamReq = http.request(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(body),
     }
-  });
-  headers['X-Upstream-Response'] = 'true';
-  headers['Access-Control-Expose-Headers'] = 'x-upstream-response';
+  }, (upstreamRes) => {
 
-  // Check for error responses
-  if (!response.body || !response.ok) {
-    let errorText: string;
-    try {
-      errorText = await response.text();
-    } catch {
-      errorText = 'Error reading response body';
+    // Error response from the upstream server.
+    if (upstreamRes.statusCode && upstreamRes.statusCode >= 400) {
+      res.writeHead(upstreamRes.statusCode, upstreamRes.headers);
+      res.setHeader('X-Upstream-Response', 'true');
+      res.setHeader('Access-Control-Expose-Headers', 'x-upstream-response');
+      upstreamRes.pipe(res);
+      return;
     }
 
-    if (!response.body) {
-      errorText = errorText || 'No response body';
-    }
+    /**
+     * Connection established
+     */
+    let conn: LiveConnection;
 
-    log.info({ status: response.status, headers }, `[streaming] error response ${response.status}: ${errorText}`);
-
-    res.writeHead(response.status, headers);
-    res.end(errorText);
-    return;
-  }
-
-  // Success - store connection and start streaming in background
-  const reader = response.body.getReader();
-
-  const connection: LiveConnection = {
-    runId,
-    metadata,
-
-    reader,
-    abortController,
-
-    state: {
+    const state: State = {
       textBuffers: new Map<string, string>(),
       reasoningBuffers: new Map<string, string>(),
       toolStates: new Map<string, { toolName: string; inputText: string; input?: any }>(),
       emittedItemTypes: [],
       outputTexts: [],
-    },
+    }
 
-    streamBuffer: [],
-    streamDone: false,
-    streamNotify: [],
-  };
+    upstreamRes.setEncoding('utf-8'); // automatic decoding of stream to the string
 
-  liveConnections.set(runId, connection);
+    const sseParser = createParser({
+      onEvent: function onSSEEvent(event: EventSourceMessage) {
+        const data = event.data;
 
-  // Start processing in background (don't await)
-  processStream(connection).catch((err) => {
-    log.error({ err, runId }, '[streaming] processStream unhandled error');
+        if (data === '[DONE]') {
+          log.debug({ runId }, '[streaming] [DONE] received');
+
+          // After done we just drain the stream and close the connection
+          upstreamRes.removeAllListeners('data');
+          upstreamRes.resume();
+          return;
+        }
+
+        // parse
+        const { data: processedData, op } = processEvent(runId, state, data);
+
+        if (op) {
+          saveData(conn, op); // todo: this is fire & forget -> we need better handling
+        }
+
+        // Buffer chunk for GET /stream consumers
+        pushToBuffer(conn, processedData);
+      },
+    });
+
+    upstreamRes.on('data', function onData(chunk: string) { // chunk is string thanks to setEncoding('utf-8')
+      sseParser.feed(chunk);
+    });
+
+    upstreamRes.on('error', function onError(error) {
+      if (error instanceof GracefulRunTerminationError) { // graceful termination (aka sigterm)
+        log.info({ runId }, '[streaming] graceful termination');
+
+        if (error.reason.status === 'cancelled') {
+          conn.state.finalOp = { type: 'cancel' };
+        }
+        else if (error.reason.status === 'failed') {
+          conn.state.finalOp = {
+            type: 'fail',
+            failReason: { message: error.message ?? 'Connection error' },
+          };
+        }
+      }
+      else if (error instanceof RunTerminationError) { // run already killed
+        log.info({ runId }, '[streaming] run killed while streaming');
+        return;
+      }
+      else if (error instanceof TypeError) { // connection error while streaming
+        log.info({ runId }, '[streaming] connection error while streaming');
+
+        conn.state.finalOp = {
+          type: 'fail',
+          failReason: { message: error.message ?? 'Connection error' },
+        };
+      } else { // unexpected error while streaming
+        log.error({ runId }, '[streaming] unexpected error while streaming');
+        conn.state.finalOp = {
+          type: 'fail',
+          failReason: { message: error instanceof Error ? error.message : String(error) },
+        };
+      }
+
+      if (!conn.state.finalOp) {
+        log.error({ runId, error }, 'Unreachable: no finalOp set');
+        return;
+      }
+
+      if (conn.state.finalOp.type === 'cancel') {
+        pushToBuffer(conn, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));
+      } else if (conn.state.finalOp.type === 'fail') {
+        const failReason = conn.state.finalOp.failReason.message ?? 'Unknown error';
+        pushToBuffer(conn, JSON.stringify({ type: 'error', errorText: failReason }));
+      }
+
+      saveData(conn, conn.state.finalOp); // TODO: this is fire & forget -> we need better handling
+    });
+
+    upstreamRes.on('end', () => {
+      if (!state.finalOp) {
+        log.info({ runId }, '[streaming] stream ended incomplete');
+        state.finalOp = {
+          type: 'fail',
+          failReason: {
+            message: 'Agent stream ended without completing',
+          },
+        };
+      } else {
+        log.info({ runId }, '[streaming] stream ended complete');
+      }
+
+      log.debug({ runId }, '[streaming] fast.patch for completion');
+      saveData(conn, state.finalOp); // TODO: this is fire & forget -> we need better handling
+    });
+
+    upstreamRes.on('close', () => {
+      upstreamRes.destroy();
+
+      log.info({ runId }, '[streaming] sending [DONE]');
+
+      pushToBuffer(conn, '[DONE]');
+      markStreamDone(conn);
+
+      // Keep buffer available for late-connecting consumers, clean up after 60s
+      setTimeout(() => {
+        liveConnections.delete(runId);
+      }, 60_000);
+
+      log.info({ runId }, '[streaming] connection cleaned up');
+    });
+
+    conn = {
+      runId,
+      metadata,
+
+      upstreamRes,
+
+      state,
+
+      streamBuffer: [],
+      streamDone: false,
+      streamNotify: [],
+    };
+
+    liveConnections.set(runId, conn);
   });
 
-  log.info({ runId }, '[streaming] connection established');
+  upstreamReq.on('error', (err) => {
+    log.error({ err }, '[streaming] upstream request error');
 
-  res.writeHead(response.status, headers);
-  res.end();
+    const code = 'code' in err ? (err as NodeJS.ErrnoException).code : undefined;
+    sendJson(res, 502, { code, message: err.message });
+    return;
+  });
+
+  upstreamReq.write(body);
+  upstreamReq.end();
 }
 
 async function handleDeleteStream(req: http.IncomingMessage, res: http.ServerResponse, runId: string) {
@@ -200,18 +273,24 @@ async function handleDeleteStream(req: http.IncomingMessage, res: http.ServerRes
     return;
   }
 
-  const connection = liveConnections.get(runId);
+  const conn = liveConnections.get(runId);
 
-  if (!connection) {
-    sendJson(res, 404, { message: 'Connection not found' });
+  if (!conn) {
+    sendJson(res, 404, { message: 'conn not found' });
     return;
   }
 
+  // if (!graceful) {
+  //   conn.abortController.abort(new RunTerminationError(reason));
+  // }
+  // else {
+  //   conn.abortController.abort(new GracefulRunTerminationError(reason));
+  // }
   if (!graceful) {
-    connection.abortController.abort(new RunTerminationError(reason));
+    conn.upstreamRes.destroy(new RunTerminationError(reason));
   }
   else {
-    connection.abortController.abort(new GracefulRunTerminationError(reason));
+    conn.upstreamRes.destroy(new GracefulRunTerminationError(reason));
   }
 
   /**
@@ -222,7 +301,7 @@ async function handleDeleteStream(req: http.IncomingMessage, res: http.ServerRes
   const TOTAL_WAIT_TIME = 5000;
   const INTERVAL = 100;
 
-  while (!connection.streamDone) {
+  while (!conn.streamDone) {
     if (time > TOTAL_WAIT_TIME) {
       log.error({ runId }, '[streaming] run not closed after 5 seconds after cancellation');
       sendJson(res, 500, { message: 'Run not closed after 5 seconds after cancellation' });
@@ -293,7 +372,7 @@ async function handleGetStream(req: http.IncomingMessage, res: http.ServerRespon
     // Stream cancelled by consumer
   }
 
-  try { res.end(); } catch {}
+  try { res.end(); } catch { }
 }
 
 
@@ -340,114 +419,10 @@ const requestHandler: http.RequestListener = async (req, res) => {
     if (!res.headersSent) {
       sendJson(res, 500, { message: 'Internal server error' });
     } else {
-      try { res.end(); } catch {}
+      try { res.end(); } catch { }
     }
   }
 };
-
-
-async function processStream(conn: LiveConnection) {
-  const { reader, runId, state } = conn;
-
-  try {
-    log.info({ runId }, '[streaming] streaming started');
-
-    for await (const data of parseAISDKStream(reader)) {
-      if (data === '[DONE]') {
-        log.debug({ runId }, '[streaming] [DONE] received');
-        break;
-      }
-
-      // parse
-      const { data: processedData, op } = await processEvent(runId, state, data);
-
-      if (op) {
-        await saveData(conn, op);
-      }
-      // Buffer chunk for GET /stream consumers
-      pushToBuffer(conn, processedData); // strinfiy only updated chunks
-    }
-
-    if (!state.finalOp) {
-      log.info({ runId }, '[streaming] stream ended incomplete');
-      state.finalOp = {
-        type: 'fail',
-        failReason: {
-          message: 'Agent stream ended without completing',
-        },
-      };
-    } else {
-      log.info({ runId }, '[streaming] stream ended complete');
-    }
-
-    log.debug({ runId }, '[streaming] fast.patch for completion');
-    await saveData(conn, state.finalOp);
-
-  } catch (error: unknown) {
-
-    if (error instanceof GracefulRunTerminationError) { // graceful termination (aka sigterm)
-      log.info({ runId }, '[streaming] graceful termination');
-
-      if (error.reason.status === 'cancelled') {
-        conn.state.finalOp = { type: 'cancel' };
-      }
-      else if (error.reason.status === 'failed') {
-        conn.state.finalOp = {
-          type: 'fail',
-          failReason: { message: error.message ?? 'Connection error' },
-        };
-      }
-    }
-    else if (error instanceof RunTerminationError) { // run already killed
-      log.info({ runId }, '[streaming] run killed while streaming');
-      return;
-    }
-    else if (error instanceof TypeError) { // connection error while streaming
-      log.info({ runId }, '[streaming] connection error while streaming');
-
-      conn.state.finalOp = {
-        type: 'fail',
-        failReason: { message: error.message ?? 'Connection error' },
-      };
-    } else { // unexpected error while streaming
-      log.error({ runId }, '[streaming] unexpected error while streaming');
-      conn.state.finalOp = {
-        type: 'fail',
-        failReason: { message: error instanceof Error ? error.message : String(error) },
-      };
-    }
-
-    if (!conn.state.finalOp) {
-      log.error({ runId, error }, 'Unreachable: no finalOp set');
-      return;
-    }
-
-    if (conn.state.finalOp.type === 'cancel') {
-      pushToBuffer(conn, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));
-    } else if (conn.state.finalOp.type === 'fail') {
-      const failReason = conn.state.finalOp.failReason.message ?? 'Unknown error';
-      pushToBuffer(conn, JSON.stringify({ type: 'error', errorText: failReason }));
-    }
-
-    await saveData(conn, conn.state.finalOp);
-
-  } finally {
-    await reader?.cancel().catch(() => {});
-
-    log.info({ runId }, '[streaming] sending [DONE]');
-
-    pushToBuffer(conn, '[DONE]');
-    markStreamDone(conn);
-
-    // Keep buffer available for late-connecting consumers, clean up after 60s
-    setTimeout(() => {
-      liveConnections.delete(runId);
-    }, 60_000);
-
-    log.info({ runId }, '[streaming] connection cleaned up');
-  }
-}
-
 
 
 // Prevent unhandled rejections from crashing the process

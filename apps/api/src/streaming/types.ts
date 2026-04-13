@@ -1,3 +1,4 @@
+import type { IncomingMessage } from "node:http";
 import { RunTerminationError } from "../runs";
 import type { State } from "./processEvent";
 
@@ -7,8 +8,10 @@ export class GracefulRunTerminationError extends RunTerminationError {}
 
 export interface LiveConnection {
   runId: string;
-  reader: ReadableStreamDefaultReader<Uint8Array>;
-  abortController: AbortController;
+
+  upstreamRes: IncomingMessage;
+
+  // abortController: AbortController;
   metadata: string;
 
   state: State
