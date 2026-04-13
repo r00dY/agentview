@@ -1,4 +1,5 @@
 import http from 'node:http';
+import https from 'node:https';
 import { log } from '../logger';
 import { startMeasuring } from '../performance';
 import { startCpuProfiling, stopCpuProfiling } from './profiler';
@@ -94,22 +95,29 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
   log.info(`LIVE CONNECTION run:${runId}`);
 
-
-  const upstreamReq = http.request(url, {
+  const requester = url.startsWith('https') ? https : http;
+  const upstreamReq = requester.request(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Content-Length': Buffer.byteLength(body),
     }
   }, (upstreamRes) => {
+    const statusCode = upstreamRes.statusCode!;
 
-    // Error response from the upstream server.
-    if (upstreamRes.statusCode && upstreamRes.statusCode >= 400) {
-      res.writeHead(upstreamRes.statusCode, upstreamRes.headers);
-      res.setHeader('X-Upstream-Response', 'true');
-      res.setHeader('Access-Control-Expose-Headers', 'x-upstream-response');
+    // If we have response, we just pipe headers and status
+    res.writeHead(statusCode, {
+      ...upstreamRes.headers,
+      'X-Upstream-Response': 'true',
+      'Access-Control-Expose-Headers': 'x-upstream-response',
+    });
+
+    if (statusCode >= 400) {
       upstreamRes.pipe(res);
       return;
+    }
+    else {
+      res.end();
     }
 
     /**
@@ -251,6 +259,8 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     };
 
     liveConnections.set(runId, conn);
+
+    log.info({ runId }, '[streaming] connection established');
   });
 
   upstreamReq.on('error', (err) => {
@@ -280,12 +290,6 @@ async function handleDeleteStream(req: http.IncomingMessage, res: http.ServerRes
     return;
   }
 
-  // if (!graceful) {
-  //   conn.abortController.abort(new RunTerminationError(reason));
-  // }
-  // else {
-  //   conn.abortController.abort(new GracefulRunTerminationError(reason));
-  // }
   if (!graceful) {
     conn.upstreamRes.destroy(new RunTerminationError(reason));
   }

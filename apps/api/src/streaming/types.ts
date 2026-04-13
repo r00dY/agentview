@@ -10,8 +10,6 @@ export interface LiveConnection {
   runId: string;
 
   upstreamRes: IncomingMessage;
-
-  // abortController: AbortController;
   metadata: string;
 
   state: State

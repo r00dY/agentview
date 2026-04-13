@@ -1,5 +1,3 @@
-
-import { uiMessageChunkSchema } from "ai";
 import type { FastPatchOp } from "../runs";
 
 export type State = {
@@ -10,48 +8,6 @@ export type State = {
     outputTexts: string[],
     finalOp?: FastPatchOp
 }
-
-// export async function processEvent(runId: string, state: State, data: string) {
-//     // parse
-//     const chunk = await parseChunk(data);
-
-//     // update chunk (rare)
-//     let chunkUpdated = false;
-//     if (chunk.type === 'start' && !chunk.messageId) {
-//         chunk.messageId = runId;
-//         chunkUpdated = true;
-//     }
-
-//     // update state
-//     const op = processChunk(state, chunk);
-
-//     return {
-//         data: chunkUpdated ? JSON.stringify(chunk) : data, 
-//         op 
-//     };
-// }
-
-// Resolve the LazySchema once — gives us a Schema with a `.validate()` method.
-// const uiMessageChunkValidator = uiMessageChunkSchema();
-
-// async function parseChunk(data: string) {
-//     const obj = JSON.parse(data);
-
-//     // simplified parsing for text-delta
-//     if (obj.type === 'text-delta') {
-//         if (typeof obj.delta !== 'string' || typeof obj.id !== 'string') {
-//             throw new Error('Invalid text-delta chunk');
-//         }
-//         return obj;
-//     }
-
-//     const validationResult = await uiMessageChunkValidator.validate!(JSON.parse(data));
-//     if (!validationResult.success) {
-//         throw validationResult.error;
-//     }
-
-//     return validationResult.value;
-// }
 
 export function processEvent(runId: string, state: State, data: string) {
     // parse
