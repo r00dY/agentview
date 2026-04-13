@@ -209,7 +209,6 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
         pushToBuffer(conn, JSON.stringify({ type: 'error', errorText: failReason }));
       }
 
-      saveData(conn, conn.state.finalOp); // TODO: this is fire & forget -> we need better handling
     });
 
     upstreamRes.on('end', () => {
@@ -226,7 +225,6 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
       }
 
       log.debug({ runId }, '[streaming] fast.patch for completion');
-      saveData(conn, state.finalOp); // TODO: this is fire & forget -> we need better handling
     });
 
     upstreamRes.on('close', () => {
@@ -234,8 +232,22 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
       log.info({ runId }, '[streaming] sending [DONE]');
 
-      pushToBuffer(conn, '[DONE]');
-      markStreamDone(conn);
+      if (conn.state.finalOp) {
+        saveData(conn, conn.state.finalOp).then(() => {
+          pushToBuffer(conn, '[DONE]');
+          markStreamDone(conn);
+        }).catch((err) => {
+          log.error({ runId, err }, '[streaming] error saving final op');
+        });
+      }
+      else {
+        log.error({ runId }, '[streaming] no final op set');
+        pushToBuffer(conn, '[DONE]');
+        markStreamDone(conn);
+      }
+
+      // pushToBuffer(conn, '[DONE]');
+      // markStreamDone(conn);
 
       // Keep buffer available for late-connecting consumers, clean up after 60s
       setTimeout(() => {
@@ -264,7 +276,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
   });
 
   upstreamReq.on('error', (err) => {
-    log.error({ err }, '[streaming] upstream request error');
+    log.info({ err }, '[streaming] upstream request error');
 
     const code = 'code' in err ? (err as NodeJS.ErrnoException).code : undefined;
     sendJson(res, 502, { code, message: err.message });
