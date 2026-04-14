@@ -6,6 +6,12 @@ import {
 import { parseUIMessageChunk } from './parseUIMessageChunk';
 import type { UIMessage } from "ai";
 
+export class StreamUserError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = "StreamUserError";
+    }
+  }
 
 export function createState(messageId: string): StreamingUIMessageState<UIMessage> {
     return createStreamingUIMessageState({
@@ -27,7 +33,7 @@ export function processEvent(args: {
         chunk,
         write: () => {},
         onError: (err) => {
-            throw err;
+            throw new StreamUserError((err as Error).message); // we make this error different class to distinguish from unexpected errors
         }
     })
 }

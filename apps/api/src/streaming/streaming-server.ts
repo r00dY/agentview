@@ -5,10 +5,12 @@ import { startMeasuring } from '../performance';
 import { startCpuProfiling, stopCpuProfiling } from './profiler';
 
 import { RunTerminationError, type RunTerminationReason } from '../runs';
-import { createState, processEvent } from './processEvent';
+import { createState, processEvent, StreamUserError } from './processEvent';
 import { GracefulRunTerminationError, type LiveConnection } from './types';
 import { saveDataAll } from './saveData';
 import { createParser, type EventSourceMessage } from 'eventsource-parser';
+import { ChunkParseError } from './parseUIMessageChunk';
+import { UIMessageStreamError } from 'ai';
 
 if (!process.env.HTTP_SERVER_PORT) {
   throw new Error('HTTP_SERVER_PORT is not set');
@@ -17,6 +19,12 @@ if (!process.env.HTTP_SERVER_PORT) {
 if (!process.env.STREAMING_SERVER_PORT) {
   throw new Error('STREAMING_SERVER_PORT is not set');
 }
+
+const NETWORK_ERROR_CODES = [
+  'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT',
+  'ENOTFOUND', 'EHOSTUNREACH', 'ENETUNREACH',
+  'EPIPE', 'EAI_AGAIN'
+];
 
 const DONE_MSG = '[DONE]';
 
@@ -129,34 +137,19 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
     upstreamRes.setEncoding('utf-8'); // automatic decoding of stream to the string
 
-    let streamFinishReason : { type: 'error', message: string } | { type: 'abort' } | { type: 'complete' } | undefined = undefined;
+    let streamFinishReason : { type: 'error', message: string, [key: string]: any } | { type: 'abort' } | { type: 'complete' } | undefined = undefined;
 
-
-    // function endWithoutError() {
-    //   if (!state.finalOp) {
-    //     log.info({ runId }, '[streaming] stream ended incomplete');
-    //     state.finalOp = {
-    //       type: 'fail',
-    //       failReason: {
-    //         message: 'Agent stream ended without completing',
-    //       },
-    //     };
-    //   } else {
-    //     log.info({ runId }, '[streaming] stream ended complete');
-    //   }
-
-    //   log.debug({ runId }, '[streaming] fast.patch for completion');
-    // }
 
 
     const sseParser = createParser({
       onEvent: function onSSEEvent(event: EventSourceMessage) {
+        if (streamFinishReason) { return } // prevents race conditions. There's a possibility that previous error set streamFinishReason and on('end') / on('error') / on('close') hasn't been called yet.
+
         const data = event.data;
 
         if (data === DONE_MSG) {
           log.info({ runId }, `[streaming] ${DONE_MSG} received`);
           streamFinishReason = { type: 'complete' };
-          // endWithoutError();
           upstreamRes.destroy(); // will trigger 'close' event without 'error' event
           return;
         }
@@ -166,29 +159,30 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
             state,
             data
           });
+
+          pushToBuffer(conn, data);
+
         } catch (error) {
-          // TODO: error handling!!!!!!!!!
-          // log.error({ runId, error }, '[streaming] error processing event');
 
-          upstreamRes.destroy(error as Error);
+          // Can't process chunk -> error.
+          if (error instanceof ChunkParseError || error instanceof UIMessageStreamError) {
+            streamFinishReason = { type: 'error', code: "STREAM_INVALID_CHUNK", message: error.message, data }; // just pass 'data' for debugging, it's enough
+            upstreamRes.destroy(); // custom error handling
+          }
+          // Upstream error (sent by user) -> okay. No code.
+          else if (error instanceof StreamUserError) { // errors by user ('error' chunk in the upstream stream)
+            streamFinishReason = { type: 'error', message: error.message }; // upstream error has no code -> just user's error.
+            upstreamRes.destroy();
+          }
+          // unexpected errors fallback
+          else {
+            log.error({ runId, error }, '[streaming] unexpected error while streaming');
+            streamFinishReason = { type: 'error', code: "STREAM_AGENTVIEW_INTERNAL_ERROR", message: (error as Error).message ?? String(error) }
+          }
 
-          // if (error instanceof UIMessageStreamError) {
-
-          // }
-          // else {
-
-          // }
+          upstreamRes.destroy();  // we can bypass on('error'), as we handled errors already (streamFinishReason is set)
         }
 
-        // // parse
-        // const { data: processedData, op } = processEvent(runId, state, data);
-
-        // if (op) {
-        //   saveData(conn, op); // todo: this is fire & forget -> we need better handling
-        // }
-
-        // Buffer chunk for GET /stream consumers
-        pushToBuffer(conn, data);
       },
     });
 
@@ -198,9 +192,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
 
     upstreamRes.on('error', function onError(error) {
-      // let type : 'abort' | 'error' = 'error';
-      // let message: string = 'Unknown error';
-      
+      console.log('on(error)')
       if (error instanceof GracefulRunTerminationError) { // graceful termination (aka sigterm)
         log.info({ runId, error }, '[streaming] graceful termination');
 
@@ -208,40 +200,29 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
           streamFinishReason = { type: 'abort' };
         }
         else if (error.reason.status === 'failed') {
-          streamFinishReason = { type: 'error', message: error.message };
+          streamFinishReason = { type: 'error', code: "STREAM_TERMINATED", message: error.message };
         }
       }
       else if (error instanceof RunTerminationError) { // run already killed
         log.info({ runId, error }, '[streaming] run killed while streaming');
         return;
       }
-      /**
-       * Todo: we should distinguish errors:
-       * 1. Network errors
-       * 2. AI SDK errors (bad chunk, etc)
-       * 3. 'error' chunk (from user's stream)
-       */
-      else { // unexpected error while streaming
-        log.info({ runId, error }, '[streaming] unexpected error while streaming');
-        streamFinishReason = { type: 'error', message: error instanceof Error ? error.message : String(error) };
+      // Network errors
+      else if (error instanceof Error && NETWORK_ERROR_CODES.includes((error as any)?.code)) { // in node you gotta check for 'code' property to know whether it's network error 
+        log.info({ runId, error }, '[streaming] network error while streaming');
+        streamFinishReason = { type: 'error', code: "STREAM_NETWORK_ERROR", message: error.message };
       }
-
-
-
-      // if (conn.state.finalOp.type === 'cancel') {
-      //   pushToBuffer(conn, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));
-      // } else if (conn.state.finalOp.type === 'fail') {
-      //   const failReason = conn.state.finalOp.failReason.message ?? 'Unknown error';
-      //   pushToBuffer(conn, JSON.stringify({ type: 'error', errorText: failReason }));
-      // }
-
+      // Unexpected errors fallback
+      else {
+        log.error({ runId, error }, '[streaming] unexpected error while streaming');
+        streamFinishReason = { type: 'error', code: "STREAM_AGENTVIEW_INTERNAL_ERROR", message: error instanceof Error ? error.message : String(error) };
+      }
     });
 
     // Lack of [done] is treated as unfinished stream -> therefore error.
     upstreamRes.on('end', () => {
-      if (streamFinishReason) { // prevent's race condition with [done]
-        return;
-      }
+      if (streamFinishReason) { return } // prevents race conditions (maybe [done] was just set before end event)
+
       log.info({ runId }, '[streaming] stream ended incomplete');
       streamFinishReason = { type: 'error', message: "Stream ended incomplete" };
     });
@@ -269,6 +250,8 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
      * If stream ended without [done] and without error, we trigger error in on('end')
      */
     upstreamRes.on('close', () => {
+
+      console.log('on(close)')
       upstreamRes.destroy();
 
       log.info({ runId }, '[streaming] connection closed, closing');
@@ -284,7 +267,8 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
         pushToBuffer(conn, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));
       }
       else if (streamFinishReason.type === 'error') {
-        pushToBuffer(conn, JSON.stringify({ type: 'error', errorText: streamFinishReason.message }));
+        const { type, ...fields } = streamFinishReason;
+        pushToBuffer(conn, JSON.stringify({ type: 'error', errorText: JSON.stringify(fields) })); // this is a bit tricky but it's the only way we can send more error details so user can distinguish between them. no providerData on error :(
       }
 
       saveDataAll(conn, streamFinishReason).then(() => {
@@ -292,33 +276,6 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
       }).catch((err) => {
         log.error({ runId, err }, '[streaming] error saving data');
       });
-
-
-
-
-      // // const finalOp = conn.state.finalOp;
-
-      // if (finalOp) {
-      //   setTimeout(() => {
-
-
-
-
-      //     saveData(conn, finalOp)
-      //       .then(() => { })
-      //       .catch((err) => {
-      //         log.error({ runId, err }, '[streaming] error saving final op');
-      //       })
-      //       .finally(() => {
-      //         cleanup(conn);
-      //       });
-
-      //   }, 2000) // TODO: FIX IT!!!
-      // }
-      // else {
-      //   log.error({ runId }, '[streaming] no final op set');
-      //   cleanup(conn);
-      // }
     });
 
     conn = {
