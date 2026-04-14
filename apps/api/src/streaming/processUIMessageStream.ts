@@ -33,6 +33,8 @@ import type {
   InferUIMessageTools,
 } from 'ai/internals/ui/ui-messages';
 
+import type { ExtendedUIMessageChunk } from './parseUIMessageChunk';
+
 export type StreamingUIMessageState<UI_MESSAGE extends UIMessage> = {
   message: UI_MESSAGE;
   activeTextParts: Record<string, TextUIPart>;
@@ -94,7 +96,7 @@ export function processUIMessageStream__modified<UI_MESSAGE extends UIMessage>({
   onData?: (dataPart: DataUIPart<InferUIMessageData<UI_MESSAGE>>) => void;
   onError: ErrorHandler;
   state: StreamingUIMessageState<UI_MESSAGE>;
-  chunk: UIMessageChunk;
+  chunk: ExtendedUIMessageChunk;
   write: () => void;
 }): void {
           function getToolInvocation(toolCallId: string) {
@@ -746,6 +748,20 @@ export function processUIMessageStream__modified<UI_MESSAGE extends UIMessage>({
 
             case 'error': {
               onError?.(new Error(chunk.errorText));
+              break;
+            }
+
+            // V7 beta: custom part
+            case 'custom': {
+              const customChunk = chunk as import('./parseUIMessageChunk').CustomUIMessageChunk;
+              state.message.parts.push({
+                type: 'custom',
+                kind: customChunk.kind,
+                ...(customChunk.providerMetadata != null
+                  ? { providerMetadata: customChunk.providerMetadata }
+                  : {}),
+              } as any);
+              write();
               break;
             }
 

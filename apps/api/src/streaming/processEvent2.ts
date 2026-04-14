@@ -3,6 +3,7 @@ import {
     createStreamingUIMessageState,
     type StreamingUIMessageState,
   } from './processUIMessageStream';
+import { parseUIMessageChunk } from './parseUIMessageChunk';
 import type { UIMessage } from "ai";
 
 
@@ -19,21 +20,7 @@ export function processEvent2(args: {
 }) {
     const { state, data } = args;
 
-    // parse
-    const chunk = JSON.parse(data);
-
-    // simplified validation for hot-path (deltas)
-    /**
-     * TODO!!!!!! VALIDATE CHUNKS!!!!!!!
-     */
-    if (chunk.type === 'text-delta') {
-        // if (typeof chunk.delta !== 'string' || typeof chunk.id !== 'string') {
-        //     throw new Error('Invalid text-delta chunk'); // onError???
-        // }
-    }
-    else {
-        // validate normally
-    }
+    const chunk = parseUIMessageChunk(data);
 
     processUIMessageStream__modified({
         state,
