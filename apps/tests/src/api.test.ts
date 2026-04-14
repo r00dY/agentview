@@ -2904,7 +2904,7 @@ describe('API', () => {
       console.log(chunks);
     }, 10000);
 
-    test.only("error → invalid chunk", async () => {
+    test("error → invalid chunk", async () => {
       await updateConfigWithAiSdkUrl();
       const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
 
