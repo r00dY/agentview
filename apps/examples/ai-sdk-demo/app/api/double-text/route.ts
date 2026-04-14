@@ -18,8 +18,9 @@ export async function POST() {
     // Second text part
     { type: "text-start", id: textId2 },
     { type: "text-delta", id: textId2, delta: "And here is " },
-    { type: "text-delta", id: textId2, delta: "the second text part.", dupa: 8 },
+    { type: "text-delta", id: textId2, delta: "the second text part." },
     { type: "text-end", id: textId2 },
+    { type: "custom", kind: "dupa.dupa" },
     { type: "finish-step" },
     { type: "finish" },
   ];
@@ -30,7 +31,7 @@ export async function POST() {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(part)}\n\n`));
         await new Promise((r) => setTimeout(r, 100));
       }
-      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      // controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       controller.close();
     },
   });

@@ -7,9 +7,8 @@ import { startCpuProfiling, stopCpuProfiling } from './profiler';
 import { RunTerminationError, type RunTerminationReason } from '../runs';
 import { createState, processEvent2 } from './processEvent2';
 import { GracefulRunTerminationError, type LiveConnection } from './types';
-import { saveData, saveDataAll } from './saveData';
+import { saveDataAll } from './saveData';
 import { createParser, type EventSourceMessage } from 'eventsource-parser';
-import { UIMessageStreamError } from 'ai';
 
 if (!process.env.HTTP_SERVER_PORT) {
   throw new Error('HTTP_SERVER_PORT is not set');
