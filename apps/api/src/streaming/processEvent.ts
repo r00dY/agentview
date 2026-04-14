@@ -1,5 +1,5 @@
 import {
-    processUIMessageStream__modified,
+    processUIMessageStream__fast,
     createStreamingUIMessageState,
     type StreamingUIMessageState,
   } from './processUIMessageStream';
@@ -14,7 +14,7 @@ export function createState(messageId: string): StreamingUIMessageState<UIMessag
     });
 }
 
-export function processEvent2(args: {
+export function processEvent(args: {
     state: StreamingUIMessageState<UIMessage>;
     data: string;
 }) {
@@ -22,7 +22,7 @@ export function processEvent2(args: {
 
     const chunk = parseUIMessageChunk(data);
 
-    processUIMessageStream__modified({
+    processUIMessageStream__fast({
         state,
         chunk,
         write: () => {},

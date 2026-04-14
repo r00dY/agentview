@@ -5,7 +5,7 @@ import { startMeasuring } from '../performance';
 import { startCpuProfiling, stopCpuProfiling } from './profiler';
 
 import { RunTerminationError, type RunTerminationReason } from '../runs';
-import { createState, processEvent2 } from './processEvent2';
+import { createState, processEvent } from './processEvent';
 import { GracefulRunTerminationError, type LiveConnection } from './types';
 import { saveDataAll } from './saveData';
 import { createParser, type EventSourceMessage } from 'eventsource-parser';
@@ -162,7 +162,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
         }
 
         try {
-          processEvent2({
+          processEvent({
             state,
             data
           });

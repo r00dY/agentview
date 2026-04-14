@@ -78,7 +78,7 @@ export function createStreamingUIMessageState<UI_MESSAGE extends UIMessage>({
   };
 }
 
-export function processUIMessageStream__modified<UI_MESSAGE extends UIMessage>({
+export function processUIMessageStream__fast<UI_MESSAGE extends UIMessage>({
   // messageMetadataSchema,
   dataPartSchemas: _dataPartSchemas,
   onError,
