@@ -2,7 +2,7 @@ import {
     processUIMessageStream__modified,
     createStreamingUIMessageState,
     type StreamingUIMessageState,
-  } from 'ai/process-ui-message-stream__modified';
+  } from './processUIMessageStream';
 import type { UIMessage } from "ai";
 
 

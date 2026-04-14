@@ -11,7 +11,7 @@ overrides:
 
 patchedDependencies:
   ai@6.0.158:
-    hash: 46b2ed0c3eb38a79afd73e5d776daf6f3f5084a310b1e3d3a0fda948a1d7c24b
+    hash: 8d1f876a28bee7c90f8b6c2badfdf0bbb84a024c656b852dfaa37cbc2381c112
     path: patches/ai@6.0.158.patch
 
 importers:
@@ -44,7 +44,7 @@ importers:
         version: link:../../packages/agentview
       ai:
         specifier: 6.0.158
-        version: 6.0.158(patch_hash=46b2ed0c3eb38a79afd73e5d776daf6f3f5084a310b1e3d3a0fda948a1d7c24b)(zod@4.1.12)
+        version: 6.0.158(patch_hash=8d1f876a28bee7c90f8b6c2badfdf0bbb84a024c656b852dfaa37cbc2381c112)(zod@4.1.12)
       better-auth:
         specifier: ^1.2.12
         version: 1.3.14(next@15.5.12(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -8104,7 +8104,7 @@ snapshots:
 
   agent-base@7.1.4: {}
 
-  ai@6.0.158(patch_hash=46b2ed0c3eb38a79afd73e5d776daf6f3f5084a310b1e3d3a0fda948a1d7c24b)(zod@4.1.12):
+  ai@6.0.158(patch_hash=8d1f876a28bee7c90f8b6c2badfdf0bbb84a024c656b852dfaa37cbc2381c112)(zod@4.1.12):
     dependencies:
       '@ai-sdk/gateway': 3.0.95(zod@4.1.12)
       '@ai-sdk/provider': 3.0.8

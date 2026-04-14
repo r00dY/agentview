@@ -1,7 +1,7 @@
 import type { IncomingMessage } from "node:http";
 import { RunTerminationError } from "../runs";
 import type { State } from "./processEvent__old";
-import type { StreamingUIMessageState } from "ai/process-ui-message-stream__modified";
+import type { StreamingUIMessageState } from "./processUIMessageStream";
 import type { UIMessage } from "ai";
 
 // signal to shut down streaming gracefully (to distinguish from normal RunTerminationError)

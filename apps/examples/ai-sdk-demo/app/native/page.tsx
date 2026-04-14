@@ -9,9 +9,9 @@ import {
 import { useState } from "react";
 
 export default function Chat() {
-  const { messages, sendMessage, status } = useChat({
+  const { messages, sendMessage, status, error } = useChat({
     transport: new DefaultChatTransport({
-      api: "/api/chat",
+      api: "/api/double-text",
       prepareSendMessagesRequest: ({ messages, body, id }) => {
         console.log('messages', messages);
         console.log('body', body);
@@ -28,6 +28,9 @@ export default function Chat() {
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
   });
   const [input, setInput] = useState("");
+
+  console.log('error', error);
+  console.log(typeof error);
 
   return (
     <div
@@ -158,6 +161,11 @@ export default function Chat() {
         {(status === "submitted" || status === "streaming") && (
           <div style={{ color: "#666", padding: "0.5rem" }}>
             {status === "submitted" ? "Thinking..." : "Streaming..."}
+          </div>
+        )}
+        {error && (
+          <div style={{ color: "red", padding: "0.5rem" }}>
+            {error.message}
           </div>
         )}
       </div>
