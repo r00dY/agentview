@@ -259,7 +259,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
       // Can't happen.
       if (!streamFinishReason) {
         log.error({ runId }, '[streaming] unknown finish reason, setting to error');
-        streamFinishReason = { type: 'error', message: "Unknown finish reason. It's internal error, please report." };
+        streamFinishReason = { type: 'error', code: "STREAM_INTERNAL_ERROR", message: "Unknown finish reason. It's internal error, please report." };
       }
 
       // The only case when we push to buffer ourselves.
