@@ -2900,6 +2900,49 @@ describe('API', () => {
       const updatedSession = await av.getSession({ id: session.id });
       expect(updatedSession.lastRun!.status).toBe("failed");
       expect(updatedSession.lastRun!.failReason).toBeDefined();
+      console.log(updatedSession.lastRun!.failReason);
+      console.log(chunks);
+    }, 10000);
+
+    test.only("error → invalid chunk", async () => {
+      await updateConfigWithAiSdkUrl();
+      const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
+
+      mockAISDKServer!.setHandler((_body, res) => {
+        writeAISDKSuccessHeaders(res);
+
+        writeAISDKChunks(res, [
+          { type: "start", messageId: "msg_1" },
+          { type: "text-start", id: "t1" },
+          { type: "text-delta", id: "t1", delta: "Hello " },
+          { type: "text-delta", id: "t1", delta: "world!" },
+          { type: "text-end", id: "t1" },
+          { type: "bad-chunk" },
+          { type: "finish", finishReason: "stop" },
+        ]);
+        writeAISDKDone(res);
+        res.end();
+      });
+
+      // Create run and consume the AI SDK stream
+      const stream = await sendMessageViaTransport(
+        avAISDK.createTransport(), 
+        session.id, 
+        { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
+      );
+
+      const chunks = await consumeChunksFromTransportStream(stream);
+
+      // Changes should be available immediately after stream ends
+      const updatedSession = await avAISDK.getSession({ id: session.id });
+
+      expect(updatedSession.messages[1].parts.length).toBe(1);
+      expect(updatedSession.messages[1].parts[0].type).toBe("text");
+      expect(updatedSession.messages[1].parts[0].text).toBe("Hello world!");
+
+      expect(updatedSession.status).toBe("failed");
+      expect(updatedSession.failReason).toBeDefined();
+
     }, 10000);
 
     /**

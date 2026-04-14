@@ -89,7 +89,7 @@ export function parseUIMessageChunk(raw: string): ExtendedUIMessageChunk {
   try {
     obj = JSON.parse(raw);
   } catch {
-    throw new ChunkParseError(`Invalid JSON: ${raw.slice(0, 200)}`, raw);
+    throw new ChunkParseError(`Invalid JSON`, raw);
   }
 
   if (obj == null || typeof obj !== 'object') {

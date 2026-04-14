@@ -44,9 +44,11 @@ export async function saveData(
     }
 
     if (streamFinishReason.type === 'error') {
+      const { type, ...failReason } = streamFinishReason;
+
       await saveData(conn, {
         type: 'fail',
-        failReason: { message: streamFinishReason.message },
+        failReason,
       });
     }
     else if (streamFinishReason.type === 'abort') {

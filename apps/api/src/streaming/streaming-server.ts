@@ -177,7 +177,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
           // unexpected errors fallback
           else {
             log.error({ runId, error }, '[streaming] unexpected error while streaming');
-            streamFinishReason = { type: 'error', code: "STREAM_AGENTVIEW_INTERNAL_ERROR", message: (error as Error).message ?? String(error) }
+            streamFinishReason = { type: 'error', code: "STREAM_INTERNAL_ERROR", message: (error as Error).message ?? String(error) }
           }
 
           upstreamRes.destroy();  // we can bypass on('error'), as we handled errors already (streamFinishReason is set)
@@ -215,7 +215,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
       // Unexpected errors fallback
       else {
         log.error({ runId, error }, '[streaming] unexpected error while streaming');
-        streamFinishReason = { type: 'error', code: "STREAM_AGENTVIEW_INTERNAL_ERROR", message: error instanceof Error ? error.message : String(error) };
+        streamFinishReason = { type: 'error', code: "STREAM_INTERNAL_ERROR", message: error instanceof Error ? error.message : String(error) };
       }
     });
 
