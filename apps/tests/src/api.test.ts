@@ -3385,6 +3385,56 @@ describe('API', () => {
       });
     }, 10000);
 
+    test("tools inputs are objects, partial tool call is object too", async () => {
+      await updateConfigWithAiSdkUrl();
+      const session = await avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
+
+      mockAISDKServer!.setHandler((_body, res) => {
+        writeAISDKSuccessHeaders(res);
+        writeAISDKChunks(res, [
+          { type: "start" },
+
+          // normal full tool
+          { type: "tool-input-available", toolCallId: "111", toolName: "getInfo", input: { importantInfo: "some info", number: 10 } },
+
+          { type: "tool-input-start", toolCallId: "222", toolName: "getWeather" },
+          { type: "tool-input-delta", toolCallId: "222", inputTextDelta: '{ "city": "War' },
+          { type: "tool-input-delta", toolCallId: "222", inputTextDelta: 'szawa", "unit": "ce' },
+          { type: "tool-input-delta", toolCallId: "222", inputTextDelta: 'lsius", "days": ' },
+          { type: "tool-input-delta", toolCallId: "222", inputTextDelta: '2' },
+          { type: "error", errorText: "whatever" }
+        ]);
+        writeAISDKDone(res);
+        res.end();
+      });
+
+      // Create run and get the native AI SDK stream
+      const stream = await sendMessageViaTransport(
+        avAISDK.createTransport(), 
+        session.id, 
+        { id: "msg_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] }
+      );
+
+      await consumeChunksFromTransportStream(stream);
+
+      // Verify final run state via API
+      const finalSession = await avAISDK.getSession({ id: session.id });
+      expect(finalSession.messages[1].parts[0]).toMatchObject({
+        type: "tool-getInfo",
+        toolCallId: "111",
+        state: "input-available",
+        input: { importantInfo: "some info", number: 10 },
+      });
+
+      expect(finalSession.messages[1].parts[1]).toMatchObject({
+        type: "tool-getWeather",
+        toolCallId: "222",
+        state: "input-streaming",
+        input: { city: "Warszawa", unit: "celsius" },
+      });
+
+    }, 10000);
+
   });
 
   describe("comments and scores (flat API)", () => {

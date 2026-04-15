@@ -3,6 +3,7 @@ import {
   getStaticToolName,
   isStaticToolUIPart,
   isToolUIPart,
+  parsePartialJson,
   type FlexibleSchema,
   type ProviderMetadata,
   type FinishReason,
@@ -76,6 +77,25 @@ export function createStreamingUIMessageState<UI_MESSAGE extends UIMessage>({
     activeReasoningParts: {},
     partialToolCalls: {},
   };
+}
+
+export async function cleanupStreamingUIMessageState<UI_MESSAGE extends UIMessage>(state: StreamingUIMessageState<UI_MESSAGE>): Promise<void> {
+  const entries = Object.entries(state.partialToolCalls);
+  if (entries.length === 0) return;
+
+  await Promise.all(
+    entries.map(async ([toolCallId, partial]) => {
+      const { value } = await parsePartialJson(partial.text);
+
+      const part = state.message.parts.find(
+        p => isToolUIPart(p) && p.toolCallId === toolCallId,
+      );
+
+      if (part != null) {
+        (part as any).input = value;
+      }
+    }),
+  );
 }
 
 export function processUIMessageStream__fast<UI_MESSAGE extends UIMessage>({
@@ -531,7 +551,14 @@ export function processUIMessageStream__fast<UI_MESSAGE extends UIMessage>({
 
               partialToolCall.text += chunk.inputTextDelta;
 
+              /**
+               * We can't do partial JSON in hot-path (which deltas are). We do it in finalize state function.
+               */
+              // const { value: partialArgs } = await parsePartialJson(
+              //   partialToolCall.text,
+              // );
               const partialArgs = partialToolCall.text;
+
 
               if (partialToolCall.dynamic) {
                 updateDynamicToolPart({

@@ -11,6 +11,7 @@ import { saveDataAll } from './saveData';
 import { createParser, type EventSourceMessage } from 'eventsource-parser';
 import { ChunkParseError } from './parseUIMessageChunk';
 import { UIMessageStreamError } from 'ai';
+import { cleanupStreamingUIMessageState } from './processUIMessageStream';
 
 if (!process.env.HTTP_SERVER_PORT) {
   throw new Error('HTTP_SERVER_PORT is not set');
@@ -271,11 +272,19 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
         pushToBuffer(conn, JSON.stringify({ type: 'error', errorText: JSON.stringify(fields) })); // this is a bit tricky but it's the only way we can send more error details so user can distinguish between them. no providerData on error :(
       }
 
-      saveDataAll(conn, streamFinishReason).then(() => {
-        cleanup(conn);
-      }).catch((err) => {
-        log.error({ runId, err }, '[streaming] error saving data');
-      });
+      // here we write async fun for easiness, on('close') is not hot path, a single promise won't hurt
+      async function close() {
+        try {
+          await cleanupStreamingUIMessageState(conn.state); // we need to clean up partial tool calls
+          await saveDataAll(conn, streamFinishReason!);
+        } catch (err) {
+          log.error({ runId, err }, '[streaming] error saving data');
+        } finally {
+          cleanup(conn);
+        }
+      }
+
+      close();
     });
 
     conn = {
