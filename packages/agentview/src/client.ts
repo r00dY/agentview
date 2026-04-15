@@ -60,6 +60,8 @@ export class AgentViewBase {
     return headers
   }
 
+
+
   protected async request<T>(
     method: string,
     path: string,
@@ -80,19 +82,22 @@ export class AgentViewBase {
       }
     }
 
-    if (!response.ok) {
-      const isUpstreamResponse = response.headers.get('X-Upstream-Response') === 'true';
-      if (isUpstreamResponse) {
-        const text = await response.text();
+    // upstream response
+    if (response.headers.get('X-Upstream-Response') === 'true') {
+      const text = await response.text();
+      if (!response.ok) {
         throw new Error(text);
       }
-
-      const errorBody: AgentViewErrorBody = await response.json()
-      const { message, ...details } = errorBody;
-      throw new AgentViewError(message ?? "Unknown error", response.status, details)
+      return JSON.parse(text);
     }
-
-    return await response.json()
+    // agentview response
+    else {
+      const body = await response.json()
+      if (!response.ok) {
+        throw new AgentViewError(body.message ?? "Unknown error", response.status, body)
+      }
+      return body;
+    }
   }
 
   // --- Shared methods ---
