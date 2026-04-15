@@ -12,6 +12,8 @@ import { seedUsers } from './seedUsers';
 
 import { type UIDataTypes, type UIMessage, type UIMessageChunk } from 'ai';
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // globally disable summaries for all tests
 configDefaults.__internal = {
   disableSummaries: true,
@@ -2691,7 +2693,7 @@ describe('API', () => {
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKSuccessHeaders(res);
         writeAISDKChunks(res, [
-          { type: "start", messageId: "msg_1" },
+          { type: "start" },
           { type: "text-start", id: "t1" },
           { type: "text-delta", id: "t1", delta: "Hello " },
           { type: "text-delta", id: "t1", delta: "world!" },
@@ -2733,6 +2735,9 @@ describe('API', () => {
       expect(finalSession.messages[1].parts.length).toBe(1);
       expect(finalSession.messages[1].parts[0].type).toBe("text");
       expect(finalSession.messages[1].parts[0].text).toBe("Hello world!");
+
+      // Verity message id (auto set)
+      expect(finalSession.messages[1].id).toMatch(UUID_REGEX);
     }, 10000);
 
     test("happy path: text + reasoning (validated via ai-sdk stream)", async () => {
