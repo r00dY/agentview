@@ -32,58 +32,27 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
             throw new Error("[sessionToUIMessages] Run is not an AI SDK run");
         }
 
-        const items = run.sessionItems;
-        if (items.length === 0) continue;
+        const [inputItem, ...outputParts] = run.sessionItems;
 
-        // Split items by type field, with positional fallback for NULL type
-        const hasTypedItems = items.some(item => item.type != null);
-        const inputItems = hasTypedItems
-            ? items.filter(item => item.type === 'input')
-            : [items[0]];
-        const outputItems = hasTypedItems
-            ? items.filter(item => item.type === 'output' || item.type === 'step')
-            : items.slice(1);
+        messages.push(inputItem.content);
 
-        // Squash all input items into one user message  by collecting all their parts
-        const userParts: any[] = [];
-        for (const inputItem of inputItems) {
-            const inputContent = inputItem.content;
-            if (Array.isArray(inputContent.parts)) {
-                userParts.push(...inputContent.parts);
-            } else {
-                userParts.push({ type: 'text', text: typeof inputContent === 'string' ? inputContent : (inputContent.content ?? JSON.stringify(inputContent)) });
-            }
-        }
-
-        const firstInputItem = inputItems[0];
-        const userMessage: UIMessage = {
-            id: firstInputItem.id,
-            role: 'user',
-            parts: userParts,
-        };
-        if (firstInputItem.content?.metadata) {
-            userMessage.metadata = firstInputItem.content.metadata;
-        }
-        messages.push(userMessage);
-
-        // For in_progress runs (current run), only include the user message
         if (!isRunFinished(run)) {
             continue;
         }
 
-        // Output items → assistant message parts
-        if (outputItems.length > 0) {
-            const assistantParts = outputItems.map(item => item.content);
-            const assistantMessage: UIMessage = {
-                id: run.id,
-                role: 'assistant',
-                parts: assistantParts,
-            };
-            if (run.metadata) {
-                assistantMessage.metadata = run.metadata;
-            }
-            messages.push(assistantMessage);
+        const assistantMessageId = run.metadata?.assistantMessage?.id;
+        const assistantMessageMetadata = run.metadata?.assistantMessage?.metadata;
+
+        if (!assistantMessageId) {
+            throw new Error("[sessionToUIMessages] Assistant message ID is required");
         }
+
+        messages.push({
+            id: assistantMessageId,
+            metadata: assistantMessageMetadata,
+            role: 'assistant',
+            parts: outputParts.map(part => part.content),
+        })
     }
 
     return messages;

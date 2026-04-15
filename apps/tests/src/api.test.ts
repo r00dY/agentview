@@ -2735,9 +2735,6 @@ describe('API', () => {
       expect(finalSession.messages[1].parts.length).toBe(1);
       expect(finalSession.messages[1].parts[0].type).toBe("text");
       expect(finalSession.messages[1].parts[0].text).toBe("Hello world!");
-
-      // Verity message id (auto set)
-      expect(finalSession.messages[1].id).toMatch(UUID_REGEX);
     }, 10000);
 
     test("happy path: text + reasoning (validated via ai-sdk stream)", async () => {
@@ -3316,6 +3313,78 @@ describe('API', () => {
       // Ensure stream promise settles
       await streamPromise;
     }, 10000);
+
+
+    test("message id is auto set when undefined", async () => {
+      await updateConfigWithAiSdkUrl();
+      const session = await avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
+
+      mockAISDKServer!.setHandler((_body, res) => {
+        writeAISDKSuccessHeaders(res);
+        writeAISDKChunks(res, [
+          { type: "start" },
+          { type: "text-start", id: "t1" },
+          { type: "text-delta", id: "t1", delta: "Hello " },
+          { type: "text-delta", id: "t1", delta: "world!" },
+          { type: "text-end", id: "t1" },
+          { type: "finish", finishReason: "stop" },
+        ]);
+        writeAISDKDone(res);
+        res.end();
+      });
+
+      // Create run and get the native AI SDK stream
+      const stream = await sendMessageViaTransport(
+        avAISDK.createTransport(), 
+        session.id, 
+        { id: "msg_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] }
+      );
+
+      await consumeChunksFromTransportStream(stream);
+
+      // Verify final run state via API
+      const finalSession = await avAISDK.getSession({ id: session.id });
+      expect(finalSession.messages[1].id).toMatch(UUID_REGEX);
+    }, 10000);
+
+    test("message id + metadata are preserved when provided", async () => {
+      await updateConfigWithAiSdkUrl();
+      const session = await avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
+
+      mockAISDKServer!.setHandler((_body, res) => {
+        writeAISDKSuccessHeaders(res);
+        writeAISDKChunks(res, [
+          { type: "start", messageId: "msg_assistant_1", messageMetadata: { a: "aaa" } },
+          { type: "text-start", id: "t1" },
+          { type: "text-delta", id: "t1", delta: "Hello " },
+          { type: "message-metadata", messageMetadata: { b: { bb: "xxx" } } },
+          { type: "text-delta", id: "t1", delta: "world!" },
+          { type: "text-end", id: "t1" },
+          { type: "finish", finishReason: "stop", messageMetadata: { c: 100 }  },
+        ]);
+        writeAISDKDone(res);
+        res.end();
+      });
+
+      // Create run and get the native AI SDK stream
+      const stream = await sendMessageViaTransport(
+        avAISDK.createTransport(), 
+        session.id, 
+        { id: "msg_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] }
+      );
+
+      await consumeChunksFromTransportStream(stream);
+
+      // Verify final run state via API
+      const finalSession = await avAISDK.getSession({ id: session.id });
+      expect(finalSession.messages[1].id).toBe("msg_assistant_1");
+      expect(finalSession.messages[1].metadata).toMatchObject({
+        a: "aaa",
+        b: { bb: "xxx" },
+        c: 100,
+      });
+    }, 10000);
+
   });
 
   describe("comments and scores (flat API)", () => {

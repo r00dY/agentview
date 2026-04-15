@@ -43,6 +43,18 @@ export async function saveData(
       });
     }
 
+    conn.state.message.metadata
+
+    await saveData(conn, {
+      type: 'metadata',
+      metadata: {
+        assistantMessage: {
+          id: conn.state.message.id,
+          metadata: conn.state.message.metadata,
+        }
+      },
+    });
+
     if (streamFinishReason.type === 'error') {
       const { type, ...failReason } = streamFinishReason;
 
