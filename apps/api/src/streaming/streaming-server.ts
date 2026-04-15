@@ -69,8 +69,9 @@ function readJsonBody(req: http.IncomingMessage): Promise<any> {
   });
 }
 
-function sendJson(res: http.ServerResponse, status: number, body: unknown) {
-  const payload = JSON.stringify(body);
+function sendJson(res: http.ServerResponse, status: number, body: Record<string, any>) {
+  const payload = JSON.stringify(status >= 400 ? { source: "agentview", ...body } : body);
+  
   res.writeHead(status, {
     'Content-Type': 'application/json',
     'Content-Length': Buffer.byteLength(payload),
@@ -197,7 +198,6 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
 
     upstreamRes.on('error', function onError(error) {
-      console.log('on(error)')
       if (error instanceof GracefulRunTerminationError) { // graceful termination (aka sigterm)
         log.info({ runId, error }, '[streaming] graceful termination');
 
@@ -320,12 +320,12 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     if (res.headersSent) return;
 
     if (isNodeHttpConnectionError(err)) {
-      sendJson(res, 502, { source: "agentview", code: "STREAM_NETWORK_ERROR", message: err.message, detailedCode: (err as any).code });
+      sendJson(res, 502, { code: "STREAM_NETWORK_ERROR", message: err.message, detailedCode: (err as any).code });
       return;
     }
     else {
       log.error({ err }, '[streaming] unexpected error while streaming');
-      sendJson(res, 500, { source: "agentview", code: "STREAM_INTERNAL_ERROR", message: err.message });
+      sendJson(res, 500, { code: "STREAM_INTERNAL_ERROR", message: err.message });
     }
   });
 

@@ -85,27 +85,28 @@ export const app = new OpenAPIHono({
 
 /** --------- ERROR HANDLING --------- */
 
+// here we send "source" for every error, becasue sometimes, when ai-sdk machinery gets error they tend to do new Error(body), and it's good to be able to distinguish agentview from upstream errors easily.
 app.onError((error, c) => {
   if (error instanceof AgentViewError) {
-    const payload = { message: error.message, ...(error.details ?? {}) }
+    const payload = { source: 'agentview', message: error.message, ...(error.details ?? {}) }
     log.info({ errorType: 'AgentViewError', statusCode: error.statusCode }, error.message);
     return c.json(payload, error.statusCode as any);
   }
   else if (error instanceof BetterAuthAPIError) {
     log.error({ errorType: 'BetterAuthAPIError', statusCode: error.statusCode }, error.message);
-    return c.json(error.body, error.statusCode as any); // "as any" because error.statusCode is "number" and hono expects some numeric literal union
+    return c.json({ source: 'agentview', ...error.body }, error.statusCode as any); // "as any" because error.statusCode is "number" and hono expects some numeric literal union
   }
   else if (error instanceof DrizzleQueryError) {
     log.error({ errorType: 'DrizzleQueryError', err: error }, 'DB error');
-    return c.json({ ...error, message: "DB error" }, 400);
+    return c.json({ source: 'agentview', ...error }, 500);
   }
   else if (error instanceof Error) {
     log.error({ errorType: 'Error', err: error }, error.message);
-    return c.json({ message: error.message }, 400);
+    return c.json({ source: 'agentview', message: error.message }, 400);
   }
   else {
     log.error({ errorType: 'UnexpectedError', err: error }, 'Unexpected error');
-    return c.json({ message: "Unexpected error" }, 400);
+    return c.json({ source: 'agentview', message: "Unexpected error" }, 400);
   }
 });
 

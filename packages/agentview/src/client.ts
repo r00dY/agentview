@@ -190,6 +190,10 @@ export class AgentViewClient extends AgentViewBase {
 
   createTransport() {
     const baseUrl = getApiUrl();
+    /**
+     * Here we leave "vanilla" error handling. It's because:
+     * - 
+     */
     return new DefaultChatTransport({
       headers: this.getHeaders(),
       prepareSendMessagesRequest: ({ id, messages }) => ({
