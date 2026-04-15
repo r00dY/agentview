@@ -6,10 +6,10 @@ import {
 import { parseUIMessageChunk } from './parseUIMessageChunk';
 import type { UIMessage } from "ai";
 
-export class StreamUserError extends Error {
+export class StreamUpstreamError extends Error {
     constructor(message: string) {
       super(message);
-      this.name = "StreamUserError";
+      this.name = "StreamUpstreamError";
     }
   }
 
@@ -33,7 +33,7 @@ export function processEvent(args: {
         chunk,
         write: () => {},
         onError: (err) => {
-            throw new StreamUserError((err as Error).message); // we make this error different class to distinguish from unexpected errors
+            throw new StreamUpstreamError((err as Error).message); // we make this error different class to distinguish from unexpected errors
         }
     })
 }

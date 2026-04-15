@@ -34,7 +34,6 @@ import {
   StandardSessionSchema,
   UserCreateSchema,
   UserSchema,
-  type Session,
   type StandardSession
 } from 'agentview/apiTypes';
 import { BaseConfigSchema, BaseRunSchemaToZod } from 'agentview/baseConfigTypes';
@@ -42,9 +41,6 @@ import { getChannelAgent, requireAgentConfig, requireChannelConfig, requireItemC
 import { getLastRun } from 'agentview/sessionUtils';
 import { and, countDistinct, DrizzleQueryError, eq, inArray, isNull, or, sql, type InferSelectModel } from 'drizzle-orm';
 import packageJson from '../package.json';
-import Redis from 'ioredis';
-import { createAISDKStreamConsumer, type AISDKResponseMeta, type AISDKStreamConsumer } from './adapters/ai-sdk-stream';
-import { REDIS_URL } from './redis';
 import { auth } from './auth';
 import { authn, authnAllowAnon, authnAllowPublic, authorize, requireMemberPrincipal, type Principal, type ServicePrincipal } from './authMiddleware';
 import { db__dangerous } from './db';
@@ -715,21 +711,7 @@ function getSessionStreamResponse(c: any, session: StandardSession) {
   });
 }
 
-/**
- * Raw SSE streaming: Redis XREAD → outgoing.write(). No WebStreams, no helpers.
- * Returns a sentinel Response with x-hono-already-sent so Hono skips writing.
- */
-function streamAISDKEvents(c: any, consumer: AISDKStreamConsumer) {
-  return streamSSE(c, async (stream) => {
-    try {
-      for await (const data of consumer.stream()) {
-        await stream.writeSSE({ data });
-      }
-    } finally {
-      consumer.close();
-    }
-  });
-}
+
 
 const sessionStreamRoute = createRoute({
   method: 'get',
@@ -807,9 +789,6 @@ app.openapi(sessionAISDKStreamRoute, async (c) => {
   }
 
   return createStreamResponse(c, lastRun.id);
-
-  // const consumer = createAISDKStreamConsumer(lastRun.id, c.req.raw.signal);
-  // return streamAISDKEvents(c, consumer);
 });
 
 

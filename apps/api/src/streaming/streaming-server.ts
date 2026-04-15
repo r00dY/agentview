@@ -5,7 +5,7 @@ import { startMeasuring } from '../performance';
 import { startCpuProfiling, stopCpuProfiling } from './profiler';
 
 import { RunTerminationError, type RunTerminationReason } from '../runs';
-import { createState, processEvent, StreamUserError } from './processEvent';
+import { createState, processEvent, StreamUpstreamError } from './processEvent';
 import { GracefulRunTerminationError, type LiveConnection } from './types';
 import { saveDataAll } from './saveData';
 import { createParser, type EventSourceMessage } from 'eventsource-parser';
@@ -26,6 +26,10 @@ const NETWORK_ERROR_CODES = [
   'ENOTFOUND', 'EHOSTUNREACH', 'ENETUNREACH',
   'EPIPE', 'EAI_AGAIN'
 ];
+
+function isNodeHttpConnectionError(error: unknown): boolean {
+  return error instanceof Error && NETWORK_ERROR_CODES.includes((error as any)?.code)
+}
 
 const DONE_MSG = '[DONE]';
 
@@ -138,7 +142,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
     upstreamRes.setEncoding('utf-8'); // automatic decoding of stream to the string
 
-    let streamFinishReason : { type: 'error', message: string, [key: string]: any } | { type: 'abort' } | { type: 'complete' } | undefined = undefined;
+    let streamFinishReason : { type: 'error', message: string, code: string, [key: string]: any } | { type: 'abort' } | { type: 'complete' } | undefined = undefined;
 
 
 
@@ -171,8 +175,8 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
             upstreamRes.destroy(); // custom error handling
           }
           // Upstream error (sent by user) -> okay. No code.
-          else if (error instanceof StreamUserError) { // errors by user ('error' chunk in the upstream stream)
-            streamFinishReason = { type: 'error', message: error.message }; // upstream error has no code -> just user's error.
+          else if (error instanceof StreamUpstreamError) { // errors by user ('error' chunk in the upstream stream)
+            streamFinishReason = { type: 'error', code: "STREAM_UPSTREAM_ERROR", message: error.message }; // upstream error has no code, no source
             upstreamRes.destroy();
           }
           // unexpected errors fallback
@@ -209,9 +213,9 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
         return;
       }
       // Network errors
-      else if (error instanceof Error && NETWORK_ERROR_CODES.includes((error as any)?.code)) { // in node you gotta check for 'code' property to know whether it's network error 
+      else if (isNodeHttpConnectionError(error)) { // in node you gotta check for 'code' property to know whether it's network error 
         log.info({ runId, error }, '[streaming] network error while streaming');
-        streamFinishReason = { type: 'error', code: "STREAM_NETWORK_ERROR", message: error.message };
+        streamFinishReason = { type: 'error', code: "STREAM_NETWORK_ERROR", detailedCode: (error as any).code, message: error.message };
       }
       // Unexpected errors fallback
       else {
@@ -225,7 +229,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
       if (streamFinishReason) { return } // prevents race conditions (maybe [done] was just set before end event)
 
       log.info({ runId }, '[streaming] stream ended incomplete');
-      streamFinishReason = { type: 'error', message: "Stream ended incomplete" };
+      streamFinishReason = { type: 'error', code: "STREAM_INCOMPLETE", message: "Stream ended incomplete" };
     });
 
     function cleanup(conn: LiveConnection) {
@@ -269,7 +273,9 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
       }
       else if (streamFinishReason.type === 'error') {
         const { type, ...fields } = streamFinishReason;
-        pushToBuffer(conn, JSON.stringify({ type: 'error', errorText: JSON.stringify(fields) })); // this is a bit tricky but it's the only way we can send more error details so user can distinguish between them. no providerData on error :(
+
+        const errorText = fields.code === 'STREAM_UPSTREAM_ERROR' ? fields.message : JSON.stringify({ ...fields, source: 'agentview' });
+        pushToBuffer(conn, JSON.stringify({ type: 'error', errorText })); // this is a bit tricky but it's the only way we can send more error details so user can distinguish between them. no providerData on error :(
       }
 
       // here we write async fun for easiness, on('close') is not hot path, a single promise won't hurt
@@ -313,8 +319,14 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     // which also triggers this error — but res is already finished by then.
     if (res.headersSent) return;
 
-    const code = 'code' in err ? (err as NodeJS.ErrnoException).code : undefined;
-    sendJson(res, 502, { code, message: err.message });
+    if (isNodeHttpConnectionError(err)) {
+      sendJson(res, 502, { source: "agentview", code: "STREAM_NETWORK_ERROR", message: err.message, detailedCode: (err as any).code });
+      return;
+    }
+    else {
+      log.error({ err }, '[streaming] unexpected error while streaming');
+      sendJson(res, 500, { source: "agentview", code: "STREAM_INTERNAL_ERROR", message: err.message });
+    }
   });
 
   upstreamReq.write(body);

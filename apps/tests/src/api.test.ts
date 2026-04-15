@@ -3102,10 +3102,6 @@ describe('API', () => {
     }, 10000);
 
 
-
-
-
-
     test("stream aborted (no finish and no done) → run marked failed (validated via ai-sdk stream)", async () => {
       await updateConfigWithAiSdkUrl();
       const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
@@ -3133,9 +3129,50 @@ describe('API', () => {
       expect(chunks.some(c => c.type === "text-delta")).toBe(true);
       expect(chunks.some(c => c.type === "finish")).toBe(false);
 
+      const errorChunk = chunks.find(c => c.type === "error");
+      expect(errorChunk).toBeDefined();
+      expect(JSON.parse(errorChunk!.errorText)).toMatchObject({ source: "agentview", code: "STREAM_INCOMPLETE", message: "Stream ended incomplete" });
+
       const updatedSession = await av.getSession({ id: session.id });
       expect(updatedSession.lastRun!.status).toBe("failed");
       expect(updatedSession.lastRun!.failReason.message).toContain("Stream ended incomplete");
+    }, 10000);
+
+    test("invalid chunk → run marked failed (validated via ai-sdk stream)", async () => {
+      await updateConfigWithAiSdkUrl();
+      const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
+
+      mockAISDKServer!.setHandler((_body, res) => {
+        writeAISDKSuccessHeaders(res);
+        writeAISDKChunks(res, [
+          { type: "start", messageId: "msg_2" },
+          { type: "text-start", id: "t1" },
+          { type: "text-delta", id: "t1", delta: "Hello." },
+          { type: "text-end", id: "t1" },
+          { type: "bad-chunk" },
+          { type: "finish" },
+        ]);
+        res.end();
+      });
+
+      const stream = await sendMessageViaTransport(
+        avAISDK.createTransport(), 
+        session.id, 
+        { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
+      );
+
+      const chunks = await consumeChunksFromTransportStream(stream);
+
+      // We should see the partial chunks but no finish
+      expect(chunks.some(c => c.type === "text-delta")).toBe(true);
+      expect(chunks.some(c => c.type === "finish")).toBe(false);
+      const errorChunk = chunks.find(c => c.type === "error");
+      expect(errorChunk).toBeDefined();
+      expect(JSON.parse(errorChunk!.errorText)).toMatchObject({ source: "agentview", code: "STREAM_INVALID_CHUNK", message: expect.any(String), data: "{\"type\":\"bad-chunk\"}" });
+
+      const updatedSession = await av.getSession({ id: session.id });
+      expect(updatedSession.lastRun!.status).toBe("failed");
+      expect(updatedSession.lastRun!.failReason.message).toContain("Unknown chunk type");
     }, 10000);
 
 
