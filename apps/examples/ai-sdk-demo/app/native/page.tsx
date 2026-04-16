@@ -11,26 +11,19 @@ import { useState } from "react";
 export default function Chat() {
   const { messages, sendMessage, status, error } = useChat({
     transport: new DefaultChatTransport({
-      api: "/api/double-text",
+      api: "https://individual-vision-dog-contracting.trycloudflare.com/api/fast-chat-simulation",
       prepareSendMessagesRequest: ({ messages, body, id }) => {
-        console.log('messages', messages);
-        console.log('body', body);
-        console.log('id', id);
-
         return {
           body: {
             messages,
           }
         }
-      },
-
+      }
     }),
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+    // experimental_throttle: 50,
   });
   const [input, setInput] = useState("");
-
-  console.log('error', error);
-  console.log(typeof error);
 
   return (
     <div
