@@ -128,16 +128,20 @@ function resolveConfigPath(args: string[]): string {
 
 async function loadConfig(configPath: string): Promise<AgentViewConfig> {
   const absolutePath = path.resolve(configPath);
-  const specifier = pathToFileURL(absolutePath).href + `?t=${Date.now()}`;
+  const fileUrl = pathToFileURL(absolutePath).href;
   const ext = path.extname(absolutePath).toLowerCase();
 
   let moduleExports: any;
   try {
     if (ext === ".js" || ext === ".mjs" || ext === ".cjs") {
-      moduleExports = await import(specifier);
+      // Cache-bust for plain JS so watch mode picks up changes.
+      moduleExports = await import(`${fileUrl}?t=${Date.now()}`);
     } else {
+      // tsImport handles cache-busting internally via its namespace param.
+      // Appending our own query string confuses its loader hook and falls
+      // back to the default ESM loader (which can't parse TypeScript).
       const { tsImport } = await import("tsx/esm/api");
-      moduleExports = await tsImport(specifier, { parentURL: import.meta.url });
+      moduleExports = await tsImport(fileUrl, { parentURL: import.meta.url });
     }
   } catch (error: any) {
     if (error?.code === "ERR_MODULE_NOT_FOUND") {
