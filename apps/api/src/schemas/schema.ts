@@ -248,10 +248,12 @@ export const environments = pgTable('environments', {
   organizationId: text("organization_id").notNull().references(() => organizations.id),
   userId: text("user_id").references(() => users.id, { onDelete: 'cascade' }), // NULL = production, non-NULL = user's dev environment
   config: jsonb('value'),
+  tunnelUrl: text('tunnel_url'),
   createdAt: timestamp('created_at', { withTimezone: true, mode: "string" }).notNull().defaultNow(),
-}, (table) => [   
+}, (table) => [
   unique('environments_org_handle_unique').on(table.organizationId, table.handle),
   unique('environments_org_user_unique').on(table.organizationId, table.userId).nullsNotDistinct(),
+  check('environments_tunnel_url_user_check', sql`tunnel_url IS NULL OR user_id IS NOT NULL`),
   createTenantPolicy('environments')
 ]);
 

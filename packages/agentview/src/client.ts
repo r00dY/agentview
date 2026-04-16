@@ -13,7 +13,7 @@ import type {
   RunCreate,
 } from './apiTypes.js'
 
-import { type AgentViewErrorBody, AgentViewError } from './AgentViewError.js'
+import { AgentViewError } from './AgentViewError.js'
 import { getApiUrl } from './urls.js'
 import { DefaultChatTransport } from 'ai'
 

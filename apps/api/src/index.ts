@@ -1520,24 +1520,48 @@ app.openapi(environmentPATCHRoute, async (c) => {
 
   const body = await c.req.valid('json')
 
-  // validate & parse body.config
-  const { data, success, error } = BaseConfigSchema.safeParse(body.config)
-  if (!success) {
-    log.error({ issues: error.issues }, 'invalid config')
-    return c.json({ message: "Invalid config", code: 'parse.schema', details: error.issues }, 422);
+  const updates: { config?: any; tunnelUrl?: string | null } = {};
+
+  // validate & parse body.config (only if provided)
+  if (body.config !== undefined) {
+    const { data, success, error } = BaseConfigSchema.safeParse(body.config)
+    if (!success) {
+      log.error({ issues: error.issues }, 'invalid config')
+      return c.json({ message: "Invalid config", code: 'parse.schema', details: error.issues }, 422);
+    }
+    updates.config = data;
+  }
+
+  if (body.tunnelUrl !== undefined) {
+    updates.tunnelUrl = body.tunnelUrl;
   }
 
   return withTenant(principal, async (tx) => {
     const environment = await requireEnvironment(tx);
 
-    // @ts-ignore
-    if (environment && equalJSON(environment.config, data)) {
+    // Guard: tunnelUrl can only be set on dev (user-scoped) environments
+    if (updates.tunnelUrl !== undefined && updates.tunnelUrl !== null && !environment.userId) {
+      throw new AgentViewError("Cannot set tunnel URL on production environment.", 400);
+    }
+
+    const configUnchanged =
+      updates.config === undefined ||
+      // @ts-ignore
+      equalJSON(environment.config, updates.config);
+    const tunnelUnchanged =
+      updates.tunnelUrl === undefined ||
+      environment.tunnelUrl === updates.tunnelUrl;
+
+    if (configUnchanged && tunnelUnchanged) {
       return c.json(environment, 200)
     }
 
-    // Only update existing config for this user
+    const setPayload: Record<string, any> = {};
+    if (updates.config !== undefined) setPayload.config = updates.config;
+    if (updates.tunnelUrl !== undefined) setPayload.tunnelUrl = updates.tunnelUrl;
+
     await tx.update(environments)
-      .set({ config: data })
+      .set(setPayload)
       .where(
         and(
           eq(environments.id, environment.id)

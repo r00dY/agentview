@@ -220,19 +220,25 @@ export class StandardAgentViewClient extends AgentViewBase {
   }
 
     async updateEnvironment(body: EnvironmentCreate): Promise<Environment> {
-        let config = body.config;
+        const payload: Record<string, any> = { ...body };
 
-        if (configDefaults.__internal) {
-            config = {
-                ...config,
-                __internal: {
-                    ...configDefaults.__internal,
-                    ...(config.__internal ?? {}),
+        if (body.config !== undefined) {
+            let config = body.config;
+
+            if (configDefaults.__internal) {
+                config = {
+                    ...config,
+                    __internal: {
+                        ...configDefaults.__internal,
+                        ...(config.__internal ?? {}),
+                    }
                 }
             }
+
+            payload.config = serializeConfig(config);
         }
 
-        return await this.request<Environment>('PATCH', `/api/environment`, { ...body, config: serializeConfig(config) })
+        return await this.request<Environment>('PATCH', `/api/environment`, payload)
     }
 
     as(userOrToken: User | string): StandardAgentViewClient {

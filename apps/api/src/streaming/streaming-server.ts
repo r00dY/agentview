@@ -105,7 +105,7 @@ async function handleProfileStop(res: http.ServerResponse) {
 }
 
 async function handleCreateStream(req: http.IncomingMessage, res: http.ServerResponse) {
-  const { runId, url, body, metadata } = await readJsonBody(req);
+  const { runId, url, body, metadata, headers: extraHeaders } = await readJsonBody(req);
 
   log.info(`LIVE CONNECTION run:${runId}`);
 
@@ -113,6 +113,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
   const upstreamReq = requester.request(url, {
     method: 'POST',
     headers: {
+      ...(extraHeaders ?? {}),
       'Content-Type': 'application/json',
       'Content-Length': Buffer.byteLength(body),
     }

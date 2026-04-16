@@ -12,10 +12,12 @@
     "dev:api": "pnpm --filter ./apps/api dev",
     "dev:api:http": "pnpm --filter ./apps/api dev:http",
     "dev:api:worker": "pnpm --filter ./apps/api dev:worker",
+    "dev:api:streaming": "pnpm --filter ./apps/api dev:streaming",
+    "dev:api:proxy": "pnpm --filter ./apps/api dev:proxy",
     "dev:webapp": "pnpm --filter ./apps/webapp dev",
     "dev:docs": "pnpm --filter ./apps/docs dev --no-open",
     "dev:drizzle-studio": "(cd apps/api && npx drizzle-kit studio)",
-    "dev": "concurrently --colors -n api-http,api-worker,webapp,docs,drizzle -c blue,green,yellow,magenta,cyan \"pnpm run dev:api:http\" \"pnpm run dev:api:worker\" \"pnpm run dev:webapp\" \"pnpm run dev:docs\" \"pnpm run dev:drizzle-studio\"",
+    "dev": "concurrently --colors -n api-http,api-worker,api-streaming,api-proxy,webapp,docs,drizzle -c blue,green,red,gray,yellow,magenta,cyan \"pnpm run dev:api:http\" \"pnpm run dev:api:worker\" \"pnpm run dev:api:streaming\" \"pnpm run dev:api:proxy\" \"pnpm run dev:webapp\" \"pnpm run dev:docs\" \"pnpm run dev:drizzle-studio\"",
     "seed-users": "pnpm --filter ./apps/tests seed-users",
     "sync-openapi": "./scripts/sync-openapi.sh"
   },

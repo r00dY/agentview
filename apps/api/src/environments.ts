@@ -36,6 +36,8 @@ export async function getEnvironment(tx: TenantTransaction) { // envId is actual
       handle: true,
       createdAt: true,
       config: true,
+      tunnelUrl: true,
+      userId: true,
     },
     with: {
       user: true,
@@ -47,6 +49,10 @@ export async function getEnvironment(tx: TenantTransaction) { // envId is actual
 }
 
 export async function requireEnvironment(tx: TenantTransaction) {
+  if (!tx.principal.env) {
+    throw new AgentViewError("You must provide X-Env header", 400);
+  }
+  
   const environment = await getEnvironment(tx);
   if (!environment) {
     throw new AgentViewError("Environment not found", 404);

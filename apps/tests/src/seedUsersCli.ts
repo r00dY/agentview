@@ -10,7 +10,8 @@ async function main() {
   // updateEnv("VITE_AGENTVIEW_ORGANIZATION_ID", organization.id, { includeRoot: false });
 
   // Let's write the API key to the .env file
-  // console.log('API Key: ' + apiKeySecret.key)
+  console.log('Secret API Key: ' + apiKeySecret.key)
+  console.log('Public API Key: ' + apiKeyPublic.key)
 
   updateEnv("AGENTVIEW_API_KEY", apiKeySecret.key, { includeRoot: false });
   updateEnv("NEXT_PUBLIC_AGENTVIEW_API_KEY", apiKeyPublic.key, { includeRoot: false });

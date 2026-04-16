@@ -99,7 +99,8 @@ export const EnvironmentBaseSchema = z.object({
   id: z.string(),
   handle: z.string(),
   createdAt: z.iso.date(),
-  user: z.any()
+  user: z.any(),
+  tunnelUrl: z.string().nullable().optional(),
 })
 
 export type EnvironmentBase = z.infer<typeof EnvironmentBaseSchema>
@@ -111,7 +112,8 @@ export const EnvironmentSchema = EnvironmentBaseSchema.extend({
 export type Environment = z.infer<typeof EnvironmentSchema>
 
 export const EnvironmentCreateSchema = z.object({
-  config: z.any(),
+  config: z.any().optional(),
+  tunnelUrl: z.string().nullable().optional(),
 })
 
 export type EnvironmentCreate = z.infer<typeof EnvironmentCreateSchema>

@@ -842,14 +842,22 @@ export async function createAutoRun2(
   log.debug(`[${sessionId}] [createAutoRun2] start`);
 
   // 1. Prepare run creation (authorization, validation, etc)
-  const { runId, standardSession, runConfig, agentUrl } = await withTenant(principal, async (tx) => {
+  const { runId, standardSession, runConfig, agentUrl, tunnelUrl, isLocalEnv } = await withTenant(principal, async (tx) => {
     await tx.acquireLock({ type: "edit_session", sessionId });
 
     const session = await requireSessionBase(tx, sessionId);
     authorize(tx.principal, { action: "end-user:update", user: session.user });
-  
+
     const environment = await requireEnvironment(tx);
-  
+
+    const isLocalEnv = environment.userId != null;
+    if (isLocalEnv && !environment.tunnelUrl) {
+      throw new AgentViewError(
+        "This is a local dev environment but no tunnel is active. Run `agentview dev` to start the tunnel.",
+        400
+      );
+    }
+
     const { lastRun, agentConfig, agentRefId } = await prepareRunCreation(tx, environment, sessionId);
     
     const newRunId = crypto.randomUUID();
@@ -941,7 +949,14 @@ export async function createAutoRun2(
     }
 
     const standardSession = await requireSession(tx, sessionId);
-    return { runId: run.id, standardSession, runConfig, agentUrl }
+    return {
+      runId: run.id,
+      standardSession,
+      runConfig,
+      agentUrl,
+      tunnelUrl: environment.tunnelUrl ?? null,
+      isLocalEnv,
+    }
   });
 
   const session = standardToDefaultSession(standardSession);
@@ -950,6 +965,13 @@ export async function createAutoRun2(
   // 2. Make live connection to the streaming server, wait for response to know if we should discard or accept the run.
   log.debug(`[${sessionId}] [createAutoRun2] establishing live connection...`);
 
+  // Route through tunnel for local dev environments
+  const targetUrl = isLocalEnv && tunnelUrl ? tunnelUrl : agentUrl;
+  const extraHeaders: Record<string, string> = {};
+  if (isLocalEnv && tunnelUrl) {
+    extraHeaders['X-Target-Url'] = agentUrl;
+  }
+
   try {
     const response = await fetch('http://localhost:1999/streams', {
       method: 'POST',
@@ -957,8 +979,9 @@ export async function createAutoRun2(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        url: agentUrl,
+        url: targetUrl,
         runId,
+        headers: extraHeaders,
         body: JSON.stringify({ messages, session }), // as string, no unnecessary parsing on the other end
         metadata: JSON.stringify({
           sessionId,

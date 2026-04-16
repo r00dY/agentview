@@ -9,6 +9,8 @@ import { type AgentViewConfig } from "../types";
 import { createStandardClient } from "agentview/clientStandard";
 import { AgentViewError } from "agentview";
 import { startDevServer } from "../devServer.js";
+import { startProxyServer, PROXY_PORT, type ProxyServer } from "../proxyServer.js";
+import { startCloudflareTunnel, type CloudflareTunnel } from "../tunnel.js";
 
 const DEFAULT_CONFIG_FILES = [
   "agentview.config.ts",
@@ -50,7 +52,7 @@ async function main() {
     }
 
     const port = parsePort(restArgs);
-    await startDevServer(configPath, { port });
+    await runDev(configPath, port);
     return;
   }
 
@@ -162,9 +164,100 @@ async function loadConfig(configPath: string): Promise<AgentViewConfig> {
 function getAPIKey(): string {
   const apiKey = process.env.AGENTVIEW_API_KEY;
   if (!apiKey) {
-    throw new Error("You must set AGENTVIEW_API_KEY env var to push config.");
+    throw new Error("You must set AGENTVIEW_API_KEY env var.");
   }
   return apiKey;
+}
+
+async function runDev(configPath: string, port: number | undefined) {
+  let apiKey: string;
+  try {
+    apiKey = getAPIKey();
+  } catch (error) {
+    console.error((error as Error).message);
+    process.exit(1);
+  }
+
+  const config = await loadConfig(configPath);
+  const av = createStandardClient({ apiKey, env: config.env });
+
+  let proxy: ProxyServer | null = null;
+  let tunnel: CloudflareTunnel | null = null;
+  let cleanedUp = false;
+
+  const cleanup = async (exitCode: number) => {
+    if (cleanedUp) return;
+    cleanedUp = true;
+
+    // Best-effort unregister tunnel URL on the backend
+    try {
+      await Promise.race([
+        av.updateEnvironment({ tunnelUrl: null }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("tunnel-unregister timeout")), 5000),
+        ),
+      ]);
+    } catch (error) {
+      console.error(`Failed to unregister tunnel URL: ${(error as Error).message}`);
+    }
+
+    if (tunnel) {
+      try {
+        await tunnel.stop();
+      } catch (error) {
+        console.error(`Failed to stop tunnel: ${(error as Error).message}`);
+      }
+    }
+
+    if (proxy) {
+      try {
+        await proxy.close();
+      } catch (error) {
+        console.error(`Failed to close proxy: ${(error as Error).message}`);
+      }
+    }
+
+    process.exit(exitCode);
+  };
+
+  process.on("SIGINT", () => { void cleanup(0); });
+  process.on("SIGTERM", () => { void cleanup(0); });
+
+  // 1. Start local proxy server
+  try {
+    proxy = await startProxyServer(PROXY_PORT);
+    console.log(`[agentview] proxy listening on http://127.0.0.1:${proxy.port}`);
+  } catch (error) {
+    console.error(`Failed to start proxy server on port ${PROXY_PORT}: ${(error as Error).message}`);
+    process.exit(1);
+  }
+
+  // 2. Start Cloudflare tunnel pointing at the proxy
+  try {
+    tunnel = await startCloudflareTunnel(PROXY_PORT);
+    console.log(`[agentview] tunnel URL: ${tunnel.url}`);
+  } catch (error) {
+    console.error(`Failed to start tunnel: ${(error as Error).message}`);
+    await cleanup(1);
+    return;
+  }
+
+  // 3. Register tunnel URL on backend
+  try {
+    await av.updateEnvironment({ tunnelUrl: tunnel.url });
+    console.log(`[agentview] tunnel registered with AgentView backend`);
+  } catch (error) {
+    if (error instanceof AgentViewError) {
+      console.error(`Failed to register tunnel (${error.statusCode}): ${error.message}`);
+    } else {
+      console.error(`Failed to register tunnel: ${(error as Error).message}`);
+    }
+    await cleanup(1);
+    return;
+  }
+
+  // 4. Start Vite dev server (Studio UI)
+  await startDevServer(configPath, { port });
 }
 
 async function pushConfig(configPath: string) {
