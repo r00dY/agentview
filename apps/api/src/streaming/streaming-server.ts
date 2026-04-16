@@ -145,8 +145,6 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
     let streamFinishReason : { type: 'error', message: string, code: string, [key: string]: any } | { type: 'abort' } | { type: 'complete' } | undefined = undefined;
 
-
-
     const sseParser = createParser({
       onEvent: function onSSEEvent(event: EventSourceMessage) {
         if (streamFinishReason) { return } // prevents race conditions. There's a possibility that previous error set streamFinishReason and on('end') / on('error') / on('close') hasn't been called yet.
@@ -255,8 +253,6 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
      * If stream ended without [done] and without error, we trigger error in on('end')
      */
     upstreamRes.on('close', () => {
-
-      console.log('on(close)')
       upstreamRes.destroy();
 
       log.info({ runId }, '[streaming] connection closed, closing');

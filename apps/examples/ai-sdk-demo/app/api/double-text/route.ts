@@ -15,6 +15,7 @@ export async function POST() {
     { type: "text-delta", id: textId1, delta: "Here is the " },
     { type: "text-delta", id: textId1, delta: "first text part." },
     { type: "text-end", id: textId1 },
+    { type: "error", errorText: "gówno"},
     // Second text part
     { type: "text-start", id: textId2 },
     { type: "text-delta", id: textId2, delta: "And here is " },
