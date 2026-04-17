@@ -8,9 +8,9 @@ import { pathToFileURL } from "node:url";
 import { type AgentViewConfig } from "../types";
 import { createStandardClient } from "agentview/clientStandard";
 import { AgentViewError } from "agentview";
-import { startDevServer } from "../devServer.js";
-import { startProxyServer, PROXY_PORT, type ProxyServer } from "../proxyServer.js";
-import { startCloudflareTunnel, type CloudflareTunnel } from "../tunnel.js";
+import { startDevServer } from "./devServer.js";
+import { startProxyServer, PROXY_PORT, type ProxyServer } from "./proxyServer.js";
+import { startCloudflareTunnel, type CloudflareTunnel } from "./tunnel.js";
 
 const DEFAULT_CONFIG_FILES = [
   "agentview.config.ts",
