@@ -32,21 +32,21 @@ function filterHeaders(
   return out;
 }
 
-function sendError(res: http.ServerResponse, status: number, message: string) {
+function sendError(res: http.ServerResponse, status: number, code: string, message: string) {
   if (res.headersSent) {
     try { res.end(); } catch {}
     return;
   }
   res.writeHead(status, { "Content-Type": "application/json" });
-  res.end(JSON.stringify({ source: "agentview-proxy", message }));
+  res.end(JSON.stringify({ source: "agentview", code, message }));
 }
 
 function handleRequest(req: http.IncomingMessage, res: http.ServerResponse) {
-  const targetUrlRaw = req.headers["x-target-url"];
+  const targetUrlRaw = req.headers["x-target-url-2"];
   const targetUrl = Array.isArray(targetUrlRaw) ? targetUrlRaw[0] : targetUrlRaw;
 
   if (!targetUrl) {
-    sendError(res, 400, "Missing X-Target-Url header");
+    sendError(res, 400, "LOCAL_PROXY_ERROR", "Missing X-Target-Url header");
     return;
   }
 
@@ -54,7 +54,7 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse) {
   try {
     parsed = new URL(targetUrl);
   } catch {
-    sendError(res, 400, `Invalid X-Target-Url: ${targetUrl}`);
+    sendError(res, 400, "LOCAL_PROXY_ERROR", `Invalid X-Target-Url: ${targetUrl}`);
     return;
   }
 
@@ -80,7 +80,7 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse) {
   );
 
   upstreamReq.on("error", (err) => {
-    sendError(res, 502, `Proxy upstream error: ${(err as Error).message}`);
+    sendError(res, 502, "NETWORK_ERROR", `Proxy upstream error: ${(err as Error).message}`);
   });
 
   // If the client disconnects before the response is fully sent, abort the
