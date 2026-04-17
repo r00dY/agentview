@@ -83,9 +83,13 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse) {
     sendError(res, 502, `Proxy upstream error: ${(err as Error).message}`);
   });
 
-  // If the client disconnects, abort the upstream request.
-  req.on("close", () => {
-    if (!upstreamReq.destroyed) upstreamReq.destroy();
+  // If the client disconnects before the response is fully sent, abort the
+  // upstream request.  We listen on `res` (the outgoing response) rather than
+  // `req` (the incoming request) because `req.on("close")` fires as soon as
+  // the request body is fully consumed – which may be well before the upstream
+  // has had a chance to respond.
+  res.on("close", () => {
+    if (!res.writableFinished && !upstreamReq.destroyed) upstreamReq.destroy();
   });
 
   req.pipe(upstreamReq);

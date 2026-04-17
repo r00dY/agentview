@@ -5,6 +5,7 @@ import { AgentViewError } from 'agentview';
 import { z } from 'zod';
 import type { MockServer } from './mockServer';
 import { createMockServer, writeAISDKChunks, writeAISDKDone, writeAISDKSuccessHeaders } from './mockServer';
+import { startProxyServer, type ProxyServer } from '@agentview/studio/proxy';
 
 import { type UIDataTypes, type UIMessage, type UIMessageChunk } from 'ai';
 import { setupTestOrg, expectToFail, UUID_REGEX } from './utils';
@@ -861,33 +862,39 @@ describe('ai-sdk', () => {
     }, 10000);
 
     describe("local env (tunnel)", () => {
-      // These tests exercise the backend's local-env path:
-      //  - when no tunnel is registered, runs must 400
-      //  - when a tunnel is registered, the backend POSTs to the tunnel URL
-      //    and sets X-Target-Url to the actual agent URL (the real proxy then
-      //    forwards to that URL; we don't test the proxy itself here).
-      const TUNNEL_PORT = 3460;
-      const TUNNEL_URL = `http://localhost:${TUNNEL_PORT}`;
+      // These tests exercise the backend's local-env tunnel path end-to-end
+      // using the REAL proxy server from @agentview/studio (the same code that
+      // runs when a user executes `npx agentview dev`).
+      //
+      // In production the flow is:
+      //   Backend → Cloudflare Tunnel → Proxy (proxyServer.ts) → Agent
+      //
+      // Here we skip Cloudflare (not needed on localhost) and point the backend
+      // directly at the local proxy. The proxy reads X-Target-Url and forwards
+      // to the mock AI SDK agent server — exactly as it does in a real dev setup.
+      const PROXY_TEST_PORT = 19891;
+      const PROXY_URL = `http://127.0.0.1:${PROXY_TEST_PORT}`;
 
-      let mockTunnel: MockServer | null = null;
+      let proxy: ProxyServer | null = null;
 
       beforeAll(async () => {
-        mockTunnel = await createMockServer(TUNNEL_PORT);
+        proxy = await startProxyServer(PROXY_TEST_PORT);
+        await org.admin.localStandardClient.updateEnvironment({
+          config: buildConfig(),
+          tunnelUrl: PROXY_URL,
+        });
       });
 
       afterAll(async () => {
-        if (mockTunnel) {
-          await mockTunnel.close();
-          mockTunnel = null;
+        await org.admin.localStandardClient.updateEnvironment({ tunnelUrl: null }).catch(() => {});
+        if (proxy) {
+          await proxy.close();
+          proxy = null;
         }
       }, 10000);
 
-      beforeEach(() => {
-        mockTunnel?.resetRequests();
-      });
-
       test("local env without tunnel → 400 error from run", async () => {
-        await org.admin.localStandardClient.updateEnvironment({ config: buildConfig(), tunnelUrl: null });
+        await org.admin.localStandardClient.updateEnvironment({ tunnelUrl: null });
 
         const session = await org.admin.localClient.createSession({ agent: "test-ai-sdk" });
         const promise = org.admin.localClient.createRun({ sessionId: session.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hello" }] } });
@@ -895,52 +902,185 @@ describe('ai-sdk', () => {
         await expect(promise).rejects.toBeInstanceOf(AgentViewError);
         expectToFail(promise, 400)
 
+        // Re-register tunnel for subsequent tests
+        await org.admin.localStandardClient.updateEnvironment({ tunnelUrl: PROXY_URL });
       }, 10000);
 
-      test("local env with tunnel → backend POSTs to tunnel URL with X-Target-Url header", async () => {
-        await org.admin.localStandardClient.updateEnvironment({ tunnelUrl: TUNNEL_URL });
+      test("happy path: text response through real proxy", async () => {
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "Hello " },
+            { type: "text-delta", id: "t1", delta: "via tunnel!" },
+            { type: "text-end", id: "t1" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
 
-          // Mock tunnel stands in for cloudflared + proxy. It receives the forwarded
-          // request and responds with a valid AI SDK stream (as the proxy would).
-          mockTunnel!.setHandler((_body, res) => {
-            writeAISDKSuccessHeaders(res);
-            writeAISDKChunks(res, [
-              { type: "start" },
-              { type: "text-start", id: "t1" },
-              { type: "text-delta", id: "t1", delta: "via tunnel" },
-              { type: "text-end", id: "t1" },
-              { type: "finish", finishReason: "stop" },
-            ]);
-            writeAISDKDone(res);
-            res.end();
-          });
+        const session = await org.admin.localClient.createSession({ agent: "test-ai-sdk" });
 
-          const session = await org.admin.localClient.createSession({ agent: "test-ai-sdk" });
+        const stream = await sendMessageViaTransport(
+          org.admin.localClient.createTransport(),
+          session.id,
+          { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hello" }] }
+        );
 
-          const stream = await sendMessageViaTransport(
-            org.admin.localClient.createTransport(),
-            session.id,
-            { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hello" }] }
-          );
+        const chunks = await consumeChunksFromTransportStream(stream);
 
-          const chunks = await consumeChunksFromTransportStream(stream);
-          const textDeltas = chunks.filter(c => c.type === "text-delta");
-          expect(textDeltas.map(d => d.delta).join("")).toBe("via tunnel");
+        // Verify full AI SDK stream came through the proxy
+        const chunkTypes = chunks.map(c => c.type);
+        expect(chunkTypes).toContain("start");
+        expect(chunkTypes).toContain("text-start");
+        expect(chunkTypes).toContain("text-delta");
+        expect(chunkTypes).toContain("text-end");
+        expect(chunkTypes).toContain("finish");
 
-          // The mock tunnel must have received exactly one POST with X-Target-Url = agent URL
-          expect(mockTunnel!.requests.length).toBe(1);
-          const received = mockTunnel!.requests[0];
-          expect(received.headers['x-target-url']).toBe(AI_SDK_AGENT_URL);
-          // Body should be the normal upstream agent request body
-          expect(received.body.messages).toBeDefined();
-          expect(Array.isArray(received.body.messages)).toBe(true);
-          expect(received.body.messages[0].parts[0].text).toBe("Hello");
+        const textDeltas = chunks.filter(c => c.type === "text-delta");
+        expect(textDeltas.map(d => d.delta).join("")).toBe("Hello via tunnel!");
 
+        // Verify session state — same assertions as the non-tunnel happy path
+        const finalSession = await org.admin.localClient.getSession({ id: session.id });
+        expect(finalSession.status).toBe("idle");
+        expect(finalSession.messages.length).toBe(2);
+        expect(finalSession.messages[0].role).toBe("user");
+        expect(finalSession.messages[1].role).toBe("assistant");
+        expect(finalSession.messages[1].parts[0].text).toBe("Hello via tunnel!");
+
+        // Verify the mock agent actually received the request (went through proxy)
+        expect(mockAISDKServer!.requests.length).toBeGreaterThanOrEqual(1);
+        expect(mockAISDKServer!.requests[0].body.messages[0].parts[0].text).toBe("Hello");
+      }, 10000);
+
+      test("happy path: text + reasoning through real proxy", async () => {
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start", messageId: "msg_1" },
+            { type: "reasoning-start", id: "r1" },
+            { type: "reasoning-delta", id: "r1", delta: "Let me think..." },
+            { type: "reasoning-end", id: "r1" },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "The answer is 42" },
+            { type: "text-end", id: "t1" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        const session = await org.admin.localClient.createSession({ agent: "test-ai-sdk" });
+
+        const stream = await sendMessageViaTransport(
+          org.admin.localClient.createTransport(),
+          session.id,
+          { id: "msg_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] }
+        );
+
+        const chunks = await consumeChunksFromTransportStream(stream);
+
+        const chunkTypes = chunks.map(c => c.type);
+        expect(chunkTypes).toContain("reasoning-start");
+        expect(chunkTypes).toContain("reasoning-delta");
+        expect(chunkTypes).toContain("reasoning-end");
+        expect(chunkTypes).toContain("text-start");
+        expect(chunkTypes).toContain("text-delta");
+        expect(chunkTypes).toContain("text-end");
+        expect(chunkTypes).toContain("finish");
+
+        const reasoningDeltas = chunks.filter(c => c.type === "reasoning-delta");
+        expect(reasoningDeltas.map(d => d.delta).join("")).toBe("Let me think...");
+
+        const textDeltas = chunks.filter(c => c.type === "text-delta");
+        expect(textDeltas.map(d => d.delta).join("")).toBe("The answer is 42");
+      }, 10000);
+
+      test("multi-turn: second request has full history through proxy", async () => {
+        const session = await org.admin.localClient.createSession({ agent: "test-ai-sdk" });
+
+        // First turn
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "Hello!" },
+            { type: "text-end", id: "t1" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        const stream1 = await sendMessageViaTransport(
+          org.admin.localClient.createTransport(),
+          session.id,
+          { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
+        );
+        await consumeChunksFromTransportStream(stream1);
+
+        // Second turn
+        mockAISDKServer!.resetRequests();
+
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "text-start", id: "t2" },
+            { type: "text-delta", id: "t2", delta: "I'm fine!" },
+            { type: "text-end", id: "t2" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        const stream2 = await sendMessageViaTransport(
+          org.admin.localClient.createTransport(),
+          session.id,
+          { id: "msg_2", role: "user", parts: [{ type: "text", text: "How are you?" }] }
+        );
+        await consumeChunksFromTransportStream(stream2);
+
+        // Verify second request received full conversation history through the proxy
+        expect(mockAISDKServer!.requests.length).toBeGreaterThanOrEqual(1);
+        const reqBody = mockAISDKServer!.requests[0].body;
+        expect(reqBody.messages.length).toBe(3); // user1, assistant1, user2
+        expect(reqBody.messages[0].role).toBe("user");
+        expect(reqBody.messages[0].parts[0].text).toBe("Hi");
+        expect(reqBody.messages[1].role).toBe("assistant");
+        expect(reqBody.messages[1].parts[0].text).toBe("Hello!");
+        expect(reqBody.messages[2].role).toBe("user");
+        expect(reqBody.messages[2].parts[0].text).toBe("How are you?");
+      }, 10000);
+
+      test("agent HTTP 500 error propagates through proxy", async () => {
+        mockAISDKServer!.setHandler((_body, res) => {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end("Agent error through proxy");
+        });
+
+        const session = await org.admin.localClient.createSession({ agent: "test-ai-sdk" });
+
+        const stream = sendMessageViaTransport(
+          org.admin.localClient.createTransport(),
+          session.id,
+          { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
+        );
+
+        await expect(stream).rejects.not.toBeInstanceOf(AgentViewError);
+        await expect(stream).rejects.toThrowError("Agent error through proxy");
+
+        const updatedSession = await org.admin.localClient.getSession({ id: session.id });
+        expect(updatedSession.messages.length).toBe(0);
       }, 10000);
 
       test("setting tunnelUrl on production env → 400 error", async () => {
         await expect(
-          org.prodStandardClient.updateEnvironment({ tunnelUrl: TUNNEL_URL })
+          org.prodStandardClient.updateEnvironment({ tunnelUrl: PROXY_URL })
         ).rejects.toThrowError(expect.objectContaining({
           statusCode: 400,
           message: expect.stringContaining("production"),

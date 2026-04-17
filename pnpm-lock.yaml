@@ -462,6 +462,9 @@ importers:
 
   apps/tests:
     dependencies:
+      '@agentview/studio':
+        specifier: workspace:*
+        version: link:../../packages/studio
       '@agentview/utils':
         specifier: workspace:*
         version: link:../../packages/utils

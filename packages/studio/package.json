@@ -25,6 +25,7 @@
     "./components/internal/*": "./src/components/internal/*.tsx",
     "./lib/*": "./src/lib/*.ts",
     "./hooks/*": "./src/hooks/*.tsx",
+    "./proxy": "./src/proxyServer.ts",
     "./styles.css": {
       "default": "./src/styles.css"
     }
@@ -52,6 +53,10 @@
       "./components/ui/*": {
         "import": "./dist/components/ui/*.js",
         "types": "./dist/components/ui/*.d.ts"
+      },
+      "./proxy": {
+        "import": "./dist/proxyServer.js",
+        "types": "./dist/proxyServer.d.ts"
       },
       "./styles.css": {
         "default": "./dist/styles.css"

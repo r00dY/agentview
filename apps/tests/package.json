@@ -10,7 +10,8 @@
         "vitest": "^4.0.7",
         "zod": "^4.1.12",
         "better-auth": "^1.2.12",
-        "@agentview/utils": "workspace:*"
+        "@agentview/utils": "workspace:*",
+        "@agentview/studio": "workspace:*"
     },
     "devDependencies": {
         "ai": "^6.0.0",
