@@ -25,11 +25,8 @@ describe('ai-sdk', () => {
   describe("agent endpoint auto-fetch (ai-sdk adapter)", () => {
     const AI_SDK_AGENT_PORT = 3458;
     const AI_SDK_AGENT_URL = `http://localhost:${AI_SDK_AGENT_PORT}/agent`;
-    // const PROXY_TEST_PORT = 19891;
-    // const PROXY_URL = `http://127.0.0.1:${PROXY_TEST_PORT}`;
 
     let mockAISDKServer: MockServer | null = null;
-    // let proxy: ProxyServer | null = null;
 
     function buildConfig(options?: { agentUrl?: string }) {
       const inputSchema = z.looseObject({ role: z.literal("user"), parts: z.array(z.any()) });
@@ -71,8 +68,7 @@ describe('ai-sdk', () => {
 
 
     beforeAll(async () => {
-      mockAISDKServer = await createMockServer(AI_SDK_AGENT_PORT);
-      // proxy = await startProxyServer(PROXY_TEST_PORT);
+      mockAISDKServer = await createMockServer(3500);
     });
 
     afterAll(async () => {
@@ -80,10 +76,6 @@ describe('ai-sdk', () => {
         await mockAISDKServer.close();
         mockAISDKServer = null;
       }
-      // if (proxy) {
-      //   await proxy.close();
-      //   proxy = null;
-      // }
     }, 30000);
 
     beforeEach(() => {
@@ -113,7 +105,7 @@ describe('ai-sdk', () => {
           // start real proxy with real tunnel
           proxyProcess = spawn('npx', ['agentview', 'dev', '--api-key', org.apiKeySecret.key, '--env', 'local:' + org.admin.user.email, '--no-studio'], {
             detached: true,
-            stdio: 'ignore',
+            stdio: 'inherit',
             shell: process.platform === 'win32' // needed on Windows for .cmd shims
           });
           proxyProcess.unref();
@@ -132,7 +124,7 @@ describe('ai-sdk', () => {
         }
       });
 
-      test("happy path: text response (validated via ai-sdk stream)", async () => {
+      test.only("happy path: text response (validated via ai-sdk stream)", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
         const session = await client.createSession({ agent: "test-ai-sdk" });
 
