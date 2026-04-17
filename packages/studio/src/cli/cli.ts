@@ -19,6 +19,16 @@ const DEFAULT_CONFIG_FILES = [
   "agentview.config.js"
 ];
 
+function handleError(error: unknown): never {
+  if (error instanceof AgentViewError) {
+    console.error(`Error (${error.statusCode}): ${error.message}`);
+    if (error.details) console.error(error.details);
+  } else {
+    console.error((error as Error).message ?? error);
+  }
+  process.exit(1);
+}
+
 export async function runCli() {
   const program = new Command();
 
@@ -34,14 +44,7 @@ export async function runCli() {
     .option("--api-key <key>", "AgentView API key (overrides AGENTVIEW_API_KEY env var)")
     .option("--env <env>", "Environment name (overrides env from config)")
     .action(async (opts) => {
-      let configPath: string;
-      try {
-        configPath = resolveConfigPath(opts.config);
-      } catch (error) {
-        console.error((error as Error).message);
-        process.exit(1);
-        return;
-      }
+      const configPath = resolveConfigPath(opts.config);
       await runDev(configPath, { port: opts.port, apiKey: opts.apiKey, env: opts.env });
     });
 
@@ -54,20 +57,8 @@ export async function runCli() {
     .description("Send the config file to the AgentView server once")
     .option("-c, --config <path>", "Path to agentview config file")
     .action(async (opts) => {
-      let configPath: string;
-      try {
-        configPath = resolveConfigPath(opts.config);
-      } catch (error) {
-        console.error((error as Error).message);
-        process.exit(1);
-        return;
-      }
-      try {
-        await pushConfig(configPath);
-      } catch (error) {
-        console.error((error as Error).message);
-        process.exit(1);
-      }
+      const configPath = resolveConfigPath(opts.config);
+      await pushConfig(configPath);
     });
 
   configCmd
@@ -75,23 +66,15 @@ export async function runCli() {
     .description("Watch the config file and sync on every change")
     .option("-c, --config <path>", "Path to agentview config file")
     .action(async (opts) => {
-      let configPath: string;
-      try {
-        configPath = resolveConfigPath(opts.config);
-      } catch (error) {
-        console.error((error as Error).message);
-        process.exit(1);
-        return;
-      }
-      try {
-        await watchConfig(configPath);
-      } catch (error) {
-        console.error((error as Error).message);
-        process.exit(1);
-      }
+      const configPath = resolveConfigPath(opts.config);
+      await watchConfig(configPath);
     });
 
-  await program.parseAsync(process.argv);
+  try {
+    await program.parseAsync(process.argv);
+  } catch (error) {
+    handleError(error);
+  }
 }
 
 function resolveConfigPath(explicitPath?: string): string {
@@ -125,12 +108,8 @@ async function loadConfig(configPath: string): Promise<AgentViewConfig> {
   let moduleExports: any;
   try {
     if (ext === ".js" || ext === ".mjs" || ext === ".cjs") {
-      // Cache-bust for plain JS so watch mode picks up changes.
       moduleExports = await import(`${fileUrl}?t=${Date.now()}`);
     } else {
-      // tsImport handles cache-busting internally via its namespace param.
-      // Appending our own query string confuses its loader hook and falls
-      // back to the default ESM loader (which can't parse TypeScript).
       const { tsImport } = await import("tsx/esm/api");
       moduleExports = await tsImport(fileUrl, { parentURL: import.meta.url });
     }
@@ -171,15 +150,7 @@ interface RunDevOptions {
 }
 
 async function runDev(configPath: string, opts: RunDevOptions) {
-  const apiKey = opts.apiKey ?? (() => {
-    try {
-      return getAPIKey();
-    } catch (error) {
-      console.error((error as Error).message);
-      process.exit(1);
-    }
-  })();
-
+  const apiKey = opts.apiKey ?? getAPIKey();
   const config = await loadConfig(configPath);
   const env = opts.env ?? config.env;
   const av = createStandardClient({ apiKey, env });
@@ -192,7 +163,6 @@ async function runDev(configPath: string, opts: RunDevOptions) {
     if (cleanedUp) return;
     cleanedUp = true;
 
-    // Best-effort unregister tunnel URL on the backend
     try {
       await Promise.race([
         av.updateEnvironment({ tunnelUrl: null }),
@@ -200,24 +170,16 @@ async function runDev(configPath: string, opts: RunDevOptions) {
           setTimeout(() => reject(new Error("tunnel-unregister timeout")), 5000),
         ),
       ]);
-    } catch (error) {
-      console.error(`Failed to unregister tunnel URL: ${(error as Error).message}`);
+    } catch {
+      // best-effort
     }
 
     if (tunnel) {
-      try {
-        await tunnel.stop();
-      } catch (error) {
-        console.error(`Failed to stop tunnel: ${(error as Error).message}`);
-      }
+      try { await tunnel.stop(); } catch { /* best-effort */ }
     }
 
     if (proxy) {
-      try {
-        await proxy.close();
-      } catch (error) {
-        console.error(`Failed to close proxy: ${(error as Error).message}`);
-      }
+      try { await proxy.close(); } catch { /* best-effort */ }
     }
 
     process.exit(exitCode);
@@ -226,66 +188,24 @@ async function runDev(configPath: string, opts: RunDevOptions) {
   process.on("SIGINT", () => { void cleanup(0); });
   process.on("SIGTERM", () => { void cleanup(0); });
 
-  // 1. Start local proxy server
-  try {
-    proxy = await startProxyServer(PROXY_PORT);
-    console.log(`[agentview] proxy listening on http://127.0.0.1:${proxy.port}`);
-  } catch (error) {
-    console.error(`Failed to start proxy server on port ${PROXY_PORT}: ${(error as Error).message}`);
-    process.exit(1);
-  }
+  proxy = await startProxyServer(PROXY_PORT);
+  console.log(`[agentview] proxy listening on http://127.0.0.1:${proxy.port}`);
 
-  // 2. Start Cloudflare tunnel pointing at the proxy
-  try {
-    tunnel = await startCloudflareTunnel(PROXY_PORT);
-    console.log(`[agentview] tunnel URL: ${tunnel.url}`);
-  } catch (error) {
-    console.error(`Failed to start tunnel: ${(error as Error).message}`);
-    await cleanup(1);
-    return;
-  }
+  tunnel = await startCloudflareTunnel(PROXY_PORT);
+  console.log(`[agentview] tunnel URL: ${tunnel.url}`);
 
-  // 3. Register tunnel URL on backend
-  try {
-    await av.updateEnvironment({ tunnelUrl: tunnel.url });
-    console.log(`[agentview] tunnel registered with AgentView backend`);
-  } catch (error) {
-    if (error instanceof AgentViewError) {
-      console.error(`Failed to register tunnel (${error.statusCode}): ${error.message}`);
-    } else {
-      console.error(`Failed to register tunnel: ${(error as Error).message}`);
-    }
-    await cleanup(1);
-    return;
-  }
+  await av.updateEnvironment({ tunnelUrl: tunnel.url });
+  console.log(`[agentview] tunnel registered with AgentView backend`);
 
-  // 4. Start Vite dev server (Studio UI)
   await startDevServer(configPath, { port: opts.port });
 }
 
 async function pushConfig(configPath: string) {
   const config = await loadConfig(configPath);
-
   const apiKey = getAPIKey();
+  const av = createStandardClient({ apiKey });
 
-  const av = createStandardClient({
-    apiKey,
-  });
-
-  try {
-    await av.updateEnvironment({ config });
-  } catch (error) {
-    if (error instanceof AgentViewError) {
-      console.error(`Error (${error.statusCode}): ${error.message}`);
-      console.error(error.details);
-    }
-    else {
-      console.error("Unknown error");
-      console.log(error);
-    }
-    process.exit(1);
-  }
-
+  await av.updateEnvironment({ config });
   console.log(`Config pushed`);
 }
 
