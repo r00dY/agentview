@@ -4,6 +4,7 @@ import 'dotenv/config'
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { Command } from "commander";
 
 import { type AgentViewConfig } from "../types";
 import { createStandardClient } from "agentview/clientStandard";
@@ -18,93 +19,83 @@ const DEFAULT_CONFIG_FILES = [
   "agentview.config.js"
 ];
 
-const HELP_TEXT = `Usage: agentview <command> [options]
-
-Commands:
-  dev [--config <path>] [-p <port>]  Start Studio dev server (default port: 1989)
-  config push [--config <path>]      Send the config file to the AgentView server once
-  config watch [--config <path>]     Watch the config file and sync on every change
-  help                               Show this message
-
-Options:
-  -c, --config <path>             Path to agentview config file (defaults to common filenames in the current directory)
-  -p, --port <port>               Port for the dev server (default: 1989)`;
-
 export async function runCli() {
-  const [, , ...args] = process.argv;
+  const program = new Command();
 
-  if (args.length === 0 || args[0] === "help" || args.includes("--help") || args.includes("-h")) {
-    printHelp();
-    return;
-  }
+  program
+    .name("agentview")
+    .description("AgentView CLI");
 
-  const [command, subcommand, ...rest] = args;
+  program
+    .command("dev")
+    .description("Start Studio dev server")
+    .option("-c, --config <path>", "Path to agentview config file")
+    .option("-p, --port <port>", "Port for the dev server", parseInt)
+    .option("--api-key <key>", "AgentView API key (overrides AGENTVIEW_API_KEY env var)")
+    .option("--env <env>", "Environment name (overrides env from config)")
+    .action(async (opts) => {
+      let configPath: string;
+      try {
+        configPath = resolveConfigPath(opts.config);
+      } catch (error) {
+        console.error((error as Error).message);
+        process.exit(1);
+        return;
+      }
+      await runDev(configPath, { port: opts.port, apiKey: opts.apiKey, env: opts.env });
+    });
 
-  if (command === "dev") {
-    const restArgs = [subcommand, ...rest].filter(Boolean);
-    let configPath: string;
-    try {
-      configPath = resolveConfigPath(restArgs);
-    } catch (error) {
-      console.error((error as Error).message);
-      process.exit(1);
-      return;
-    }
+  const configCmd = program
+    .command("config")
+    .description("Manage config");
 
-    const port = parsePort(restArgs);
-    await runDev(configPath, port);
-    return;
-  }
+  configCmd
+    .command("push")
+    .description("Send the config file to the AgentView server once")
+    .option("-c, --config <path>", "Path to agentview config file")
+    .action(async (opts) => {
+      let configPath: string;
+      try {
+        configPath = resolveConfigPath(opts.config);
+      } catch (error) {
+        console.error((error as Error).message);
+        process.exit(1);
+        return;
+      }
+      try {
+        await pushConfig(configPath);
+      } catch (error) {
+        console.error((error as Error).message);
+        process.exit(1);
+      }
+    });
 
-  if (command !== "config") {
-    console.error(`Unknown command "${command}".`);
-    printHelp(1);
-    return;
-  }
+  configCmd
+    .command("watch")
+    .description("Watch the config file and sync on every change")
+    .option("-c, --config <path>", "Path to agentview config file")
+    .action(async (opts) => {
+      let configPath: string;
+      try {
+        configPath = resolveConfigPath(opts.config);
+      } catch (error) {
+        console.error((error as Error).message);
+        process.exit(1);
+        return;
+      }
+      try {
+        await watchConfig(configPath);
+      } catch (error) {
+        console.error((error as Error).message);
+        process.exit(1);
+      }
+    });
 
-  if (subcommand !== "push" && subcommand !== "watch") {
-    console.error(`Unknown subcommand "${subcommand}".`);
-    printHelp(1);
-    return;
-  }
-
-  let configPath: string;
-  try {
-    configPath = resolveConfigPath(rest);
-  } catch (error) {
-    console.error((error as Error).message);
-    process.exit(1);
-    return;
-  }
-
-  try {
-    if (subcommand === "push") {
-      await pushConfig(configPath);
-    } else {
-      await watchConfig(configPath);
-    }
-  } catch (error) {
-    console.error((error as Error).message);
-    process.exit(1);
-  }
+  await program.parseAsync(process.argv);
 }
 
-function printHelp(exitCode = 0) {
-  console.log(HELP_TEXT);
-  if (exitCode !== null) {
-    process.exit(exitCode);
-  }
-}
-
-function resolveConfigPath(args: string[]): string {
-  const optionIndex = args.findIndex((arg) => arg === "--config" || arg === "-c");
-
-  if (optionIndex !== -1) {
-    const explicitPath = args[optionIndex + 1];
-    if (!explicitPath) {
-      throw new Error("Missing value for --config");
-    }
-
+function resolveConfigPath(explicitPath?: string): string {
+  if (explicitPath) {
     const resolvedPath = path.resolve(process.cwd(), explicitPath);
     if (!fs.existsSync(resolvedPath)) {
       throw new Error(`Config file not found at ${explicitPath}`);
@@ -173,17 +164,25 @@ function getAPIKey(): string {
   return apiKey;
 }
 
-async function runDev(configPath: string, port: number | undefined) {
-  let apiKey: string;
-  try {
-    apiKey = getAPIKey();
-  } catch (error) {
-    console.error((error as Error).message);
-    process.exit(1);
-  }
+interface RunDevOptions {
+  port?: number;
+  apiKey?: string;
+  env?: string;
+}
+
+async function runDev(configPath: string, opts: RunDevOptions) {
+  const apiKey = opts.apiKey ?? (() => {
+    try {
+      return getAPIKey();
+    } catch (error) {
+      console.error((error as Error).message);
+      process.exit(1);
+    }
+  })();
 
   const config = await loadConfig(configPath);
-  const av = createStandardClient({ apiKey, env: config.env });
+  const env = opts.env ?? config.env;
+  const av = createStandardClient({ apiKey, env });
 
   let proxy: ProxyServer | null = null;
   let tunnel: CloudflareTunnel | null = null;
@@ -261,7 +260,7 @@ async function runDev(configPath: string, port: number | undefined) {
   }
 
   // 4. Start Vite dev server (Studio UI)
-  await startDevServer(configPath, { port });
+  await startDevServer(configPath, { port: opts.port });
 }
 
 async function pushConfig(configPath: string) {
@@ -313,20 +312,4 @@ async function watchConfig(configPath: string) {
       pushAndReport();
     }, 100);
   });
-}
-
-function parsePort(args: string[]): number | undefined {
-  const portIndex = args.findIndex((arg) => arg === "--port" || arg === "-p");
-  if (portIndex === -1) return undefined;
-  const portStr = args[portIndex + 1];
-  if (!portStr) {
-    console.error("Missing value for --port");
-    process.exit(1);
-  }
-  const port = Number(portStr);
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    console.error(`Invalid port: ${portStr}`);
-    process.exit(1);
-  }
-  return port;
 }
