@@ -3525,16 +3525,9 @@ describe('API', () => {
       const TUNNEL_URL = `http://localhost:${TUNNEL_PORT}`;
 
       let mockTunnel: MockServer | null = null;
-      // let avLocal: StandardAgentViewClient;
-      // let avAISDKLocal: AgentViewClient;
-      // let localUser: User;
 
       beforeAll(async () => {
         mockTunnel = await createMockServer(TUNNEL_PORT);
-        // avLocal = createStandardClient({ apiKey: apiKeySecret, env: `dev:${adminUser.email}` });
-        // avAISDKLocal = createClient({ apiKey: apiKeySecret, env: `dev:${adminUser.email}` });
-        // // Use a fresh playground user in the local env so we don't collide with outer state
-        // localUser = await avLocal.createUser({ externalId: `tunnel-user-${Math.random().toString(36).slice(2)}` });
       });
 
       afterAll(async () => {
@@ -3542,27 +3535,17 @@ describe('API', () => {
           await mockTunnel.close();
           mockTunnel = null;
         }
-      }, 30000);
+      }, 10000);
 
       beforeEach(() => {
         mockTunnel?.resetRequests();
       });
 
       test("local env without tunnel → 400 error from run", async () => {
-        // await updateConfigWithAiSdkUrl({ client: avLocal });
         await avLocal.updateEnvironment({ config: buildConfig(), tunnelUrl: null });
 
         const session = await avAISDKLocal.createSession({ agent: "test-ai-sdk", userId: localUser1.id });
-
         const promise = avAISDKLocal.createRun({ sessionId: session.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hello" }] } });
-
-        // const promise = sendMessageViaTransport(
-        //   avAISDKLocal.createTransport(),
-        //   session.id,
-        //   { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hello" }] }
-        // );
-
-        // await promise;
 
         await expect(promise).rejects.toBeInstanceOf(AgentViewError);
         expectToFail(promise, 400)
@@ -3572,7 +3555,6 @@ describe('API', () => {
       test("local env with tunnel → backend POSTs to tunnel URL with X-Target-Url header", async () => {
         await avLocal.updateEnvironment({ tunnelUrl: TUNNEL_URL });
 
-        try {
           // Mock tunnel stands in for cloudflared + proxy. It receives the forwarded
           // request and responds with a valid AI SDK stream (as the proxy would).
           mockTunnel!.setHandler((_body, res) => {
@@ -3608,10 +3590,7 @@ describe('API', () => {
           expect(received.body.messages).toBeDefined();
           expect(Array.isArray(received.body.messages)).toBe(true);
           expect(received.body.messages[0].parts[0].text).toBe("Hello");
-        } finally {
-          // Cleanup: unregister the tunnel URL so it doesn't bleed into other tests
-          await avLocal.updateEnvironment({ tunnelUrl: null });
-        }
+
       }, 10000);
 
       test("setting tunnelUrl on production env → 400 error", async () => {
