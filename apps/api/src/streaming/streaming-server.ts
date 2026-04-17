@@ -317,12 +317,12 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     if (res.headersSent) return;
 
     if (isNodeHttpConnectionError(err)) {
-      sendJson(res, 502, { code: "STREAM_NETWORK_ERROR", message: err.message, detailedCode: (err as any).code });
+      sendJson(res, 502, { code: "CONNECTION_NETWORK_ERROR", message: err.message, detailedCode: (err as any).code });
       return;
     }
     else {
       log.error({ err }, '[streaming] unexpected error while streaming');
-      sendJson(res, 500, { code: "STREAM_INTERNAL_ERROR", message: err.message });
+      sendJson(res, 500, { code: "CONNECTION_INTERNAL_ERROR", message: err.message });
     }
   });
 

@@ -482,6 +482,47 @@ describe('API', () => {
         message: expect.any(String),
       }))
     })
+
+
+    test("local env without tunnel → creating run should result in 400 error", async () => {
+      await updateConfig()
+      await updateConfig({ prod: true });
+
+      const session = await org.admin.localClient.createSession({ agent: "test" });
+      const promise = org.admin.localClient.createRun({ sessionId: session.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hello" }] } });
+
+      expectToFail(promise, 400)
+    });
+
+    test("setting tunnelUrl on production env → 400 error", async () => {
+      await updateConfig()
+      await updateConfig({ prod: true });
+
+      await expect(
+        org.prodStandardClient.updateEnvironment({ tunnelUrl: "https://some-proxy-url.com" })
+      ).rejects.toThrowError(expect.objectContaining({
+        statusCode: 400,
+        message: expect.stringContaining("production"),
+      }));
+    });
+
+    test("incorrect tunnel URL format → 400 error", async () => {
+      await updateConfig()
+
+      await expect(
+        org.admin.localStandardClient.updateEnvironment({ tunnelUrl: "xxxx" })
+      ).rejects.toThrowError(expect.objectContaining({
+        statusCode: 422,
+      }));
+
+      await expect(
+        org.admin.localStandardClient.updateEnvironment({ tunnelUrl: "ftp://some-domain.com/incorrect-tunnel-url" })
+      ).rejects.toThrowError(expect.objectContaining({
+        statusCode: 422,
+      }));
+    });
+
+
   })
 
   describe("sessions", async () => {

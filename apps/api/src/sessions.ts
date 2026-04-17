@@ -418,6 +418,7 @@ export async function createSession(tx: TenantTransaction, body: StandardSession
   // in API channel and agent must exist
   const channelRef: ChannelRef = { type: 'api', name: body.agent }
 
+  // TODO: when wrong agent name is provided, we shouldn't throw CHANNEL ERROR
   const channelConfig = requireChannelConfig(config, channelRef)
   const agentConfig = requireAgentConfig(config, getChannelAgent(channelConfig)?.name)
 

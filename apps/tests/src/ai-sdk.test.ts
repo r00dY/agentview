@@ -68,7 +68,7 @@ describe('ai-sdk', () => {
 
 
     beforeAll(async () => {
-      mockAISDKServer = await createMockServer(3500);
+      mockAISDKServer = await createMockServer(AI_SDK_AGENT_PORT);
     });
 
     afterAll(async () => {
@@ -81,6 +81,7 @@ describe('ai-sdk', () => {
     beforeEach(() => {
       mockAISDKServer?.resetRequests();
     });
+
 
     // ---------------------------------------------------------------
     // All core tests run on BOTH environments:
@@ -124,7 +125,7 @@ describe('ai-sdk', () => {
         }
       });
 
-      test.only("happy path: text response (validated via ai-sdk stream)", async () => {
+      test("happy path: text response (validated via ai-sdk stream)", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
         const session = await client.createSession({ agent: "test-ai-sdk" });
 
@@ -422,6 +423,20 @@ describe('ai-sdk', () => {
 
         const streamAfterCompletion = await transport.reconnectToStream({ chatId: session.id })
         expect(streamAfterCompletion).toBeNull();
+
+      }, TEST_TIMEOUT);
+
+      test("Upstream server is down → 502 error", async () => {
+        await standardClient.updateEnvironment({ config: buildConfig({ agentUrl: "http://localhost:10000/this-server-is-down" }) }); // 
+        const session = await client.createSession({ agent: "test-ai-sdk" });
+
+        const stream = sendMessageViaTransport(
+          client.createTransport(),
+          session.id,
+          { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
+        );
+
+        await expect(stream).rejects.toThrowError("CONNECTION_NETWORK_ERROR");
 
       }, TEST_TIMEOUT);
 
@@ -848,42 +863,6 @@ describe('ai-sdk', () => {
       }, TEST_TIMEOUT);
     });
 
-    // ---------------------------------------------------------------
-    // Environment-specific tests
-    // ---------------------------------------------------------------
-
-    // test("Error HTTP endpoint is down → client.createRun (no stream) passes error to client. No run is created.", async () => {
-    //   await org.prodStandardClient.updateEnvironment({ config: buildConfig({ agentUrl: "http://localhost:TEST_TIMEOUT/this-url-is-down" }) });
-
-    //   const promise = org.prodClient.createSession({ agent: "test-ai-sdk" , input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
-
-    //   await expect(promise).rejects.toBeInstanceOf(AgentViewError);
-    //   await expect(promise).rejects.toThrowError(expect.objectContaining({
-    //     statusCode: 502
-    //   }));
-    // }, TEST_TIMEOUT);
-
-    // test("local env without tunnel → 400 error from run", async () => {
-    //   await org.admin.localStandardClient.updateEnvironment({ config: buildConfig(), tunnelUrl: null });
-
-    //   const session = await org.admin.localClient.createSession({ agent: "test-ai-sdk" });
-    //   const promise = org.admin.localClient.createRun({ sessionId: session.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hello" }] } });
-
-    //   await expect(promise).rejects.toBeInstanceOf(AgentViewError);
-    //   expectToFail(promise, 400)
-
-    //   // Restore tunnel for any subsequent usage
-    //   await org.admin.localStandardClient.updateEnvironment({ tunnelUrl: PROXY_URL });
-    // }, TEST_TIMEOUT);
-
-    // test("setting tunnelUrl on production env → 400 error", async () => {
-    //   await expect(
-    //     org.prodStandardClient.updateEnvironment({ tunnelUrl: PROXY_URL })
-    //   ).rejects.toThrowError(expect.objectContaining({
-    //     statusCode: 400,
-    //     message: expect.stringContaining("production"),
-    //   }));
-    // }, TEST_TIMEOUT);
 
   });
 

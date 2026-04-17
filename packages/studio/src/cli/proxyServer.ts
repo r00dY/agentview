@@ -32,14 +32,14 @@ function filterHeaders(
   return out;
 }
 
-function sendError(res: http.ServerResponse, args: { statusCode: number, code: string, url?: string, message: string }) {
+function sendError(res: http.ServerResponse, args: { statusCode: number, code: string, message: string, detailedCode?: string }) {
   if (res.headersSent) {
     try { res.end(); } catch {}
     return;
   }
   const { statusCode, ...body } = args;
   res.writeHead(statusCode, { "Content-Type": "application/json" });
-  res.end(JSON.stringify({source: "agentview", ...body}));
+  res.end(JSON.stringify({source: "agentview", ...body, localhost: true }));
 }
 
 function handleRequest(req: http.IncomingMessage, res: http.ServerResponse) {
@@ -47,7 +47,7 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse) {
   const targetUrl = Array.isArray(targetUrlRaw) ? targetUrlRaw[0] : targetUrlRaw;
 
   if (!targetUrl) {
-    sendError(res, { statusCode: 400, code: "LOCAL_PROXY_ERROR", message: "Missing X-Target-Url header" });
+    sendError(res, { statusCode: 500, code: "CONNECTION_PROXY_ERROR", message: "Missing X-Target-Url header." });
     return;
   }
 
@@ -55,7 +55,7 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse) {
   try {
     parsed = new URL(targetUrl);
   } catch {
-    sendError(res, { statusCode: 400, code: "LOCAL_PROXY_ERROR", message: `Invalid X-Target-Url: ${targetUrl}` });
+    sendError(res, { statusCode: 400, code: "CONNECTION_PROXY_ERROR", message: `Invalid X-Target-Url: ${targetUrl}.` });
     return;
   }
 
@@ -83,8 +83,8 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse) {
   upstreamReq.on("error", (err) => {
     // console.log('error', err)
     // console.log('error message', (err as Error).message)
-    const code = (err as any).code ?? "UNKNOWN_ERROR";
-    sendError(res, { statusCode: 502, code, message: `Local server unreachable.`, url: targetUrl });
+    const detailedCode = (err as any).code;
+    sendError(res, { statusCode: 502, code: "CONNECTION_NETWORK_ERROR", message: `Local server unreachable (${targetUrl}).`, detailedCode });
   });
 
   // If the client disconnects before the response is fully sent, abort the

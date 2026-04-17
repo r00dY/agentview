@@ -113,7 +113,7 @@ export type Environment = z.infer<typeof EnvironmentSchema>
 
 export const EnvironmentCreateSchema = z.object({
   config: z.any().optional(),
-  tunnelUrl: z.string().nullable().optional(),
+  tunnelUrl: z.httpUrl().nullish(),
 })
 
 export type EnvironmentCreate = z.infer<typeof EnvironmentCreateSchema>
