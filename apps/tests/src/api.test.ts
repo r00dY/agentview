@@ -1,23 +1,14 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
 
-import { AgentViewError, createClient, type AgentViewClient, type User } from 'agentview';
+import { type User } from 'agentview';
 import type { SessionStreamEvent, StandardRun, StandardSession } from 'agentview/apiTypes';
-import { configDefaults, createStandardClient, type StandardAgentViewClient } from 'agentview/clientStandard';
+import { createStandardClient, type StandardAgentViewClient } from 'agentview/clientStandard';
 
 
 import { z } from 'zod';
-import type { MockServer } from './mockServer';
-import { createMockServer, writeAISDKChunks, writeAISDKDone, writeAISDKSuccessHeaders } from './mockServer';
 import { seedUsers } from './seedUsers';
 
-import { type UIDataTypes, type UIMessage, type UIMessageChunk } from 'ai';
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-// globally disable summaries for all tests
-configDefaults.__internal = {
-  disableSummaries: true,
-}
+import { setupTestOrg } from './utils';
 
 describe('API', () => {
   let initUser1: User
@@ -25,69 +16,22 @@ describe('API', () => {
 
   let initProdUser: User
 
-  let localUser1: User
-  let localUser2: User
-  let prodUser1: User
-
   const EXTERNAL_ID_1 = 'external-id-1'
   const EXTERNAL_ID_2 = 'external-id-2'
   const EXTERNAL_PROD_ID_1 = 'external-prod-id-1'
 
+  let org: Awaited<ReturnType<typeof setupTestOrg>>;
+
   let av: StandardAgentViewClient;
 
-  let avLocal: StandardAgentViewClient;
-  let avProd: StandardAgentViewClient;
-
-  let avAISDKLocal: AgentViewClient;
-  let avAISDKProd: AgentViewClient;
-
-  let orgSlug: string;
-  let organization: { id: string };
-  let adminUser: { id: string; email: string; name: string; }; // matches shape of adminUser returned by seedUsers
-
-  let apiKeySecret: string;
-  let apiKeyPublic: string;
-
   beforeAll(async () => {
-    orgSlug = "test-" + Math.random().toString(36).slice(2);
-    console.log("Seeding users for org: ", orgSlug);
+    org = await setupTestOrg();
 
-    const result = await seedUsers(orgSlug);
-    organization = result.organization;
-    adminUser = result.admin.user;
-
-    apiKeySecret = result.apiKeySecret.key;
-    apiKeyPublic = result.apiKeyPublic.key;
-
-    av = createStandardClient({
-      apiKey: result.apiKeySecret.key,
-      env: "dev:"+adminUser.email
-    })
-
-    avLocal = av;
-
-    avAISDKLocal = createClient({
-      apiKey: result.apiKeySecret.key,
-      env: "dev:"+adminUser.email
-    })
-
-    avProd = createStandardClient({
-      apiKey: result.apiKeySecret.key,
-      env: "production"
-    })
-
-    avAISDKProd = createClient({
-      apiKey: result.apiKeySecret.key,
-      env: "production"
-    })
-
-    initUser1 = await av.createUser({ externalId: EXTERNAL_ID_1 })
-    initUser2 = await av.createUser({ externalId: EXTERNAL_ID_2 })
-    initProdUser = await avProd.createUser({ externalId: EXTERNAL_PROD_ID_1, space: "production" })
-
-    localUser1 = initUser1;
-    localUser2 = initUser2;
-    prodUser1 = initProdUser;
+    av = org.admin.localStandardClient;
+    
+    initUser1 = await org.admin.localClient.createUser({ externalId: EXTERNAL_ID_1 })
+    initUser2 = await org.admin.localClient.createUser({ externalId: EXTERNAL_ID_2 })
+    initProdUser = await org.prodClient.createUser({ externalId: EXTERNAL_PROD_ID_1, space: "production" })
 
     expect(initUser1).toBeDefined()
     expect(initUser1.externalId).toBe(EXTERNAL_ID_1)
@@ -148,7 +92,7 @@ describe('API', () => {
     }
 
     if (options.prod) {
-      await avProd.updateEnvironment({ config })
+      await org.prodStandardClient.updateEnvironment({ config })
     }
     else {
       await av.updateEnvironment({ config })
@@ -280,7 +224,7 @@ describe('API', () => {
       test("[local env] default space is user's playground", async () => {
         const user = await av.createUser()
         expect(user.space).toBe("playground")
-        expect(user.createdBy).toBe(adminUser.id)
+        expect(user.createdBy).toBe(org.admin.user.id)
       })
 
       test("[local env] production space is blocked", async () => {
@@ -291,18 +235,18 @@ describe('API', () => {
       })
 
       test("[prod env] default space for new user is production and createdBy is null", async () => {
-        const user = await avProd.createUser()
+        const user = await org.prodStandardClient.createUser()
         expect(user.space).toBe("production")
         expect(user.createdBy).toBeNull()
       })
 
       // test("[prod api-key] playground or shared-playground are not allowed with production api-key (you must be logged in as member to do it)", async () => {
-      //   await expect(avProd.createUser({ space: "playground" })).rejects.toThrowError(expect.objectContaining({
+      //   await expect(org.prodStandardClient.createUser({ space: "playground" })).rejects.toThrowError(expect.objectContaining({
       //     statusCode: 401,
       //     message: expect.any(String),
       //   }))
 
-      //   await expect(avProd.createUser({ space: "shared-playground" })).rejects.toThrowError(expect.objectContaining({
+      //   await expect(org.prodStandardClient.createUser({ space: "shared-playground" })).rejects.toThrowError(expect.objectContaining({
       //     statusCode: 401,
       //     message: expect.any(String),
       //   }))
@@ -348,7 +292,7 @@ describe('API', () => {
 
         test("works for existing users", async () => {
           const avPublic1 = createStandardClient({
-            apiKey: apiKeyPublic,
+            apiKey: org.apiKeyPublic.key,
             userToken: initUser1.token
           })
           const user1 = await avPublic1.getMe()
@@ -356,7 +300,7 @@ describe('API', () => {
           expect(user1.externalId).toBe(EXTERNAL_ID_1)
 
           const avPublic2 = createStandardClient({
-            apiKey: apiKeyPublic,
+            apiKey: org.apiKeyPublic.key,
             userToken: initUser2.token
           })
           const user2 = await avPublic2.getMe()
@@ -366,7 +310,7 @@ describe('API', () => {
 
         test("fails for unknown key", async () => {
           const avPublic1 = createStandardClient({
-            apiKey: apiKeyPublic,
+            apiKey: org.apiKeyPublic.key,
             userToken: "xxx"
           })
 
@@ -383,7 +327,7 @@ describe('API', () => {
           const session = await av.createSession({ agent: "test", userId: initUser1.id})
 
           const avPublic1 = createStandardClient({
-            apiKey: apiKeyPublic,
+            apiKey: org.apiKeyPublic.key,
             userToken: initUser1.token
           })
 
@@ -396,7 +340,7 @@ describe('API', () => {
           const session = await av.createSession({ agent: "test", userId: initUser1.id})
 
           const avPublic2 = createStandardClient({
-            apiKey: apiKeyPublic,
+            apiKey: org.apiKeyPublic.key,
             userToken: initUser2.token
           })
 
@@ -472,8 +416,8 @@ describe('API', () => {
       // });
       // await authClient.signOut();
 
-      const avBob = createStandardClient({ apiKey: apiKeySecret, env: `dev:bob@${orgSlug}.com` });
-      const avAlice = createStandardClient({ apiKey: apiKeySecret, env: `dev:alice@${orgSlug}.com` });
+      const avBob = createStandardClient({ apiKey: org.apiKeySecret.key, env: `dev:bob@${org.organization.slug}.com` });
+      const avAlice = createStandardClient({ apiKey: org.apiKeySecret.key, env: `dev:alice@${org.organization.slug}.com` });
 
       // Bob uploads his config
       const BOB_CONFIG = { agents: [{ name: "bob-agent", version: "1.0.0" }], channels: [{ type: 'api' as const, name: "bob-agent", agent: "bob-agent" }], __internal: { disableSummaries: true } };
@@ -519,11 +463,11 @@ describe('API', () => {
       await updateConfig({ prod: true });
 
       // creating prod user allowed with prod key
-      const prodUser = await avProd.createUser({ space: "production" })
+      const prodUser = await org.prodStandardClient.createUser({ space: "production" })
       expect(prodUser).toBeDefined()
 
       // creating prod session allowed with prod key
-      const prodSession = await avProd.createSession({ agent: "test", userId: prodUser.id })
+      const prodSession = await org.prodStandardClient.createSession({ agent: "test", userId: prodUser.id })
       expect(prodSession).toBeDefined()
 
       // creating prod user not allowed with dev key
@@ -800,33 +744,33 @@ describe('API', () => {
       let agentName = 'agent-for-testing-lists'
 
       beforeAll(async () => {
-        await avProd.updateEnvironment({ config: { agents: [{ name: agentName, version: "1.0.0" }], channels: [{ type: 'api', name: agentName, agent: agentName }] } })
+        await org.prodStandardClient.updateEnvironment({ config: { agents: [{ name: agentName, version: "1.0.0" }], channels: [{ type: 'api', name: agentName, agent: agentName }] } })
 
         // Create 20 sessions for testing
         user1Sessions = []
         for (let i = 0; i < USER_1_SESSIONS_COUNT; i++) {
-          const session = await avProd.createSession({ agent: agentName, userId: initUser1.id })
+          const session = await org.prodStandardClient.createSession({ agent: agentName, userId: initUser1.id })
           user1Sessions.push(session)
           await new Promise(resolve => setTimeout(resolve, 10)) // Small delay to ensure different updatedAt timestamps
         }
 
         user2Sessions = []
         for (let i = 0; i < USER_2_SESSIONS_COUNT; i++) {
-          const session = await avProd.createSession({ agent: agentName, userId: initUser2.id })
+          const session = await org.prodStandardClient.createSession({ agent: agentName, userId: initUser2.id })
           user2Sessions.push(session)
           await new Promise(resolve => setTimeout(resolve, 10)) // Small delay to ensure different updatedAt timestamps
         }
 
         prodUserSessions = []
         for (let i = 0; i < PROD_USER_SESSIONS_COUNT; i++) {
-          const session = await avProd.createSession({ agent: agentName, userId: initProdUser.id })
+          const session = await org.prodStandardClient.createSession({ agent: agentName, userId: initProdUser.id })
           prodUserSessions.push(session)
           await new Promise(resolve => setTimeout(resolve, 10)) // Small delay to ensure different updatedAt timestamps
         }
       })
 
       test("no pagination params", async () => {
-        const result = await avProd.getSessions({ userId: initUser2.id })
+        const result = await org.prodStandardClient.getSessions({ userId: initUser2.id })
 
         expect(result.sessions).toBeDefined()
         expect(Array.isArray(result.sessions)).toBe(true)
@@ -841,7 +785,7 @@ describe('API', () => {
       })
 
       test("5 items per page, first page", async () => {
-        const result = await avProd.getSessions({ userId: initUser2.id, limit: 5, page: 1 })
+        const result = await org.prodStandardClient.getSessions({ userId: initUser2.id, limit: 5, page: 1 })
 
         expect(result.sessions).toBeDefined()
         expect(result.sessions.length).toBe(5)
@@ -855,7 +799,7 @@ describe('API', () => {
       })
 
       test("5 items per page, second page", async () => {
-        const result = await avProd.getSessions({ userId: initUser2.id, limit: 5, page: 2 })
+        const result = await org.prodStandardClient.getSessions({ userId: initUser2.id, limit: 5, page: 2 })
 
         expect(result.sessions).toBeDefined()
         expect(result.sessions.length).toBe(USER_2_SESSIONS_COUNT - 5)
@@ -870,7 +814,7 @@ describe('API', () => {
         const itemsPerPage = 5
         const lastPage = Math.ceil(USER_2_SESSIONS_COUNT / itemsPerPage)
 
-        const result = await avProd.getSessions({ userId: initUser2.id, limit: 5, page: lastPage })
+        const result = await org.prodStandardClient.getSessions({ userId: initUser2.id, limit: 5, page: lastPage })
 
         expect(result.sessions).toBeDefined()
         expect(result.sessions.length).toBeGreaterThan(0)
@@ -884,7 +828,7 @@ describe('API', () => {
 
 
       test("5 items per page, page well beyond last page", async () => {
-        const result = await avProd.getSessions({ userId: initUser2.id, limit: 5, page: 100 })
+        const result = await org.prodStandardClient.getSessions({ userId: initUser2.id, limit: 5, page: 100 })
 
         expect(result.sessions).toBeDefined()
         expect(result.sessions.length).toEqual(0)
@@ -896,25 +840,25 @@ describe('API', () => {
       })
 
       test("different page numbers", async () => {
-        const page3 = await avProd.getSessions({ space: "playground", limit: 5, page: 3 })
+        const page3 = await org.prodStandardClient.getSessions({ space: "playground", limit: 5, page: 3 })
         expect(page3.pagination.page).toBe(3)
         expect(page3.sessions.length).toBe(5)
 
-        const page4 = await avProd.getSessions({ space: "playground", limit: 5, page: 4 })
+        const page4 = await org.prodStandardClient.getSessions({ space: "playground", limit: 5, page: 4 })
         expect(page4.pagination.page).toBe(4)
         expect(page4.sessions.length).toBe(5)
       })
 
       test("page limit exceeds maximum (999999) should error", async () => {
-        await expect(avProd.getSessions({ space: "playground", limit: 999999 })).rejects.toThrowError(expect.objectContaining({
+        await expect(org.prodStandardClient.getSessions({ space: "playground", limit: 999999 })).rejects.toThrowError(expect.objectContaining({
           statusCode: 422,
           message: expect.any(String)
         }))
       })
 
       test("user scoping works", async () => {
-        const user1FetchedSessions = await avProd.as(initUser1).getSessions({ space: "playground", limit: 10 })
-        const user2FetchedSessions = await avProd.as(initUser2).getSessions({ space: "playground", limit: 10 })
+        const user1FetchedSessions = await org.prodStandardClient.as(initUser1).getSessions({ space: "playground", limit: 10 })
+        const user2FetchedSessions = await org.prodStandardClient.as(initUser2).getSessions({ space: "playground", limit: 10 })
 
         expect(user1FetchedSessions.sessions.length).toBe(10)
         expect(user1FetchedSessions.sessions.every(session => session.userId === initUser1.id)).toBe(true)
@@ -927,7 +871,7 @@ describe('API', () => {
 
       test("[public api] works", async () => {
         const avPublic1 = createStandardClient({
-          apiKey: apiKeyPublic,
+          apiKey: org.apiKeyPublic.key,
           userToken: initUser1.token
         })
 
@@ -939,7 +883,7 @@ describe('API', () => {
 
 
         const avPublic2 = createStandardClient({
-          apiKey: apiKeyPublic,
+          apiKey: org.apiKeyPublic.key,
           userToken: initUser2.token
         })
 
