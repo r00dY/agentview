@@ -78,8 +78,13 @@ export async function seedUsers(slug: string) {
 
   return {
     organization,
-    apiKeySecret,
+
+    // keys are created by users but are org-level for now
+    apiKeySecret, 
     apiKeyPublic,
-    adminUser: admin.user
+
+    admin: {
+      ...admin
+    }
   }
 }
