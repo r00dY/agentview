@@ -46,7 +46,7 @@ describe('API', () => {
     expect(initProdUser.createdBy).toBeNull()
   })
 
-  function expectToFail(promise: Promise<any>, statusCode: number) {
+  async function expectToFail(promise: Promise<any>, statusCode: number) {
     return expect(promise).rejects.toThrowError(expect.objectContaining({
       statusCode,
       message: expect.any(String),
@@ -491,7 +491,7 @@ describe('API', () => {
       const session = await org.admin.localClient.createSession({ agent: "test" });
       const promise = org.admin.localClient.createRun({ sessionId: session.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hello" }] } });
 
-      expectToFail(promise, 400)
+      await expectToFail(promise, 400)
     });
 
     test("setting tunnelUrl on production env → 400 error", async () => {

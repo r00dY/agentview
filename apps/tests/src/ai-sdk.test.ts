@@ -90,8 +90,8 @@ describe('ai-sdk', () => {
     //     proxy server from @agentview/studio (same code as `npx agentview dev`)
     // ---------------------------------------------------------------
     describe.each([
-      // { envName: "production (direct)", envType: "production" },
-      { envName: "local (via tunnel proxy)", envType: "local" },
+      { envName: "production (direct)", envType: "production" },
+      // { envName: "local (via tunnel proxy)", envType: "local" },
     ])("$envName", ({ envType }) => {
       let client: typeof org.prodClient;
       let standardClient: typeof org.prodStandardClient;

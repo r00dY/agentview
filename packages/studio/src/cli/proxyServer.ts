@@ -47,7 +47,7 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse) {
   const targetUrl = Array.isArray(targetUrlRaw) ? targetUrlRaw[0] : targetUrlRaw;
 
   if (!targetUrl) {
-    sendError(res, { statusCode: 500, code: "CONNECTION_PROXY_ERROR", message: "Missing X-Target-Url header." });
+    sendError(res, { statusCode: 400, code: "CONNECTION_ERROR", message: "Missing X-Target-Url header." });
     return;
   }
 
@@ -55,7 +55,7 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse) {
   try {
     parsed = new URL(targetUrl);
   } catch {
-    sendError(res, { statusCode: 400, code: "CONNECTION_PROXY_ERROR", message: `Invalid X-Target-Url: ${targetUrl}.` });
+    sendError(res, { statusCode: 400, code: "CONNECTION_ERROR", message: `Invalid target URL: ${targetUrl}.` });
     return;
   }
 
