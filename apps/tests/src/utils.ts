@@ -25,12 +25,12 @@ export async function setupTestOrg() {
 
     const localStandardClient = createStandardClient({
         apiKey: result.apiKeySecret.key,
-        env: "dev:" + result.admin.user.email
+        env: "local:" + result.admin.user.email
     })
 
     const localClient = createClient({
         apiKey: result.apiKeySecret.key,
-        env: "dev:" + result.admin.user.email
+        env: "local:" + result.admin.user.email
     })
 
     const prodStandardClient = createStandardClient({
@@ -53,42 +53,6 @@ export async function setupTestOrg() {
         prodClient,
         prodStandardClient,
     }
-
-    // organization = result.organization;
-    // adminUser = result.adminUser;
-
-    // apiKeySecret = result.apiKeySecret.key;
-    // apiKeyPublic = result.apiKeyPublic.key;
-
-    // av = createStandardClient({
-    //   apiKey: result.apiKeySecret.key,
-    //   env: "dev:"+adminUser.email
-    // })
-
-    // avLocal = av;
-
-    // avAISDKLocal = createClient({
-    //     apiKey: result.apiKeySecret.key,
-    //     env: "dev:" + adminUser.email
-    // })
-
-    // avProd = createStandardClient({
-    //     apiKey: result.apiKeySecret.key,
-    //     env: "production"
-    // })
-
-    // avAISDKProd = createClient({
-    //     apiKey: result.apiKeySecret.key,
-    //     env: "production"
-    // })
-
-    // initUser1 = await av.createUser({ externalId: EXTERNAL_ID_1 })
-    // initUser2 = await av.createUser({ externalId: EXTERNAL_ID_2 })
-    // initProdUser = await avProd.createUser({ externalId: EXTERNAL_PROD_ID_1, space: "production" })
-
-    // localUser1 = initUser1;
-    // localUser2 = initUser2;
-    // prodUser1 = initProdUser;
 }
 
 export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

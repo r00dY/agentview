@@ -77,7 +77,7 @@ function getDefaultSpaceFromEnvironment(environment: Environment): { space: Spac
       createdBy: null,
     }
   }
-  else if (environment.handle.startsWith('dev:')) {
+  else if (environment.handle.startsWith('local:')) {
     return {
       space: 'playground',
       createdBy: environment.user!.id as string,

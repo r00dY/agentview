@@ -98,14 +98,14 @@ The AgentView Team`,
                     user,
                     organization,
                 }) => {
-                    await createEnvironment(organization.id, `dev:${user.email}`, user.id);
+                    await createEnvironment(organization.id, `local:${user.email}`, user.id);
                 },
 
                 afterAcceptInvitation: async ({
                     user,
                     organization,
                 }) => {
-                    await createEnvironment(organization.id, `dev:${user.email}`, user.id);
+                    await createEnvironment(organization.id, `local:${user.email}`, user.id);
                 },
             }
         })

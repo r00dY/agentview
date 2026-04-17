@@ -141,7 +141,7 @@ export default function Channels() {
                     <TableCell>
                       {channel.environment ? (
                         <span className="text-sm">
-                          {channel.environment.user ? `dev:${channel.environment.user.email}` : 'prod'}
+                          {channel.environment.user ? `local:${channel.environment.user.email}` : 'prod'}
                         </span>
                       ) : (
                         <span className="text-sm text-muted-foreground">Not configured</span>

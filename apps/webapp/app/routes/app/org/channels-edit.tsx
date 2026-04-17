@@ -114,7 +114,7 @@ export default function ChannelsEdit() {
                   <SelectItem value="__none__">None</SelectItem>
                   {environments.map((env) => (
                     <SelectItem key={env.id} value={env.id}>
-                      {env.user ? `dev:${env.user.email}` : 'prod'}
+                      {env.user ? `local:${env.user.email}` : 'prod'}
                     </SelectItem>
                   ))}
                 </SelectContent>

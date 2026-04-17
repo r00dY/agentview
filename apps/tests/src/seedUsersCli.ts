@@ -2,7 +2,7 @@ import { updateEnv } from '@agentview/utils/updateEnv'
 import { seedUsers } from './seedUsers';
 
 async function main() {
-  const { apiKeySecret, apiKeyPublic, organization, adminUser } = await seedUsers("acme");
+  const { apiKeySecret, apiKeyPublic, organization, admin } = await seedUsers("acme");
 
   // console.log('Organization id: ' + organization.id)
 
@@ -16,7 +16,7 @@ async function main() {
   updateEnv("AGENTVIEW_API_KEY", apiKeySecret.key, { includeRoot: false });
   updateEnv("NEXT_PUBLIC_AGENTVIEW_API_KEY", apiKeyPublic.key, { includeRoot: false });
   updateEnv("NEXT_PUBLIC_AGENTVIEW_ORGANIZATION_ID", organization.id, { includeRoot: false });
-  updateEnv("NEXT_PUBLIC_AGENTVIEW_ENV", "dev:"+adminUser.email, { includeRoot: false });
+  updateEnv("NEXT_PUBLIC_AGENTVIEW_ENV", "local:"+admin.user.email, { includeRoot: false });
 }
 
 main().catch(console.error);

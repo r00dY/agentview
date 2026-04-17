@@ -149,14 +149,14 @@ async function main() {
   console.log(`Seeding org: ${orgSlug}`);
   const seed = await seedUsers(orgSlug);
   const apiKey = seed.apiKeySecret.key;
-  const adminEmail = seed.adminUser.email;
+  const adminEmail = seed.admin.user.email;
 
   const authHeaders = {
     Authorization: `Bearer ${apiKey}`,
-    'X-Env': `dev:${adminEmail}`,
+    'X-Env': `local:${adminEmail}`,
   };
 
-  const av = createStandardClient({ apiKey, env: `dev:${adminEmail}` });
+  const av = createStandardClient({ apiKey, env: `local:${adminEmail}` });
 
   await av.updateEnvironment({
     config: {
@@ -180,7 +180,7 @@ async function main() {
     },
   });
 
-  const avAISDK = createClient({ apiKey, env: `dev:${adminEmail}` });
+  const avAISDK = createClient({ apiKey, env: `local:${adminEmail}` });
 
   // ELU monitor
   const eluInterval = setInterval(() => {

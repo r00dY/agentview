@@ -416,8 +416,8 @@ describe('API', () => {
       // });
       // await authClient.signOut();
 
-      const avBob = createStandardClient({ apiKey: org.apiKeySecret.key, env: `dev:bob@${org.organization.slug}.com` });
-      const avAlice = createStandardClient({ apiKey: org.apiKeySecret.key, env: `dev:alice@${org.organization.slug}.com` });
+      const avBob = createStandardClient({ apiKey: org.apiKeySecret.key, env: `local:bob@${org.organization.slug}.com` });
+      const avAlice = createStandardClient({ apiKey: org.apiKeySecret.key, env: `local:alice@${org.organization.slug}.com` });
 
       // Bob uploads his config
       const BOB_CONFIG = { agents: [{ name: "bob-agent", version: "1.0.0" }], channels: [{ type: 'api' as const, name: "bob-agent", agent: "bob-agent" }], __internal: { disableSummaries: true } };
