@@ -105,9 +105,6 @@ describe('ai-sdk', () => {
       let proxyProcess: any;
 
       beforeAll(async () => {
-        console.log('dzień dobry');
-
-
         if (envType === "local") {
           console.log("Using local environment (via proxy), starting proxy process...");
           client = org.admin.localClient;
@@ -115,17 +112,13 @@ describe('ai-sdk', () => {
 
           // start real proxy with real tunnel
           proxyProcess = spawn('npx', ['agentview', 'dev', '--api-key', org.apiKeySecret.key, '--env', 'local:' + org.admin.user.email, '--no-studio'], {
-            // detached: true,
-            stdio: 'inherit', // 'ignore'
+            detached: true,
+            stdio: 'ignore',
             shell: process.platform === 'win32' // needed on Windows for .cmd shims
           });
+          proxyProcess.unref();
 
           await new Promise(resolve => setTimeout(resolve, PROXY_TIMEOUT));
-          
-          console.log("Gooooo")
-
-          // // start real proxy
-          // await standardClient.updateEnvironment({ config: buildConfig(), tunnelUrl: PROXY_URL });
         } else {
           console.log("Using production environment");
           client = org.prodClient;
@@ -134,8 +127,8 @@ describe('ai-sdk', () => {
       }, TEST_TIMEOUT);
 
       afterAll(async () => {
-        if (envType === "local") {
-          await standardClient.updateEnvironment({ tunnelUrl: null }).catch(() => {});
+        if (proxyProcess?.pid) {
+          try { process.kill(-proxyProcess.pid, 'SIGTERM'); } catch {}
         }
       });
 
