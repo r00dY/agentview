@@ -2671,32 +2671,6 @@ describe('API', () => {
       };
     }
 
-    // const updateConfigWithAiSdkUrl = async (options?: { aiEndpointIsDown?: boolean; client?: StandardAgentViewClient; agentUrl?: string }) => {
-    //   const inputSchema = z.looseObject({ role: z.literal("user"), parts: z.array(z.any()) });
-    //   const outputSchema = z.looseObject({ type: z.literal("text"), text: z.string() });
-    //   const stepSchema = z.looseObject({ type: z.literal("reasoning"), text: z.string() });
-
-    //   const client = options?.client ?? avProd;
-    //   const url = options?.agentUrl ?? (options?.aiEndpointIsDown ? "http://localhost:10000/this-url-is-down" : AI_SDK_AGENT_URL);
-
-    //   await client.updateEnvironment({
-    //     config: {
-    //       agents: [{
-    //         name: "test-ai-sdk",
-    //         version: "1.0.0",
-    //         url,
-    //         adapter: 'ai-sdk',
-    //         runs: [{
-    //           input: { schema: inputSchema },
-    //           steps: [{ schema: stepSchema }],
-    //           output: { schema: outputSchema },
-    //         }]
-    //       }],
-    //       channels: [{ type: 'api', name: "test-ai-sdk", agent: "test-ai-sdk" }],
-    //     },
-    //   });
-    // };
-
     beforeAll(async () => {
       mockAISDKServer = await createMockServer(AI_SDK_AGENT_PORT);
     });
