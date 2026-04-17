@@ -25,13 +25,21 @@ describe('API', () => {
 
   let initProdUser: User
 
+  let localUser1: User
+  let localUser2: User
+  let prodUser1: User
+
   const EXTERNAL_ID_1 = 'external-id-1'
   const EXTERNAL_ID_2 = 'external-id-2'
   const EXTERNAL_PROD_ID_1 = 'external-prod-id-1'
 
   let av: StandardAgentViewClient;
-  let avAISDK: AgentViewClient;
+
+  let avLocal: StandardAgentViewClient;
   let avProd: StandardAgentViewClient;
+
+  let avAISDKLocal: AgentViewClient;
+  let avAISDKProd: AgentViewClient;
 
   let orgSlug: string;
   let organization: { id: string };
@@ -56,7 +64,9 @@ describe('API', () => {
       env: "dev:"+adminUser.email
     })
 
-    avAISDK = createClient({
+    avLocal = av;
+
+    avAISDKLocal = createClient({
       apiKey: result.apiKeySecret.key,
       env: "dev:"+adminUser.email
     })
@@ -66,9 +76,18 @@ describe('API', () => {
       env: "production"
     })
 
+    avAISDKProd = createClient({
+      apiKey: result.apiKeySecret.key,
+      env: "production"
+    })
+
     initUser1 = await av.createUser({ externalId: EXTERNAL_ID_1 })
     initUser2 = await av.createUser({ externalId: EXTERNAL_ID_2 })
     initProdUser = await avProd.createUser({ externalId: EXTERNAL_PROD_ID_1, space: "production" })
+
+    localUser1 = initUser1;
+    localUser2 = initUser2;
+    prodUser1 = initProdUser;
 
     expect(initUser1).toBeDefined()
     expect(initUser1.externalId).toBe(EXTERNAL_ID_1)
@@ -2631,28 +2650,52 @@ describe('API', () => {
 
     let mockAISDKServer: MockServer | null = null;
 
-    const updateConfigWithAiSdkUrl = async (options?: { aiEndpointIsDown?: boolean }) => {
+    function buildConfig(options?: { agentUrl?: string }) {
       const inputSchema = z.looseObject({ role: z.literal("user"), parts: z.array(z.any()) });
       const outputSchema = z.looseObject({ type: z.literal("text"), text: z.string() });
       const stepSchema = z.looseObject({ type: z.literal("reasoning"), text: z.string() });
 
-      await av.updateEnvironment({
-        config: {
-          agents: [{
-            name: "test-ai-sdk",
-            version: "1.0.0",
-            url: options?.aiEndpointIsDown ? "http://localhost:10000/this-url-is-down" : AI_SDK_AGENT_URL,
-            adapter: 'ai-sdk',
-            runs: [{
-              input: { schema: inputSchema },
-              steps: [{ schema: stepSchema }],
-              output: { schema: outputSchema },
-            }]
-          }],
-          channels: [{ type: 'api', name: "test-ai-sdk", agent: "test-ai-sdk" }],
-        },
-      });
-    };
+      return {
+        agents: [{
+          name: "test-ai-sdk",
+          version: "1.0.0",
+          url: options?.agentUrl ?? AI_SDK_AGENT_URL,
+          adapter: 'ai-sdk',
+          runs: [{
+            input: { schema: inputSchema },
+            steps: [{ schema: stepSchema }],
+            output: { schema: outputSchema },
+          }]
+        }],
+        channels: [{ type: 'api', name: "test-ai-sdk", agent: "test-ai-sdk" }],
+      };
+    }
+
+    // const updateConfigWithAiSdkUrl = async (options?: { aiEndpointIsDown?: boolean; client?: StandardAgentViewClient; agentUrl?: string }) => {
+    //   const inputSchema = z.looseObject({ role: z.literal("user"), parts: z.array(z.any()) });
+    //   const outputSchema = z.looseObject({ type: z.literal("text"), text: z.string() });
+    //   const stepSchema = z.looseObject({ type: z.literal("reasoning"), text: z.string() });
+
+    //   const client = options?.client ?? avProd;
+    //   const url = options?.agentUrl ?? (options?.aiEndpointIsDown ? "http://localhost:10000/this-url-is-down" : AI_SDK_AGENT_URL);
+
+    //   await client.updateEnvironment({
+    //     config: {
+    //       agents: [{
+    //         name: "test-ai-sdk",
+    //         version: "1.0.0",
+    //         url,
+    //         adapter: 'ai-sdk',
+    //         runs: [{
+    //           input: { schema: inputSchema },
+    //           steps: [{ schema: stepSchema }],
+    //           output: { schema: outputSchema },
+    //         }]
+    //       }],
+    //       channels: [{ type: 'api', name: "test-ai-sdk", agent: "test-ai-sdk" }],
+    //     },
+    //   });
+    // };
 
     beforeAll(async () => {
       mockAISDKServer = await createMockServer(AI_SDK_AGENT_PORT);
@@ -2669,7 +2712,7 @@ describe('API', () => {
       mockAISDKServer?.resetRequests();
     });
 
-    function sendMessageViaTransport(transport: ReturnType<typeof avAISDK.createTransport>, sessionId: string, input: UIMessage) {
+    function sendMessageViaTransport(transport: ReturnType<typeof avAISDKProd.createTransport>, sessionId: string, input: UIMessage) {
       return transport.sendMessages({
         chatId: sessionId,
         messages: [input],
@@ -2687,8 +2730,8 @@ describe('API', () => {
     }
 
     test("happy path: text response (validated via ai-sdk stream)", async () => {
-      await updateConfigWithAiSdkUrl();
-      const session = await avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
+      await avProd.updateEnvironment({ config: buildConfig() });
+      const session = await avAISDKProd.createSession({ agent: "test-ai-sdk", userId: initProdUser.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKSuccessHeaders(res);
@@ -2706,7 +2749,7 @@ describe('API', () => {
 
       // Create run and get the native AI SDK stream
       const stream = await sendMessageViaTransport(
-        avAISDK.createTransport(), 
+        avAISDKProd.createTransport(), 
         session.id, 
         { id: "msg_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] }
       );
@@ -2726,7 +2769,7 @@ describe('API', () => {
       expect(textDeltas.map(d => d.delta).join("")).toBe("Hello world!");
 
       // Verify final run state via API
-      const finalSession = await avAISDK.getSession({ id: session.id });
+      const finalSession = await avAISDKProd.getSession({ id: session.id });
 
       expect(finalSession.status).toBe("idle");
       expect(finalSession.messages.length).toBe(2);
@@ -2738,8 +2781,8 @@ describe('API', () => {
     }, 10000);
 
     test("happy path: text + reasoning (validated via ai-sdk stream)", async () => {
-      await updateConfigWithAiSdkUrl();
-      const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
+      await avProd.updateEnvironment({ config: buildConfig() });
+      const session = await avAISDKProd.createSession({ agent: "test-ai-sdk", userId: initProdUser.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKSuccessHeaders(res);
@@ -2758,7 +2801,7 @@ describe('API', () => {
       });
 
       const stream = await sendMessageViaTransport(
-        avAISDK.createTransport(), 
+        avAISDKProd.createTransport(), 
         session.id, 
         { id: "msg_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] }
       );
@@ -2783,7 +2826,7 @@ describe('API', () => {
       expect(textDeltas.map(d => d.delta).join("")).toBe("The answer is 42");
 
       // Verify final run state
-      const finalSession = await av.getSession({ id: session.id });
+      const finalSession = await avProd.getSession({ id: session.id });
       const completedRun = finalSession.lastRun!;
       expect(completedRun.status).toBe("completed");
       expect(completedRun.sessionItems.length).toBe(3);
@@ -2800,7 +2843,7 @@ describe('API', () => {
       const reasoningSchema = z.looseObject({ type: z.literal("reasoning"), text: z.string() });
       const toolCallSchema = z.looseObject({ type: z.literal("tool-call"), toolCallId: z.string(), toolName: z.string(), state: z.string() });
 
-      await av.updateEnvironment({
+      await avProd.updateEnvironment({
         config: {
           agents: [{
             name: "test-ai-sdk",
@@ -2817,7 +2860,7 @@ describe('API', () => {
         },
       });
 
-      const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
+      const session = await avProd.createSession({ agent: "test-ai-sdk", userId: initProdUser.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKSuccessHeaders(res);
@@ -2839,7 +2882,7 @@ describe('API', () => {
       // Create run and get the native AI SDK stream
 
       const stream = await sendMessageViaTransport(
-        avAISDK.createTransport(), 
+        avAISDKProd.createTransport(), 
         session.id, 
         { id: "msg_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] }
       );
@@ -2860,7 +2903,7 @@ describe('API', () => {
       expect(toolOutput?.output).toEqual({ temp: 72 });
 
       // Verify final run state
-      const finalSession = await av.getSession({ id: session.id });
+      const finalSession = await avProd.getSession({ id: session.id });
       const completedRun = finalSession.lastRun!;
       expect(completedRun.status).toBe("completed");
       expect(completedRun.sessionItems.length).toBe(3);
@@ -2874,8 +2917,8 @@ describe('API', () => {
 
 
     test("error event → run marked failed (validated via ai-sdk stream)", async () => {
-      await updateConfigWithAiSdkUrl();
-      const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
+      await avProd.updateEnvironment({ config: buildConfig() });
+      const session = await avProd.createSession({ agent: "test-ai-sdk", userId: initProdUser.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKSuccessHeaders(res);
@@ -2888,7 +2931,7 @@ describe('API', () => {
 
       // Create run and consume the AI SDK stream
       const stream = await sendMessageViaTransport(
-        avAISDK.createTransport(), 
+        avAISDKProd.createTransport(), 
         session.id, 
         { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
       );
@@ -2899,7 +2942,7 @@ describe('API', () => {
       expect(chunks.some(c => c.type === "error")).toBe(true);
 
       // Changes should be available immediately after stream ends
-      const updatedSession = await av.getSession({ id: session.id });
+      const updatedSession = await avProd.getSession({ id: session.id });
       expect(updatedSession.lastRun!.status).toBe("failed");
       expect(updatedSession.lastRun!.failReason).toBeDefined();
       console.log(updatedSession.lastRun!.failReason);
@@ -2907,8 +2950,8 @@ describe('API', () => {
     }, 10000);
 
     test("error → invalid chunk", async () => {
-      await updateConfigWithAiSdkUrl();
-      const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
+      await avProd.updateEnvironment({ config: buildConfig() });
+      const session = await avProd.createSession({ agent: "test-ai-sdk", userId: initProdUser.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKSuccessHeaders(res);
@@ -2928,7 +2971,7 @@ describe('API', () => {
 
       // Create run and consume the AI SDK stream
       const stream = await sendMessageViaTransport(
-        avAISDK.createTransport(), 
+        avAISDKProd.createTransport(), 
         session.id, 
         { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
       );
@@ -2936,7 +2979,7 @@ describe('API', () => {
       const chunks = await consumeChunksFromTransportStream(stream);
 
       // Changes should be available immediately after stream ends
-      const updatedSession = await avAISDK.getSession({ id: session.id });
+      const updatedSession = await avAISDKProd.getSession({ id: session.id });
 
       expect(updatedSession.messages[1].parts.length).toBe(1);
       expect(updatedSession.messages[1].parts[0].type).toBe("text");
@@ -2954,7 +2997,7 @@ describe('API', () => {
      * - consume the stream
      */
     test("happy path: text response, creating run via session input -> reconnect to stream", async () => {
-      await updateConfigWithAiSdkUrl();
+      await avProd.updateEnvironment({ config: buildConfig() });
 
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKSuccessHeaders(res);
@@ -2977,7 +3020,7 @@ describe('API', () => {
         }, 2000)
       });
 
-      const session = await avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] }});
+      const session = await avAISDKProd.createSession({ agent: "test-ai-sdk", userId: initProdUser.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] }});
       expect(session.status).toBe("in_progress");
       expect(session.messages.length).toBe(1);
       expect(session.messages[0]).toMatchObject({
@@ -2986,7 +3029,7 @@ describe('API', () => {
       });
 
       // reconnect to stream
-      const transport = avAISDK.createTransport()
+      const transport = avAISDKProd.createTransport()
       const stream = await transport.reconnectToStream({ chatId: session.id })
       if (!stream) {
         throw new Error("No stream to reconnect");
@@ -3001,7 +3044,7 @@ describe('API', () => {
       expect(chunkTypes).toContain("text-end");
       expect(chunkTypes).toContain("finish");
 
-      const updatedSession = await avAISDK.getSession({ id: session.id });
+      const updatedSession = await avAISDKProd.getSession({ id: session.id });
       expect(updatedSession.status).toBe("idle");
       expect(updatedSession.messages.length).toBe(2);
       expect(updatedSession.messages[1].parts.length).toBe(1);
@@ -3017,8 +3060,8 @@ describe('API', () => {
 
 
     test("HTTP error: 500 → run marked failed (validated via ai-sdk stream)", async () => {
-      await updateConfigWithAiSdkUrl();
-      const session = await avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
+      await avProd.updateEnvironment({ config: buildConfig() });
+      const session = await avAISDKProd.createSession({ agent: "test-ai-sdk", userId: initProdUser.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -3026,7 +3069,7 @@ describe('API', () => {
       });
 
       const stream = sendMessageViaTransport(
-        avAISDK.createTransport(), 
+        avAISDKProd.createTransport(), 
         session.id, 
         { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
       );
@@ -3035,31 +3078,31 @@ describe('API', () => {
       await expect(stream).rejects.toThrowError("This is an error from test suite.");
 
       // The stream ends before the worker marks the run as failed, so wait briefly
-      const updatedSession = await avAISDK.getSession({ id: session.id });
+      const updatedSession = await avAISDKProd.getSession({ id: session.id });
       expect(updatedSession.messages.length).toBe(0); // Error from AI endpoint means no messages are saved (user message included)
     }, 10000);
 
     test("HTTP error: 500 → client.createRun (no stream) passes error to client. No run is created.", async () => {
-      await updateConfigWithAiSdkUrl();
-      const session = await avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
+      await avProd.updateEnvironment({ config: buildConfig() });
+      const session = await avAISDKProd.createSession({ agent: "test-ai-sdk", userId: initProdUser.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         res.writeHead(500);
         res.end("This is an error from test suite.");
       });
 
-      const promise = avAISDK.createRun({ sessionId: session.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
+      const promise = avAISDKProd.createRun({ sessionId: session.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
 
       await expect(promise).rejects.not.toBeInstanceOf(AgentViewError);
       await expect(promise).rejects.toThrowError("This is an error from test suite.");
 
       // The stream ends before the worker marks the run as failed, so wait briefly
-      const updatedSession = await avAISDK.getSession({ id: session.id });
+      const updatedSession = await avAISDKProd.getSession({ id: session.id });
       expect(updatedSession.messages.length).toBe(0); // Error from AI endpoint means no messages are saved (user message included)
     }, 10000);
 
     test("HTTP error: 422 → client.createSession with input. No run is created", async () => {
-      await updateConfigWithAiSdkUrl();
+      await avProd.updateEnvironment({ config: buildConfig() });
 
       const jsonError = JSON.stringify({ message: "blah blah blah" });
 
@@ -3068,7 +3111,7 @@ describe('API', () => {
         res.end(jsonError);
       });
 
-      const promise = avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
+      const promise = avAISDKProd.createSession({ agent: "test-ai-sdk", userId: initProdUser.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
 
       await expect(promise).rejects.not.toBeInstanceOf(AgentViewError);
       await expect(promise).rejects.toThrowError(jsonError);
@@ -3076,14 +3119,14 @@ describe('API', () => {
     }, 10000);
 
     test("HTTP error 400: empty body in response → client.createSession with input. No run is created", async () => {
-      await updateConfigWithAiSdkUrl();
+      await avProd.updateEnvironment({ config: buildConfig() });
 
       mockAISDKServer!.setHandler((_body, res) => {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         res.end("");
       });
 
-      const promise = avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
+      const promise = avAISDKProd.createSession({ agent: "test-ai-sdk", userId: initProdUser.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
 
       await expect(promise).rejects.not.toBeInstanceOf(AgentViewError);
       await expect(promise).rejects.toThrowError("");
@@ -3091,9 +3134,9 @@ describe('API', () => {
     }, 10000);
 
     test("Error HTTP endpoint is down → client.createRun (no stream) passes error to client. No run is created.", async () => {
-      await updateConfigWithAiSdkUrl({ aiEndpointIsDown: true });
+      await avProd.updateEnvironment({ config: buildConfig({ agentUrl: "http://localhost:10000/this-url-is-down" }) });
 
-      const promise = avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
+      const promise = avAISDKProd.createSession({ agent: "test-ai-sdk", userId: initProdUser.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
 
       await expect(promise).rejects.toBeInstanceOf(AgentViewError);
       await expect(promise).rejects.toThrowError(expect.objectContaining({
@@ -3103,8 +3146,8 @@ describe('API', () => {
 
 
     test("stream aborted (no finish and no done) → run marked failed (validated via ai-sdk stream)", async () => {
-      await updateConfigWithAiSdkUrl();
-      const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
+      await avProd.updateEnvironment({ config: buildConfig() });
+      const session = await avProd.createSession({ agent: "test-ai-sdk", userId: initProdUser.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKSuccessHeaders(res);
@@ -3118,7 +3161,7 @@ describe('API', () => {
       });
 
       const stream = await sendMessageViaTransport(
-        avAISDK.createTransport(), 
+        avAISDKProd.createTransport(), 
         session.id, 
         { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
       );
@@ -3133,14 +3176,14 @@ describe('API', () => {
       expect(errorChunk).toBeDefined();
       expect(JSON.parse(errorChunk!.errorText)).toMatchObject({ source: "agentview", code: "STREAM_INCOMPLETE", message: "Stream ended incomplete" });
 
-      const updatedSession = await av.getSession({ id: session.id });
+      const updatedSession = await avProd.getSession({ id: session.id });
       expect(updatedSession.lastRun!.status).toBe("failed");
       expect(updatedSession.lastRun!.failReason.message).toContain("Stream ended incomplete");
     }, 10000);
 
     test("invalid chunk → run marked failed (validated via ai-sdk stream)", async () => {
-      await updateConfigWithAiSdkUrl();
-      const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
+      await avProd.updateEnvironment({ config: buildConfig() });
+      const session = await avProd.createSession({ agent: "test-ai-sdk", userId: initProdUser.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKSuccessHeaders(res);
@@ -3156,7 +3199,7 @@ describe('API', () => {
       });
 
       const stream = await sendMessageViaTransport(
-        avAISDK.createTransport(), 
+        avAISDKProd.createTransport(), 
         session.id, 
         { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
       );
@@ -3170,15 +3213,15 @@ describe('API', () => {
       expect(errorChunk).toBeDefined();
       expect(JSON.parse(errorChunk!.errorText)).toMatchObject({ source: "agentview", code: "STREAM_INVALID_CHUNK", message: expect.any(String), data: "{\"type\":\"bad-chunk\"}" });
 
-      const updatedSession = await av.getSession({ id: session.id });
+      const updatedSession = await avProd.getSession({ id: session.id });
       expect(updatedSession.lastRun!.status).toBe("failed");
       expect(updatedSession.lastRun!.failReason.message).toContain("Unknown chunk type");
     }, 10000);
 
 
     test("request body format: sends UIMessage[] with correct history", async () => {
-      await updateConfigWithAiSdkUrl();
-      const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
+      await avProd.updateEnvironment({ config: buildConfig() });
+      const session = await avProd.createSession({ agent: "test-ai-sdk", userId: initProdUser.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKSuccessHeaders(res);
@@ -3195,7 +3238,7 @@ describe('API', () => {
 
       // Use createRunStream so we wait for the stream to complete
       const stream = await sendMessageViaTransport(
-        avAISDK.createTransport(), 
+        avAISDKProd.createTransport(), 
         session.id, 
         { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hello AI SDK" }] }
       );
@@ -3215,8 +3258,8 @@ describe('API', () => {
     }, 10000);
 
     test("multi-turn: second request has full conversation history", async () => {
-      await updateConfigWithAiSdkUrl();
-      const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
+      await avProd.updateEnvironment({ config: buildConfig() });
+      const session = await avProd.createSession({ agent: "test-ai-sdk", userId: initProdUser.id});
 
       // First turn
       mockAISDKServer!.setHandler((_body, res) => {
@@ -3233,7 +3276,7 @@ describe('API', () => {
       });
 
       const stream = await sendMessageViaTransport(
-        avAISDK.createTransport(), 
+        avAISDKProd.createTransport(), 
         session.id, 
         { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
       );
@@ -3256,7 +3299,7 @@ describe('API', () => {
       });
 
       const stream2 = await sendMessageViaTransport(
-        avAISDK.createTransport(), 
+        avAISDKProd.createTransport(), 
         session.id, 
         { id: "msg_1", role: "user", parts: [{ type: "text", text: "How are you?" }] }
       );
@@ -3279,8 +3322,8 @@ describe('API', () => {
     }, 10000);
 
     test("cancellation → run cancelled and agent connection aborted", async () => {
-      await updateConfigWithAiSdkUrl();
-      const session = await av.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
+      await avProd.updateEnvironment({ config: buildConfig() });
+      const session = await avProd.createSession({ agent: "test-ai-sdk", userId: initProdUser.id});
 
       // Track connection state
       let connectionClosed = false;
@@ -3318,7 +3361,7 @@ describe('API', () => {
 
       // Start consuming the stream in background (don't await - it'll hang until stream ends)
       const streamPromise = sendMessageViaTransport(
-        avAISDK.createTransport(),
+        avAISDKProd.createTransport(),
         session.id,
         { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hello" }] }
       )
@@ -3329,11 +3372,11 @@ describe('API', () => {
 
       // Cancel the run
       // TODO: - make those AI SDK calls, not av!!! (we must have 'cancel' status available)
-      const cancelled = await av.cancelRun({ sessionId: session.id });
+      const cancelled = await avProd.cancelRun({ sessionId: session.id });
       expect(cancelled.lastRun?.status).toBe("cancelled");
       expect(cancelled.lastRun?.finishedAt).toBeDefined();
 
-      const updatedSession = await av.getSession({ id: session.id });
+      const updatedSession = await avProd.getSession({ id: session.id });
       expect(updatedSession.lastRun?.status).toBe("cancelled");
       expect(updatedSession.lastRun?.finishedAt).toBeDefined();
       expect(updatedSession.lastRun?.sessionItems.length).toBe(3);
@@ -3353,8 +3396,8 @@ describe('API', () => {
 
 
     test("message id is auto set when undefined", async () => {
-      await updateConfigWithAiSdkUrl();
-      const session = await avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
+      await avProd.updateEnvironment({ config: buildConfig() });
+      const session = await avAISDKProd.createSession({ agent: "test-ai-sdk", userId: initProdUser.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKSuccessHeaders(res);
@@ -3372,7 +3415,7 @@ describe('API', () => {
 
       // Create run and get the native AI SDK stream
       const stream = await sendMessageViaTransport(
-        avAISDK.createTransport(), 
+        avAISDKProd.createTransport(), 
         session.id, 
         { id: "msg_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] }
       );
@@ -3380,13 +3423,13 @@ describe('API', () => {
       await consumeChunksFromTransportStream(stream);
 
       // Verify final run state via API
-      const finalSession = await avAISDK.getSession({ id: session.id });
+      const finalSession = await avAISDKProd.getSession({ id: session.id });
       expect(finalSession.messages[1].id).toMatch(UUID_REGEX);
     }, 10000);
 
     test("message id + metadata are preserved when provided", async () => {
-      await updateConfigWithAiSdkUrl();
-      const session = await avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
+      await avProd.updateEnvironment({ config: buildConfig() });
+      const session = await avAISDKProd.createSession({ agent: "test-ai-sdk", userId: initProdUser.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKSuccessHeaders(res);
@@ -3405,7 +3448,7 @@ describe('API', () => {
 
       // Create run and get the native AI SDK stream
       const stream = await sendMessageViaTransport(
-        avAISDK.createTransport(), 
+        avAISDKProd.createTransport(), 
         session.id, 
         { id: "msg_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] }
       );
@@ -3413,7 +3456,7 @@ describe('API', () => {
       await consumeChunksFromTransportStream(stream);
 
       // Verify final run state via API
-      const finalSession = await avAISDK.getSession({ id: session.id });
+      const finalSession = await avAISDKProd.getSession({ id: session.id });
       expect(finalSession.messages[1].id).toBe("msg_assistant_1");
       expect(finalSession.messages[1].metadata).toMatchObject({
         a: "aaa",
@@ -3423,8 +3466,8 @@ describe('API', () => {
     }, 10000);
 
     test("tools inputs are objects, partial tool call is object too", async () => {
-      await updateConfigWithAiSdkUrl();
-      const session = await avAISDK.createSession({ agent: "test-ai-sdk", userId: initUser1.id});
+      await avProd.updateEnvironment({ config: buildConfig() });
+      const session = await avAISDKProd.createSession({ agent: "test-ai-sdk", userId: initProdUser.id});
 
       mockAISDKServer!.setHandler((_body, res) => {
         writeAISDKSuccessHeaders(res);
@@ -3447,7 +3490,7 @@ describe('API', () => {
 
       // Create run and get the native AI SDK stream
       const stream = await sendMessageViaTransport(
-        avAISDK.createTransport(), 
+        avAISDKProd.createTransport(), 
         session.id, 
         { id: "msg_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] }
       );
@@ -3455,7 +3498,7 @@ describe('API', () => {
       await consumeChunksFromTransportStream(stream);
 
       // Verify final run state via API
-      const finalSession = await avAISDK.getSession({ id: session.id });
+      const finalSession = await avAISDKProd.getSession({ id: session.id });
       expect(finalSession.messages[1].parts[0]).toMatchObject({
         type: "tool-getInfo",
         toolCallId: "111",
@@ -3471,6 +3514,115 @@ describe('API', () => {
       });
 
     }, 10000);
+
+    describe("local env (tunnel)", () => {
+      // These tests exercise the backend's local-env path:
+      //  - when no tunnel is registered, runs must 400
+      //  - when a tunnel is registered, the backend POSTs to the tunnel URL
+      //    and sets X-Target-Url to the actual agent URL (the real proxy then
+      //    forwards to that URL; we don't test the proxy itself here).
+      const TUNNEL_PORT = 3460;
+      const TUNNEL_URL = `http://localhost:${TUNNEL_PORT}`;
+
+      let mockTunnel: MockServer | null = null;
+      // let avLocal: StandardAgentViewClient;
+      // let avAISDKLocal: AgentViewClient;
+      // let localUser: User;
+
+      beforeAll(async () => {
+        mockTunnel = await createMockServer(TUNNEL_PORT);
+        // avLocal = createStandardClient({ apiKey: apiKeySecret, env: `dev:${adminUser.email}` });
+        // avAISDKLocal = createClient({ apiKey: apiKeySecret, env: `dev:${adminUser.email}` });
+        // // Use a fresh playground user in the local env so we don't collide with outer state
+        // localUser = await avLocal.createUser({ externalId: `tunnel-user-${Math.random().toString(36).slice(2)}` });
+      });
+
+      afterAll(async () => {
+        if (mockTunnel) {
+          await mockTunnel.close();
+          mockTunnel = null;
+        }
+      }, 30000);
+
+      beforeEach(() => {
+        mockTunnel?.resetRequests();
+      });
+
+      test("local env without tunnel → 400 error from run", async () => {
+        // await updateConfigWithAiSdkUrl({ client: avLocal });
+        await avLocal.updateEnvironment({ config: buildConfig(), tunnelUrl: null });
+
+        const session = await avAISDKLocal.createSession({ agent: "test-ai-sdk", userId: localUser1.id });
+
+        const promise = avAISDKLocal.createRun({ sessionId: session.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hello" }] } });
+
+        // const promise = sendMessageViaTransport(
+        //   avAISDKLocal.createTransport(),
+        //   session.id,
+        //   { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hello" }] }
+        // );
+
+        // await promise;
+
+        await expect(promise).rejects.toBeInstanceOf(AgentViewError);
+        expectToFail(promise, 400)
+
+      }, 10000);
+
+      test("local env with tunnel → backend POSTs to tunnel URL with X-Target-Url header", async () => {
+        await avLocal.updateEnvironment({ tunnelUrl: TUNNEL_URL });
+
+        try {
+          // Mock tunnel stands in for cloudflared + proxy. It receives the forwarded
+          // request and responds with a valid AI SDK stream (as the proxy would).
+          mockTunnel!.setHandler((_body, res) => {
+            writeAISDKSuccessHeaders(res);
+            writeAISDKChunks(res, [
+              { type: "start" },
+              { type: "text-start", id: "t1" },
+              { type: "text-delta", id: "t1", delta: "via tunnel" },
+              { type: "text-end", id: "t1" },
+              { type: "finish", finishReason: "stop" },
+            ]);
+            writeAISDKDone(res);
+            res.end();
+          });
+
+          const session = await avAISDKLocal.createSession({ agent: "test-ai-sdk", userId: localUser1.id });
+
+          const stream = await sendMessageViaTransport(
+            avAISDKLocal.createTransport(),
+            session.id,
+            { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hello" }] }
+          );
+
+          const chunks = await consumeChunksFromTransportStream(stream);
+          const textDeltas = chunks.filter(c => c.type === "text-delta");
+          expect(textDeltas.map(d => d.delta).join("")).toBe("via tunnel");
+
+          // The mock tunnel must have received exactly one POST with X-Target-Url = agent URL
+          expect(mockTunnel!.requests.length).toBe(1);
+          const received = mockTunnel!.requests[0];
+          expect(received.headers['x-target-url']).toBe(AI_SDK_AGENT_URL);
+          // Body should be the normal upstream agent request body
+          expect(received.body.messages).toBeDefined();
+          expect(Array.isArray(received.body.messages)).toBe(true);
+          expect(received.body.messages[0].parts[0].text).toBe("Hello");
+        } finally {
+          // Cleanup: unregister the tunnel URL so it doesn't bleed into other tests
+          await avLocal.updateEnvironment({ tunnelUrl: null });
+        }
+      }, 10000);
+
+      test("setting tunnelUrl on production env → 400 error", async () => {
+        await expect(
+          avProd.updateEnvironment({ tunnelUrl: TUNNEL_URL })
+        ).rejects.toThrowError(expect.objectContaining({
+          statusCode: 400,
+          message: expect.stringContaining("production"),
+        }));
+      }, 10000);
+    });
 
   });
 

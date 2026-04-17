@@ -4,7 +4,7 @@ import type { Socket } from 'net'
 export type MockServerHandler = (body: any, res: ServerResponse, req: IncomingMessage) => void
 
 export type MockServer = {
-  requests: Array<{ body: any; timestamp: number }>
+  requests: Array<{ body: any; headers: NodeJS.Dict<string | string[]>; timestamp: number }>
   close: () => Promise<void>
   setHandler: (handler: MockServerHandler) => void
   resetRequests: () => void
@@ -12,7 +12,7 @@ export type MockServer = {
 
 export async function createMockServer(port: number): Promise<MockServer> {
   const http = await import('http')
-  const requests: Array<{ body: any; timestamp: number }> = []
+  const requests: Array<{ body: any; headers: NodeJS.Dict<string | string[]>; timestamp: number }> = []
   const openSockets = new Set<Socket>()
   let handler: MockServerHandler = (_body, res) => {
     res.writeHead(200, { 'Content-Type': 'text/event-stream' })
@@ -26,7 +26,7 @@ export async function createMockServer(port: number): Promise<MockServer> {
       req.on('end', () => {
         let parsedBody: any
         try { parsedBody = JSON.parse(bodyStr) } catch { parsedBody = bodyStr }
-        requests.push({ body: parsedBody, timestamp: Date.now() })
+        requests.push({ body: parsedBody, headers: req.headers, timestamp: Date.now() })
         handler(parsedBody, res, req)
       })
     })

@@ -853,7 +853,7 @@ export async function createAutoRun2(
     const isLocalEnv = environment.userId != null;
     if (isLocalEnv && !environment.tunnelUrl) {
       throw new AgentViewError(
-        "This is a local dev environment but no tunnel is active. Run `agentview dev` to start the tunnel.",
+        "This call connects to local dev environment but it's not active. Run `agentview dev` to start the local server.",
         400
       );
     }
