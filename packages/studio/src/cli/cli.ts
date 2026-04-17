@@ -9,7 +9,7 @@ import { Command } from "commander";
 import { type AgentViewConfig } from "../types";
 import { createStandardClient } from "agentview/clientStandard";
 import { AgentViewError } from "agentview";
-import { startDevServer } from "./devServer.js";
+import { startStudioServer } from "./studioServer.js";
 import { startProxyServer, PROXY_PORT, type ProxyServer } from "./proxyServer.js";
 import { startCloudflareTunnel, type CloudflareTunnel } from "./tunnel.js";
 
@@ -43,9 +43,16 @@ export async function runCli() {
     .option("-p, --port <port>", "Port for the dev server", parseInt)
     .option("--api-key <key>", "AgentView API key (overrides AGENTVIEW_API_KEY env var)")
     .option("--env <env>", "Environment name (overrides env from config)")
+    .option('--no-studio', 'disable colored output')
     .action(async (opts) => {
-      const configPath = resolveConfigPath(opts.config);
-      await runDev(configPath, { port: opts.port, apiKey: opts.apiKey, env: opts.env });
+      const apiKey = opts.apiKey ?? getAPIKey();
+      const env = opts.env ?? (await loadConfig(opts.config)).env;
+      await runProxyServer({ apiKey, env });
+
+      if (opts.studio) {
+        const configPath = resolveConfigPath(opts.config);
+        await startStudioServer(configPath, { port: opts.port });
+      }
     });
 
   const configCmd = program
@@ -144,15 +151,14 @@ function getAPIKey(): string {
 }
 
 interface RunDevOptions {
-  port?: number;
-  apiKey?: string;
-  env?: string;
+  apiKey: string;
+  env: string;
 }
 
-async function runDev(configPath: string, opts: RunDevOptions) {
-  const apiKey = opts.apiKey ?? getAPIKey();
-  const config = await loadConfig(configPath);
-  const env = opts.env ?? config.env;
+async function runProxyServer({ apiKey, env }: RunDevOptions) {
+  // const apiKey = opts.apiKey ?? getAPIKey();
+  // const env = opts.env ?? (await loadConfig(configPath)).env;
+  // const env = opts.env ?? config.env;
   const av = createStandardClient({ apiKey, env });
 
   let proxy: ProxyServer | null = null;
@@ -197,7 +203,6 @@ async function runDev(configPath: string, opts: RunDevOptions) {
   await av.updateEnvironment({ tunnelUrl: tunnel.url });
   console.log(`[agentview] tunnel registered with AgentView backend`);
 
-  await startDevServer(configPath, { port: opts.port });
 }
 
 async function pushConfig(configPath: string) {

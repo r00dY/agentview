@@ -79,7 +79,7 @@ export interface DevServerOptions {
   port?: number;
 }
 
-export async function startDevServer(
+export async function startStudioServer(
   configPath: string,
   options: DevServerOptions = {},
 ) {

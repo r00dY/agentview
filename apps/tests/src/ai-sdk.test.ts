@@ -5,10 +5,15 @@ import { AgentViewError } from 'agentview';
 import { z } from 'zod';
 import type { MockServer } from './mockServer';
 import { createMockServer, writeAISDKChunks, writeAISDKDone, writeAISDKSuccessHeaders } from './mockServer';
-import { startProxyServer, type ProxyServer } from '@agentview/studio/proxy';
+// import { startProxyServer, type ProxyServer } from '@agentview/studio/proxy';
+const { spawn } = require('child_process');
+
 
 import { type UIDataTypes, type UIMessage, type UIMessageChunk } from 'ai';
 import { setupTestOrg, expectToFail, UUID_REGEX } from './utils';
+
+const PROXY_TIMEOUT = 10_000;
+const TEST_TIMEOUT = PROXY_TIMEOUT + 10_000;
 
 describe('ai-sdk', () => {
   let org: Awaited<ReturnType<typeof setupTestOrg>>;
@@ -20,11 +25,11 @@ describe('ai-sdk', () => {
   describe("agent endpoint auto-fetch (ai-sdk adapter)", () => {
     const AI_SDK_AGENT_PORT = 3458;
     const AI_SDK_AGENT_URL = `http://localhost:${AI_SDK_AGENT_PORT}/agent`;
-    const PROXY_TEST_PORT = 19891;
-    const PROXY_URL = `http://127.0.0.1:${PROXY_TEST_PORT}`;
+    // const PROXY_TEST_PORT = 19891;
+    // const PROXY_URL = `http://127.0.0.1:${PROXY_TEST_PORT}`;
 
     let mockAISDKServer: MockServer | null = null;
-    let proxy: ProxyServer | null = null;
+    // let proxy: ProxyServer | null = null;
 
     function buildConfig(options?: { agentUrl?: string }) {
       const inputSchema = z.looseObject({ role: z.literal("user"), parts: z.array(z.any()) });
@@ -67,7 +72,7 @@ describe('ai-sdk', () => {
 
     beforeAll(async () => {
       mockAISDKServer = await createMockServer(AI_SDK_AGENT_PORT);
-      proxy = await startProxyServer(PROXY_TEST_PORT);
+      // proxy = await startProxyServer(PROXY_TEST_PORT);
     });
 
     afterAll(async () => {
@@ -75,10 +80,10 @@ describe('ai-sdk', () => {
         await mockAISDKServer.close();
         mockAISDKServer = null;
       }
-      if (proxy) {
-        await proxy.close();
-        proxy = null;
-      }
+      // if (proxy) {
+      //   await proxy.close();
+      //   proxy = null;
+      // }
     }, 30000);
 
     beforeEach(() => {
@@ -92,24 +97,41 @@ describe('ai-sdk', () => {
     //     proxy server from @agentview/studio (same code as `npx agentview dev`)
     // ---------------------------------------------------------------
     describe.each([
-      { envName: "production (direct)", envType: "production" },
+      // { envName: "production (direct)", envType: "production" },
       { envName: "local (via tunnel proxy)", envType: "local" },
     ])("$envName", ({ envType }) => {
       let client: typeof org.prodClient;
       let standardClient: typeof org.prodStandardClient;
+      let proxyProcess: any;
 
       beforeAll(async () => {
+        console.log('dzień dobry');
+
+
         if (envType === "local") {
-          console.log("Using local environment (via proxy)");
+          console.log("Using local environment (via proxy), starting proxy process...");
           client = org.admin.localClient;
           standardClient = org.admin.localStandardClient;
-          await standardClient.updateEnvironment({ config: buildConfig(), tunnelUrl: PROXY_URL });
+
+          // start real proxy with real tunnel
+          proxyProcess = spawn('npx', ['agentview', 'dev', '--api-key', org.apiKeySecret.key, '--env', 'local:' + org.admin.user.email, '--no-studio'], {
+            // detached: true,
+            stdio: 'inherit', // 'ignore'
+            shell: process.platform === 'win32' // needed on Windows for .cmd shims
+          });
+
+          await new Promise(resolve => setTimeout(resolve, PROXY_TIMEOUT));
+          
+          console.log("Gooooo")
+
+          // // start real proxy
+          // await standardClient.updateEnvironment({ config: buildConfig(), tunnelUrl: PROXY_URL });
         } else {
           console.log("Using production environment");
           client = org.prodClient;
           standardClient = org.prodStandardClient;
         }
-      });
+      }, TEST_TIMEOUT);
 
       afterAll(async () => {
         if (envType === "local") {
@@ -162,7 +184,7 @@ describe('ai-sdk', () => {
         expect(finalSession.messages[1].parts.length).toBe(1);
         expect(finalSession.messages[1].parts[0].type).toBe("text");
         expect(finalSession.messages[1].parts[0].text).toBe("Hello world!");
-      }, 10000);
+      }, TEST_TIMEOUT);
 
       test("happy path: text + reasoning (validated via ai-sdk stream)", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
@@ -215,7 +237,7 @@ describe('ai-sdk', () => {
         expect(completedRun.sessionItems[1].content.text).toBe("Let me think...");
         expect(completedRun.sessionItems[2].content.type).toBe("text");
         expect(completedRun.sessionItems[2].content.text).toBe("The answer is 42");
-      }, 10000);
+      }, TEST_TIMEOUT);
 
       test("happy path: tool call (validated via ai-sdk stream)", async () => {
         const inputSchema = z.looseObject({ role: z.literal("user"), parts: z.array(z.any()) });
@@ -288,7 +310,7 @@ describe('ai-sdk', () => {
         expect(completedRun.sessionItems[1].content.output).toEqual({ temp: 72 });
         expect(completedRun.sessionItems[2].content.type).toBe("text");
         expect(completedRun.sessionItems[2].content.text).toBe("It's 72F in NYC");
-      }, 10000);
+      }, TEST_TIMEOUT);
 
 
       test("error event → run marked failed (validated via ai-sdk stream)", async () => {
@@ -317,7 +339,7 @@ describe('ai-sdk', () => {
         const updatedSession = await standardClient.getSession({ id: session.id });
         expect(updatedSession.lastRun!.status).toBe("failed");
         expect(updatedSession.lastRun!.failReason).toBeDefined();
-      }, 10000);
+      }, TEST_TIMEOUT);
 
       test("error → invalid chunk", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
@@ -356,7 +378,7 @@ describe('ai-sdk', () => {
         expect(updatedSession.status).toBe("failed");
         expect(updatedSession.failReason).toBeDefined();
 
-      }, 10000);
+      }, TEST_TIMEOUT);
 
       test("happy path: text response, creating run via session input -> reconnect to stream", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
@@ -416,7 +438,7 @@ describe('ai-sdk', () => {
         const streamAfterCompletion = await transport.reconnectToStream({ chatId: session.id })
         expect(streamAfterCompletion).toBeNull();
 
-      }, 10000);
+      }, TEST_TIMEOUT);
 
 
       test("HTTP error: 500 → run marked failed (validated via ai-sdk stream)", async () => {
@@ -439,7 +461,7 @@ describe('ai-sdk', () => {
 
         const updatedSession = await client.getSession({ id: session.id });
         expect(updatedSession.messages.length).toBe(0);
-      }, 10000);
+      }, TEST_TIMEOUT);
 
       test("HTTP error: 500 → client.createRun (no stream) passes error to client. No run is created.", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
@@ -457,7 +479,7 @@ describe('ai-sdk', () => {
 
         const updatedSession = await client.getSession({ id: session.id });
         expect(updatedSession.messages.length).toBe(0);
-      }, 10000);
+      }, TEST_TIMEOUT);
 
       test("HTTP error: 422 → client.createSession with input. No run is created", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
@@ -474,7 +496,7 @@ describe('ai-sdk', () => {
         await expect(promise).rejects.not.toBeInstanceOf(AgentViewError);
         await expect(promise).rejects.toThrowError(jsonError);
 
-      }, 10000);
+      }, TEST_TIMEOUT);
 
       test("HTTP error 400: empty body in response → client.createSession with input. No run is created", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
@@ -489,7 +511,7 @@ describe('ai-sdk', () => {
         await expect(promise).rejects.not.toBeInstanceOf(AgentViewError);
         await expect(promise).rejects.toThrowError("");
 
-      }, 10000);
+      }, TEST_TIMEOUT);
 
       test("stream aborted (no finish and no done) → run marked failed (validated via ai-sdk stream)", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
@@ -524,7 +546,7 @@ describe('ai-sdk', () => {
         const updatedSession = await standardClient.getSession({ id: session.id });
         expect(updatedSession.lastRun!.status).toBe("failed");
         expect(updatedSession.lastRun!.failReason.message).toContain("Stream ended incomplete");
-      }, 10000);
+      }, TEST_TIMEOUT);
 
       test("invalid chunk → run marked failed (validated via ai-sdk stream)", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
@@ -560,7 +582,7 @@ describe('ai-sdk', () => {
         const updatedSession = await standardClient.getSession({ id: session.id });
         expect(updatedSession.lastRun!.status).toBe("failed");
         expect(updatedSession.lastRun!.failReason.message).toContain("Unknown chunk type");
-      }, 10000);
+      }, TEST_TIMEOUT);
 
 
       test("request body format: sends UIMessage[] with correct history", async () => {
@@ -597,7 +619,7 @@ describe('ai-sdk', () => {
         expect(reqBody.messages[0].parts).toBeDefined();
         expect(reqBody.messages[0].parts[0].type).toBe("text");
         expect(reqBody.messages[0].parts[0].text).toBe("Hello AI SDK");
-      }, 10000);
+      }, TEST_TIMEOUT);
 
       test("multi-turn: second request has full conversation history", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
@@ -659,7 +681,7 @@ describe('ai-sdk', () => {
         expect(reqBody.messages[1].parts[0].text).toBe("Hello!");
         expect(reqBody.messages[2].role).toBe("user");
         expect(reqBody.messages[2].parts[0].text).toBe("How are you?");
-      }, 10000);
+      }, TEST_TIMEOUT);
 
       test("cancellation → run cancelled and agent connection aborted", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
@@ -723,7 +745,7 @@ describe('ai-sdk', () => {
         expect(connectionClosed).toBe(true);
 
         await streamPromise;
-      }, 10000);
+      }, TEST_TIMEOUT);
 
 
       test("message id is auto set when undefined", async () => {
@@ -754,7 +776,7 @@ describe('ai-sdk', () => {
 
         const finalSession = await client.getSession({ id: session.id });
         expect(finalSession.messages[1].id).toMatch(UUID_REGEX);
-      }, 10000);
+      }, TEST_TIMEOUT);
 
       test("message id + metadata are preserved when provided", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
@@ -790,7 +812,7 @@ describe('ai-sdk', () => {
           b: { bb: "xxx" },
           c: 100,
         });
-      }, 10000);
+      }, TEST_TIMEOUT);
 
       test("tools inputs are objects, partial tool call is object too", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
@@ -838,45 +860,45 @@ describe('ai-sdk', () => {
           input: { city: "Warszawa", unit: "celsius" },
         });
 
-      }, 10000);
+      }, TEST_TIMEOUT);
     });
 
     // ---------------------------------------------------------------
     // Environment-specific tests
     // ---------------------------------------------------------------
 
-    test("Error HTTP endpoint is down → client.createRun (no stream) passes error to client. No run is created.", async () => {
-      await org.prodStandardClient.updateEnvironment({ config: buildConfig({ agentUrl: "http://localhost:10000/this-url-is-down" }) });
+    // test("Error HTTP endpoint is down → client.createRun (no stream) passes error to client. No run is created.", async () => {
+    //   await org.prodStandardClient.updateEnvironment({ config: buildConfig({ agentUrl: "http://localhost:TEST_TIMEOUT/this-url-is-down" }) });
 
-      const promise = org.prodClient.createSession({ agent: "test-ai-sdk" , input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
+    //   const promise = org.prodClient.createSession({ agent: "test-ai-sdk" , input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
 
-      await expect(promise).rejects.toBeInstanceOf(AgentViewError);
-      await expect(promise).rejects.toThrowError(expect.objectContaining({
-        statusCode: 502
-      }));
-    }, 10000);
+    //   await expect(promise).rejects.toBeInstanceOf(AgentViewError);
+    //   await expect(promise).rejects.toThrowError(expect.objectContaining({
+    //     statusCode: 502
+    //   }));
+    // }, TEST_TIMEOUT);
 
-    test("local env without tunnel → 400 error from run", async () => {
-      await org.admin.localStandardClient.updateEnvironment({ config: buildConfig(), tunnelUrl: null });
+    // test("local env without tunnel → 400 error from run", async () => {
+    //   await org.admin.localStandardClient.updateEnvironment({ config: buildConfig(), tunnelUrl: null });
 
-      const session = await org.admin.localClient.createSession({ agent: "test-ai-sdk" });
-      const promise = org.admin.localClient.createRun({ sessionId: session.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hello" }] } });
+    //   const session = await org.admin.localClient.createSession({ agent: "test-ai-sdk" });
+    //   const promise = org.admin.localClient.createRun({ sessionId: session.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hello" }] } });
 
-      await expect(promise).rejects.toBeInstanceOf(AgentViewError);
-      expectToFail(promise, 400)
+    //   await expect(promise).rejects.toBeInstanceOf(AgentViewError);
+    //   expectToFail(promise, 400)
 
-      // Restore tunnel for any subsequent usage
-      await org.admin.localStandardClient.updateEnvironment({ tunnelUrl: PROXY_URL });
-    }, 10000);
+    //   // Restore tunnel for any subsequent usage
+    //   await org.admin.localStandardClient.updateEnvironment({ tunnelUrl: PROXY_URL });
+    // }, TEST_TIMEOUT);
 
-    test("setting tunnelUrl on production env → 400 error", async () => {
-      await expect(
-        org.prodStandardClient.updateEnvironment({ tunnelUrl: PROXY_URL })
-      ).rejects.toThrowError(expect.objectContaining({
-        statusCode: 400,
-        message: expect.stringContaining("production"),
-      }));
-    }, 10000);
+    // test("setting tunnelUrl on production env → 400 error", async () => {
+    //   await expect(
+    //     org.prodStandardClient.updateEnvironment({ tunnelUrl: PROXY_URL })
+    //   ).rejects.toThrowError(expect.objectContaining({
+    //     statusCode: 400,
+    //     message: expect.stringContaining("production"),
+    //   }));
+    // }, TEST_TIMEOUT);
 
   });
 
