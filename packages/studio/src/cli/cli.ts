@@ -7,7 +7,7 @@ import { pathToFileURL } from "node:url";
 import { Command } from "commander";
 
 import { type AgentViewConfig } from "../types";
-import { createStandardClient } from "agentview/clientStandard";
+import { createStandardClient, StandardAgentViewClient } from "agentview/clientStandard";
 import { AgentViewError } from "agentview";
 import { startStudioServer } from "./studioServer.js";
 import { startProxyServer, PROXY_PORT, type ProxyServer } from "./proxyServer.js";
@@ -29,28 +29,38 @@ function handleError(error: unknown): never {
   process.exit(1);
 }
 
+let client : StandardAgentViewClient;
+let configPathFromArg : string | undefined; // config path from command (usually undefined)
+
 export async function runCli() {
   const program = new Command();
 
   program
     .name("agentview")
-    .description("AgentView CLI");
+    .description("AgentView CLI")
+    // .option("-c, --config <path>", "Path to agentview config file")
+    .option("--api-key <key>", "AgentView API key (overrides AGENTVIEW_API_KEY env var)")
+    .option("--env <env>", "Environment name (overrides env from config)")
+    .hook('preAction', async (thisCommand) => {
+      const opts = thisCommand.opts();
+      const apiKey = opts.apiKey ?? getAPIKey();
+      configPathFromArg = opts.config; // required to resolve path later
+      const env = opts.env ?? (await loadConfig()).env;
+
+      client = createStandardClient({ apiKey, env });
+    });
+
 
   program
     .command("dev")
     .description("Start Studio dev server")
-    .option("-c, --config <path>", "Path to agentview config file")
     .option("-p, --port <port>", "Port for the dev server", parseInt)
-    .option("--api-key <key>", "AgentView API key (overrides AGENTVIEW_API_KEY env var)")
-    .option("--env <env>", "Environment name (overrides env from config)")
     .option('--no-studio', 'disable colored output')
     .action(async (opts) => {
-      const apiKey = opts.apiKey ?? getAPIKey();
-      const env = opts.env ?? (await loadConfig(resolveConfigPath(opts.config))).env;
-      await runProxyServer({ apiKey, env });
+      await runProxyServer(client);
 
       if (opts.studio) {
-        const configPath = resolveConfigPath(opts.config);
+        const configPath = resolveConfigPath(configPathFromArg);
         await startStudioServer(configPath, { port: opts.port });
       }
     });
@@ -64,8 +74,7 @@ export async function runCli() {
     .description("Send the config file to the AgentView server once")
     .option("-c, --config <path>", "Path to agentview config file")
     .action(async (opts) => {
-      const configPath = resolveConfigPath(opts.config);
-      await pushConfig(configPath);
+      await pushConfig();
     });
 
   configCmd
@@ -73,8 +82,7 @@ export async function runCli() {
     .description("Watch the config file and sync on every change")
     .option("-c, --config <path>", "Path to agentview config file")
     .action(async (opts) => {
-      const configPath = resolveConfigPath(opts.config);
-      await watchConfig(configPath);
+      await watchConfig();
     });
 
   try {
@@ -107,7 +115,8 @@ function resolveConfigPath(explicitPath?: string): string {
   );
 }
 
-async function loadConfig(configPath: string): Promise<AgentViewConfig> {
+async function loadConfig(): Promise<AgentViewConfig> {
+  const configPath = resolveConfigPath(configPathFromArg);
   const absolutePath = path.resolve(configPath);
   const fileUrl = pathToFileURL(absolutePath).href;
   const ext = path.extname(absolutePath).toLowerCase();
@@ -150,17 +159,7 @@ function getAPIKey(): string {
   return apiKey;
 }
 
-interface RunDevOptions {
-  apiKey: string;
-  env: string;
-}
-
-async function runProxyServer({ apiKey, env }: RunDevOptions) {
-  // const apiKey = opts.apiKey ?? getAPIKey();
-  // const env = opts.env ?? (await loadConfig(configPath)).env;
-  // const env = opts.env ?? config.env;
-  const av = createStandardClient({ apiKey, env });
-
+async function runProxyServer(client: StandardAgentViewClient) {
   let proxy: ProxyServer | null = null;
   let tunnel: CloudflareTunnel | null = null;
   let cleanedUp = false;
@@ -171,7 +170,7 @@ async function runProxyServer({ apiKey, env }: RunDevOptions) {
 
     try {
       await Promise.race([
-        av.updateEnvironment({ tunnelUrl: null }),
+        client.updateEnvironment({ tunnelUrl: null }),
         new Promise((_, reject) =>
           setTimeout(() => reject(new Error("tunnel-unregister timeout")), 5000),
         ),
@@ -200,27 +199,25 @@ async function runProxyServer({ apiKey, env }: RunDevOptions) {
   tunnel = await startCloudflareTunnel(PROXY_PORT);
   console.log(`[agentview] tunnel URL: ${tunnel.url}`);
 
-  await av.updateEnvironment({ tunnelUrl: tunnel.url });
+  await client.updateEnvironment({ tunnelUrl: tunnel.url });
   console.log(`[agentview] tunnel registered with AgentView backend`);
 
 }
 
-async function pushConfig(configPath: string) {
-  const config = await loadConfig(configPath);
-  const apiKey = getAPIKey();
-  const av = createStandardClient({ apiKey });
-
-  await av.updateEnvironment({ config });
+async function pushConfig() {
+  const config = await loadConfig();
+  await client.updateEnvironment({ config });
   console.log(`Config pushed`);
 }
 
-async function watchConfig(configPath: string) {
+async function watchConfig() {
+  const configPath = resolveConfigPath(configPathFromArg);
   const relativePath = path.relative(process.cwd(), configPath) || configPath;
   console.log(`Watching ${relativePath} for changes...`);
 
   const pushAndReport = async () => {
     try {
-      await pushConfig(configPath);
+      await pushConfig();
     } catch (error) {
       console.error((error as Error).message);
     }
