@@ -8,7 +8,7 @@ import { z } from "zod";
 import { CustomPage } from "./components/CustomPage";
 
 export default defineConfig({
-  organizationId: process.env.NEXT_PUBLIC_AGENTVIEW_ORGANIZATION_ID!,
+  publicApiKey: process.env.NEXT_PUBLIC_AGENTVIEW_API_KEY!,
   env: process.env.NEXT_PUBLIC_AGENTVIEW_ENV!,
   channels: [
     {

@@ -4,6 +4,7 @@ import { config } from "../config"
 import { data, redirect } from "react-router"
 import { getApiUrl } from "agentview/urls"
 import { swr } from "./swr-cache"
+import { agentview } from "./agentview"
 
 export function createBetterAuthClient({ baseURL }: { baseURL: string }) {
     return createAuthClient({
@@ -13,9 +14,6 @@ export function createBetterAuthClient({ baseURL }: { baseURL: string }) {
             organizationClient()
         ],
         fetchOptions: {
-            // headers: {
-            //     "X-Organization-Id": config.organizationId
-            // },
             auth: {
                 type: "Bearer",
                 token: () => localStorage.getItem("agentview_token") || ""
@@ -27,13 +25,12 @@ export function createBetterAuthClient({ baseURL }: { baseURL: string }) {
 export const authClient = createBetterAuthClient({ baseURL: new URL('/api/auth', getApiUrl()).toString() })
 
 
-export async function getOrganization() {
-    const response = await authClient.organization.getFullOrganization({ query: { organizationId: config.organizationId } })
+export async function getFullOrganization() {
+    const organizationBase = await agentview().getOrganization();
+
+    const response = await authClient.organization.getFullOrganization({ query: { organizationId: organizationBase.id } })
 
     if (response.error) {
-        if (response.error.code === "USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION") {
-            throw data({ message: "You don't have access to this organization." });
-        }
         throw data(response.error, 400);
     }
 
@@ -62,7 +59,7 @@ export async function getSession() {
 export type Session = NonNullable<Awaited<ReturnType<typeof getSession>>>;
 export type Member = Awaited<ReturnType<typeof getMember>>;
 export type User = Session["user"];
-export type Organization = Awaited<ReturnType<typeof getOrganization>>;
+export type Organization = Awaited<ReturnType<typeof getFullOrganization>>;
 
 // Cached versions with stale-while-revalidate
 export async function getSessionCached() {
@@ -77,15 +74,6 @@ export async function getSessionCached() {
 
 export async function getOrganizationCached() {
     return swr('auth:organization', async () => {
-        const response = await authClient.organization.getFullOrganization({
-            query: { organizationId: config.organizationId }
-        });
-        if (response.error) {
-            if (response.error.code === "USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION") {
-                throw new Error("You don't have access to this organization.");
-            }
-            throw response.error;
-        }
-        return response.data;
+        return getFullOrganization();
     });
 }

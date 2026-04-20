@@ -14,7 +14,6 @@ export function agentview() {
     cachedClient = new CachedAgentView({
       apiKey: token,
       env: config.env,
-      organizationId: config.organizationId,
     })
   }
   return cachedClient

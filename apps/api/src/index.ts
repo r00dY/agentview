@@ -1428,24 +1428,20 @@ app.get('/api/invitations/:invitation_id', async (c) => {
 
 /* --------- ORGANIZATION PUBLIC INFO --------- */
 
-app.get('/api/organization/public-info', async (c) => {
-  const organizationId = c.req.header('x-organization-id');
-
-  if (!organizationId) {
-    return c.json({ name: null }, 200);
-  }
+app.get('/api/organization', async (c) => {
+  const principal = await authnAllowPublic(c.req.raw.headers)
 
   // Auth tables don't have RLS - safe to query directly
   const organization = await db__dangerous.query.organizations.findFirst({
-    where: eq(organizations.id, organizationId),
-    columns: { name: true }
+    where: eq(organizations.id, principal.organizationId),
+    columns: { id: true, name: true, slug: true, logo: true }
   });
 
   if (!organization) {
-    return c.json({ name: null }, 200);
+    throw new AgentViewError("Organization not found", 404);
   }
 
-  return c.json({ name: organization.name }, 200);
+  return c.json(organization, 200);
 })
 
 /* --------- SCHEMAS ---------   */

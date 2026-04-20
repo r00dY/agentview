@@ -104,7 +104,7 @@ export type AgentConfig = BaseAgentConfig<RunConfig> & {
 }
 
 export type AgentViewConfig = BaseAgentViewConfig<AgentConfig, ChannelConfig> & {
-  organizationId: string;
-  env: string;
+  publicApiKey: string;
+  env: string; // required for playground, we know which environment to use
   customRoutes?: CustomRoute[],
 }

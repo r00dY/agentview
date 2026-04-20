@@ -299,7 +299,14 @@ export type PublicSessionsGetQueryParams = z.infer<typeof PublicSessionsGetQuery
 export type SessionsGetQueryParams = z.infer<typeof SessionsGetQueryParamsSchema>
 
 
+export const OrganizationBaseSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string().nullable(),
+  logo: z.string().nullable()
+})
 
+export type OrganizationBase = z.infer<typeof OrganizationBaseSchema>
 
 // // member - user of organization, works in agentview panel, not end user
 // export const MemberSchema = z.object({

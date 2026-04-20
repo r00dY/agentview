@@ -5,6 +5,8 @@ import { CardPageLayout } from "../components/CardPageLayout";
 import { authClient } from "../lib/auth-client";
 import { getWebAppUrl, getApiUrl } from "agentview/urls";
 import { config } from "../config";
+import { agentview } from "../lib/agentview";
+
 
 function getRedirectUrl(stringUrl: string) {
   const url = new URL(stringUrl);
@@ -35,17 +37,8 @@ async function loader({ request }: LoaderFunctionArgs) {
     return redirect(getRedirectUrl(url.toString()));
   }
 
-  // Fetch organization name
-  try {
-    const response = await fetch(new URL('/api/organization/public-info', getApiUrl()).toString(), {
-      headers: {
-        'X-Organization-Id': config.organizationId
-      }
-    });
-    const data = await response.json();
-    return { organizationName: data.name };
-  } catch {
-    return { organizationName: null };
+  return {
+    organization: await agentview().getOrganization(),
   }
 }
 
@@ -58,7 +51,7 @@ function Component() {
     <CardPageLayout variant="poweredBy">
       <Card>
         <CardHeader>
-          <CardTitle className="text-center">Sign in to <span className="">{loaderData?.organizationName}</span></CardTitle>
+          <CardTitle className="text-center">Sign in to <span className="">{loaderData?.organization.name}</span></CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
           <Button asChild variant="outline" className="w-full">

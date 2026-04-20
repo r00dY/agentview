@@ -11,6 +11,7 @@ import type {
   SessionCreate,
   Run,
   RunCreate,
+  OrganizationBase,
 } from './apiTypes.js'
 
 import { AgentViewError } from './AgentViewError.js'
@@ -101,6 +102,10 @@ export class AgentViewBase {
   }
 
   // --- Shared methods ---
+
+  async getOrganization(): Promise<OrganizationBase> {
+    return await this.request<OrganizationBase>('GET', `/api/organization`)
+  }
 
   async getSessionComments(options: { id: string }) {
     return await this.request<CommentMessage[]>('GET', `/api/sessions/${options.id}/comments`, undefined)
