@@ -46,7 +46,7 @@ export async function runCli() {
     .option('--no-studio', 'disable colored output')
     .action(async (opts) => {
       const apiKey = opts.apiKey ?? getAPIKey();
-      const env = opts.env ?? (await loadConfig(opts.config)).env;
+      const env = opts.env ?? (await loadConfig(resolveConfigPath(opts.config))).env;
       await runProxyServer({ apiKey, env });
 
       if (opts.studio) {
