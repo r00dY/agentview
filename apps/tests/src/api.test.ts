@@ -33,15 +33,15 @@ describe('API', () => {
 
     av = org.admin.localStandardClient;
     
-    const initUser1Result = await org.admin.localClient.createUser({ externalId: EXTERNAL_ID_1 })
+    const initUser1Result = await org.admin.localClient.users.create({ externalId: EXTERNAL_ID_1 })
     initUser1 = initUser1Result.user
     initUser1Token = initUser1Result.token
 
-    const initUser2Result = await org.admin.localClient.createUser({ externalId: EXTERNAL_ID_2 })
+    const initUser2Result = await org.admin.localClient.users.create({ externalId: EXTERNAL_ID_2 })
     initUser2 = initUser2Result.user
     initUser2Token = initUser2Result.token
     
-    const initProdUserResult = await org.prodClient.createUser({ externalId: EXTERNAL_PROD_ID_1, space: "production" })
+    const initProdUserResult = await org.prodClient.users.create({ externalId: EXTERNAL_PROD_ID_1, space: "production" })
     initProdUser = initProdUserResult.user
     initProdUserToken = initProdUserResult.token
 
@@ -135,7 +135,7 @@ describe('API', () => {
 
   describe("users", () => {
     test("creating another user with the same external id should fail", async () => {
-      await expect(av.createUser({ externalId: EXTERNAL_ID_1 })).rejects.toThrowError(expect.objectContaining({
+      await expect(av.users.create({ externalId: EXTERNAL_ID_1 })).rejects.toThrowError(expect.objectContaining({
         statusCode: 422,
         message: expect.any(String),
       }))
@@ -146,13 +146,13 @@ describe('API', () => {
     //   const EXTERNAL_ID = Math.random().toString(36).slice(2);
     //   const NEW_EXTERNAL_ID = EXTERNAL_ID + '1';
 
-    //   const user = await av.createUser({ externalId: EXTERNAL_ID, isShared: false })
+    //   const user = await av.users.create({ externalId: EXTERNAL_ID, isShared: false })
     //   let updatedUser = await av.updateUser({ id: user.id, externalId: NEW_EXTERNAL_ID, isShared: true })
     //   expect(updatedUser).toBeDefined()
     //   expect(updatedUser.externalId).toBe(NEW_EXTERNAL_ID)
     //   expect(updatedUser.isShared).toBe(true)
 
-    //   updatedUser = await av.getUser({ id: user.id })
+    //   updatedUser = await av.users.get({ id: user.id })
     //   expect(updatedUser).toBeDefined()
     //   expect(updatedUser.externalId).toBe(NEW_EXTERNAL_ID)
     //   expect(updatedUser.isShared).toBe(true)
@@ -161,37 +161,37 @@ describe('API', () => {
     describe("get by id", () => {
 
       test("existing ids", async () => {
-        const user1 = await av.getUser(initUser1.id)
+        const user1 = await av.users.get(initUser1.id)
         expect(user1).toBeDefined()
         expect(user1.externalId).toBe(EXTERNAL_ID_1)
 
-        const user2 = await av.getUser(initUser2.id)
+        const user2 = await av.users.get(initUser2.id)
         expect(user2).toBeDefined()
         expect(user2.externalId).toBe(EXTERNAL_ID_2)
       })
 
       test("not found", async () => {
-        await expect(av.getUser('xxx')).rejects.toThrowError(expect.objectContaining({
+        await expect(av.users.get('xxx')).rejects.toThrowError(expect.objectContaining({
           statusCode: 404,
           message: expect.any(String),
         }))
       })
 
       test("succeeds when scoped with own token with .me()", async () => {
-        const user1 = await av.asUser(initUser1).getMe()
+        const user1 = await av.asUser(initUser1).users.me()
         expect(user1).toBeDefined()
         expect(user1.externalId).toBe(EXTERNAL_ID_1)
       })
 
       test("getUser by id fails when scoped with other user's token", async () => {
-        await expect(av.asUser(initUser1).getUser(initUser1.id)).rejects.toThrowError(expect.objectContaining({
+        await expect(av.asUser(initUser1).users.get(initUser1.id)).rejects.toThrowError(expect.objectContaining({
           statusCode: 401,
           message: expect.any(String),
         }))
       })
 
       test("getUser by id fails when scoped with other user's token", async () => {
-        await expect(av.asUser(initUser1).getUser(initUser2.id)).rejects.toThrowError(expect.objectContaining({
+        await expect(av.asUser(initUser1).users.get(initUser2.id)).rejects.toThrowError(expect.objectContaining({
           statusCode: 401,
           message: expect.any(String),
         }))
@@ -200,13 +200,13 @@ describe('API', () => {
 
     describe("get by external id", () => {
       test("existing external ids", async () => {
-        const user1 = await av.getUserByExternalId(EXTERNAL_ID_1)
+        const user1 = await av.users.getByExternalId(EXTERNAL_ID_1)
         expect(user1).toBeDefined()
         expect(user1.externalId).toBe(EXTERNAL_ID_1)
       })
 
       test("not found", async () => {
-        await expect(av.getUserByExternalId('unknown_external_id')).rejects.toThrowError(expect.objectContaining({
+        await expect(av.users.getByExternalId('unknown_external_id')).rejects.toThrowError(expect.objectContaining({
           statusCode: 404,
           message: expect.any(String),
         }))
@@ -214,18 +214,18 @@ describe('API', () => {
 
       test("fails when scoped with own user's token, but by calling getUser by external id", async () => {
 
-        await expect(av.asUser(initUser1).getUserByExternalId(EXTERNAL_ID_1)).rejects.toThrowError(expect.objectContaining({
+        await expect(av.asUser(initUser1).users.getByExternalId(EXTERNAL_ID_1)).rejects.toThrowError(expect.objectContaining({
           statusCode: 401,
           message: expect.any(String),
         }))
 
-        // const user1 = await av.as(initUser1).getUser({ externalId: EXTERNAL_ID_1 })
+        // const user1 = await av.as(initUser1).users.get({ externalId: EXTERNAL_ID_1 })
         // expect(user1).toBeDefined()
         // expect(user1.externalId).toBe(EXTERNAL_ID_1)
       })
 
       test("fails when scoped with another user's token", async () => {
-        await expect(av.asUser(initUser2).getUserByExternalId(EXTERNAL_ID_1)).rejects.toThrowError(expect.objectContaining({
+        await expect(av.asUser(initUser2).users.getByExternalId(EXTERNAL_ID_1)).rejects.toThrowError(expect.objectContaining({
           statusCode: 401,
           message: expect.any(String),
         }))
@@ -234,31 +234,31 @@ describe('API', () => {
 
     describe("environment-related behaviour", () => {
       test("[local env] default space is user's playground", async () => {
-        const { user } = await av.createUser()
+        const { user } = await av.users.create()
         expect(user.space).toBe("playground")
         expect(user.ownerId).toBe(org.admin.user.id)
       })
 
       test("[local env] production space is blocked", async () => {
-        await expect(av.createUser({ space: "production" })).rejects.toThrowError(expect.objectContaining({
+        await expect(av.users.create({ space: "production" })).rejects.toThrowError(expect.objectContaining({
           statusCode: 401,
           message: expect.any(String),
         }))
       })
 
       test("[prod env] default space for new user is production and ownerId is null", async () => {
-        const { user } = await org.prodStandardClient.createUser()
+        const { user } = await org.prodStandardClient.users.create()
         expect(user.space).toBe("production")
         expect(user.ownerId).toBeNull()
       })
 
       // test("[prod api-key] playground or shared-playground are not allowed with production api-key (you must be logged in as member to do it)", async () => {
-      //   await expect(org.prodStandardClient.createUser({ space: "playground" })).rejects.toThrowError(expect.objectContaining({
+      //   await expect(org.prodStandardClient.users.create({ space: "playground" })).rejects.toThrowError(expect.objectContaining({
       //     statusCode: 401,
       //     message: expect.any(String),
       //   }))
 
-      //   await expect(org.prodStandardClient.createUser({ space: "shared-playground" })).rejects.toThrowError(expect.objectContaining({
+      //   await expect(org.prodStandardClient.users.create({ space: "shared-playground" })).rejects.toThrowError(expect.objectContaining({
       //     statusCode: 401,
       //     message: expect.any(String),
       //   }))
@@ -266,13 +266,13 @@ describe('API', () => {
 
 
       // test("[prod api-key] playground is possible only with explicit ", async () => {
-      //   const user = await av.createUser({ space: "shared-playground" })
+      //   const user = await av.users.create({ space: "shared-playground" })
       //   expect(user.space).toBe("shared-playground")
       //   expect(user.createdBy).toBeNull()
       // })
 
       // test("[dev api-key] production space is blocked", async () => {
-      //   await expect(av.createUser({ space: "production" })).rejects.toThrowError(expect.objectContaining({
+      //   await expect(av.users.create({ space: "production" })).rejects.toThrowError(expect.objectContaining({
       //     statusCode: 401,
       //     message: expect.any(String),
       //   }))
@@ -281,17 +281,17 @@ describe('API', () => {
 
     describe("get me", () => {
       test("works", async () => {
-        const user1 = await av.asUser(initUser1).getMe()
+        const user1 = await av.asUser(initUser1).users.me()
         expect(user1).toBeDefined()
         expect(user1.externalId).toBe(EXTERNAL_ID_1)
 
-        const user2 = await av.asUser(initUser2).getMe()
+        const user2 = await av.asUser(initUser2).users.me()
         expect(user2).toBeDefined()
         expect(user2.externalId).toBe(EXTERNAL_ID_2)
       })
 
       test("fails for bad token", async () => {
-        await expect(av.asUser({ token: 'xxx' }).getMe()).rejects.toThrowError(expect.objectContaining({
+        await expect(av.asUser({ token: 'xxx' }).users.me()).rejects.toThrowError(expect.objectContaining({
           statusCode: 401,
           message: expect.any(String),
         }))
@@ -308,13 +308,13 @@ describe('API', () => {
             apiKey: org.apiKeyPublic.key,
           })
           const avPublicAsUser1 = avPublic.asUser({ token: initUser1Token })
-          const user1 = await avPublicAsUser1.getMe()
+          const user1 = await avPublicAsUser1.users.me()
 
           expect(user1).toBeDefined()
           expect(user1.externalId).toBe(EXTERNAL_ID_1)
 
           const avPublicAsUser2 = avPublic.asUser({ token: initUser2Token })
-          const user2 = await avPublicAsUser2.getMe()
+          const user2 = await avPublicAsUser2.users.me()
           expect(user2).toBeDefined()
           expect(user2.externalId).toBe(EXTERNAL_ID_2)
         })
@@ -325,7 +325,7 @@ describe('API', () => {
           })
           const avPublicAsUser = avPublic.asUser({ token: "xxx" })
 
-          await expect(avPublicAsUser.getMe()).rejects.toThrowError(expect.objectContaining({
+          await expect(avPublicAsUser.users.me()).rejects.toThrowError(expect.objectContaining({
             statusCode: 401,
             message: expect.any(String),
           }))
@@ -337,7 +337,7 @@ describe('API', () => {
           })
           const avPublicAsUser = avPublic.asUser({ id: initUser1.id })
 
-          await expect(avPublicAsUser.getMe()).rejects.toThrowError(expect.objectContaining({
+          await expect(avPublicAsUser.users.me()).rejects.toThrowError(expect.objectContaining({
             statusCode: 401,
             message: expect.any(String),
           }))
@@ -465,12 +465,12 @@ describe('API', () => {
 
       // Test that configs are isolated for real operations (sessions/runs)
       // Bob can create sessions for his channel
-      const { user: bobUser } = await avBob.createUser({ externalId: "bob-test-user" });
+      const { user: bobUser } = await avBob.users.create({ externalId: "bob-test-user" });
       const bobSession = await avBob.createSession({ agent: "bob-agent", userId: bobUser.id });
       expect(bobSession.channel).toEqual({ type: 'api', name: 'bob-agent' });
 
       // Alice can create sessions for her channel
-      const { user: aliceUser } = await avAlice.createUser({ externalId: "alice-test-user" });
+      const { user: aliceUser } = await avAlice.users.create({ externalId: "alice-test-user" });
       const aliceSession = await avAlice.createSession({ agent: "alice-agent", userId: aliceUser.id });
       expect(aliceSession.channel).toEqual({ type: 'api', name: 'alice-agent' });
 
@@ -488,7 +488,7 @@ describe('API', () => {
       await updateConfig({ prod: true });
 
       // creating prod user allowed with prod key
-      const { user: prodUser } = await org.prodStandardClient.createUser({ space: "production" })
+      const { user: prodUser } = await org.prodStandardClient.users.create({ space: "production" })
       expect(prodUser).toBeDefined()
 
       // creating prod session allowed with prod key
@@ -496,7 +496,7 @@ describe('API', () => {
       expect(prodSession).toBeDefined()
 
       // creating prod user not allowed with dev key
-      await expect(av.createUser({ space: "production" })).rejects.toThrowError(expect.objectContaining({
+      await expect(av.users.create({ space: "production" })).rejects.toThrowError(expect.objectContaining({
         statusCode: 401,
         message: expect.any(String),
       }))
@@ -2245,17 +2245,17 @@ describe('API', () => {
 
     test('org_a cannot see org_b users', async () => {
       // Create a user in org2
-      const { user: user_a } = await av_a.createUser();
+      const { user: user_a } = await av_a.users.create();
       expect(user_a).toBeDefined();
       expect(user_a.id).toBeDefined();
 
       // Try to get that user from org1 - should fail with 404
-      await expect(av_b.getUser(user_a.id)).rejects.toThrow();
+      await expect(av_b.users.get(user_a.id)).rejects.toThrow();
     });
 
     test('org_a cannot see org_a sessions', async () => {
       // Create a user and session in org2
-      const { user: user_b } = await av_b.createUser();
+      const { user: user_b } = await av_b.users.create();
       const session_b = await av_b.createSession({ userId: user_b.id, agent: 'test-agent' });
       expect(session_b).toBeDefined();
 
@@ -2265,8 +2265,8 @@ describe('API', () => {
 
     test('listing sessions only returns own org data', async () => {
       // Create users and sessions in both orgs
-      const{ user: user_a } = await av_a.createUser();
-      const{ user: user_b } = await av_b.createUser();
+      const{ user: user_a } = await av_a.users.create();
+      const{ user: user_b } = await av_b.users.create();
 
       const session_a = await av_a.createSession({ userId: user_a.id, agent: 'test-agent' });
       const session_b = await av_b.createSession({ userId: user_b.id, agent: 'test-agent' });
@@ -2283,7 +2283,7 @@ describe('API', () => {
 
     test('org1 cannot modify org2 resources', async () => {
       // Create a session in org2 with a run
-      const { user: user_b } = await av_b.createUser();
+      const { user: user_b } = await av_b.users.create();
       const session_b = await av_b.createSession({ userId: user_b.id, agent: 'test-agent' });
 
       const run_b = await av_b.createManualRun({

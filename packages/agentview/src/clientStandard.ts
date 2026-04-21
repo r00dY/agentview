@@ -1,6 +1,5 @@
 import {
     type StandardSession,
-    type User,
     type StandardRun,
     type StandardRunCreate,
     type ManualRunCreate,
@@ -32,37 +31,37 @@ export const configDefaults: {
 
 export class StandardAgentViewClient extends AgentViewBase {
     async createSession(options: StandardSessionCreate) {
-        return enhanceSession(await this.request<StandardSession>('POST', `/api/sessions/standard`, options))
+        return enhanceSession(await this._request<StandardSession>('POST', `/api/sessions/standard`, options))
     }
 
     async getSession(options: { id: string }) {
-        return enhanceSession(await this.request<StandardSession>('GET', `/api/sessions/${options.id}/standard`, undefined))
+        return enhanceSession(await this._request<StandardSession>('GET', `/api/sessions/${options.id}/standard`, undefined))
     }
 
     async updateSession(options: { id: string } & SessionUpdate) {
-        return enhanceSession(await this.request<StandardSession>('PATCH', `/api/sessions/${options.id}`, options))
+        return enhanceSession(await this._request<StandardSession>('PATCH', `/api/sessions/${options.id}`, options))
     }
 
     async createRun(options: StandardRunCreate & { sessionId: string }) {
         const { sessionId, ...body } = options;
-        return await this.request<StandardRun>('POST', `/api/sessions/${sessionId}/runs/standard`, body)
+        return await this._request<StandardRun>('POST', `/api/sessions/${sessionId}/runs/standard`, body)
     }
 
     async createManualRun(options: ManualRunCreate & { sessionId: string }) {
         const { sessionId, ...body } = options;
-        return await this.request<StandardRun>('POST', `/api/sessions/${sessionId}/runs/manual`, body)
+        return await this._request<StandardRun>('POST', `/api/sessions/${sessionId}/runs/manual`, body)
     }
 
     async updateManualRun(options: ManualRunUpdate & { id: string }) {
-        return await this.request<StandardRun>('PATCH', `/api/runs/${options.id}/manual`, options)
+        return await this._request<StandardRun>('PATCH', `/api/runs/${options.id}/manual`, options)
     }
 
     async cancelRun(options: { sessionId: string }) {
-        return enhanceSession(await this.request<StandardSession>('POST', `/api/sessions/${options.sessionId}/cancel/standard`))
+        return enhanceSession(await this._request<StandardSession>('POST', `/api/sessions/${options.sessionId}/cancel/standard`))
     }
 
     async keepAliveRun(options: { id: string }): Promise<{ expiresAt: string | null }> {
-        return await this.request<{ expiresAt: string | null }>('POST', `/api/runs/${options.id}/keep-alive`, undefined)
+        return await this._request<{ expiresAt: string | null }>('POST', `/api/runs/${options.id}/keep-alive`, undefined)
     }
 
     async getSessionStream(options: { id: string, signal?: AbortSignal }): Promise<AsyncGenerator<{
@@ -73,7 +72,7 @@ export class StandardAgentViewClient extends AgentViewBase {
 
         const response = await fetch(url, {
             method: 'GET',
-            headers: this.getHeaders(),
+            headers: this._getHeaders(),
             signal: options.signal
         })
 
@@ -150,11 +149,11 @@ export class StandardAgentViewClient extends AgentViewBase {
     }
 
     async getChannels(): Promise<Channel[]> {
-        return await this.request<Channel[]>('GET', `/api/channels`)
+        return await this._request<Channel[]>('GET', `/api/channels`)
     }
 
     async updateChannel(channelId: string, data: { environmentId?: string | null }): Promise<Channel> {
-        return await this.request<Channel>('PATCH', `/api/channels/${channelId}`, data)
+        return await this._request<Channel>('PATCH', `/api/channels/${channelId}`, data)
     }
 
     // --- Mock-email (internal/testing) ---
@@ -162,20 +161,20 @@ export class StandardAgentViewClient extends AgentViewBase {
     __internal = {
         mock: {
             createChannel: async (data: { address: string }): Promise<Channel> => {
-                return await this.request<Channel>('POST', `/api/channels/mock/create-channel`, data)
+                return await this._request<Channel>('POST', `/api/channels/mock/create-channel`, data)
             },
             sendMessage: async (data: { address: string, sourceId: string, date: string, contact: string, contactKind: string, text: string, sourceThreadId?: string, providerData?: any }): Promise<any> => {
-                return await this.request<any>('POST', `/api/channels/mock/send-message`, data)
+                return await this._request<any>('POST', `/api/channels/mock/send-message`, data)
             },
             getOutbox: async (address?: string): Promise<Array<{ id: string, address: string, contact: string, contactKind: string, text: string | null, timestamp: number }>> => {
                 const params = address ? `?address=${encodeURIComponent(address)}` : ''
-                return await this.request('GET', `/api/channels/mock/outbox${params}`)
+                return await this._request('GET', `/api/channels/mock/outbox${params}`)
             },
         }
     }
 
     async markSeen(options: InputTarget): Promise<void> {
-        return await this.request<void>('POST', `/api/seen`, options)
+        return await this._request<void>('POST', `/api/seen`, options)
     }
 
     async getSessionsStats(options?: SessionsStatsQueryParams): Promise<SessionsStats> {
@@ -193,29 +192,29 @@ export class StandardAgentViewClient extends AgentViewBase {
             path += `?${queryString}`
         }
 
-        return await this.request<SessionsStats>('GET', path, undefined)
+        return await this._request<SessionsStats>('GET', path, undefined)
     }
 
     async createComment(options: InputTarget & { content: string }): Promise<void> {
-        return await this.request<void>('POST', `/api/comments`, options)
+        return await this._request<void>('POST', `/api/comments`, options)
     }
 
     async updateComment(options: { id: string, content: string }): Promise<void> {
         const { id, ...rest } = options
-        return await this.request<void>('PUT', `/api/comments/${id}`, rest)
+        return await this._request<void>('PUT', `/api/comments/${id}`, rest)
     }
 
     async deleteComment(options: { id: string }): Promise<void> {
-        return await this.request<void>('DELETE', `/api/comments/${options.id}`, undefined)
+        return await this._request<void>('DELETE', `/api/comments/${options.id}`, undefined)
     }
 
     async updateScores(options: InputTarget & { scores: ScoreCreate[] }): Promise<void> {
-        return await this.request<void>('PATCH', `/api/scores`, options)
+        return await this._request<void>('PATCH', `/api/scores`, options)
     }
 
 
     async getEnvironments(): Promise<EnvironmentBase[]> {
-        return await this.request<EnvironmentBase[]>('GET', `/api/environments`)
+        return await this._request<EnvironmentBase[]>('GET', `/api/environments`)
     }
 
     async updateEnvironment(body: EnvironmentCreate): Promise<Environment> {
@@ -237,7 +236,7 @@ export class StandardAgentViewClient extends AgentViewBase {
             payload.config = serializeConfig(config);
         }
 
-        return await this.request<Environment>('PATCH', `/api/environment`, payload)
+        return await this._request<Environment>('PATCH', `/api/environment`, payload)
     }
 
     asUser(userIdentifier: UserIdentifier): StandardAgentViewClient {

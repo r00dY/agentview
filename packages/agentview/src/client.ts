@@ -35,14 +35,17 @@ export class AgentViewBase {
   protected env?: string
   protected organizationId?: string
 
+  users: UsersResource;
+
   constructor(options: AgentViewClientOptions) {
     this.apiKey = options.apiKey
     this.env = options.env
     this.organizationId = options.organizationId
     this.user = options.user
+    this.users = new UsersResource(this);
   }
 
-  protected getHeaders(): Record<string, string> {
+  _getHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     }
@@ -72,16 +75,14 @@ export class AgentViewBase {
     return headers
   }
 
-
-
-  protected async request<T>(
+  async _request<T>(
     method: string,
     path: string,
     body?: any
   ): Promise<T> {
     const response = await fetch(`${getApiUrl()}${path}`, {
       method,
-      headers: this.getHeaders(),
+      headers: this._getHeaders(),
       body: body ? JSON.stringify(body) : undefined,
     })
 
@@ -112,18 +113,21 @@ export class AgentViewBase {
     }
   }
 
+
+
+
   // --- Shared methods ---
 
   async getOrganization(): Promise<OrganizationBase> {
-    return await this.request<OrganizationBase>('GET', `/api/organization`)
+    return await this._request<OrganizationBase>('GET', `/api/organization`)
   }
 
   async getSessionComments(options: { id: string }) {
-    return await this.request<CommentMessage[]>('GET', `/api/sessions/${options.id}/comments`, undefined)
+    return await this._request<CommentMessage[]>('GET', `/api/sessions/${options.id}/comments`, undefined)
   }
 
   async getSessionScores(options: { id: string }) {
-    return await this.request<Score[]>('GET', `/api/sessions/${options.id}/scores`, undefined)
+    return await this._request<Score[]>('GET', `/api/sessions/${options.id}/scores`, undefined)
   }
 
   async getSessions(options?: SessionsGetQueryParams) {
@@ -140,61 +144,61 @@ export class AgentViewBase {
       path += `?${queryString}`;
     }
 
-    return await this.request<SessionsPaginatedResponse>('GET', path, undefined)
+    return await this._request<SessionsPaginatedResponse>('GET', path, undefined)
   }
 
   // Users
 
-  async createUser(options?: UserCreate): Promise<UserWithToken> {
-    return await this.request<UserWithToken>('POST', `/api/users`, options ?? {})
-  }
+  // async createUser(options?: UserCreate): Promise<UserWithToken> {
+  //   return await this._request<UserWithToken>('POST', `/api/users`, options ?? {})
+  // }
 
-  async createAnonUser(): Promise<UserWithToken> {
-    return await this.request<UserWithToken>('POST', `/api/users/anonymous`, {})
-  }
+  // async createAnonUser(): Promise<UserWithToken> {
+  //   return await this._request<UserWithToken>('POST', `/api/users/anonymous`, {})
+  // }
 
-  async getMe(): Promise<User> {
-    return await this.request<User>('GET', `/api/users/me`)
-  }
+  // async getMe(): Promise<User> {
+  //   return await this._request<User>('GET', `/api/users/me`)
+  // }
 
-  async getUser(id: string) {
-    return await this.request<User>('GET', `/api/users/${id}`)
-  }
+  // async getUser(id: string) {
+  //   return await this._request<User>('GET', `/api/users/${id}`)
+  // }
 
-  async getUserByExternalId(externalId: string) {
-    return await this.request<User>('GET', `/api/users/by-external-id/${externalId}`)
-  }
-  
-  async updateUser(options: UserCreate & { id: string }): Promise<User> {
-    return await this.request<User>('PATCH', `/api/users/${options.id}`, options)
-  }
+  // async getUserByExternalId(externalId: string) {
+  //   return await this._request<User>('GET', `/api/users/by-external-id/${externalId}`)
+  // }
+
+  // async updateUser(options: UserCreate & { id: string }): Promise<User> {
+  //   return await this._request<User>('PATCH', `/api/users/${options.id}`, options)
+  // }
 
   async getEnvironment(): Promise<Environment> {
-    return await this.request<Environment>('GET', `/api/environment`)
+    return await this._request<Environment>('GET', `/api/environment`)
   }
 
 }
 
 export class AgentViewClient extends AgentViewBase {
   async createSession(options: SessionCreate) {
-    return await this.request<Session>('POST', `/api/sessions`, options)
+    return await this._request<Session>('POST', `/api/sessions`, options)
   }
 
   async getSession(options: { id: string }) {
-    return await this.request<Session>('GET', `/api/sessions/${options.id}`)
+    return await this._request<Session>('GET', `/api/sessions/${options.id}`)
   }
 
   async updateSession(options: { id: string } & SessionUpdate) {
-    return await this.request<Session>('PATCH', `/api/sessions/${options.id}`, options)
+    return await this._request<Session>('PATCH', `/api/sessions/${options.id}`, options)
   }
 
   async createRun(options: RunCreate & { sessionId: string }) {
     const { sessionId, ...body } = options;
-    return await this.request<Run>('POST', `/api/sessions/${sessionId}/runs`, body)
+    return await this._request<Run>('POST', `/api/sessions/${sessionId}/runs`, body)
   }
 
   async cancelRun(options: { sessionId: string }) {
-    return await this.request<Session>('POST', `/api/sessions/${options.sessionId}/cancel`)
+    return await this._request<Session>('POST', `/api/sessions/${options.sessionId}/cancel`)
   }
 
   createTransport() {
@@ -204,7 +208,7 @@ export class AgentViewClient extends AgentViewBase {
      * - 
      */
     return new DefaultChatTransport({
-      headers: this.getHeaders(),
+      headers: this._getHeaders(),
       prepareSendMessagesRequest: ({ id, messages }) => ({
         api: `${baseUrl}/api/sessions/${id}/runs`,
         body: {
@@ -227,6 +231,38 @@ export class AgentViewClient extends AgentViewBase {
     })
   }
 }
+
+class UsersResource {
+  constructor(private client: AgentViewBase) { }
+
+  async create(options?: UserCreate): Promise<UserWithToken> {
+    return await this.client._request<UserWithToken>('POST', `/api/users`, options ?? {})
+  }
+
+  async createAnon(): Promise<UserWithToken> {
+    return await this.client._request<UserWithToken>('POST', `/api/users/anonymous`, {})
+  }
+
+  async me(): Promise<User> {
+    return await this.client._request<User>('GET', `/api/users/me`)
+  }
+
+  async get(id: string) {
+    return await this.client._request<User>('GET', `/api/users/${id}`)
+  }
+
+  async getByExternalId(externalId: string) {
+    return await this.client._request<User>('GET', `/api/users/by-external-id/${externalId}`)
+  }
+
+  async update(options: UserCreate & { id: string }): Promise<User> {
+    return await this.client._request<User>('PATCH', `/api/users/${options.id}`, options)
+  }
+}
+
+
+
+
 
 export function createClient(options: AgentViewClientOptions): AgentViewClient {
   return new AgentViewClient(options)
