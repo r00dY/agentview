@@ -34,6 +34,7 @@ import {
   StandardSessionSchema,
   UserCreateSchema,
   UserSchema,
+  UserWithTokenSchema,
   type StandardSession
 } from 'agentview/apiTypes';
 import { BaseConfigSchema, BaseRunSchemaToZod } from 'agentview/baseConfigTypes';
@@ -155,7 +156,7 @@ const usersPOSTRoute = createRoute({
     body: body(UserCreateSchema)
   },
   responses: {
-    201: response_data(UserSchema)
+    201: response_data(UserWithTokenSchema)
   },
 })
 
@@ -164,8 +165,8 @@ app.openapi(usersPOSTRoute, async (c) => {
   const body = await c.req.valid('json')
 
   return withTenant(principal, async (tx) => {
-    const newUser = await createUser(tx, body);
-    return c.json(newUser, 201);
+    const newUserWithToken = await createUser(tx, body);
+    return c.json(newUserWithToken, 201);
   })
 })
 
@@ -178,7 +179,7 @@ const usersAnonPOSTRoute = createRoute({
     body: body(z.object({}).optional())
   },
   responses: {
-    201: response_data(UserSchema)
+    201: response_data(UserWithTokenSchema)
   },
 })
 
@@ -187,11 +188,10 @@ app.openapi(usersAnonPOSTRoute, async (c) => {
   const body = await c.req.valid('json')
 
   return withTenant(principal, async (tx) => {
-    const newUser = await createUser(tx, body ?? {});
-    return c.json(newUser, 201);
+    const newUserWithToken = await createUser(tx, body ?? {});
+    return c.json(newUserWithToken, 201);
   })
 })
-
 
 
 const userMeRoute = createRoute({

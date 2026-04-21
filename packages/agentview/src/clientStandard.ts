@@ -24,12 +24,11 @@ import { enhanceSession } from './sessionUtils.js'
 import type { InternalConfig } from './baseConfigTypes.js'
 import { getApiUrl } from './urls.js'
 import { parseSSE } from './parseSSE.js'
-import { AgentViewBase, type AgentViewClientOptions } from './client.js'
+import { AgentViewBase, type AgentViewClientOptions, type UserIdentifier } from './client.js'
 
 export const configDefaults: {
     __internal?: InternalConfig
-  } = { __internal: undefined }
-
+} = { __internal: undefined }
 
 export class StandardAgentViewClient extends AgentViewBase {
     async createSession(options: StandardSessionCreate) {
@@ -215,9 +214,9 @@ export class StandardAgentViewClient extends AgentViewBase {
     }
 
 
-  async getEnvironments(): Promise<EnvironmentBase[]> {
-    return await this.request<EnvironmentBase[]>('GET', `/api/environments`)
-  }
+    async getEnvironments(): Promise<EnvironmentBase[]> {
+        return await this.request<EnvironmentBase[]>('GET', `/api/environments`)
+    }
 
     async updateEnvironment(body: EnvironmentCreate): Promise<Environment> {
         const payload: Record<string, any> = { ...body };
@@ -241,11 +240,10 @@ export class StandardAgentViewClient extends AgentViewBase {
         return await this.request<Environment>('PATCH', `/api/environment`, payload)
     }
 
-    as(userOrToken: User | string): StandardAgentViewClient {
-        const userToken = typeof userOrToken === 'string' ? userOrToken : userOrToken.token;
+    asUser(userIdentifier: UserIdentifier): StandardAgentViewClient {
         return new StandardAgentViewClient({
             apiKey: this.apiKey,
-            userToken,
+            user: userIdentifier,
             env: this.env,
             organizationId: this.organizationId,
         })
@@ -254,5 +252,4 @@ export class StandardAgentViewClient extends AgentViewBase {
 
 export function createStandardClient(options: AgentViewClientOptions): StandardAgentViewClient {
     return new StandardAgentViewClient(options)
-  }
-  
+}

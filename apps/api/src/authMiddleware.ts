@@ -78,10 +78,21 @@ function extractBearerToken(headers: Headers) {
   return rest.join(' ').trim()
 }
 
-function extractUserToken(headers: Headers) {
-  const xUserToken = headers.get('x-user-token')
-  if (!xUserToken) return null
-  return xUserToken.trim()
+function extractUserIdentifierFromHeaders(headers: Headers) : { id: string } | { externalId: string } | { token: string } | null {
+  const xUserToken = headers.get('x-user-token')?.trim()
+  const xUserId = headers.get('x-user-id')?.trim()
+  const xUserExternalId = headers.get('x-user-external-id')?.trim()
+  
+  if (xUserToken) {
+    return { token: xUserToken }
+  }
+  if (xUserId) {
+    return { id: xUserId }
+  }
+  if (xUserExternalId) {
+    return { externalId: xUserExternalId }
+  }
+  return null;
 }
 
 async function getRole(userId: string, organizationId: string) {
@@ -112,15 +123,42 @@ async function getRole(userId: string, organizationId: string) {
 // but it's not work just on its own, you gotta be authenticated first (via api key or member cookie)
 
 
-async function getUserPrincipal(headers: Headers, organizationId: string, env?: string) : Promise<UserPrincipal | undefined> {
-  const userToken = extractUserToken(headers);
-  if (userToken) {
-    const user = await withOrg(organizationId, tx => findUser(tx, { token: userToken }))
+async function getUserPrincipal(headers: Headers, organizationId: string, allowOnlyForToken: boolean, env?: string) : Promise<UserPrincipal | undefined> {
+  const userIdentifier = extractUserIdentifierFromHeaders(headers);
+
+  if (!userIdentifier) {
+    return undefined;
+  }
+
+  
+  if ('token' in userIdentifier) {
+    const user = await withOrg(organizationId, tx => findUser(tx, { token: userIdentifier.token }))
     if (!user) {
       throw new AgentViewError("Invalid User Token", 401);
     }
     return { type: 'user', user, organizationId, env }
   }
+
+  if (allowOnlyForToken) {
+    return undefined;
+  }
+
+  if ('id' in userIdentifier) {
+    const user = await withOrg(organizationId, tx => findUser(tx, { id: userIdentifier.id }))
+    if (!user) {
+      throw new AgentViewError("Invalid User ID", 401);
+    }
+    return { type: 'user', user, organizationId, env }
+  }
+
+  if ('externalId' in userIdentifier) {
+    const user = await withOrg(organizationId, tx => findUser(tx, { externalId: userIdentifier.externalId }))
+    if (!user) {
+      throw new AgentViewError("Invalid User External ID", 401);
+    }
+    return { type: 'user', user, organizationId, env }
+  }
+  
   return undefined;
 }
 
@@ -172,7 +210,7 @@ export async function authnAllowAnon(headers: Headers): Promise<Principal> {
   }
 
   // User principal overrides API Key and member principal (based on x-user-token header)
-  const userPrincipal = await getUserPrincipal(headers, organization.id, env)
+  const userPrincipal = await getUserPrincipal(headers, organization.id, apiKeyPrincipal.type === 'apiKeyPublic', env)
   if (userPrincipal) {
     return userPrincipal;
   }

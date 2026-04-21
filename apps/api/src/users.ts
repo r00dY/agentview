@@ -118,7 +118,7 @@ export async function createUser(tx: TenantTransaction, body: UserCreate) {
     }
   }
 
-  const [newEndUser] = await tx.insert(endUsers).values({
+  const [newEndUserRow] = await tx.insert(endUsers).values({
     organizationId: tx.organizationId,
     externalId: body.externalId,
     email: body.email,
@@ -127,7 +127,9 @@ export async function createUser(tx: TenantTransaction, body: UserCreate) {
     token: randomBytes(32).toString('hex'),
   }).returning()
 
-  return newEndUser
+  const { token, ...newEndUser} = newEndUserRow
+
+  return { token, user: newEndUser }
 }
 
 
@@ -150,7 +152,8 @@ export async function ensureUserForEmail(tx: TenantTransaction, email: string) {
     return user2
   }
 
-  return await createUser(tx, { email })
+  const result = await createUser(tx, { email })
+  return result.user;
 }
 
 

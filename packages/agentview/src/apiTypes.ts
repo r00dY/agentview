@@ -22,7 +22,6 @@ export const UserSchema = z.object({
   updatedAt: z.iso.date(),
   ownerId: z.string().nullable(),
   space: SpaceSchema,
-  token: z.string(),
 })
 
 export type User = z.infer<typeof UserSchema>
@@ -35,6 +34,13 @@ export const UserCreateSchema = UserSchema.pick({
 }).partial();
 
 export type UserCreate = z.infer<typeof UserCreateSchema>
+
+export const UserWithTokenSchema = z.object({
+  user: UserSchema,
+  token: z.string()
+})
+
+export type UserWithToken = z.infer<typeof UserWithTokenSchema>
 
 export const ScoreSchema = z.object({
   id: z.string(),

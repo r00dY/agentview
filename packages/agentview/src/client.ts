@@ -12,31 +12,34 @@ import type {
   Run,
   RunCreate,
   OrganizationBase,
+  UserWithToken,
 } from './apiTypes.js'
 
 import { AgentViewError } from './AgentViewError.js'
 import { getApiUrl } from './urls.js'
 import { DefaultChatTransport } from 'ai'
 
+export type UserIdentifier = { id: string } | { externalId: string } | { token: string }
+
 export interface AgentViewClientOptions {
   apiKey: string
-  userToken?: string
+  user?: UserIdentifier
   env?: string
   organizationId?: string
 }
 
 export class AgentViewBase {
   protected apiKey: string
-  protected userToken?: string
+  protected user?: UserIdentifier
   protected customHeaders?: HeadersInit | (() => HeadersInit)
   protected env?: string
   protected organizationId?: string
 
   constructor(options: AgentViewClientOptions) {
     this.apiKey = options.apiKey
-    this.userToken = options.userToken
     this.env = options.env
     this.organizationId = options.organizationId
+    this.user = options.user
   }
 
   protected getHeaders(): Record<string, string> {
@@ -50,8 +53,16 @@ export class AgentViewBase {
       headers['X-Env'] = this.env
     }
 
-    if (this.userToken) {
-      headers['X-User-Token'] = this.userToken
+    if (this.user) {
+      if ('token' in this.user) {
+        headers['X-User-Token'] = this.user.token
+      }
+      if ('id' in this.user) {
+        headers['X-User-Id'] = this.user.id
+      }
+      if ('externalId' in this.user) {
+        headers['X-User-External-Id'] = this.user.externalId
+      }
     }
 
     if (this.organizationId) {
@@ -132,38 +143,48 @@ export class AgentViewBase {
     return await this.request<SessionsPaginatedResponse>('GET', path, undefined)
   }
 
-  async createUser(options?: UserCreate): Promise<User> {
-    return await this.request<User>('POST', `/api/users`, options ?? {})
+  // Users
+
+  async createUser(options?: UserCreate): Promise<UserWithToken> {
+    return await this.request<UserWithToken>('POST', `/api/users`, options ?? {})
   }
 
-  async createAnonUser(): Promise<User> {
-    return await this.request<User>('POST', `/api/users/anonymous`, {})
+  async createAnonUser(): Promise<UserWithToken> {
+    return await this.request<UserWithToken>('POST', `/api/users/anonymous`, {})
   }
 
   async getMe(): Promise<User> {
     return await this.request<User>('GET', `/api/users/me`)
   }
 
-  async getUser(options: { id: string } | { token: string } | { externalId: string }): Promise<User> {
-    if ('id' in options) {
-      return await this.request<User>('GET', `/api/users/${options.id}`)
-    }
-    if ('token' in options) {
-      if (this.userToken && this.userToken !== options.token) {
-        throw new Error('Cannot get user with token when scoped with another user\'s token')
-      }
-      const scoped = new AgentViewBase({
-        apiKey: this.apiKey,
-        userToken: options.token,
-        env: this.env
-      })
-      return await scoped.request<User>('GET', `/api/users/me`)
-    }
-    if ('externalId' in options) {
-      return await this.request<User>('GET', `/api/users/by-external-id/${options.externalId}`)
-    }
-    throw new Error('Invalid options')
+  async getUser(id: string) {
+    return await this.request<User>('GET', `/api/users/${id}`)
   }
+
+  async getUserByExternalId(externalId: string) {
+    return await this.request<User>('GET', `/api/users/by-external-id/${externalId}`)
+  }
+
+  // async getUser(options: { id: string } | { token: string } | { externalId: string }): Promise<User> {
+  //   if ('id' in options) {
+  //     return await this.request<User>('GET', `/api/users/${options.id}`)
+  //   }
+  //   if ('token' in options) {
+  //     if (this.userToken && this.userToken !== options.token) {
+  //       throw new Error('Cannot get user with token when scoped with another user\'s token')
+  //     }
+  //     const scoped = new AgentViewBase({
+  //       apiKey: this.apiKey,
+  //       userToken: options.token,
+  //       env: this.env
+  //     })
+  //     return await scoped.request<User>('GET', `/api/users/me`)
+  //   }
+  //   if ('externalId' in options) {
+  //     return await this.request<User>('GET', `/api/users/by-external-id/${options.externalId}`)
+  //   }
+  //   throw new Error('Invalid options')
+  // }
 
   async updateUser(options: UserCreate & { id: string }): Promise<User> {
     return await this.request<User>('PATCH', `/api/users/${options.id}`, options)
@@ -218,11 +239,10 @@ export class AgentViewClient extends AgentViewBase {
     })
   }
 
-  as(userOrToken: User | string): AgentViewClient {
-    const userToken = typeof userOrToken === 'string' ? userOrToken : userOrToken.token;
+  asUser(userIdentifier: UserIdentifier): AgentViewClient {
     return new AgentViewClient({
       apiKey: this.apiKey,
-      userToken,
+      user: userIdentifier,
       env: this.env,
       organizationId: this.organizationId,
     })

@@ -21,4 +21,5 @@ export type {
     SessionCreate,
     Run,
     RunCreate,
+    UserWithToken
 } from "./apiTypes.js";

@@ -119,7 +119,9 @@ describe('ai-sdk', () => {
           standardClient = org.prodStandardClient;
         }
 
-        user = await client.createUser();
+        const result = await client.createUser();
+        user = result.user;
+        
       }, TEST_TIMEOUT);
 
       afterAll(async () => {
