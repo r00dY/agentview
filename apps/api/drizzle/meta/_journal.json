@@ -169,6 +169,13 @@
       "when": 1776361132379,
       "tag": "0023_talented_invisible_woman",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1776777322477,
+      "tag": "0024_vengeful_marvex",
+      "breakpoints": true
     }
   ]
 }

@@ -411,8 +411,6 @@ export async function getSessions(tx: TenantTransaction, params: SessionsGetQuer
 export async function createSession(tx: TenantTransaction, body: StandardSessionCreate, options: { active: boolean }) {
   await tx.acquireLock({ type: "create_resource" });
 
-  const createdBy = tx.principal.type === 'member' ? tx.principal.session.user.id : null;
-
   const config = await requireConfig(tx)
 
   // in API channel and agent must exist
@@ -452,11 +450,10 @@ export async function createSession(tx: TenantTransaction, body: StandardSession
     summary: body.summary,
     agentRefId: agentRefWithId.id,
     initialState: body.initialState,
-    createdBy,
   });
 
   if (options.active) {
-    await activateSession(tx, newSessionRow.id);
+    await activateSession(tx, newSessionRow.id, tx.principal.type === 'member' ? tx.principal.session.user.id : undefined);
   }
 
   return newSessionRow;
@@ -475,7 +472,6 @@ export async function createInactiveSession(tx: OrgTransaction, params: {
   channelThreadId?: string | null;
   agentRefId?: string | null;
   initialState?: any;
-  createdBy?: string | null;
 }) {
   await tx.acquireLock({ type: "create_resource" });
 
@@ -505,14 +501,13 @@ export async function createInactiveSession(tx: OrgTransaction, params: {
     channelThreadId: params.channelThreadId ?? null,
     agentRefId: params.agentRefId ?? null,
     initialState: params.initialState ?? null,
-    createdBy: params.createdBy ?? null,
     active: false
   }).returning();
 
   return newSessionRow;
 }
 
-export async function activateSession(tx: OrgTransaction, sessionId: string) {
+export async function activateSession(tx: OrgTransaction, sessionId: string, authorId?: string) {
   await tx.acquireLock({ type: "edit_session", sessionId });
 
   const session = await tx.query.sessions.findFirst({

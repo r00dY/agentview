@@ -99,22 +99,22 @@ describe('API', () => {
     }
   }
 
-  const baseInput = { type: "message", role: "user", content: "Hello" }
-  const baseOutput = { type: "message", role: "assistant", content: "Hi there" }
-  const baseStep = { type: "reasoning", content: "Thinking..." }
+  const baseInput = { type: "message", role: "user", content: "Hello", id: "base-input-1" }
+  const baseOutput = { type: "message", role: "assistant", content: "Hi there", id: "base-output-1" }
+  const baseStep = { type: "reasoning", content: "Thinking...", id: "base-step-1" }
 
   const fun1Call = (id?: string) => ({ type: "function_call", name: "function1", ...(id ? { callId: id } : {}) })
   const fun2Call = (id?: string) => ({ type: "function_call", name: "function2", ...(id ? { callId: id } : {}) })
 
   const funResult = (id?: string) => ({ type: "function_call_result", ...(id ? { callId: id } : {}) })
 
-  const baseInputExt = { type: "message", role: "user", content: "Hello", __extraField: "extra" }
-  const baseOutputExt = { type: "message", role: "assistant", content: "Hi there", __extraField: "extra" }
-  const baseStepExt = { type: "reasoning", content: "Thinking...", __extraField: "extra" }
+  const baseInputExt = { type: "message", role: "user", content: "Hello", __extraField: "extra", id: "base-input-1-ext" }
+  const baseOutputExt = { type: "message", role: "assistant", content: "Hi there", __extraField: "extra", id: "base-output-1-ext" }
+  const baseStepExt = { type: "reasoning", content: "Thinking...", __extraField: "extra", id: "base-step-1-ext" }
 
-  const wrongInput = { type: "message", role: "user", content: 100 }
-  const wrongStep = { type: "reasoning", content: 100 }
-  const wrongOutput = { type: "message", role: "assistant", content: 100 }
+  const wrongInput = { type: "message", role: "user", content: 100, id: "wrong-input-1" }
+  const wrongStep = { type: "reasoning", content: 100, id: "wrong-step-1" }
+  const wrongOutput = { type: "message", role: "assistant", content: 100, id: "wrong-output-1" }
 
 
   async function createSession() {

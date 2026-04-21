@@ -52,7 +52,6 @@ export const sessions = pgTable("sessions", {
   initialState: jsonb("initial_state"),
   channelThreadId: uuid("channel_thread_id").references(() => channelThreads.id, { onDelete: 'set null' }),
   active: boolean("active").notNull().default(true),
-  createdBy: text("created_by").references(() => users.id, { onDelete: 'set null' }), // required for inactive session so that when we activate we know about notifications
 }, (table) => [
   uniqueIndex('sessions_handle_org_unique').on(table.handleNumber, table.handleSuffix, table.organizationId),
   index('sessions_channel_thread_idx').on(table.channelThreadId),
