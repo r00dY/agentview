@@ -164,28 +164,7 @@ export class AgentViewBase {
   async getUserByExternalId(externalId: string) {
     return await this.request<User>('GET', `/api/users/by-external-id/${externalId}`)
   }
-
-  // async getUser(options: { id: string } | { token: string } | { externalId: string }): Promise<User> {
-  //   if ('id' in options) {
-  //     return await this.request<User>('GET', `/api/users/${options.id}`)
-  //   }
-  //   if ('token' in options) {
-  //     if (this.userToken && this.userToken !== options.token) {
-  //       throw new Error('Cannot get user with token when scoped with another user\'s token')
-  //     }
-  //     const scoped = new AgentViewBase({
-  //       apiKey: this.apiKey,
-  //       userToken: options.token,
-  //       env: this.env
-  //     })
-  //     return await scoped.request<User>('GET', `/api/users/me`)
-  //   }
-  //   if ('externalId' in options) {
-  //     return await this.request<User>('GET', `/api/users/by-external-id/${options.externalId}`)
-  //   }
-  //   throw new Error('Invalid options')
-  // }
-
+  
   async updateUser(options: UserCreate & { id: string }): Promise<User> {
     return await this.request<User>('PATCH', `/api/users/${options.id}`, options)
   }
