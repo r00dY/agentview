@@ -147,32 +147,6 @@ export class AgentViewBase {
     return await this._request<SessionsPaginatedResponse>('GET', path, undefined)
   }
 
-  // Users
-
-  // async createUser(options?: UserCreate): Promise<UserWithToken> {
-  //   return await this._request<UserWithToken>('POST', `/api/users`, options ?? {})
-  // }
-
-  // async createAnonUser(): Promise<UserWithToken> {
-  //   return await this._request<UserWithToken>('POST', `/api/users/anonymous`, {})
-  // }
-
-  // async getMe(): Promise<User> {
-  //   return await this._request<User>('GET', `/api/users/me`)
-  // }
-
-  // async getUser(id: string) {
-  //   return await this._request<User>('GET', `/api/users/${id}`)
-  // }
-
-  // async getUserByExternalId(externalId: string) {
-  //   return await this._request<User>('GET', `/api/users/by-external-id/${externalId}`)
-  // }
-
-  // async updateUser(options: UserCreate & { id: string }): Promise<User> {
-  //   return await this._request<User>('PATCH', `/api/users/${options.id}`, options)
-  // }
-
   async getEnvironment(): Promise<Environment> {
     return await this._request<Environment>('GET', `/api/environment`)
   }
@@ -259,9 +233,6 @@ class UsersResource {
     return await this.client._request<User>('PATCH', `/api/users/${options.id}`, options)
   }
 }
-
-
-
 
 
 export function createClient(options: AgentViewClientOptions): AgentViewClient {
