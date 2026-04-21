@@ -136,6 +136,10 @@ export class AgentViewBase {
     return await this.request<User>('POST', `/api/users`, options ?? {})
   }
 
+  async createAnonUser(): Promise<User> {
+    return await this.request<User>('POST', `/api/users/anonymous`, {})
+  }
+
   async getMe(): Promise<User> {
     return await this.request<User>('GET', `/api/users/me`)
   }

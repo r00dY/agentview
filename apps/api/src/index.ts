@@ -159,10 +159,8 @@ const usersPOSTRoute = createRoute({
   },
 })
 
-
-
 app.openapi(usersPOSTRoute, async (c) => {
-  const principal = await authnAllowAnon(c.req.raw.headers)
+  const principal = await authn(c.req.raw.headers)
   const body = await c.req.valid('json')
 
   return withTenant(principal, async (tx) => {
@@ -170,6 +168,30 @@ app.openapi(usersPOSTRoute, async (c) => {
     return c.json(newUser, 201);
   })
 })
+
+const usersAnonPOSTRoute = createRoute({
+  method: 'post',
+  path: '/api/users/anonymous',
+  summary: 'Create anon user',
+  tags: ['Users'],
+  request: {
+    body: body(z.object({}).optional())
+  },
+  responses: {
+    201: response_data(UserSchema)
+  },
+})
+
+app.openapi(usersAnonPOSTRoute, async (c) => {
+  const principal = await authnAllowAnon(c.req.raw.headers)
+  const body = await c.req.valid('json')
+
+  return withTenant(principal, async (tx) => {
+    const newUser = await createUser(tx, body ?? {});
+    return c.json(newUser, 201);
+  })
+})
+
 
 
 const userMeRoute = createRoute({
