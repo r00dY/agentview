@@ -778,6 +778,38 @@ describe('ai-sdk', () => {
         expect(finalSession.messages[1].id).toMatch(UUID_REGEX);
       }, TEST_TIMEOUT);
 
+      test("input message id is auto set when not provided", async () => {
+        await standardClient.updateEnvironment({ config: buildConfig() });
+
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "Hi" },
+            { type: "text-end", id: "t1" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        // for session
+        const session = await client.createSession({
+          agent: "test-ai-sdk",
+          input: { role: "user", parts: [{ type: "text", text: "Hello" }] },
+        });
+
+        expect(session.messages[0].id).toMatch(UUID_REGEX);
+
+        // for run
+        const session2 = await client.createSession({ agent: "test-ai-sdk" });
+        await client.createRun({ sessionId: session2.id, input: { role: "user", parts: [{ type: "text", text: "Hello" }] }});
+        const finalSession2 = await client.getSession({ id: session2.id });
+        expect(finalSession2.messages[0].id).toMatch(UUID_REGEX);
+      }, TEST_TIMEOUT);
+
+
       test("message id + metadata are preserved when provided", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
         const session = await client.createSession({ agent: "test-ai-sdk" });

@@ -958,7 +958,7 @@ app.openapi(runsAISDKPOSTRoute, async (c) => {
   if (!body.stream) {
     return await withTenant(principal, async (tx) => {
       const standardSession = await requireSession(tx, params.session_id);
-      return standardToDefaultSession(standardSession)
+      return c.json(standardToDefaultSession(standardSession), 201);
     })
   }
 
