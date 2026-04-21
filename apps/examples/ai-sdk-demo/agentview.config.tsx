@@ -14,7 +14,7 @@ export default defineConfig({
     {
       type: "gmail",
       address: "agentviewtest@gmail.com",
-      agent: "weather-chat",
+      agent: "weather-chat"
     },
     {
       type: "api",

@@ -121,21 +121,15 @@ async function loadConfig(): Promise<AgentViewConfig> {
   const configPath = resolveConfigPath(configPathFromArg);
   const absolutePath = path.resolve(configPath);
   const fileUrl = pathToFileURL(absolutePath).href;
-  const ext = path.extname(absolutePath).toLowerCase();
 
   let moduleExports: any;
   try {
-    // Cache-bust so re-imports pick up file changes during watch mode
-    if (ext === ".js" || ext === ".mjs" || ext === ".cjs") {
-      moduleExports = await import(`${fileUrl}?t=${Date.now()}`);
-    } else {
-      const { tsImport } = await import("tsx/esm/api");
-      moduleExports = await tsImport(`${fileUrl}?t=${Date.now()}`, { parentURL: import.meta.url });
-    }
+    const { tsImport } = await import("tsx/esm/api");
+    moduleExports = await tsImport(fileUrl, { parentURL: import.meta.url });
   } catch (error: any) {
     if (error?.code === "ERR_MODULE_NOT_FOUND") {
       throw new Error(
-        `Cannot load ${configPath}. If it's a TypeScript file, ensure "tsx" is installed.`,
+        `Cannot load ${configPath}. Ensure "tsx" is installed.`,
       );
     }
     throw error;

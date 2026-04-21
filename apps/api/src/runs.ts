@@ -337,8 +337,10 @@ async function prepareRunCreation(tx: OrgTransaction, environment: Environment, 
 
 async function processInput(agentConfig: BaseAgentConfig, input: any) {
   const runConfig = requireRunConfig(agentConfig, input);
-  const parsedInput = runConfig.input.schema.parse(input);
+  const parsedInput = runConfig.input.schema.parse(input) as any;
   const idleTimeout = runConfig.idleTimeout ?? DEFAULT_IDLE_TIME;
+
+  parsedInput.id = parsedInput.id ?? crypto.randomUUID();
 
   return { runConfig, parsedInput, idleTimeout };
 }
