@@ -20,7 +20,7 @@ export const UserSchema = z.object({
   email: z.string().nullable(),
   createdAt: z.iso.date(),
   updatedAt: z.iso.date(),
-  createdBy: z.string().nullable(),
+  ownerId: z.string().nullable(),
   space: SpaceSchema,
   token: z.string(),
 })
@@ -31,7 +31,7 @@ export const UserCreateSchema = UserSchema.pick({
   externalId: true,
   email: true,
   space: true, // default based on env
-  createdBy: true,
+  ownerId: true,
 }).partial();
 
 export type UserCreate = z.infer<typeof UserCreateSchema>
@@ -264,9 +264,9 @@ export const SessionCreateBaseSchema = z.object({
   metadata: z.record(z.string(), z.any()).optional(),
   userId: z.string().optional(),
 
-  // mandatory if userId is not provided -> determines destination space basically
-  space: SpaceSchema.optional(),
-  createdBy: z.string().optional(),
+  // // mandatory if userId is not provided -> determines destination space basically
+  // space: SpaceSchema.optional(),
+  // createdBy: z.string().optional(),
 
   summary: z.string().nullish()
 })

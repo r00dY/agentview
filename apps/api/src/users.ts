@@ -70,17 +70,17 @@ export async function requireUser(tx: OrgTransaction, arg: Parameters<typeof fin
 
 
 
-function getDefaultSpaceFromEnvironment(environment: Environment): { space: Space, createdBy: string | null } {
+function getDefaultSpaceFromEnvironment(environment: Environment): { space: Space, ownerId: string | null } {
   if (environment.handle === 'production') {
     return {
       space: 'production',
-      createdBy: null,
+      ownerId: null,
     }
   }
   else if (environment.handle.startsWith('local:')) {
     return {
       space: 'playground',
-      createdBy: environment.user!.id as string,
+      ownerId: environment.user!.id as string,
     }
   }
   else {
@@ -97,11 +97,11 @@ export async function createUser(tx: TenantTransaction, body: UserCreate) {
 
   const environment = await requireEnvironment(tx)
 
-  if (body.space && body.space === 'playground' && body.createdBy !== null) {
-    throw new AgentViewError('Users in playground space must have "createdBy" set.', 400)
+  if (body.space && body.space === 'playground' && body.ownerId !== null) {
+    throw new AgentViewError('Users in playground space must have "ownerId" set.', 400)
   }
 
-  const { space, createdBy } = body.space ? { space: body.space, createdBy: body.createdBy ?? null } : getDefaultSpaceFromEnvironment(environment);
+  const { space, ownerId } = body.space ? { space: body.space, ownerId: body.ownerId ?? null } : getDefaultSpaceFromEnvironment(environment);
 
   await authorize(tx.principal, { action: "end-user:create", space })
 
@@ -122,7 +122,7 @@ export async function createUser(tx: TenantTransaction, body: UserCreate) {
     organizationId: tx.organizationId,
     externalId: body.externalId,
     email: body.email,
-    createdBy,
+    ownerId,
     space,
     token: randomBytes(32).toString('hex'),
   }).returning()

@@ -291,11 +291,11 @@ export function getSessionListFilter(tx: TenantTransaction, params: z.infer<type
     if (space === "playground") {
 
       if (principal.type === 'member') {
-        filters.push(eq(endUsers.createdBy, principal.session.user.id));
+        filters.push(eq(endUsers.ownerId, principal.session.user.id));
       }
-      else if (principal.type === 'apiKey') {
-        filters.push(eq(endUsers.createdBy, principal.apiKey.userId));
-      }
+      // else if (principal.type === 'apiKey') {
+      //   filters.push(eq(endUsers.ownerId, principal.apiKey.userId));
+      // }
     }
   }
   else if (principal.type === 'user') {
@@ -430,7 +430,9 @@ export async function createSession(tx: TenantTransaction, body: StandardSession
       return tx.principal.user;
     }
 
-    return await createUser(tx, { space: body.space, createdBy: body.createdBy });
+    throw new AgentViewError("Invalid request. You must provide `userId` or be authenticated as a user.", 422);
+
+    // return await createUser(tx, { space: body.space, createdBy: body.createdBy });
   })()
 
   authorize(tx.principal, { action: "end-user:update", user });

@@ -21,7 +21,7 @@ export const endUsers = pgTable("end_users", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 
-  createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
+  ownerId: text('owner_id').references(() => users.id, { onDelete: 'set null' }),
   space: varchar("space", { length: 24 }).notNull().$type<'production' | 'playground' | 'shared-playground'>(), // production, playground, shared-playground
 
   token: text("token").notNull().unique(),
@@ -30,8 +30,8 @@ export const endUsers = pgTable("end_users", {
   uniqueIndex('end_user_external_id_org_unique').on(table.externalId, table.organizationId),
   uniqueIndex('end_user_email_org_unique').on(table.email, table.organizationId),
   createTenantPolicy('end_users'),
-  // If space = 'production' then createdBy must be null, otherwise createdBy must be defined
-  check('end_users_created_by_space_check', sql`(space = 'production' AND created_by IS NULL) OR (space != 'production' AND created_by IS NOT NULL)`),
+  // If space = 'production' then ownerId must be null, otherwise ownerId must be defined
+  check('end_users_owner_id_space_check', sql`(space = 'production' AND owner_id IS NULL) OR (space != 'production' AND owner_id IS NOT NULL)`),
 ]);
 
 
@@ -312,8 +312,8 @@ export const sessionRelations = relations(sessions, ({ many, one }) => ({
 
 export const endUserRelations = relations(endUsers, ({ many, one }) => ({
   sessions: many(sessions),
-  createdBy: one(users, {
-    fields: [endUsers.createdBy],
+  owner: one(users, {
+    fields: [endUsers.ownerId],
     references: [users.id],
   }),
 }));

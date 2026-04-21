@@ -340,7 +340,9 @@ async function processInput(agentConfig: BaseAgentConfig, input: any) {
   const parsedInput = runConfig.input.schema.parse(input) as any;
   const idleTimeout = runConfig.idleTimeout ?? DEFAULT_IDLE_TIME;
 
-  parsedInput.id = parsedInput.id ?? crypto.randomUUID();
+  if (agentConfig.adapter === 'ai-sdk') {
+    parsedInput.id = parsedInput.id ?? crypto.randomUUID();
+  }
 
   return { runConfig, parsedInput, idleTimeout };
 }

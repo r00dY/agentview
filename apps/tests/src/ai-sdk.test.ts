@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
 
-import { AgentViewError } from 'agentview';
+import { AgentViewError, type User } from 'agentview';
 
 import { z } from 'zod';
 import type { MockServer } from './mockServer';
@@ -96,6 +96,7 @@ describe('ai-sdk', () => {
       let client: typeof org.prodClient;
       let standardClient: typeof org.prodStandardClient;
       let proxyProcess: any;
+      let user: User;
 
       beforeAll(async () => {
         if (envType === "local") {
@@ -117,6 +118,8 @@ describe('ai-sdk', () => {
           client = org.prodClient;
           standardClient = org.prodStandardClient;
         }
+
+        user = await client.createUser();
       }, TEST_TIMEOUT);
 
       afterAll(async () => {
@@ -127,7 +130,7 @@ describe('ai-sdk', () => {
 
       test("happy path: text response (validated via ai-sdk stream)", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await client.createSession({ agent: "test-ai-sdk" });
+        const session = await client.createSession({ agent: "test-ai-sdk", userId: user.id });
 
         mockAISDKServer!.setHandler((_body, res) => {
           writeAISDKSuccessHeaders(res);
@@ -174,7 +177,7 @@ describe('ai-sdk', () => {
 
       test("happy path: text + reasoning (validated via ai-sdk stream)", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await client.createSession({ agent: "test-ai-sdk" });
+        const session = await client.createSession({ agent: "test-ai-sdk", userId: user.id });
 
         mockAISDKServer!.setHandler((_body, res) => {
           writeAISDKSuccessHeaders(res);
@@ -248,7 +251,7 @@ describe('ai-sdk', () => {
           },
         });
 
-        const session = await standardClient.createSession({ agent: "test-ai-sdk" });
+        const session = await standardClient.createSession({ agent: "test-ai-sdk", userId: user.id });
 
         mockAISDKServer!.setHandler((_body, res) => {
           writeAISDKSuccessHeaders(res);
@@ -301,7 +304,7 @@ describe('ai-sdk', () => {
 
       test("error event → run marked failed (validated via ai-sdk stream)", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await standardClient.createSession({ agent: "test-ai-sdk" });
+        const session = await standardClient.createSession({ agent: "test-ai-sdk", userId: user.id });
 
         mockAISDKServer!.setHandler((_body, res) => {
           writeAISDKSuccessHeaders(res);
@@ -329,7 +332,7 @@ describe('ai-sdk', () => {
 
       test("error → invalid chunk", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await standardClient.createSession({ agent: "test-ai-sdk" });
+        const session = await standardClient.createSession({ agent: "test-ai-sdk", userId: user.id });
 
         mockAISDKServer!.setHandler((_body, res) => {
           writeAISDKSuccessHeaders(res);
@@ -389,7 +392,7 @@ describe('ai-sdk', () => {
           }, 2000)
         });
 
-        const session = await client.createSession({ agent: "test-ai-sdk" , input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] }});
+        const session = await client.createSession({ agent: "test-ai-sdk", userId: user.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] }});
         expect(session.status).toBe("in_progress");
         expect(session.messages.length).toBe(1);
         expect(session.messages[0]).toMatchObject({
@@ -428,7 +431,7 @@ describe('ai-sdk', () => {
 
       test("Upstream server is down → 502 error", async () => {
         await standardClient.updateEnvironment({ config: buildConfig({ agentUrl: "http://localhost:10000/this-server-is-down" }) }); // 
-        const session = await client.createSession({ agent: "test-ai-sdk" });
+        const session = await client.createSession({ agent: "test-ai-sdk", userId: user.id });
 
         const stream = sendMessageViaTransport(
           client.createTransport(),
@@ -443,7 +446,7 @@ describe('ai-sdk', () => {
 
       test("HTTP error: 500 → run marked failed (validated via ai-sdk stream)", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await client.createSession({ agent: "test-ai-sdk" });
+        const session = await client.createSession({ agent: "test-ai-sdk", userId: user.id });
 
         mockAISDKServer!.setHandler((_body, res) => {
           res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -465,7 +468,7 @@ describe('ai-sdk', () => {
 
       test("HTTP error: 500 → client.createRun (no stream) passes error to client. No run is created.", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await client.createSession({ agent: "test-ai-sdk" });
+        const session = await client.createSession({ agent: "test-ai-sdk", userId: user.id });
 
         mockAISDKServer!.setHandler((_body, res) => {
           res.writeHead(500);
@@ -491,7 +494,7 @@ describe('ai-sdk', () => {
           res.end(jsonError);
         });
 
-        const promise = client.createSession({ agent: "test-ai-sdk" , input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
+        const promise = client.createSession({ agent: "test-ai-sdk" , userId: user.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
 
         await expect(promise).rejects.not.toBeInstanceOf(AgentViewError);
         await expect(promise).rejects.toThrowError(jsonError);
@@ -506,7 +509,7 @@ describe('ai-sdk', () => {
           res.end("");
         });
 
-        const promise = client.createSession({ agent: "test-ai-sdk" , input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
+        const promise = client.createSession({ agent: "test-ai-sdk" , userId: user.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
 
         await expect(promise).rejects.not.toBeInstanceOf(AgentViewError);
         await expect(promise).rejects.toThrowError("");
@@ -515,7 +518,7 @@ describe('ai-sdk', () => {
 
       test("stream aborted (no finish and no done) → run marked failed (validated via ai-sdk stream)", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await standardClient.createSession({ agent: "test-ai-sdk" });
+        const session = await standardClient.createSession({ agent: "test-ai-sdk", userId: user.id });
 
         mockAISDKServer!.setHandler((_body, res) => {
           writeAISDKSuccessHeaders(res);
@@ -550,7 +553,7 @@ describe('ai-sdk', () => {
 
       test("invalid chunk → run marked failed (validated via ai-sdk stream)", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await standardClient.createSession({ agent: "test-ai-sdk" });
+        const session = await standardClient.createSession({ agent: "test-ai-sdk", userId: user.id });
 
         mockAISDKServer!.setHandler((_body, res) => {
           writeAISDKSuccessHeaders(res);
@@ -587,7 +590,7 @@ describe('ai-sdk', () => {
 
       test("request body format: sends UIMessage[] with correct history", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await standardClient.createSession({ agent: "test-ai-sdk" });
+        const session = await standardClient.createSession({ agent: "test-ai-sdk", userId: user.id });
 
         mockAISDKServer!.setHandler((_body, res) => {
           writeAISDKSuccessHeaders(res);
@@ -623,7 +626,7 @@ describe('ai-sdk', () => {
 
       test("multi-turn: second request has full conversation history", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await standardClient.createSession({ agent: "test-ai-sdk" });
+        const session = await standardClient.createSession({ agent: "test-ai-sdk", userId: user.id  });
 
         // First turn
         mockAISDKServer!.setHandler((_body, res) => {
@@ -685,7 +688,7 @@ describe('ai-sdk', () => {
 
       test("cancellation → run cancelled and agent connection aborted", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await standardClient.createSession({ agent: "test-ai-sdk" });
+        const session = await standardClient.createSession({ agent: "test-ai-sdk", userId: user.id });
 
         let connectionClosed = false;
         let connectionEstablished: () => void;
@@ -750,7 +753,7 @@ describe('ai-sdk', () => {
 
       test("message id is auto set when undefined", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await client.createSession({ agent: "test-ai-sdk" });
+        const session = await client.createSession({ agent: "test-ai-sdk", userId: user.id });
 
         mockAISDKServer!.setHandler((_body, res) => {
           writeAISDKSuccessHeaders(res);
@@ -797,13 +800,14 @@ describe('ai-sdk', () => {
         // for session
         const session = await client.createSession({
           agent: "test-ai-sdk",
+          userId: user.id,
           input: { role: "user", parts: [{ type: "text", text: "Hello" }] },
         });
 
         expect(session.messages[0].id).toMatch(UUID_REGEX);
 
         // for run
-        const session2 = await client.createSession({ agent: "test-ai-sdk" });
+        const session2 = await client.createSession({ agent: "test-ai-sdk", userId: user.id });
         await client.createRun({ sessionId: session2.id, input: { role: "user", parts: [{ type: "text", text: "Hello" }] }});
         const finalSession2 = await client.getSession({ id: session2.id });
         expect(finalSession2.messages[0].id).toMatch(UUID_REGEX);
@@ -812,7 +816,7 @@ describe('ai-sdk', () => {
 
       test("message id + metadata are preserved when provided", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await client.createSession({ agent: "test-ai-sdk" });
+        const session = await client.createSession({ agent: "test-ai-sdk", userId: user.id });
 
         mockAISDKServer!.setHandler((_body, res) => {
           writeAISDKSuccessHeaders(res);
@@ -848,7 +852,7 @@ describe('ai-sdk', () => {
 
       test("tools inputs are objects, partial tool call is object too", async () => {
         await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await client.createSession({ agent: "test-ai-sdk" });
+        const session = await client.createSession({ agent: "test-ai-sdk", userId: user.id });
 
         mockAISDKServer!.setHandler((_body, res) => {
           writeAISDKSuccessHeaders(res);
