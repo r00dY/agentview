@@ -16,7 +16,8 @@ import { startCloudflareTunnel, type CloudflareTunnel } from "./tunnel.js";
 const DEFAULT_CONFIG_FILES = [
   "agentview.config.ts",
   "agentview.config.tsx",
-  "agentview.config.js"
+  "agentview.config.js",
+  "agentview.config.jsx"
 ];
 
 function handleError(error: unknown): never {
@@ -44,8 +45,10 @@ export async function runCli() {
     .hook('preAction', async (thisCommand) => {
       const opts = thisCommand.opts();
       const apiKey = opts.apiKey ?? getAPIKey();
-      configPathFromArg = opts.config; // required to resolve path later
       const env = opts.env ?? (await loadConfig()).env;
+
+      // For now, no custom config paths.
+      // configPathFromArg = opts.config; // required to resolve path later
 
       client = createStandardClient({ apiKey, env });
     });
@@ -58,6 +61,7 @@ export async function runCli() {
     .option('--no-studio', 'disable colored output')
     .action(async (opts) => {
       await runProxyServer(client);
+      await watchConfig();
 
       if (opts.studio) {
         const configPath = resolveConfigPath(configPathFromArg);
@@ -72,7 +76,6 @@ export async function runCli() {
   configCmd
     .command("push")
     .description("Send the config file to the AgentView server once")
-    .option("-c, --config <path>", "Path to agentview config file")
     .action(async (opts) => {
       await pushConfig();
     });
@@ -80,7 +83,6 @@ export async function runCli() {
   configCmd
     .command("watch")
     .description("Watch the config file and sync on every change")
-    .option("-c, --config <path>", "Path to agentview config file")
     .action(async (opts) => {
       await watchConfig();
     });
@@ -123,11 +125,12 @@ async function loadConfig(): Promise<AgentViewConfig> {
 
   let moduleExports: any;
   try {
+    // Cache-bust so re-imports pick up file changes during watch mode
     if (ext === ".js" || ext === ".mjs" || ext === ".cjs") {
       moduleExports = await import(`${fileUrl}?t=${Date.now()}`);
     } else {
       const { tsImport } = await import("tsx/esm/api");
-      moduleExports = await tsImport(fileUrl, { parentURL: import.meta.url });
+      moduleExports = await tsImport(`${fileUrl}?t=${Date.now()}`, { parentURL: import.meta.url });
     }
   } catch (error: any) {
     if (error?.code === "ERR_MODULE_NOT_FOUND") {
@@ -211,27 +214,20 @@ async function pushConfig() {
 }
 
 async function watchConfig() {
-  const configPath = resolveConfigPath(configPathFromArg);
-  const relativePath = path.relative(process.cwd(), configPath) || configPath;
-  console.log(`Watching ${relativePath} for changes...`);
+  console.log(`[agentview] watching for config changes...`);
 
-  const pushAndReport = async () => {
-    try {
-      await pushConfig();
-    } catch (error) {
-      console.error((error as Error).message);
-    }
-  };
-
-  await pushAndReport();
+  // Push once on startup
+  try { await pushConfig(); } catch (e) { console.error((e as Error).message); }
 
   let debounceTimer: NodeJS.Timeout | null = null;
-  fs.watch(configPath, { persistent: true }, () => {
-    if (debounceTimer) {
-      clearTimeout(debounceTimer);
-    }
-    debounceTimer = setTimeout(() => {
-      pushAndReport();
-    }, 100);
+  fs.watch(process.cwd(), { recursive: true }, (_event, filename) => {
+    if (!filename) return;
+    if (filename.includes("node_modules")) return;
+    if (!/\.(ts|tsx|js|jsx)$/.test(filename)) return;
+
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(async () => {
+      try { await pushConfig(); } catch (e) { console.error((e as Error).message); }
+    }, 300);
   });
 }
