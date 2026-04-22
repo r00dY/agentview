@@ -154,7 +154,7 @@ export function SessionCard({ session, listParams, sessionStats }: { session: Se
   const itemsMentionsCount = allItemEvents.filter((event: any) => Array.isArray(event?.payload?.user_mentions) && (event.payload.user_mentions as any[]).includes(me.id)).length;
   const hasUnreads = hasSessionUnreads || hasUnreadItems;
 
-  const author = members.find((member) => member.userId === session.user.createdBy);
+  const author = members.find((member) => member.userId === session.user.ownerId);
 
   return <div key={session.id}>
     <NavLink to={`/sessions/${session.id}?${toQueryParams(listParams)}`}>
