@@ -56,7 +56,7 @@ async function action({ request, params }: ActionFunctionArgs): Promise<ActionRe
   }
 
   try {
-    const user = await agentview().createUser();
+    const { user } = await agentview().users.createAnon();
     const session = await agentview().createSession({
       agent: agentName,
       userId: user.id,

@@ -249,8 +249,8 @@ function SessionPage(props: { session: StandardSession, comments: CommentMessage
         <SessionShell
             sessionBase={session}
             channelConfig={channelConfig}
-            headerExtra={session.user.createdBy === me.id && <ShareForm session={session} />}
-            footer={session.user.createdBy === me.id && <InputForm session={session} channelConfig={channelConfig} styles={styles} createRun={createRun} cancelRun={cancelRun} isRunning={isRunning} />}
+            headerExtra={session.user.ownerId === me.id && <ShareForm session={session} />}
+            footer={session.user.ownerId === me.id && <InputForm session={session} channelConfig={channelConfig} styles={styles} createRun={createRun} cancelRun={cancelRun} isRunning={isRunning} />}
             outletContext={{ session }}
         >
             <div ref={bodyRef}>
@@ -519,7 +519,7 @@ function SessionPage(props: { session: StandardSession, comments: CommentMessage
 function SessionDetails({ sessionBase, channelConfig }: { sessionBase: SessionBase, channelConfig: ChannelConfig }) {
     const { organization: { members } } = useSessionContext();
     const agentRefs = sessionBase.agentRefs;
-    const simulatedBy = members.find((member) => member.userId === sessionBase.user.createdBy);
+    const owner = members.find((member) => member.userId === sessionBase.user.ownerId);
 
     return (
         <div className="w-full">
@@ -543,7 +543,7 @@ function SessionDetails({ sessionBase, channelConfig }: { sessionBase: SessionBa
                 <PropertyListItem>
                     <PropertyListTitle>Space</PropertyListTitle>
                     <PropertyListTextValue>
-                        {simulatedBy ? <>Playground of <span className="text-cyan-700">{simulatedBy.user.name}</span></> : "Production"}
+                        {owner ? <>Playground of <span className="text-cyan-700">{owner.user.name}</span></> : "Production"}
                     </PropertyListTextValue>
                 </PropertyListItem>
                 <PropertyListItem>

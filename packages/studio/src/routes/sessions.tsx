@@ -63,6 +63,8 @@ async function loader({ request }: LoaderFunctionArgs) {
 function Component() {
   const { sessions, pagination, listParams, allStats } = useLoaderData<typeof loader>();
 
+  console.log(sessions);
+
   return <div className="flex flex-row items-stretch h-full">
 
     <div className="basis-[300px] flex-shrink-0 flex-grow-0 min-w-0 border-r flex flex-col ">
