@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { seedUsers } from './seedUsers'
 import { createMockServer, writeAISDKChunks, writeAISDKDone, writeAISDKSuccessHeaders } from './mockServer'
 import type { MockServer } from './mockServer'
+import { updateEnvironment } from 'agentview/updateEnvironment'
 
 configDefaults.__internal = {
   disableSummaries: true,
@@ -30,7 +31,7 @@ describe('Channels', () => {
     avProd = createStandardClient({ apiKey: result.apiKeySecret.key, env: 'production' })
 
     // create environment
-    env = await avProd.updateEnvironment({
+    env = await updateEnvironment(avProd, {
       config: {
         agents: [{
           name: 'support-agent',
@@ -77,7 +78,7 @@ describe('Channels', () => {
   })
 
   test('list channels includes new channel', async () => {
-    const channels = await av.getChannels()
+    const channels = await av.channels.list()
     expect(channels.length).toBeGreaterThanOrEqual(1)
     const found = channels.find(c => c.id === channel.id)
     expect(found).toBeDefined()
@@ -116,7 +117,7 @@ describe('Channels', () => {
    */
   describe("with environment assigned to channel", () => {
     beforeAll(async () => {
-      channel = await av.updateChannel(channel.id, { // connect environment to channel
+      channel = await av.channels.update(channel.id, { // connect environment to channel
         environmentId: env.id,
       })
     })
