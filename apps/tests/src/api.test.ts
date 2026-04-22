@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest'
 import { type User } from 'agentview';
 import type { SessionStreamEvent, StandardRun, StandardSession } from 'agentview/apiTypes';
 import { createStandardClient, type StandardAgentViewClient } from 'agentview/clientStandard';
+import { updateEnvironment } from 'agentview/updateEnvironment';
 
 
 import { z } from 'zod';
@@ -104,10 +105,10 @@ describe('API', () => {
     }
 
     if (options.prod) {
-      await org.prodStandardClient.updateEnvironment({ config })
+      await updateEnvironment(org.prodStandardClient, { config })
     }
     else {
-      await av.updateEnvironment({ config })
+      await updateEnvironment(av, { config })
     }
   }
 
@@ -346,7 +347,7 @@ describe('API', () => {
 
       describe("get session by id", () => {
         test("works for own session", async () => {
-          await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
+          await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
           const session = await av.createSession({ agent: "test", userId: initUser1.id})
 
           const avPublic = createStandardClient({
@@ -360,7 +361,7 @@ describe('API', () => {
         })
 
         test("fails for someone else's session", async () => {
-          await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
+          await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
           const session = await av.createSession({ agent: "test", userId: initUser1.id})
 
           const avPublic = createStandardClient({
@@ -387,18 +388,18 @@ describe('API', () => {
     test("works", async () => {
       const CONFIG = { agents: [{ name: "test", version: "1.0.0" }], __internal: { disableSummaries: true } };
 
-      let environment = await av.updateEnvironment({ config: CONFIG })
+      let environment = await updateEnvironment(av, { config: CONFIG })
       expect(environment.config).toEqual(CONFIG);
 
-      environment = await av.getEnvironment();
+      environment = await av.environments.getActive();
       expect(environment.config).toEqual(CONFIG);
 
       const CONFIG_2 = { agents: [{ name: "test2", version: "1.0.0" }], __internal: { disableSummaries: true } };
 
-      environment = await av.updateEnvironment({ config: CONFIG_2 })
+      environment = await updateEnvironment(av, { config: CONFIG_2 })
       expect(environment.config).toEqual(CONFIG_2);
 
-      environment = await av.getEnvironment();
+      environment = await av.environments.getActive();
       expect(environment.config).toEqual(CONFIG_2);
     })
 
@@ -406,15 +407,15 @@ describe('API', () => {
       const CONFIG = { agents: [], __internal: { disableSummaries: true } };
       const CONFIG_WITH_ANIMAL = { ...CONFIG, animal: "dog" };
 
-      let environment = await av.updateEnvironment({ config: CONFIG_WITH_ANIMAL })
+      let environment = await updateEnvironment(av, { config: CONFIG_WITH_ANIMAL })
       expect(environment.config).toEqual(CONFIG);
 
-      environment = await av.getEnvironment();
+      environment = await av.environments.getActive();
       expect(environment.config).toEqual(CONFIG);
     })
 
     test("invalid config throws", async () => {
-      await expect(av.updateEnvironment({ config: { agents: 100 } })).rejects.toThrowError(expect.objectContaining({
+      await expect(updateEnvironment(av, { config: { agents: 100 } })).rejects.toThrowError(expect.objectContaining({
         statusCode: 422,
         message: expect.any(String),
       }))
@@ -446,21 +447,21 @@ describe('API', () => {
 
       // Bob uploads his config
       const BOB_CONFIG = { agents: [{ name: "bob-agent", version: "1.0.0" }], channels: [{ type: 'api' as const, name: "bob-agent", agent: "bob-agent" }], __internal: { disableSummaries: true } };
-      await avBob.updateEnvironment({ config: BOB_CONFIG });
+      await updateEnvironment(avBob, { config: BOB_CONFIG });
 
       // Alice uploads her config
       const ALICE_CONFIG = { agents: [{ name: "alice-agent", version: "1.0.0" }], channels: [{ type: 'api' as const, name: "alice-agent", agent: "alice-agent" }], __internal: { disableSummaries: true } };
-      await avAlice.updateEnvironment({ config: ALICE_CONFIG });
+      await updateEnvironment(avAlice, { config: ALICE_CONFIG });
 
       // Verify each developer sees only their own config
-      const bobConfig = await avBob.getEnvironment();
+      const bobConfig = await avBob.environments.getActive();
       expect(bobConfig.config).toEqual(BOB_CONFIG);
 
-      const aliceConfig = await avAlice.getEnvironment();
+      const aliceConfig = await avAlice.environments.getActive();
       expect(aliceConfig.config).toEqual(ALICE_CONFIG);
 
       // Double-check Bob's config wasn't overwritten by Alice's
-      const bobConfigAgain = await avBob.getEnvironment();
+      const bobConfigAgain = await avBob.environments.getActive();
       expect(bobConfigAgain.config).toEqual(BOB_CONFIG);
 
       // Test that configs are isolated for real operations (sessions/runs)
@@ -514,8 +515,8 @@ describe('API', () => {
       await updateConfig({ prod: true });
 
 
-      const session = await org.admin.localClient.createSession({ agent: "test", userId: initUser1.id });
-      const promise = org.admin.localClient.createRun({ sessionId: session.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hello" }] } });
+      const session = await org.admin.localClient.sessions.create({ agent: "test", userId: initUser1.id });
+      const promise = org.admin.localClient.sessions.createRun(session.id, { input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hello" }] } });
 
       await expectToFail(promise, 400)
     });
@@ -525,7 +526,7 @@ describe('API', () => {
       await updateConfig({ prod: true });
 
       await expect(
-        org.prodStandardClient.updateEnvironment({ tunnelUrl: "https://some-proxy-url.com" })
+        updateEnvironment(org.prodStandardClient, { tunnelUrl: "https://some-proxy-url.com" })
       ).rejects.toThrowError(expect.objectContaining({
         statusCode: 400,
         message: expect.stringContaining("production"),
@@ -536,13 +537,13 @@ describe('API', () => {
       await updateConfig()
 
       await expect(
-        org.admin.localStandardClient.updateEnvironment({ tunnelUrl: "xxxx" })
+        updateEnvironment(org.admin.localStandardClient, { tunnelUrl: "xxxx" })
       ).rejects.toThrowError(expect.objectContaining({
         statusCode: 422,
       }));
 
       await expect(
-        org.admin.localStandardClient.updateEnvironment({ tunnelUrl: "ftp://some-domain.com/incorrect-tunnel-url" })
+        updateEnvironment(org.admin.localStandardClient, { tunnelUrl: "ftp://some-domain.com/incorrect-tunnel-url" })
       ).rejects.toThrowError(expect.objectContaining({
         statusCode: 422,
       }));
@@ -553,7 +554,7 @@ describe('API', () => {
 
   describe("sessions", async () => {
     test("create for specific user", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
+      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
 
       const session = await av.createSession({ agent: "test", userId: initUser1.id})
       expect(session).toMatchObject({
@@ -569,7 +570,7 @@ describe('API', () => {
     })
 
     // test("create for no user (creates new user)", async () => {
-    //   await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
+    //   await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
 
     //   const session = await av.createSession({ agent: "test" })
     //   expect(session.userId).toBeDefined()
@@ -579,7 +580,7 @@ describe('API', () => {
     // })
 
     test("create session for other user with 'as' -> should throw", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
+      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
 
       await expect(av.asUser(initUser1).createSession({ agent: "test", userId: initUser2.id })).rejects.toThrowError(expect.objectContaining({
         statusCode: 401,
@@ -589,7 +590,7 @@ describe('API', () => {
     })
 
     test("create - fails at wrong agent", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
+      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
 
       await expect(av.createSession({ agent: "wrong_channel", userId: initUser1.id })).rejects.toThrowError(expect.objectContaining({
         statusCode: 404,
@@ -601,7 +602,7 @@ describe('API', () => {
 
 
     test("get by id for existing session", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
+      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
 
       const session = await av.createSession({ agent: "test", userId: initUser1.id})
       const fetchedSession = await av.getSession({ id: session.id })
@@ -613,7 +614,7 @@ describe('API', () => {
     })
 
     test("get by id - wrong id", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
+      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
 
       await expect(av.getSession({ id: 'xxx' })).rejects.toThrowError(expect.objectContaining({
         statusCode: 404,
@@ -688,7 +689,7 @@ describe('API', () => {
 
     // METADATA TESTS
     test("create / with known metadata / saved", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { product_id: z.string() } }] } })
+      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { product_id: z.string() } }] } })
 
       const session = await av.createSession({ agent: "test", userId: initUser1.id, metadata: { product_id: "123" } })
       expect(session).toMatchObject({
@@ -699,7 +700,7 @@ describe('API', () => {
     })
 
     test("create / optional & nullable metadata / all saved as null", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { x: z.nullable(z.string()), y: z.nullable(z.number()) } }] } })
+      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { x: z.nullable(z.string()), y: z.nullable(z.number()) } }] } })
 
       const session = await av.createSession({ agent: "test", userId: initUser1.id })
       expect(session).toMatchObject({
@@ -711,7 +712,7 @@ describe('API', () => {
     })
 
     test("create / with known metadata + allowUnknownMetadata=false / saved", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { product_id: z.string() }, allowUnknownMetadata: false }] } })
+      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { product_id: z.string() }, allowUnknownMetadata: false }] } })
 
       const session = await av.createSession({ agent: "test", userId: initUser1.id, metadata: { product_id: "123" } })
       expect(session).toMatchObject({
@@ -722,7 +723,7 @@ describe('API', () => {
     })
 
     test("create / with unknown metadata / saved", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
+      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
 
       const session = await av.createSession({ agent: "test", userId: initUser1.id, metadata: { product_id: "123" } })
       expect(session).toMatchObject({
@@ -733,7 +734,7 @@ describe('API', () => {
     })
 
     test("create / with unknown metadata + allowUnknownMetadata=false / failed", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", allowUnknownMetadata: false }] } })
+      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", allowUnknownMetadata: false }] } })
 
       await expect(av.createSession({ agent: "test", userId: initUser1.id, metadata: { product_id: "123" } })).rejects.toThrowError(expect.objectContaining({
         statusCode: 422,
@@ -742,7 +743,7 @@ describe('API', () => {
     })
 
     test("create / with incompatible metadata / fails", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { product_id: z.string() } }] } })
+      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { product_id: z.string() } }] } })
 
       await expect(av.createSession({ agent: "test", userId: initUser1.id, metadata: { product_id: 123 } })).rejects.toThrowError(expect.objectContaining({
         statusCode: 422,
@@ -752,7 +753,7 @@ describe('API', () => {
 
 
     test("update metadata", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { field1: z.string(), field2: z.number() }, allowUnknownMetadata: false }] } })
+      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { field1: z.string(), field2: z.number() }, allowUnknownMetadata: false }] } })
 
       const session = await av.createSession({ agent: "test", metadata: { field1: "A", field2: 0 }, userId: initUser1.id })
 
@@ -764,7 +765,7 @@ describe('API', () => {
     })
 
     test("update metadata - partial update", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { field1: z.string(), field2: z.number() }, allowUnknownMetadata: false }] } })
+      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { field1: z.string(), field2: z.number() }, allowUnknownMetadata: false }] } })
 
       const session = await av.createSession({ agent: "test", metadata: { field1: "A", field2: 0 }, userId: initUser1.id })
 
@@ -776,7 +777,7 @@ describe('API', () => {
     })
 
     test("update metadata - make field null", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { field1: z.string(), field2: z.number().nullable() }, allowUnknownMetadata: false }] } })
+      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { field1: z.string(), field2: z.number().nullable() }, allowUnknownMetadata: false }] } })
 
       const session = await av.createSession({ agent: "test", metadata: { field1: "A", field2: 0 }, userId: initUser1.id })
 
@@ -788,7 +789,7 @@ describe('API', () => {
     })
 
     test("update metadata only - validation enforced", async () => {
-      await av.updateEnvironment({ config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { product_id: z.string() }, allowUnknownMetadata: false }] } })
+      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { product_id: z.string() }, allowUnknownMetadata: false }] } })
 
       const session = await av.createSession({ agent: "test", metadata: { product_id: "A" }, userId: initUser1.id })
 
@@ -811,7 +812,7 @@ describe('API', () => {
       let agentName = 'agent-for-testing-lists'
 
       beforeAll(async () => {
-        await org.prodStandardClient.updateEnvironment({ config: { agents: [{ name: agentName, version: "1.0.0" }], channels: [{ type: 'api', name: agentName, agent: agentName }] } })
+        await updateEnvironment(org.prodStandardClient, { config: { agents: [{ name: agentName, version: "1.0.0" }], channels: [{ type: 'api', name: agentName, agent: agentName }] } })
 
         // Create 20 sessions for testing
         user1Sessions = []
@@ -1706,7 +1707,7 @@ describe('API', () => {
           ]
         }
 
-        await av.updateEnvironment({ config })
+        await updateEnvironment(av, { config })
       }
 
       test("keepAliveRun returns expiresAt timestamp for in_progress run", async () => {
@@ -1882,7 +1883,7 @@ describe('API', () => {
         const functionCallSchema = z.looseObject({ type: z.literal("function_call"), name: z.string(), callId: z.string().meta({ callId: true }) });
         const functionResultSchema = z.looseObject({ type: z.literal("function_call_result"), callId: z.string().meta({ callId: true }) });
 
-        await av.updateEnvironment({
+        await updateEnvironment(av, {
           config: {
             webhookUrl: WEBHOOK_URL,
             agents: [{
@@ -2239,8 +2240,8 @@ describe('API', () => {
       };
 
       // Set up config for both orgs
-      await av_a.updateEnvironment({ config });
-      await av_b.updateEnvironment({ config });
+      await updateEnvironment(av_a, { config });
+      await updateEnvironment(av_b, { config });
     });
 
     test('org_a cannot see org_b users', async () => {
@@ -2370,7 +2371,7 @@ describe('API', () => {
   //     const outputSchema = z.looseObject({ type: z.literal("message"), role: z.literal("assistant"), content: z.string() });
   //     const stepSchema = z.looseObject({ type: z.literal("reasoning"), content: z.string() });
 
-  //     await av.updateEnvironment({
+  //     await updateEnvironment(av, {
   //       config: {
   //         agents: [{
   //           name: "test",
@@ -2673,10 +2674,10 @@ describe('API', () => {
       const outputItem = updatedSession.runs[0].sessionItems.find(i => i.type === "output")!;
 
       // Create comment on session item
-      await av.createComment({ sessionItemId: outputItem.id, content: "Great output!" });
+      await av.comments.create({ sessionItemId: outputItem.id, content: "Great output!" });
 
       // Verify comment appears in session comments
-      let comments = await av.getSessionComments({ id: session.id });
+      let comments = await av.comments.list({ sessionId: session.id });
       expect(comments.length).toBe(1);
       expect(comments[0].content).toBe("Great output!");
       expect(comments[0].sessionItemId).toBe(outputItem.id);
@@ -2687,16 +2688,16 @@ describe('API', () => {
       const commentId = comments[0].id;
 
       // Edit comment
-      await av.updateComment({ id: commentId, content: "Updated comment!" });
+      await av.comments.update(commentId, { content: "Updated comment!" });
 
-      comments = await av.getSessionComments({ id: session.id });
+      comments = await av.comments.list({ sessionId: session.id });
       expect(comments.length).toBe(1);
       expect(comments[0].content).toBe("Updated comment!");
 
       // Delete comment
-      await av.deleteComment({ id: commentId });
+      await av.comments.delete(commentId);
 
-      comments = await av.getSessionComments({ id: session.id });
+      comments = await av.comments.list({ sessionId: session.id });
       // Deleted comments should not appear in listing
       expect(comments.length).toBe(0);
     });
@@ -2708,10 +2709,10 @@ describe('API', () => {
       const run = await av.createManualRun({ sessionId: session.id, items: [baseInput] });
 
       // Create comment on run
-      await av.createComment({ runId: run.id, content: "Run comment" });
+      await av.comments.create({ runId: run.id, content: "Run comment" });
 
       // Verify comment appears in session comments
-      const comments = await av.getSessionComments({ id: session.id });
+      const comments = await av.comments.list({ sessionId: session.id });
       const runComment = comments.find(c => c.runId === run.id);
       expect(runComment).toBeDefined();
       expect(runComment!.content).toBe("Run comment");
@@ -2728,7 +2729,7 @@ describe('API', () => {
       
       // No target
       await expectToFail(
-        av.createComment({ content: "no target" } as any),
+        av.comments.create({ content: "no target" } as any),
         400
       );
 
@@ -2737,7 +2738,7 @@ describe('API', () => {
       const inputItem = updatedSession.runs[0].sessionItems.find(i => i.type === "input")!;
 
       await expectToFail(
-        av.createComment({ sessionItemId: inputItem.id, runId: run2.id, content: "incompatible session item and run item" }),
+        av.comments.create({ sessionItemId: inputItem.id, runId: run2.id, content: "incompatible session item and run item" }),
         400
       );
     });
@@ -2755,10 +2756,10 @@ describe('API', () => {
       const outputItem = updatedSession.runs[0].sessionItems.find(i => i.type === "output")!;
 
       // Create score
-      await av.updateScores({ sessionItemId: outputItem.id, scores: [{ name: "quality", value: "good" }] });
+      await av.scores.update({ sessionItemId: outputItem.id, scores: [{ name: "quality", value: "good" }] });
 
       // Verify score appears in session scores
-      let sessionScores = await av.getSessionScores({ id: session.id });
+      let sessionScores = await av.scores.list({ sessionId: session.id });
       expect(sessionScores.length).toBe(1);
       expect(sessionScores[0].name).toBe("quality");
       expect(sessionScores[0].value).toBe("good");
@@ -2767,16 +2768,16 @@ describe('API', () => {
       expect(sessionScores[0].runId).toBe(run.id);
 
       // Update score
-      await av.updateScores({ sessionItemId: outputItem.id, scores: [{ name: "quality", value: "bad" }] });
+      await av.scores.update({ sessionItemId: outputItem.id, scores: [{ name: "quality", value: "bad" }] });
 
-      sessionScores = await av.getSessionScores({ id: session.id });
+      sessionScores = await av.scores.list({ sessionId: session.id });
       expect(sessionScores.length).toBe(1);
       expect(sessionScores[0].value).toBe("bad");
 
       // Delete score (set to null)
-      await av.updateScores({ sessionItemId: outputItem.id, scores: [{ name: "quality", value: null }] });
+      await av.scores.update({ sessionItemId: outputItem.id, scores: [{ name: "quality", value: null }] });
 
-      sessionScores = await av.getSessionScores({ id: session.id });
+      sessionScores = await av.scores.list({ sessionId: session.id });
       expect(sessionScores.length).toBe(0);
     });
 
@@ -2789,10 +2790,10 @@ describe('API', () => {
       const run = await av.createManualRun({ sessionId: session.id, items: [baseInput] });
 
       // Create run-level score
-      await av.updateScores({ runId: run.id, scores: [{ name: "accuracy", value: 0.95 }] });
+      await av.scores.update({ runId: run.id, scores: [{ name: "accuracy", value: 0.95 }] });
 
       // Verify score appears in session scores
-      let sessionScores = await av.getSessionScores({ id: session.id });
+      let sessionScores = await av.scores.list({ sessionId: session.id });
       expect(sessionScores.length).toBe(1);
       expect(sessionScores[0].name).toBe("accuracy");
       expect(sessionScores[0].value).toBe(0.95);
@@ -2800,9 +2801,9 @@ describe('API', () => {
       expect(sessionScores[0].sessionItemId).toBeNull();
 
       // Update run-level score
-      await av.updateScores({ runId: run.id, scores: [{ name: "accuracy", value: 0.5 }] });
+      await av.scores.update({ runId: run.id, scores: [{ name: "accuracy", value: 0.5 }] });
 
-      sessionScores = await av.getSessionScores({ id: session.id });
+      sessionScores = await av.scores.list({ sessionId: session.id });
       expect(sessionScores.length).toBe(1);
       expect(sessionScores[0].value).toBe(0.5);
     });
@@ -2837,7 +2838,7 @@ describe('API', () => {
 
       // Unknown score name
       await expectToFail(
-        av.updateScores({ sessionItemId: outputItem.id, scores: [{ name: "unknown", value: "good" }] }),
+        av.scores.update({ sessionItemId: outputItem.id, scores: [{ name: "unknown", value: "good" }] }),
         400
       );
     });
@@ -2856,7 +2857,7 @@ describe('API', () => {
 
       // Invalid value for enum
       await expectToFail(
-        av.updateScores({ sessionItemId: outputItem.id, scores: [{ name: "quality", value: "invalid" }] }),
+        av.scores.update({ sessionItemId: outputItem.id, scores: [{ name: "quality", value: "invalid" }] }),
         400
       );
     });

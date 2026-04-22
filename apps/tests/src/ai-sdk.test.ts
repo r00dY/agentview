@@ -11,6 +11,7 @@ const { spawn } = require('child_process');
 
 import { type UIDataTypes, type UIMessage, type UIMessageChunk } from 'ai';
 import { setupTestOrg, expectToFail, UUID_REGEX } from './utils';
+import { updateEnvironment } from 'agentview/updateEnvironment';
 
 const PROXY_TIMEOUT = 10_000;
 const TEST_TIMEOUT = PROXY_TIMEOUT + 10_000;
@@ -94,7 +95,7 @@ describe('ai-sdk', () => {
       // { envName: "local (via tunnel proxy)", envType: "local" },
     ])("$envName", ({ envType }) => {
       let client: typeof org.prodClient;
-      let standardClient: typeof org.prodStandardClient;
+      // let standardClient: typeof org.prodStandardClient;
       let proxyProcess: any;
       let user: User;
 
@@ -102,7 +103,7 @@ describe('ai-sdk', () => {
         if (envType === "local") {
           console.log("Using local environment (via proxy), starting proxy process...");
           client = org.admin.localClient;
-          standardClient = org.admin.localStandardClient;
+          // standardClient = org.admin.localStandardClient;
 
           // start real proxy with real tunnel
           proxyProcess = spawn('npx', ['agentview', 'dev', '--api-key', org.apiKeySecret.key, '--env', 'local:' + org.admin.user.email, '--no-studio'], {
@@ -116,7 +117,7 @@ describe('ai-sdk', () => {
         } else {
           console.log("Using production environment");
           client = org.prodClient;
-          standardClient = org.prodStandardClient;
+          // standardClient = org.prodStandardClient;
         }
 
         const result = await client.users.create();
@@ -131,8 +132,8 @@ describe('ai-sdk', () => {
       });
 
       test("happy path: text response (validated via ai-sdk stream)", async () => {
-        await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await client.createSession({ agent: "test-ai-sdk", userId: user.id });
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
 
         mockAISDKServer!.setHandler((_body, res) => {
           writeAISDKSuccessHeaders(res);
@@ -166,7 +167,7 @@ describe('ai-sdk', () => {
         const textDeltas = chunks.filter(c => c.type === "text-delta");
         expect(textDeltas.map(d => d.delta).join("")).toBe("Hello world!");
 
-        const finalSession = await client.getSession({ id: session.id });
+        const finalSession = await client.sessions.get(session.id);
 
         expect(finalSession.status).toBe("idle");
         expect(finalSession.messages.length).toBe(2);
@@ -178,8 +179,8 @@ describe('ai-sdk', () => {
       }, TEST_TIMEOUT);
 
       test("happy path: text + reasoning (validated via ai-sdk stream)", async () => {
-        await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await client.createSession({ agent: "test-ai-sdk", userId: user.id });
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
 
         mockAISDKServer!.setHandler((_body, res) => {
           writeAISDKSuccessHeaders(res);
@@ -220,14 +221,19 @@ describe('ai-sdk', () => {
         const textDeltas = chunks.filter(c => c.type === "text-delta");
         expect(textDeltas.map(d => d.delta).join("")).toBe("The answer is 42");
 
-        const finalSession = await standardClient.getSession({ id: session.id });
-        const completedRun = finalSession.lastRun!;
-        expect(completedRun.status).toBe("completed");
-        expect(completedRun.sessionItems.length).toBe(3);
-        expect(completedRun.sessionItems[1].content.type).toBe("reasoning");
-        expect(completedRun.sessionItems[1].content.text).toBe("Let me think...");
-        expect(completedRun.sessionItems[2].content.type).toBe("text");
-        expect(completedRun.sessionItems[2].content.text).toBe("The answer is 42");
+        const finalSession = await client.sessions.get(session.id);
+
+
+        expect(finalSession.status).toBe("idle");
+        expect(finalSession.messages.length).toBe(2);
+        expect(finalSession.messages[0].role).toBe("user");
+        expect(finalSession.messages[1].role).toBe("assistant");
+        expect(finalSession.messages[1].parts.length).toBe(2);
+        expect(finalSession.messages[1].parts[0].type).toBe("reasoning");
+        expect(finalSession.messages[1].parts[0].text).toBe("Let me think...");
+        expect(finalSession.messages[1].parts[1].type).toBe("text");
+        expect(finalSession.messages[1].parts[1].text).toBe("The answer is 42");
+
       }, TEST_TIMEOUT);
 
       test("happy path: tool call (validated via ai-sdk stream)", async () => {
@@ -236,7 +242,7 @@ describe('ai-sdk', () => {
         const reasoningSchema = z.looseObject({ type: z.literal("reasoning"), text: z.string() });
         const toolCallSchema = z.looseObject({ type: z.literal("tool-call"), toolCallId: z.string(), toolName: z.string(), state: z.string() });
 
-        await standardClient.updateEnvironment({
+        await updateEnvironment(client, {
           config: {
             agents: [{
               name: "test-ai-sdk",
@@ -253,7 +259,7 @@ describe('ai-sdk', () => {
           },
         });
 
-        const session = await standardClient.createSession({ agent: "test-ai-sdk", userId: user.id });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
 
         mockAISDKServer!.setHandler((_body, res) => {
           writeAISDKSuccessHeaders(res);
@@ -291,22 +297,26 @@ describe('ai-sdk', () => {
         const toolOutput = chunks.find(c => c.type === "tool-output-available");
         expect(toolOutput?.output).toEqual({ temp: 72 });
 
-        const finalSession = await standardClient.getSession({ id: session.id });
-        const completedRun = finalSession.lastRun!;
-        expect(completedRun.status).toBe("completed");
-        expect(completedRun.sessionItems.length).toBe(3);
-        expect(completedRun.sessionItems[1].content.type).toBe("tool-getWeather");
-        expect(completedRun.sessionItems[1].content.state).toBe("output-available");
-        expect(completedRun.sessionItems[1].content.input).toEqual({ city: "NYC" });
-        expect(completedRun.sessionItems[1].content.output).toEqual({ temp: 72 });
-        expect(completedRun.sessionItems[2].content.type).toBe("text");
-        expect(completedRun.sessionItems[2].content.text).toBe("It's 72F in NYC");
+        const finalSession = await client.sessions.get(session.id);
+
+
+        expect(finalSession.status).toBe("idle");
+        expect(finalSession.messages.length).toBe(2);
+        expect(finalSession.messages[0].role).toBe("user");
+        expect(finalSession.messages[1].role).toBe("assistant");
+        expect(finalSession.messages[1].parts.length).toBe(2);
+        expect(finalSession.messages[1].parts[0].type).toBe("tool-getWeather");
+        expect(finalSession.messages[1].parts[0].state).toBe("output-available");
+        expect(finalSession.messages[1].parts[0].input).toEqual({ city: "NYC" });
+        expect(finalSession.messages[1].parts[0].output).toEqual({ temp: 72 });
+        expect(finalSession.messages[1].parts[1].type).toBe("text");
+        expect(finalSession.messages[1].parts[1].text).toBe("It's 72F in NYC");
       }, TEST_TIMEOUT);
 
 
       test("error event → run marked failed (validated via ai-sdk stream)", async () => {
-        await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await standardClient.createSession({ agent: "test-ai-sdk", userId: user.id });
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
 
         mockAISDKServer!.setHandler((_body, res) => {
           writeAISDKSuccessHeaders(res);
@@ -327,14 +337,14 @@ describe('ai-sdk', () => {
 
         expect(chunks.some(c => c.type === "error")).toBe(true);
 
-        const updatedSession = await standardClient.getSession({ id: session.id });
-        expect(updatedSession.lastRun!.status).toBe("failed");
-        expect(updatedSession.lastRun!.failReason).toBeDefined();
+        const updatedSession = await client.sessions.get(session.id);
+        expect(updatedSession.status).toBe("failed");
+        expect(updatedSession.failReason).toBeDefined();
       }, TEST_TIMEOUT);
 
       test("error → invalid chunk", async () => {
-        await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await standardClient.createSession({ agent: "test-ai-sdk", userId: user.id });
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
 
         mockAISDKServer!.setHandler((_body, res) => {
           writeAISDKSuccessHeaders(res);
@@ -360,7 +370,7 @@ describe('ai-sdk', () => {
 
         const chunks = await consumeChunksFromTransportStream(stream);
 
-        const updatedSession = await client.getSession({ id: session.id });
+        const updatedSession = await client.sessions.get(session.id);
 
         expect(updatedSession.messages[1].parts.length).toBe(1);
         expect(updatedSession.messages[1].parts[0].type).toBe("text");
@@ -372,7 +382,7 @@ describe('ai-sdk', () => {
       }, TEST_TIMEOUT);
 
       test("happy path: text response, creating run via session input -> reconnect to stream", async () => {
-        await standardClient.updateEnvironment({ config: buildConfig() });
+        await updateEnvironment(client, { config: buildConfig() });
 
         mockAISDKServer!.setHandler((_body, res) => {
           writeAISDKSuccessHeaders(res);
@@ -394,7 +404,7 @@ describe('ai-sdk', () => {
           }, 2000)
         });
 
-        const session = await client.createSession({ agent: "test-ai-sdk", userId: user.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] }});
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] }});
         expect(session.status).toBe("in_progress");
         expect(session.messages.length).toBe(1);
         expect(session.messages[0]).toMatchObject({
@@ -417,7 +427,7 @@ describe('ai-sdk', () => {
         expect(chunkTypes).toContain("text-end");
         expect(chunkTypes).toContain("finish");
 
-        const updatedSession = await client.getSession({ id: session.id });
+        const updatedSession = await client.sessions.get(session.id);
         expect(updatedSession.status).toBe("idle");
         expect(updatedSession.messages.length).toBe(2);
         expect(updatedSession.messages[1].parts.length).toBe(1);
@@ -432,8 +442,8 @@ describe('ai-sdk', () => {
       }, TEST_TIMEOUT);
 
       test("Upstream server is down → 502 error", async () => {
-        await standardClient.updateEnvironment({ config: buildConfig({ agentUrl: "http://localhost:10000/this-server-is-down" }) }); // 
-        const session = await client.createSession({ agent: "test-ai-sdk", userId: user.id });
+        await updateEnvironment(client, { config: buildConfig({ agentUrl: "http://localhost:10000/this-server-is-down" }) }); // 
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
 
         const stream = sendMessageViaTransport(
           client.createTransport(),
@@ -447,8 +457,8 @@ describe('ai-sdk', () => {
 
 
       test("HTTP error: 500 → run marked failed (validated via ai-sdk stream)", async () => {
-        await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await client.createSession({ agent: "test-ai-sdk", userId: user.id });
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
 
         mockAISDKServer!.setHandler((_body, res) => {
           res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -464,30 +474,30 @@ describe('ai-sdk', () => {
         await expect(stream).rejects.not.toBeInstanceOf(AgentViewError);
         await expect(stream).rejects.toThrowError("This is an error from test suite.");
 
-        const updatedSession = await client.getSession({ id: session.id });
+        const updatedSession = await client.sessions.get(session.id);
         expect(updatedSession.messages.length).toBe(0);
       }, TEST_TIMEOUT);
 
       test("HTTP error: 500 → client.createRun (no stream) passes error to client. No run is created.", async () => {
-        await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await client.createSession({ agent: "test-ai-sdk", userId: user.id });
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
 
         mockAISDKServer!.setHandler((_body, res) => {
           res.writeHead(500);
           res.end("This is an error from test suite.");
         });
 
-        const promise = client.createRun({ sessionId: session.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
+        const promise = client.sessions.createRun(session.id, { input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
 
         await expect(promise).rejects.not.toBeInstanceOf(AgentViewError);
         await expect(promise).rejects.toThrowError("This is an error from test suite.");
 
-        const updatedSession = await client.getSession({ id: session.id });
+        const updatedSession = await client.sessions.get(session.id);
         expect(updatedSession.messages.length).toBe(0);
       }, TEST_TIMEOUT);
 
       test("HTTP error: 422 → client.createSession with input. No run is created", async () => {
-        await standardClient.updateEnvironment({ config: buildConfig() });
+        await updateEnvironment(client, { config: buildConfig() });
 
         const jsonError = JSON.stringify({ message: "blah blah blah" });
 
@@ -496,7 +506,7 @@ describe('ai-sdk', () => {
           res.end(jsonError);
         });
 
-        const promise = client.createSession({ agent: "test-ai-sdk" , userId: user.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
+        const promise = client.sessions.create({ agent: "test-ai-sdk" , userId: user.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
 
         await expect(promise).rejects.not.toBeInstanceOf(AgentViewError);
         await expect(promise).rejects.toThrowError(jsonError);
@@ -504,14 +514,14 @@ describe('ai-sdk', () => {
       }, TEST_TIMEOUT);
 
       test("HTTP error 400: empty body in response → client.createSession with input. No run is created", async () => {
-        await standardClient.updateEnvironment({ config: buildConfig() });
+        await updateEnvironment(client, { config: buildConfig() });
 
         mockAISDKServer!.setHandler((_body, res) => {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end("");
         });
 
-        const promise = client.createSession({ agent: "test-ai-sdk" , userId: user.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
+        const promise = client.sessions.create({ agent: "test-ai-sdk" , userId: user.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
 
         await expect(promise).rejects.not.toBeInstanceOf(AgentViewError);
         await expect(promise).rejects.toThrowError("");
@@ -519,8 +529,8 @@ describe('ai-sdk', () => {
       }, TEST_TIMEOUT);
 
       test("stream aborted (no finish and no done) → run marked failed (validated via ai-sdk stream)", async () => {
-        await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await standardClient.createSession({ agent: "test-ai-sdk", userId: user.id });
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
 
         mockAISDKServer!.setHandler((_body, res) => {
           writeAISDKSuccessHeaders(res);
@@ -548,14 +558,14 @@ describe('ai-sdk', () => {
         expect(errorChunk).toBeDefined();
         expect(JSON.parse(errorChunk!.errorText)).toMatchObject({ source: "agentview", code: "STREAM_INCOMPLETE", message: "Stream ended incomplete" });
 
-        const updatedSession = await standardClient.getSession({ id: session.id });
-        expect(updatedSession.lastRun!.status).toBe("failed");
-        expect(updatedSession.lastRun!.failReason.message).toContain("Stream ended incomplete");
+        const updatedSession = await client.sessions.get(session.id);
+        expect(updatedSession.status).toBe("failed");
+        expect(updatedSession.failReason.message).toContain("Stream ended incomplete");
       }, TEST_TIMEOUT);
 
       test("invalid chunk → run marked failed (validated via ai-sdk stream)", async () => {
-        await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await standardClient.createSession({ agent: "test-ai-sdk", userId: user.id });
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
 
         mockAISDKServer!.setHandler((_body, res) => {
           writeAISDKSuccessHeaders(res);
@@ -584,15 +594,15 @@ describe('ai-sdk', () => {
         expect(errorChunk).toBeDefined();
         expect(JSON.parse(errorChunk!.errorText)).toMatchObject({ source: "agentview", code: "STREAM_INVALID_CHUNK", message: expect.any(String), data: "{\"type\":\"bad-chunk\"}" });
 
-        const updatedSession = await standardClient.getSession({ id: session.id });
-        expect(updatedSession.lastRun!.status).toBe("failed");
-        expect(updatedSession.lastRun!.failReason.message).toContain("Unknown chunk type");
+        const updatedSession = await client.sessions.get(session.id);
+        expect(updatedSession.status).toBe("failed");
+        expect(updatedSession.failReason.message).toContain("Unknown chunk type");
       }, TEST_TIMEOUT);
 
 
       test("request body format: sends UIMessage[] with correct history", async () => {
-        await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await standardClient.createSession({ agent: "test-ai-sdk", userId: user.id });
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
 
         mockAISDKServer!.setHandler((_body, res) => {
           writeAISDKSuccessHeaders(res);
@@ -627,8 +637,8 @@ describe('ai-sdk', () => {
       }, TEST_TIMEOUT);
 
       test("multi-turn: second request has full conversation history", async () => {
-        await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await standardClient.createSession({ agent: "test-ai-sdk", userId: user.id  });
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id  });
 
         // First turn
         mockAISDKServer!.setHandler((_body, res) => {
@@ -689,8 +699,8 @@ describe('ai-sdk', () => {
       }, TEST_TIMEOUT);
 
       test("cancellation → run cancelled and agent connection aborted", async () => {
-        await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await standardClient.createSession({ agent: "test-ai-sdk", userId: user.id });
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
 
         let connectionClosed = false;
         let connectionEstablished: () => void;
@@ -732,19 +742,27 @@ describe('ai-sdk', () => {
         await connectionEstablishedPromise;
         await new Promise(r => setTimeout(r, 1000));
 
-        const cancelled = await standardClient.cancelRun({ sessionId: session.id });
-        expect(cancelled.lastRun?.status).toBe("cancelled");
-        expect(cancelled.lastRun?.finishedAt).toBeDefined();
+        const cancelled = await client.sessions.cancelRun(session.id);
+        expect(cancelled.status).toBe("cancelled");
+        // expect(cancelled.finishedAt).toBeDefined();
 
-        const updatedSession = await standardClient.getSession({ id: session.id });
-        expect(updatedSession.lastRun?.status).toBe("cancelled");
-        expect(updatedSession.lastRun?.finishedAt).toBeDefined();
-        expect(updatedSession.lastRun?.sessionItems.length).toBe(3);
-        expect(updatedSession.lastRun?.sessionItems[1].content.type).toBe("text");
-        expect(updatedSession.lastRun?.sessionItems[1].content.text).toBe("First chunk");
+        const updatedSession = await client.sessions.get(session.id);
+        expect(updatedSession.status).toBe("cancelled");
+        // expect(updatedSession.lastRun?.finishedAt).toBeDefined();
 
-        expect(updatedSession.lastRun?.sessionItems[2].content.type).toBe("text");
-        expect(updatedSession.lastRun?.sessionItems[2].content.text).toMatch(/^\.+$/);
+        expect(updatedSession.messages.length).toBe(2);
+        expect(updatedSession.messages[1].parts.length).toBe(2);
+        expect(updatedSession.messages[1].parts[0].type).toBe("text");
+        expect(updatedSession.messages[1].parts[0].text).toBe("First chunk");
+        expect(updatedSession.messages[1].parts[1].type).toBe("text");
+        expect(updatedSession.messages[1].parts[1].text).toMatch(/^\.+$/);
+
+        // expect(updatedSession.sessionItems.length).toBe(3);
+        // expect(updatedSession.sessionItems[1].content.type).toBe("text");
+        // expect(updatedSession.sessionItems[1].content.text).toBe("First chunk");
+
+        // expect(updatedSession.sessionItems[2].content.type).toBe("text");
+        // expect(updatedSession.sessionItems[2].content.text).toMatch(/^\.+$/);
 
         await new Promise(r => setTimeout(r, 500));
         expect(connectionClosed).toBe(true);
@@ -754,8 +772,8 @@ describe('ai-sdk', () => {
 
 
       test("message id is auto set when undefined", async () => {
-        await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await client.createSession({ agent: "test-ai-sdk", userId: user.id });
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
 
         mockAISDKServer!.setHandler((_body, res) => {
           writeAISDKSuccessHeaders(res);
@@ -779,12 +797,12 @@ describe('ai-sdk', () => {
 
         await consumeChunksFromTransportStream(stream);
 
-        const finalSession = await client.getSession({ id: session.id });
+        const finalSession = await client.sessions.get(session.id);
         expect(finalSession.messages[1].id).toMatch(UUID_REGEX);
       }, TEST_TIMEOUT);
 
       test("input message id is auto set when not provided", async () => {
-        await standardClient.updateEnvironment({ config: buildConfig() });
+        await updateEnvironment(client, { config: buildConfig() });
 
         mockAISDKServer!.setHandler((_body, res) => {
           writeAISDKSuccessHeaders(res);
@@ -800,7 +818,7 @@ describe('ai-sdk', () => {
         });
 
         // for session
-        const session = await client.createSession({
+        const session = await client.sessions.create({
           agent: "test-ai-sdk",
           userId: user.id,
           input: { role: "user", parts: [{ type: "text", text: "Hello" }] },
@@ -809,16 +827,16 @@ describe('ai-sdk', () => {
         expect(session.messages[0].id).toMatch(UUID_REGEX);
 
         // for run
-        const session2 = await client.createSession({ agent: "test-ai-sdk", userId: user.id });
-        await client.createRun({ sessionId: session2.id, input: { role: "user", parts: [{ type: "text", text: "Hello" }] }});
-        const finalSession2 = await client.getSession({ id: session2.id });
+        const session2 = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
+        await client.sessions.createRun(session2.id, { input: { role: "user", parts: [{ type: "text", text: "Hello" }] }});
+        const finalSession2 = await client.sessions.get(session2.id);
         expect(finalSession2.messages[0].id).toMatch(UUID_REGEX);
       }, TEST_TIMEOUT);
 
 
       test("message id + metadata are preserved when provided", async () => {
-        await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await client.createSession({ agent: "test-ai-sdk", userId: user.id });
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
 
         mockAISDKServer!.setHandler((_body, res) => {
           writeAISDKSuccessHeaders(res);
@@ -843,7 +861,7 @@ describe('ai-sdk', () => {
 
         await consumeChunksFromTransportStream(stream);
 
-        const finalSession = await client.getSession({ id: session.id });
+        const finalSession = await client.sessions.get(session.id);
         expect(finalSession.messages[1].id).toBe("msg_assistant_1");
         expect(finalSession.messages[1].metadata).toMatchObject({
           a: "aaa",
@@ -853,8 +871,8 @@ describe('ai-sdk', () => {
       }, TEST_TIMEOUT);
 
       test("tools inputs are objects, partial tool call is object too", async () => {
-        await standardClient.updateEnvironment({ config: buildConfig() });
-        const session = await client.createSession({ agent: "test-ai-sdk", userId: user.id });
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
 
         mockAISDKServer!.setHandler((_body, res) => {
           writeAISDKSuccessHeaders(res);
@@ -883,7 +901,7 @@ describe('ai-sdk', () => {
 
         await consumeChunksFromTransportStream(stream);
 
-        const finalSession = await client.getSession({ id: session.id });
+        const finalSession = await client.sessions.get(session.id);
         expect(finalSession.messages[1].parts[0]).toMatchObject({
           type: "tool-getInfo",
           toolCallId: "111",

@@ -13,6 +13,11 @@ import type {
   RunCreate,
   OrganizationBase,
   UserWithToken,
+  SessionsStatsQueryParams,
+  SessionsStats,
+  InputTarget,
+  ScoreCreate,
+  Channel
 } from './apiTypes.js'
 
 import { AgentViewError } from './AgentViewError.js'
@@ -36,13 +41,24 @@ export class AgentViewBase {
   protected organizationId?: string // required only for session auth
 
   users: UsersResource;
+  comments: CommentsResource;
+  scores: ScoresResource;
+  channels: ChannelsResource;
+  organization: OrganizationsResource;
+  environments: EnvironmentsResource;
 
   constructor(options: AgentViewClientOptions) {
     this.apiKey = options.apiKey
     this.env = options.env
     this.organizationId = options.organizationId
     this.user = options.user
+
     this.users = new UsersResource(this);
+    this.comments = new CommentsResource(this);
+    this.scores = new ScoresResource(this);
+    this.channels = new ChannelsResource(this);
+    this.organization = new OrganizationsResource(this);
+    this.environments = new EnvironmentsResource(this);
   }
 
   _getHeaders(): Record<string, string> {
@@ -113,66 +129,49 @@ export class AgentViewBase {
     }
   }
 
+  __internal = {
+    mock: {
+      createChannel: async (data: { address: string }): Promise<Channel> => {
+        return await this._request<Channel>('POST', `/api/channels/mock/create-channel`, data)
+      },
+      sendMessage: async (data: { address: string, sourceId: string, date: string, contact: string, contactKind: string, text: string, sourceThreadId?: string, providerData?: any }): Promise<any> => {
+        return await this._request<any>('POST', `/api/channels/mock/send-message`, data)
+      },
+      getOutbox: async (address?: string): Promise<Array<{ id: string, address: string, contact: string, contactKind: string, text: string | null, timestamp: number }>> => {
+        const params = address ? `?address=${encodeURIComponent(address)}` : ''
+        return await this._request('GET', `/api/channels/mock/outbox${params}`)
+      },
+    }
+  }
 
 
 
   // --- Shared methods ---
 
-  async getOrganization(): Promise<OrganizationBase> {
-    return await this._request<OrganizationBase>('GET', `/api/organization`)
-  }
+  // async getOrganization(): Promise<OrganizationBase> {
+  //   return await this._request<OrganizationBase>('GET', `/api/organization`)
+  // }
 
-  async getSessionComments(options: { id: string }) {
-    return await this._request<CommentMessage[]>('GET', `/api/sessions/${options.id}/comments`, undefined)
-  }
+  // async getSessionComments(options: { id: string }) {
+  //   return await this._request<CommentMessage[]>('GET', `/api/sessions/${options.id}/comments`, undefined)
+  // }
 
-  async getSessionScores(options: { id: string }) {
-    return await this._request<Score[]>('GET', `/api/sessions/${options.id}/scores`, undefined)
-  }
+  // async getSessionScores(options: { id: string }) {
+  //   return await this._request<Score[]>('GET', `/api/sessions/${options.id}/scores`, undefined)
+  // }
 
-  async getSessions(options?: SessionsGetQueryParams) {
-    let path = `/api/sessions`;
-    const params = new URLSearchParams();
 
-    if (options?.page) params.append('page', options.page.toString());
-    if (options?.limit) params.append('limit', options.limit.toString());
-    if (options?.userId) params.append('userId', options.userId);
-    if (options?.space) params.append('space', options.space);
-
-    const queryString = params.toString();
-    if (queryString) {
-      path += `?${queryString}`;
-    }
-
-    return await this._request<SessionsPaginatedResponse>('GET', path, undefined)
-  }
-
-  async getEnvironment(): Promise<Environment> {
-    return await this._request<Environment>('GET', `/api/environment`)
-  }
-
+  // async getEnvironment(): Promise<Environment> {
+  //   return await this._request<Environment>('GET', `/api/environment`)
+  // }
 }
 
 export class AgentViewClient extends AgentViewBase {
-  async createSession(options: SessionCreate) {
-    return await this._request<Session>('POST', `/api/sessions`, options)
-  }
+  sessions: SessionsResource;
 
-  async getSession(options: { id: string }) {
-    return await this._request<Session>('GET', `/api/sessions/${options.id}`)
-  }
-
-  async updateSession(options: { id: string } & SessionUpdate) {
-    return await this._request<Session>('PATCH', `/api/sessions/${options.id}`, options)
-  }
-
-  async createRun(options: RunCreate & { sessionId: string }) {
-    const { sessionId, ...body } = options;
-    return await this._request<Run>('POST', `/api/sessions/${sessionId}/runs`, body)
-  }
-
-  async cancelRun(options: { sessionId: string }) {
-    return await this._request<Session>('POST', `/api/sessions/${options.sessionId}/cancel`)
+  constructor(options: AgentViewClientOptions) {
+    super(options);
+    this.sessions = new SessionsResource(this);
   }
 
   createTransport() {
@@ -204,6 +203,23 @@ export class AgentViewClient extends AgentViewBase {
       organizationId: this.organizationId,
     })
   }
+
+}
+
+class OrganizationsResource {
+  constructor(private client: AgentViewBase) { }
+
+  async get(): Promise<OrganizationBase> {
+    return await this.client._request<OrganizationBase>('GET', `/api/organization`)
+  }
+}
+
+class EnvironmentsResource {
+  constructor(private client: AgentViewBase) { }
+
+  async getActive(): Promise<Environment> {
+    return await this.client._request<Environment>('GET', `/api/environment`)
+  }
 }
 
 class UsersResource {
@@ -231,6 +247,114 @@ class UsersResource {
 
   async update(options: UserCreate & { id: string }): Promise<User> {
     return await this.client._request<User>('PATCH', `/api/users/${options.id}`, options)
+  }
+}
+
+class SessionsResource {
+  constructor(private client: AgentViewBase) { }
+
+  async create(options: SessionCreate) {
+    return await this.client._request<Session>('POST', `/api/sessions`, options)
+  }
+
+  async get(id: string) {
+    return await this.client._request<Session>('GET', `/api/sessions/${id}`)
+  }
+
+  async update(id: string, options: SessionUpdate) {
+    return await this.client._request<Session>('PATCH', `/api/sessions/${id}`, options)
+  }
+
+  async createRun(id: string, options: RunCreate) {
+    return await this.client._request<Run>('POST', `/api/sessions/${id}/runs`, options)
+  }
+
+  async cancelRun(id: string) {
+    return await this.client._request<Session>('POST', `/api/sessions/${id}/cancel`)
+  }
+
+  async list(options?: SessionsGetQueryParams) {
+    let path = `/api/sessions`;
+    const params = new URLSearchParams();
+
+    if (options?.page) params.append('page', options.page.toString());
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.userId) params.append('userId', options.userId);
+    if (options?.space) params.append('space', options.space);
+
+    const queryString = params.toString();
+    if (queryString) {
+      path += `?${queryString}`;
+    }
+
+    return await this.client._request<SessionsPaginatedResponse>('GET', path, undefined)
+  }
+
+  async getStats(options?: SessionsStatsQueryParams): Promise<SessionsStats> {
+    let path = `/api/sessions/stats`
+    const params = new URLSearchParams()
+
+    if (options?.space) params.append('space', options.space)
+    if (options?.page) params.append('page', options.page.toString())
+    if (options?.limit) params.append('limit', options.limit.toString())
+    if (options?.userId) params.append('userId', options.userId)
+    if (options?.granular) params.append('granular', 'true')
+
+    const queryString = params.toString()
+    if (queryString) {
+      path += `?${queryString}`
+    }
+
+    return await this.client._request<SessionsStats>('GET', path, undefined)
+  }
+}
+
+
+class CommentsResource {
+  constructor(private client: AgentViewBase) { }
+
+  async create(options: InputTarget & { content: string }): Promise<void> {
+    return await this.client._request<void>('POST', `/api/comments`, options)
+  }
+
+  async update(id: string, options: { content: string }): Promise<void> {
+    return await this.client._request<void>('PUT', `/api/comments/${id}`, options)
+  }
+
+  async delete(id: string): Promise<void> {
+    return await this.client._request<void>('DELETE', `/api/comments/${id}`, undefined)
+  }
+
+  async markSeen(options: InputTarget): Promise<void> {
+    return await this.client._request<void>('POST', `/api/seen`, options)
+  }
+
+  async list(options: { sessionId: string }) {
+    return await this.client._request<CommentMessage[]>('GET', `/api/sessions/${options.sessionId}/comments`, undefined)
+  }
+}
+
+class ScoresResource {
+  constructor(private client: AgentViewBase) { }
+
+  async update(options: InputTarget & { scores: ScoreCreate[] }): Promise<void> {
+    return await this.client._request<void>('PATCH', `/api/scores`, options)
+  }
+
+  async list(options: { sessionId: string }) {
+    return await this.client._request<Score[]>('GET', `/api/sessions/${options.sessionId}/scores`, undefined)
+  }
+}
+
+class ChannelsResource {
+  constructor(private client: AgentViewBase) { }
+
+  async list(): Promise<Channel[]> {
+    return await this.client._request<Channel[]>('GET', `/api/channels`)
+  }
+
+  async update(id: string, data: { environmentId?: string | null }): Promise<Channel> {
+    return await this.client._request<Channel>('PATCH', `/api/channels/${id}`, data)
   }
 }
 

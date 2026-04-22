@@ -6,19 +6,12 @@ import {
     type ManualRunUpdate,
     type StandardSessionCreate,
     type SessionUpdate,
-    type Environment,
-    type EnvironmentCreate,
-    type SessionsStatsQueryParams,
-    type SessionsStats,
-    type ScoreCreate,
     type SessionStreamEvent,
-    type Channel,
-    type InputTarget,
-    type EnvironmentBase,
+    type SessionsGetQueryParams,
+    type SessionsPaginatedResponse,
 } from './apiTypes.js'
 
 import { type AgentViewErrorBody, AgentViewError } from './AgentViewError.js'
-import { serializeConfig } from './baseConfigUtils.js'
 import { enhanceSession } from './sessionUtils.js'
 import type { InternalConfig } from './baseConfigTypes.js'
 import { getApiUrl } from './urls.js'
@@ -63,6 +56,23 @@ export class StandardAgentViewClient extends AgentViewBase {
     async keepAliveRun(options: { id: string }): Promise<{ expiresAt: string | null }> {
         return await this._request<{ expiresAt: string | null }>('POST', `/api/runs/${options.id}/keep-alive`, undefined)
     }
+
+    async getSessions(options?: SessionsGetQueryParams) {
+        let path = `/api/sessions`;
+        const params = new URLSearchParams();
+    
+        if (options?.page) params.append('page', options.page.toString());
+        if (options?.limit) params.append('limit', options.limit.toString());
+        if (options?.userId) params.append('userId', options.userId);
+        if (options?.space) params.append('space', options.space);
+    
+        const queryString = params.toString();
+        if (queryString) {
+          path += `?${queryString}`;
+        }
+    
+        return await this._request<SessionsPaginatedResponse>('GET', path, undefined)
+      }
 
     async getSessionStream(options: { id: string, signal?: AbortSignal }): Promise<AsyncGenerator<{
         event: SessionStreamEvent;
@@ -148,96 +158,96 @@ export class StandardAgentViewClient extends AgentViewBase {
         })();
     }
 
-    async getChannels(): Promise<Channel[]> {
-        return await this._request<Channel[]>('GET', `/api/channels`)
-    }
+    // async getChannels(): Promise<Channel[]> {
+    //     return await this._request<Channel[]>('GET', `/api/channels`)
+    // }
 
-    async updateChannel(channelId: string, data: { environmentId?: string | null }): Promise<Channel> {
-        return await this._request<Channel>('PATCH', `/api/channels/${channelId}`, data)
-    }
+    // async updateChannel(channelId: string, data: { environmentId?: string | null }): Promise<Channel> {
+    //     return await this._request<Channel>('PATCH', `/api/channels/${channelId}`, data)
+    // }
 
     // --- Mock-email (internal/testing) ---
 
-    __internal = {
-        mock: {
-            createChannel: async (data: { address: string }): Promise<Channel> => {
-                return await this._request<Channel>('POST', `/api/channels/mock/create-channel`, data)
-            },
-            sendMessage: async (data: { address: string, sourceId: string, date: string, contact: string, contactKind: string, text: string, sourceThreadId?: string, providerData?: any }): Promise<any> => {
-                return await this._request<any>('POST', `/api/channels/mock/send-message`, data)
-            },
-            getOutbox: async (address?: string): Promise<Array<{ id: string, address: string, contact: string, contactKind: string, text: string | null, timestamp: number }>> => {
-                const params = address ? `?address=${encodeURIComponent(address)}` : ''
-                return await this._request('GET', `/api/channels/mock/outbox${params}`)
-            },
-        }
-    }
+    // __internal = {
+    //     mock: {
+    //         createChannel: async (data: { address: string }): Promise<Channel> => {
+    //             return await this._request<Channel>('POST', `/api/channels/mock/create-channel`, data)
+    //         },
+    //         sendMessage: async (data: { address: string, sourceId: string, date: string, contact: string, contactKind: string, text: string, sourceThreadId?: string, providerData?: any }): Promise<any> => {
+    //             return await this._request<any>('POST', `/api/channels/mock/send-message`, data)
+    //         },
+    //         getOutbox: async (address?: string): Promise<Array<{ id: string, address: string, contact: string, contactKind: string, text: string | null, timestamp: number }>> => {
+    //             const params = address ? `?address=${encodeURIComponent(address)}` : ''
+    //             return await this._request('GET', `/api/channels/mock/outbox${params}`)
+    //         },
+    //     }
+    // }
 
-    async markSeen(options: InputTarget): Promise<void> {
-        return await this._request<void>('POST', `/api/seen`, options)
-    }
+    // async markSeen(options: InputTarget): Promise<void> {
+    //     return await this._request<void>('POST', `/api/seen`, options)
+    // }
 
-    async getSessionsStats(options?: SessionsStatsQueryParams): Promise<SessionsStats> {
-        let path = `/api/sessions/stats`
-        const params = new URLSearchParams()
+    // async getSessionsStats(options?: SessionsStatsQueryParams): Promise<SessionsStats> {
+    //     let path = `/api/sessions/stats`
+    //     const params = new URLSearchParams()
 
-        if (options?.space) params.append('space', options.space)
-        if (options?.page) params.append('page', options.page.toString())
-        if (options?.limit) params.append('limit', options.limit.toString())
-        if (options?.userId) params.append('userId', options.userId)
-        if (options?.granular) params.append('granular', 'true')
+    //     if (options?.space) params.append('space', options.space)
+    //     if (options?.page) params.append('page', options.page.toString())
+    //     if (options?.limit) params.append('limit', options.limit.toString())
+    //     if (options?.userId) params.append('userId', options.userId)
+    //     if (options?.granular) params.append('granular', 'true')
 
-        const queryString = params.toString()
-        if (queryString) {
-            path += `?${queryString}`
-        }
+    //     const queryString = params.toString()
+    //     if (queryString) {
+    //         path += `?${queryString}`
+    //     }
 
-        return await this._request<SessionsStats>('GET', path, undefined)
-    }
+    //     return await this._request<SessionsStats>('GET', path, undefined)
+    // }
 
-    async createComment(options: InputTarget & { content: string }): Promise<void> {
-        return await this._request<void>('POST', `/api/comments`, options)
-    }
+    // async createComment(options: InputTarget & { content: string }): Promise<void> {
+    //     return await this._request<void>('POST', `/api/comments`, options)
+    // }
 
-    async updateComment(options: { id: string, content: string }): Promise<void> {
-        const { id, ...rest } = options
-        return await this._request<void>('PUT', `/api/comments/${id}`, rest)
-    }
+    // async updateComment(options: { id: string, content: string }): Promise<void> {
+    //     const { id, ...rest } = options
+    //     return await this._request<void>('PUT', `/api/comments/${id}`, rest)
+    // }
 
-    async deleteComment(options: { id: string }): Promise<void> {
-        return await this._request<void>('DELETE', `/api/comments/${options.id}`, undefined)
-    }
+    // async deleteComment(options: { id: string }): Promise<void> {
+    //     return await this._request<void>('DELETE', `/api/comments/${options.id}`, undefined)
+    // }
 
-    async updateScores(options: InputTarget & { scores: ScoreCreate[] }): Promise<void> {
-        return await this._request<void>('PATCH', `/api/scores`, options)
-    }
+    // async updateScores(options: InputTarget & { scores: ScoreCreate[] }): Promise<void> {
+    //     return await this._request<void>('PATCH', `/api/scores`, options)
+    // }
 
 
-    async getEnvironments(): Promise<EnvironmentBase[]> {
-        return await this._request<EnvironmentBase[]>('GET', `/api/environments`)
-    }
+    // async getEnvironments(): Promise<EnvironmentBase[]> {
+    //     return await this._request<EnvironmentBase[]>('GET', `/api/environments`)
+    // }
 
-    async updateEnvironment(body: EnvironmentCreate): Promise<Environment> {
-        const payload: Record<string, any> = { ...body };
+    // async updateEnvironment(body: EnvironmentCreate): Promise<Environment> {
+    //     const payload: Record<string, any> = { ...body };
 
-        if (body.config !== undefined) {
-            let config = body.config;
+    //     if (body.config !== undefined) {
+    //         let config = body.config;
 
-            if (configDefaults.__internal) {
-                config = {
-                    ...config,
-                    __internal: {
-                        ...configDefaults.__internal,
-                        ...(config.__internal ?? {}),
-                    }
-                }
-            }
+    //         if (configDefaults.__internal) {
+    //             config = {
+    //                 ...config,
+    //                 __internal: {
+    //                     ...configDefaults.__internal,
+    //                     ...(config.__internal ?? {}),
+    //                 }
+    //             }
+    //         }
 
-            payload.config = serializeConfig(config);
-        }
+    //         payload.config = serializeConfig(config);
+    //     }
 
-        return await this._request<Environment>('PATCH', `/api/environment`, payload)
-    }
+    //     return await this._request<Environment>('PATCH', `/api/environment`, payload)
+    // }
 
     asUser(userIdentifier: UserIdentifier): StandardAgentViewClient {
         return new StandardAgentViewClient({
