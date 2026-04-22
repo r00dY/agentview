@@ -8,6 +8,7 @@ import { Command } from "commander";
 
 import { type AgentViewConfig } from "../types";
 import { createStandardClient, StandardAgentViewClient } from "agentview/clientStandard";
+import { updateEnvironment } from "agentview/updateEnvironment";
 import { AgentViewError } from "agentview";
 import { startStudioServer } from "./studioServer.js";
 import { startProxyServer, PROXY_PORT, type ProxyServer } from "./proxyServer.js";
@@ -167,7 +168,7 @@ async function runProxyServer(client: StandardAgentViewClient) {
 
     try {
       await Promise.race([
-        client.updateEnvironment({ tunnelUrl: null }),
+        updateEnvironment(client, { tunnelUrl: null }),
         new Promise((_, reject) =>
           setTimeout(() => reject(new Error("tunnel-unregister timeout")), 5000),
         ),
@@ -196,14 +197,14 @@ async function runProxyServer(client: StandardAgentViewClient) {
   tunnel = await startCloudflareTunnel(PROXY_PORT);
   console.log(`[agentview] tunnel URL: ${tunnel.url}`);
 
-  await client.updateEnvironment({ tunnelUrl: tunnel.url });
+  await updateEnvironment(client, { tunnelUrl: tunnel.url });
   console.log(`[agentview] tunnel registered with AgentView backend`);
 
 }
 
 async function pushConfig() {
   const config = await loadConfig();
-  await client.updateEnvironment({ config });
+  await updateEnvironment(client, { config });
   console.log(`Config pushed`);
 }
 

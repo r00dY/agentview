@@ -9,6 +9,8 @@ import {
     type SessionStreamEvent,
     type SessionsGetQueryParams,
     type SessionsPaginatedResponse,
+    type SessionsStatsQueryParams,
+    type SessionsStats,
 } from './apiTypes.js'
 
 import { type AgentViewErrorBody, AgentViewError } from './AgentViewError.js'
@@ -187,23 +189,23 @@ export class StandardAgentViewClient extends AgentViewBase {
     //     return await this._request<void>('POST', `/api/seen`, options)
     // }
 
-    // async getSessionsStats(options?: SessionsStatsQueryParams): Promise<SessionsStats> {
-    //     let path = `/api/sessions/stats`
-    //     const params = new URLSearchParams()
+    async getSessionsStats(options?: SessionsStatsQueryParams): Promise<SessionsStats> {
+        let path = `/api/sessions/stats`
+        const params = new URLSearchParams()
 
-    //     if (options?.space) params.append('space', options.space)
-    //     if (options?.page) params.append('page', options.page.toString())
-    //     if (options?.limit) params.append('limit', options.limit.toString())
-    //     if (options?.userId) params.append('userId', options.userId)
-    //     if (options?.granular) params.append('granular', 'true')
+        if (options?.space) params.append('space', options.space)
+        if (options?.page) params.append('page', options.page.toString())
+        if (options?.limit) params.append('limit', options.limit.toString())
+        if (options?.userId) params.append('userId', options.userId)
+        if (options?.granular) params.append('granular', 'true')
 
-    //     const queryString = params.toString()
-    //     if (queryString) {
-    //         path += `?${queryString}`
-    //     }
+        const queryString = params.toString()
+        if (queryString) {
+            path += `?${queryString}`
+        }
 
-    //     return await this._request<SessionsStats>('GET', path, undefined)
-    // }
+        return await this._request<SessionsStats>('GET', path, undefined)
+    }
 
     // async createComment(options: InputTarget & { content: string }): Promise<void> {
     //     return await this._request<void>('POST', `/api/comments`, options)

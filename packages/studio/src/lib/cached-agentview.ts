@@ -1,6 +1,7 @@
 import { type AgentViewClientOptions } from 'agentview'
 import { StandardAgentViewClient } from 'agentview/clientStandard'
-import type { InputTarget } from 'agentview/apiTypes'
+import type { InputTarget, ScoreCreate, EnvironmentCreate, UserCreate } from 'agentview/apiTypes'
+import { updateEnvironment as _updateEnvironment } from 'agentview/updateEnvironment'
 import { invalidateByPrefix, invalidateCache, swr, swrSync } from './swr-cache'
 
 // Cache key helpers
@@ -19,7 +20,7 @@ export class CachedAgentView extends StandardAgentViewClient {
     super(options)
   }
 
-  // === CACHED READS ===
+  // === CACHED READS (methods on StandardAgentViewClient) ===
 
   override async getSession(...args: Parameters<StandardAgentViewClient['getSession']>) {
     return await swr(cacheKeys.session(args[0].id), () => super.getSession(...args))
@@ -39,6 +40,8 @@ export class CachedAgentView extends StandardAgentViewClient {
     return swrSync(cacheKeys.sessions(paramKey), () => super.getSessions(...args))
   }
 
+  // === CACHED READS (methods moved to subresources) ===
+
   override async getSessionsStats(...args: Parameters<StandardAgentViewClient['getSessionsStats']>) {
     const paramKey = JSON.stringify(args[0] ?? {})
     return swr(cacheKeys.sessionsStats(paramKey), () => super.getSessionsStats(...args))
@@ -49,11 +52,31 @@ export class CachedAgentView extends StandardAgentViewClient {
     return swrSync(cacheKeys.sessionsStats(paramKey), () => super.getSessionsStats(...args))
   }
 
-  override async getEnvironment(...args: Parameters<StandardAgentViewClient['getEnvironment']>) {
-    return swr(cacheKeys.environment(), () => super.getEnvironment(...args))
+  async getEnvironment() {
+    return swr(cacheKeys.environment(), () => this.environments.getActive())
   }
 
-  // === MUTATIONS (invalidate cache) ===
+  async getSessionComments(options: { id: string }) {
+    return swr(cacheKeys.sessionComments(options.id), () => this.comments.list({ sessionId: options.id }))
+  }
+
+  getSessionCommentsSync(options: { id: string }) {
+    return swrSync(cacheKeys.sessionComments(options.id), () => this.comments.list({ sessionId: options.id }))
+  }
+
+  async getSessionScores(options: { id: string }) {
+    return swr(cacheKeys.sessionScores(options.id), () => this.scores.list({ sessionId: options.id }))
+  }
+
+  getSessionScoresSync(options: { id: string }) {
+    return swrSync(cacheKeys.sessionScores(options.id), () => this.scores.list({ sessionId: options.id }))
+  }
+
+  async getOrganization() {
+    return this.organization.get()
+  }
+
+  // === MUTATIONS (methods on StandardAgentViewClient) ===
 
   override async createSession(...args: Parameters<StandardAgentViewClient['createSession']>) {
     const result = await super.createSession(...args)
@@ -96,49 +119,33 @@ export class CachedAgentView extends StandardAgentViewClient {
     return result
   }
 
-  override async getSessionComments(...args: Parameters<StandardAgentViewClient['getSessionComments']>) {
-    return swr(cacheKeys.sessionComments(args[0].id), () => super.getSessionComments(...args))
+  // === MUTATIONS (methods moved to subresources) ===
+
+  async createComment(options: WithRequired<InputTarget & { content: string }, 'sessionId'>) { // we make sessionId mandatory in Target to simplify cache invalidation
+    const result = await this.comments.create(options)
+    invalidateCache(cacheKeys.sessionScores(options.sessionId))
+    invalidateCache(cacheKeys.sessionComments(options.sessionId))
+    return result
   }
 
-  getSessionCommentsSync(...args: Parameters<StandardAgentViewClient['getSessionComments']>) {
-    return swrSync(cacheKeys.sessionComments(args[0].id), () => super.getSessionComments(...args))
-  }
-
-  override async getSessionScores(...args: Parameters<StandardAgentViewClient['getSessionScores']>) {
-    return swr(cacheKeys.sessionScores(args[0].id), () => super.getSessionScores(...args))
-  }
-
-  getSessionScoresSync(...args: Parameters<StandardAgentViewClient['getSessionScores']>) {
-    return swrSync(cacheKeys.sessionScores(args[0].id), () => super.getSessionScores(...args))
-  }
-
-  override async createComment(options_: WithRequired<Parameters<StandardAgentViewClient['createComment']>[0], 'sessionId'>) { // we make sessionId mandatory in Target to simplify cache invalidation
-    const { sessionId, ...options } = options_
-    const result = await super.createComment(options)
+  async updateComment(options: { id: string, content: string, sessionId: string }) {
+    const { sessionId, id, ...rest } = options
+    const result = await this.comments.update(id, rest)
     invalidateCache(cacheKeys.sessionScores(sessionId))
     invalidateCache(cacheKeys.sessionComments(sessionId))
     return result
   }
 
-  override async updateComment(options_: Parameters<StandardAgentViewClient['updateComment']>[0] & { sessionId: string }) {
-    const { sessionId, ...options } = options_
-    const result = await super.updateComment(options)
-
+  async deleteComment(options: { id: string, sessionId: string }) {
+    const { sessionId, id } = options
+    const result = await this.comments.delete(id)
     invalidateCache(cacheKeys.sessionScores(sessionId))
     invalidateCache(cacheKeys.sessionComments(sessionId))
     return result
   }
 
-  override async deleteComment(options_: Parameters<StandardAgentViewClient['deleteComment']>[0] & { sessionId: string }) {
-    const { sessionId, ...options } = options_
-    const result = await super.deleteComment(options)
-    invalidateCache(cacheKeys.sessionScores(sessionId))
-    invalidateCache(cacheKeys.sessionComments(sessionId))
-    return result
-  }
-
-  override async updateScores(options: WithRequired<InputTarget, 'sessionId'> & { scores: any[] }) {
-    const result = await super.updateScores(options)
+  async updateScores(options: WithRequired<InputTarget, 'sessionId'> & { scores: ScoreCreate[] }) {
+    const result = await this.scores.update(options)
     if (options.sessionId) {
       invalidateCache(cacheKeys.sessionScores(options.sessionId))
       invalidateCache(cacheKeys.sessionComments(options.sessionId))
@@ -146,15 +153,14 @@ export class CachedAgentView extends StandardAgentViewClient {
     return result
   }
 
-  override async updateEnvironment(...args: Parameters<StandardAgentViewClient['updateEnvironment']>) {
-    const result = await super.updateEnvironment(...args)
+  async updateEnvironment(body: EnvironmentCreate) {
+    const result = await _updateEnvironment(this, body)
     invalidateCache(cacheKeys.environment())
     return result
   }
 
-  override async updateUser(...args: Parameters<StandardAgentViewClient['updateUser']>) {
-    const result = await super.updateUser(...args)
-
+  async updateUser(options: UserCreate & { id: string }) {
+    const result = await this.users.update(options)
     // .user is part of session list and also single session object. That's why we literally nuke cache here. Good for now.
     invalidateByPrefix('session');
     invalidateByPrefix('sessions');
@@ -162,8 +168,8 @@ export class CachedAgentView extends StandardAgentViewClient {
     return result
   }
 
-  override async markSeen(...args: Parameters<StandardAgentViewClient['markSeen']>) {
-    const result = await super.markSeen(...args)
+  async markSeen(options: InputTarget) {
+    const result = await this.comments.markSeen(options)
     invalidateByPrefix('sessions-stats')
     return result
   }

@@ -27,7 +27,7 @@ async function loader({ request }: LoaderFunctionArgs) {
     return redirect(getRedirectUrl(request.url));
   }
 
-  const organization = await publicClient.getOrganization();
+  const organization = await publicClient.organization.get();
 
   // Check for token in query params
   const url = new URL(request.url);
