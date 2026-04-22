@@ -22,9 +22,10 @@ export function ChatUI(props: {
   
   const { messages, sendMessage, status, error, stop } = useChat({
     id: session.id,
+    generateId: () => crypto.randomUUID(),
     messages: session.messages,
     resume: session.resume,
-    transport: client.as(userToken).createTransport()
+    transport: client.asUser({ token: userToken }).createTransport()
   });
 
   const [input, setInput] = useState("");
