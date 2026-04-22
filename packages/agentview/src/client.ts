@@ -33,7 +33,7 @@ export class AgentViewBase {
   protected user?: UserIdentifier
   protected customHeaders?: HeadersInit | (() => HeadersInit)
   protected env?: string
-  protected organizationId?: string
+  protected organizationId?: string // required only for session auth
 
   users: UsersResource;
 

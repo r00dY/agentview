@@ -43,7 +43,7 @@ import { getLastRun } from 'agentview/sessionUtils';
 import { and, countDistinct, DrizzleQueryError, eq, inArray, isNull, or, sql, type InferSelectModel } from 'drizzle-orm';
 import packageJson from '../package.json';
 import { auth } from './auth';
-import { authn, authnAllowAnon, authnAllowPublic, authorize, requireMemberPrincipal, type Principal, type ServicePrincipal } from './authMiddleware';
+import { authn, authnAllowAnon, authnAllowUser, authorize, requireMemberPrincipal, type Principal, type ServicePrincipal } from './authMiddleware';
 import { db__dangerous } from './db';
 import { requireConfig, requireEnvironment } from './environments';
 import { equalJSON } from './equalJSON';
@@ -206,7 +206,7 @@ const userMeRoute = createRoute({
 })
 
 app.openapi(userMeRoute, async (c) => {
-  const principal = await authnAllowPublic(c.req.raw.headers)
+  const principal = await authnAllowUser(c.req.raw.headers)
 
   if (principal.type !== 'user') {
     throw new AgentViewError("This endpoint is only available for user-scoped tokens.", 401);
@@ -322,7 +322,7 @@ const sessionsGETRoute = createRoute({
 })
 
 app.openapi(sessionsGETRoute, async (c) => {
-  const principal = await authnAllowPublic(c.req.raw.headers)
+  const principal = await authnAllowUser(c.req.raw.headers)
   const params = c.req.valid("query");
 
   return withTenant(principal, async (tx) => {
@@ -459,7 +459,7 @@ const sessionGETRoute = createRoute({
 })
 
 async function sessionGETHandler(c: Parameters<RouteHandler<typeof sessionGETRoute>>[0]) {
-  const principal = await authnAllowPublic(c.req.raw.headers)
+  const principal = await authnAllowUser(c.req.raw.headers)
   const { session_id } = c.req.param()
 
   return withOrg(principal.organizationId, async (tx) => {
@@ -627,7 +627,7 @@ const sessionsPOSTRoute = createRoute({
 })
 
 app.openapi(sessionsPOSTRoute, async (c) => {
-  const principal = await authnAllowPublic(c.req.raw.headers)
+  const principal = await authnAllowUser(c.req.raw.headers)
   const body = await c.req.valid('json')
 
   if (body.input) {
@@ -666,7 +666,7 @@ const sessionsAISDKPOSTRoute = createRoute({
 })
 
 app.openapi(sessionsAISDKPOSTRoute, async (c) => {
-  const principal = await authnAllowPublic(c.req.raw.headers)
+  const principal = await authnAllowUser(c.req.raw.headers)
   const body = await c.req.valid('json')
 
   // session without run - just create active session and return it
@@ -762,7 +762,7 @@ const sessionStreamRoute = createRoute({
 });
 
 const sessionStreamHandler = async (c: Parameters<RouteHandler<typeof sessionStreamRoute>>[0]) => {
-  const principal = await authnAllowPublic(c.req.raw.headers);
+  const principal = await authnAllowUser(c.req.raw.headers);
 
   const { session_id } = c.req.param()
 
@@ -966,7 +966,7 @@ app.post('/internal/fast-patch', async (c) => {
 })
 
 app.openapi(runsAISDKPOSTRoute, async (c) => {
-  const principal = await authnAllowPublic(c.req.raw.headers)
+  const principal = await authnAllowUser(c.req.raw.headers)
   const body = await c.req.valid('json')
   const params = await c.req.param();
 
@@ -1006,7 +1006,7 @@ const sessionStandardCancelRoute = createRoute({
 })
 
 async function sessionStandardCancelHandler(c: Parameters<RouteHandler<typeof sessionCancelRoute>>[0]) {
-  const principal = await authnAllowPublic(c.req.raw.headers)
+  const principal = await authnAllowUser(c.req.raw.headers)
 
   const { session_id } = c.req.param()
 
@@ -1451,7 +1451,7 @@ app.get('/api/invitations/:invitation_id', async (c) => {
 /* --------- ORGANIZATION PUBLIC INFO --------- */
 
 app.get('/api/organization', async (c) => {
-  const principal = await authnAllowPublic(c.req.raw.headers)
+  const principal = await authnAllowAnon(c.req.raw.headers)
 
   // Auth tables don't have RLS - safe to query directly
   const organization = await db__dangerous.query.organizations.findFirst({

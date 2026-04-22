@@ -78,11 +78,11 @@ function extractBearerToken(headers: Headers) {
   return rest.join(' ').trim()
 }
 
-function extractUserIdentifierFromHeaders(headers: Headers) : { id: string } | { externalId: string } | { token: string } | null {
+function extractUserIdentifierFromHeaders(headers: Headers): { id: string } | { externalId: string } | { token: string } | null {
   const xUserToken = headers.get('x-user-token')?.trim()
   const xUserId = headers.get('x-user-id')?.trim()
   const xUserExternalId = headers.get('x-user-external-id')?.trim()
-  
+
   if (xUserToken) {
     return { token: xUserToken }
   }
@@ -123,14 +123,14 @@ async function getRole(userId: string, organizationId: string) {
 // but it's not work just on its own, you gotta be authenticated first (via api key or member cookie)
 
 
-async function getUserPrincipal(headers: Headers, organizationId: string, allowOnlyForToken: boolean, env?: string) : Promise<UserPrincipal | undefined> {
+async function getUserPrincipal(headers: Headers, organizationId: string, allowOnlyForToken: boolean, env?: string): Promise<UserPrincipal | undefined> {
   const userIdentifier = extractUserIdentifierFromHeaders(headers);
 
   if (!userIdentifier) {
     return undefined;
   }
 
-  
+
   if ('token' in userIdentifier) {
     const user = await withOrg(organizationId, tx => findUser(tx, { token: userIdentifier.token }))
     if (!user) {
@@ -158,12 +158,25 @@ async function getUserPrincipal(headers: Headers, organizationId: string, allowO
     }
     return { type: 'user', user, organizationId, env }
   }
-  
+
   return undefined;
 }
 
+
+async function verifyOrgAccess(organizationId: string, userId: string) {
+  const organization = await db__dangerous.query.organizations.findFirst({ where: eq(organizations.id, organizationId) })
+  if (!organization) {
+    throw new AgentViewError("The API Key is associated with organization that doesn't exist.", 404);
+  }
+
+  const member = await db__dangerous.query.members.findFirst({ where: and(eq(members.userId, userId), eq(members.organizationId, organizationId)) })
+  if (!member) {
+    throw new AgentViewError("The owner of the API Key is not a member of the organization.", 401);
+  }
+}
+
 export async function authnAllowAnon(headers: Headers): Promise<Principal> {
-  const env  = headers.get('x-env') ?? undefined;
+  const env = headers.get('x-env') ?? undefined;
 
   // API Key is always required, let's verify
   const bearer = extractBearerToken(headers)
@@ -172,65 +185,71 @@ export async function authnAllowAnon(headers: Headers): Promise<Principal> {
     throw new AgentViewError("Missing API Key", 401);
   }
 
-  const { valid, error, key } = await auth.api.verifyApiKey({
-    body: {
-      key: bearer,
-    },
-  })
+  let bearerPrincipal: MemberPrincipal | ApiKeyPrincipal | ApiKeyPublicPrincipal
 
-  if (error || !valid || !key) {
-    throw new AgentViewError(error?.message ?? "Invalid API Key", 401);
-  }
+  // Check for member session
+  const memberSession = await auth.api.getSession({ headers })
 
-  // Let's extract and verify organization
-  const organizationId = key.metadata?.organizationId;
-  if (!organizationId) {
-    throw new AgentViewError("The API Key is not associated with any organization.", 400);
-  }
+  // Session auth
+  if (memberSession) {
+    /**
+     * Worth mentioning why we need this X-Organization-Id. 
+     * 
+     * The session auth uses Bearer token, the same as keys. But session bearer token doesn't have org info (and probably shouldn't have).
+     * This is rare to use X-Organization-Id, almost like an edge case only for studio.
+     */
+    const organizationId = headers.get('x-organization-id') ?? undefined;
+    if (!organizationId) {
+      throw new AgentViewError("No organization ID provided in X-Organization-Id header (required for session authentication).", 401);
+    }
 
-  const organization = await db__dangerous.query.organizations.findFirst({ where: eq(organizations.id, organizationId) })
-  if (!organization) {
-    throw new AgentViewError("The API Key is associated with organization that doesn't exist.", 404);
-  }
+    await verifyOrgAccess(organizationId, memberSession.user.id);
 
-  const member = await db__dangerous.query.members.findFirst({ where: and(eq(members.userId, key.userId), eq(members.organizationId, organizationId)) })
-  if (!member) {
-    throw new AgentViewError("The owner of the API Key is not a member of the organization.", 401);
+    const role = await getRole(memberSession.user.id, organizationId)
+    bearerPrincipal = { type: 'member', session: memberSession, role, organizationId: organizationId, env }
   }
-
-  let apiKeyPrincipal: ApiKeyPrincipal | ApiKeyPublicPrincipal;
-  if (key.prefix === 'pk_') {
-    apiKeyPrincipal = { type: 'apiKeyPublic', apiKey: key, organizationId: organizationId, env }
-  }
-  else if (key.prefix === 'sk_') {
-    apiKeyPrincipal = { type: 'apiKey', apiKey: key, organizationId: organizationId, env }
-  }
+  // API Key auth
   else {
-    throw new AgentViewError("Invalid API Key. The API Key must have pk_ or sk_ prefix.", 401);
+    const { valid, error, key } = await auth.api.verifyApiKey({
+      body: {
+        key: bearer,
+      },
+    })
+
+    if (error || !valid || !key) {
+      throw new AgentViewError(error?.message ?? "Invalid API Key", 401);
+    }
+
+    // Let's extract and verify organization
+    const organizationId = key.metadata?.organizationId;
+    if (!organizationId) {
+      throw new AgentViewError("The API Key is not associated with any organization.", 400);
+    }
+
+    await verifyOrgAccess(organizationId, key.userId);
+
+    if (key.prefix === 'pk_') {
+      bearerPrincipal = { type: 'apiKeyPublic', apiKey: key, organizationId: organizationId, env }
+    }
+    else if (key.prefix === 'sk_') {
+      bearerPrincipal = { type: 'apiKey', apiKey: key, organizationId: organizationId, env }
+    }
+    else {
+      throw new AgentViewError("Invalid API Key. The API Key must have pk_ or sk_ prefix.", 401);
+    }
   }
 
-  // User principal overrides API Key and member principal (based on x-user-token header)
-  const userPrincipal = await getUserPrincipal(headers, organization.id, apiKeyPrincipal.type === 'apiKeyPublic', env)
+  // Potential user principal
+  const allowOnlyForUserToken = bearerPrincipal.type === 'apiKeyPublic';
+  const userPrincipal = await getUserPrincipal(headers, bearerPrincipal.organizationId, allowOnlyForUserToken, env)
   if (userPrincipal) {
     return userPrincipal;
   }
 
-  // member principal (cookies), overrides API Key principal
-  const memberSession = await auth.api.getSession({ headers })
-
-  if (memberSession) {
-    if (apiKeyPrincipal.type === 'apiKey') {
-      throw new AgentViewError("Authorizing via member cookie is allowed only with public API key.", 401);
-    }
-
-    const role = await getRole(memberSession.user.id, organization.id)
-    return { type: 'member', session: memberSession, role, organizationId: organization.id, env }
-  }
-
-  return apiKeyPrincipal;
+  return bearerPrincipal;
 }
 
-export async function authnAllowPublic(headers: Headers): Promise<ServicePrincipal | PrivatePrincipal | UserPrincipal> {
+export async function authnAllowUser(headers: Headers): Promise<ServicePrincipal | PrivatePrincipal | UserPrincipal> {
   const principal = await authnAllowAnon(headers);
 
   if (principal.type === 'apiKeyPublic') {

@@ -1,19 +1,30 @@
-import { AgentViewError } from 'agentview'
+import { AgentViewError, createClient } from 'agentview'
 import { config } from '../config'
 import { CachedAgentView } from './cached-agentview'
 
 let cachedClient : CachedAgentView | undefined = undefined
 
+export const publicClient = createClient({
+  apiKey: config.publicApiKey,
+  env: config.env,
+})
+
 export function agentview() {
   if (!cachedClient) {
     const token = localStorage.getItem("agentview_token");
+    const organizationId = localStorage.getItem("agentview_organization_id");
+
     if (!token) {
       throw new Error("No token found");
+    }
+    if (!organizationId) {
+      throw new Error("No organization ID found");
     }
 
     cachedClient = new CachedAgentView({
       apiKey: token,
       env: config.env,
+      organizationId: organizationId,
     })
   }
   return cachedClient

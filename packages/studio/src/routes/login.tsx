@@ -5,7 +5,7 @@ import { CardPageLayout } from "../components/CardPageLayout";
 import { authClient } from "../lib/auth-client";
 import { getWebAppUrl, getApiUrl } from "agentview/urls";
 import { config } from "../config";
-import { agentview } from "../lib/agentview";
+import { agentview, publicClient } from "../lib/agentview";
 
 
 function getRedirectUrl(stringUrl: string) {
@@ -27,18 +27,21 @@ async function loader({ request }: LoaderFunctionArgs) {
     return redirect(getRedirectUrl(request.url));
   }
 
+  const organization = await publicClient.getOrganization();
+
   // Check for token in query params
   const url = new URL(request.url);
   const token = url.searchParams.get('token');
 
   if (token) {
     window.localStorage.setItem('agentview_token', token);
+    window.localStorage.setItem('agentview_organization_id', organization.id);
     url.searchParams.delete('token');
     return redirect(getRedirectUrl(url.toString()));
   }
 
   return {
-    organization: await agentview().getOrganization(),
+    organization,
   }
 }
 
