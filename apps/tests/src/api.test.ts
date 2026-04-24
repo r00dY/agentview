@@ -66,7 +66,7 @@ describe('API', () => {
     }))
   }
 
-  const updateConfig = async (options: { strictMatching?: boolean, runMetadata?: Record<string, z.ZodType>, allowUnknownMetadata?: boolean, validateSteps?: boolean, prod?: boolean, itemScores?: { name: string, schema: z.ZodType }[], runScores?: { name: string, schema: z.ZodType }[], version?: string } = {}) => {
+  const updateConfig = async (options: { strictMatching?: boolean, runMetadata?: Record<string, z.ZodType>, allowUnknownMetadata?: boolean, validateOutput?: boolean, prod?: boolean, itemScores?: { name: string, schema: z.ZodType }[], runScores?: { name: string, schema: z.ZodType }[], version?: string } = {}) => {
 
     let inputSchema = z.looseObject({ type: z.literal("message"), role: z.literal("user"), content: z.string() })
     let stepSchema = z.looseObject({ type: z.literal("reasoning"), content: z.string() })
@@ -89,11 +89,10 @@ describe('API', () => {
           runs: [
             {
               input: { schema: inputSchema },
-              steps: [{ schema: stepSchema }, { schema: functionCallSchema, callResult: { schema: functionResultSchema } }],
-              output: { schema: outputSchema, scores: options.itemScores },
+              output: [{ schema: stepSchema }, { schema: functionCallSchema, callResult: { schema: functionResultSchema } }, { schema: outputSchema, scores: options.itemScores }],
               scores: options.runScores,
               metadata: options.runMetadata,
-              validateSteps: options.validateSteps,
+              validateOutput: options.validateOutput,
               allowUnknownMetadata: options.allowUnknownMetadata,
             }
           ]
@@ -1022,7 +1021,7 @@ describe('API', () => {
 
       // TODO: Better error messages from bad matches!!!
 
-      const baseTestCases: Array<{ title: string, scenarios: any[], lastRunStatus: ("in_progress" | "completed" | "failed" | undefined)[], error?: number | null, validateSteps?: boolean, strictMatching?: boolean, only?: boolean }> = [
+      const baseTestCases: Array<{ title: string, scenarios: any[], lastRunStatus: ("in_progress" | "completed" | "failed" | undefined)[], error?: number | null, validateOutput?: boolean, strictMatching?: boolean, only?: boolean }> = [
         {
           title: "just input & output",
           scenarios: [
@@ -1052,7 +1051,7 @@ describe('API', () => {
             [[baseInput], [baseStep, baseStep, baseOutput]],
           ],
           lastRunStatus: [undefined],
-          validateSteps: true,
+          validateOutput: true,
           error: null, // items matching output schema are also accepted during streaming (step/output distinction happens on completion)
         },
         {
@@ -1066,14 +1065,14 @@ describe('API', () => {
           error: null
         },
         {
-          title: "input, 2 items, no output",
+          title: "input, 2 items, no output (valid - any output schema matches)",
           scenarios: [
             [[baseInput, baseStep, baseStep]],
             [[baseInput], [baseStep], [baseStep]],
             [[baseInput], [baseStep, baseStep]],
           ],
           lastRunStatus: ["completed"],
-          error: 422
+          error: null
         },
         {
           title: "single item",
@@ -1147,24 +1146,24 @@ describe('API', () => {
           error: null // when there is no step validation and status becomes "failed", we don't know if the last item was output or step
         },
         {
-          title: "incorrect step item, validateSteps=false",
+          title: "incorrect step item, validateOutput=false",
           scenarios: [
             [[baseInput, baseStep, wrongStep]],
             [[baseInput], [baseStep], [wrongStep]],
             [[baseInput], [baseStep, wrongStep]],
           ],
-          // validateSteps: false -> default
+          // validateOutput: false -> default
           lastRunStatus: [undefined],
           error: null,
         },
         {
-          title: "incorrect step item, validateSteps=true",
+          title: "incorrect step item, validateOutput=true",
           scenarios: [
             [[baseInput, baseStep, wrongStep]],
             [[baseInput], [baseStep], [wrongStep]],
             [[baseInput], [baseStep, wrongStep]],
           ],
-          validateSteps: true,
+          validateOutput: true,
           lastRunStatus: [undefined],
           error: 422,
         },
@@ -1177,7 +1176,7 @@ describe('API', () => {
             [[baseInput], [fun1Call("id1")], [funResult("id1")], [fun2Call("id2")], [funResult("id2")], [baseOutput]],
             [[baseInput], [fun1Call("id1")], [funResult("id1"), fun2Call("id2")], [funResult("id2"), baseOutput]],
           ],
-          validateSteps: true,
+          validateOutput: true,
           lastRunStatus: ["completed", "failed"],
           error: null,
         },
@@ -1186,7 +1185,7 @@ describe('API', () => {
           scenarios: [
             [[baseInput, fun1Call("1"), fun2Call("2"), fun1Call("3"), funResult("3"), funResult("1"), funResult("2"), baseOutput]],
           ],
-          validateSteps: true,
+          validateOutput: true,
           lastRunStatus: ["completed", "failed"],
           error: null,
         },
@@ -1199,7 +1198,7 @@ describe('API', () => {
             [[baseInput, fun1Call("xxx"), funResult("xxx_different")]],
             [[baseInput], [fun1Call("xxx")], [funResult("xxx_different")]],
           ],
-          validateSteps: true,
+          validateOutput: true,
           lastRunStatus: [undefined],
           error: 422,
         },
@@ -1216,7 +1215,7 @@ describe('API', () => {
             const testFn = testCase.only ? test.only : test;
 
             testFn(title, async () => {
-              await updateConfig({ strictMatching: testCase.strictMatching, validateSteps: testCase.validateSteps });
+              await updateConfig({ strictMatching: testCase.strictMatching, validateOutput: testCase.validateOutput });
 
               const session = await createSession()
 
@@ -1696,7 +1695,7 @@ describe('API', () => {
               runs: [
                 {
                   input: { schema: inputSchema },
-                  output: { schema: outputSchema },
+                  output: [{ schema: outputSchema }],
                   idleTimeout,
                 }
               ]
@@ -1891,8 +1890,7 @@ describe('API', () => {
               version: "1.0.0",
               runs: [{
                 input: { schema: inputSchema },
-                steps: [{ schema: stepSchema }, { schema: functionCallSchema, callResult: { schema: functionResultSchema } }],
-                output: { schema: outputSchema },
+                output: [{ schema: stepSchema }, { schema: functionCallSchema, callResult: { schema: functionResultSchema } }, { schema: outputSchema }],
               }]
             }],
             channels: [{ type: 'api', name: "test", agent: "test" }],
@@ -2232,8 +2230,7 @@ describe('API', () => {
           version: '1.0.0',
           runs: [{
             input: { schema: z.looseObject({ type: z.literal("message"), content: z.string() }) },
-            steps: [],
-            output: { schema: z.looseObject({ type: z.literal("output"), content: z.string() }) },
+            output: [{ schema: z.looseObject({ type: z.literal("output"), content: z.string() }) }],
           }]
         }],
         channels: [{ type: 'api' as const, name: 'test-agent', agent: 'test-agent' }]

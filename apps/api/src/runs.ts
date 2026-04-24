@@ -36,26 +36,21 @@ export function getRunInputContent(sessionItems: { content: any; type?: string |
 }
 
 /**
- * Validates non-input items. All items are validated against step schemas and output schema.
+ * Validates non-input items against output schemas.
  * Items are always inserted as type: 'step' at this stage. Output marking happens later on completion.
  */
 export function validateItems(runConfig: BaseRunConfig, previousRunItems: any[], items: any[]) {
-  const validateSteps = runConfig.validateSteps ?? false;
+  const validateOutput = runConfig.validateOutput ?? false;
 
   const parsedItems: any[] = [];
 
   for (const item of items) {
-    // Try to match against any schema (step or output)
-    const stepConfig = findItemConfig(runConfig, [...previousRunItems, ...parsedItems], item, [], "step");
     const outputConfig = findItemConfig(runConfig, [...previousRunItems, ...parsedItems], item, [], "output");
 
-    if (stepConfig) {
-      parsedItems.push(stepConfig.content);
-    }
-    else if (outputConfig) {
+    if (outputConfig) {
       parsedItems.push(outputConfig.content);
     }
-    else if (!validateSteps) {
+    else if (!validateOutput) {
       parsedItems.push(item);
     }
     else {

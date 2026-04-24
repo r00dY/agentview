@@ -125,10 +125,10 @@ type FindItemConfigResult<T extends BaseSessionItemConfig> = {
     itemConfig: T,
     content: any,
     tool?: any,
-    type: "input" | "output" | "step"
+    type: "input" | "output"
 }
 
-export function findItemConfigById<RunT extends BaseRunConfig>(runConfig: RunT, sessionItems: SessionItem[], itemId: string, itemType?: "input" | "output" | "step"): FindItemConfigResult<RunT["output"]> | undefined {
+export function findItemConfigById<RunT extends BaseRunConfig>(runConfig: RunT, sessionItems: SessionItem[], itemId: string, itemType?: "input" | "output"): FindItemConfigResult<RunT["output"][number]> | undefined {
     const itemsBefore = [];
     const itemsAfter = [];
     let newItem = undefined;
@@ -157,17 +157,14 @@ export function findItemConfigById<RunT extends BaseRunConfig>(runConfig: RunT, 
 }
 
 
-export function findItemConfig<RunT extends BaseRunConfig>(runConfig: RunT, itemsBefore: any[], item: Record<string, any>, itemsAfter: any[], itemType?: "input" | "output" | "step"): FindItemConfigResult<RunT["output"]> | undefined {
+export function findItemConfig<RunT extends BaseRunConfig>(runConfig: RunT, itemsBefore: any[], item: Record<string, any>, itemsAfter: any[], itemType?: "input" | "output"): FindItemConfigResult<RunT["output"][number]> | undefined {
     const matches: any[] = [];
 
     if (!itemType || itemType === "input") {
         matches.push(...matchItemConfigs([runConfig.input], [], item, []).map((match) => ({ ...match, type: "input" })));
     }
     if (!itemType || itemType === "output") {
-        matches.push(...matchItemConfigs([runConfig.output], [], item, []).map((match) => ({ ...match, type: "output" })));
-    }
-    if (!itemType || itemType === "step") {
-        matches.push(...matchItemConfigs(runConfig.steps ?? [], itemsBefore, item, itemsAfter).map((match) => ({ ...match, type: "step" })));
+        matches.push(...matchItemConfigs(runConfig.output, itemsBefore, item, itemsAfter).map((match) => ({ ...match, type: "output" })));
     }
 
     if (matches.length === 0) {
@@ -303,7 +300,7 @@ export function serializeRunConfig(runConfig: any) {
 }
 
 
-export function requireItemConfig(runConfig: ReturnType<typeof requireRunConfig>, sessionItems: SessionItem[], itemId: string, itemType?: "input" | "output" | "step") {
+export function requireItemConfig(runConfig: ReturnType<typeof requireRunConfig>, sessionItems: SessionItem[], itemId: string, itemType?: "input" | "output") {
     let itemConfig = findItemConfigById(runConfig, sessionItems, itemId, itemType);
 
     if (!itemConfig) {

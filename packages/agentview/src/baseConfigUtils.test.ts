@@ -102,21 +102,21 @@ function createRunConfig(steps: any[]): RunConfig {
                 content: z.string(),
             })
         },
-        output: {
-            $id: "output",
-            schema: z.looseObject({
-                type: z.literal("message"),
-                role: z.literal("user"),
-                content: z.string(),
-            })
-        },
-        steps: [
+        output: [
             {
                 schema: z.looseObject({
                     type: z.literal("reasoning"),
                 })
             },
-            ...steps
+            ...steps,
+            {
+                $id: "output",
+                schema: z.looseObject({
+                    type: z.literal("message"),
+                    role: z.literal("user"),
+                    content: z.string(),
+                })
+            },
         ]
     }
 }

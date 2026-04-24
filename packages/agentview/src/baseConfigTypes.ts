@@ -16,12 +16,11 @@ export interface BaseSessionItemConfig<TScoreConfig extends BaseScoreConfig = Ba
 
 export interface BaseRunConfig<TSessionItemConfig extends BaseSessionItemConfig = BaseSessionItemConfig, TSessionInputItemConfig extends BaseSessionItemConfig = BaseSessionItemConfig, TScoreConfig extends BaseScoreConfig = BaseScoreConfig> {
     input: TSessionInputItemConfig;
-    output: TSessionItemConfig;
-    steps?: TSessionItemConfig[];
+    output: TSessionItemConfig[];
     scores?: TScoreConfig[];
     metadata?: Metadata | undefined;
     allowUnknownMetadata?: boolean;
-    validateSteps?: boolean;
+    validateOutput?: boolean;
     idleTimeout?: number;
 }
 
@@ -103,13 +102,12 @@ function baseRunSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
 
     return z.object({
         input: BaseSessionItemConfigSchema,
-        output: BaseSessionItemConfigSchema,
-        steps: z.array(BaseSessionItemConfigSchemaWithTools).optional(),
+        output: z.array(BaseSessionItemConfigSchemaWithTools),
         scores: z.array(z.object({
             name: z.string(),
             schema: jsonSchemaSchema,
         })).optional(),
-        validateSteps: z.boolean().optional(),
+        validateOutput: z.boolean().optional(),
         metadata: z.record(z.string(), jsonSchemaSchema).optional(),
         allowUnknownMetadata: z.boolean().optional(),
         idleTimeout: z.number().optional(),

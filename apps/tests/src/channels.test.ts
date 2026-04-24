@@ -40,7 +40,7 @@ describe('Channels', () => {
           adapter: 'ai-sdk',
           runs: [{
             input: { schema: z.looseObject({ role: z.literal('user'), parts: z.array(z.any()) }) },
-            output: { schema: z.looseObject({ type: z.literal('text'), text: z.string() }) },
+            output: [{ schema: z.looseObject({ type: z.literal('text'), text: z.string() }) }],
           }],
           channels: [{
             type: 'mock',

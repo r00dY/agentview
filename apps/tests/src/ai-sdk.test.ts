@@ -42,8 +42,7 @@ describe('ai-sdk', () => {
           adapter: 'ai-sdk',
           runs: [{
             input: { schema: inputSchema },
-            steps: [{ schema: stepSchema }],
-            output: { schema: outputSchema },
+            output: [{ schema: stepSchema }, { schema: outputSchema }],
           }]
         }],
         channels: [{ type: 'api', name: "test-ai-sdk", agent: "test-ai-sdk" }],
