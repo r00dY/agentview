@@ -28,14 +28,18 @@ export function requireAgentConfigByName<T extends BaseAgentViewConfig>(config: 
     return agentConfig;
 }
 
-export function requireAgentConfigBySession<T extends BaseAgentViewConfig>(config: T, session: SessionBase): NonNullable<T["agents"]>[number] {
+export function findAgentConfigBySession<T extends BaseAgentViewConfig>(config: T, session: SessionBase): NonNullable<T["agents"]>[number] | undefined {
     if (!session.agentRef) {
-        throw new AgentViewError(`Session has no agent ref`, 400);
+        return;
     }
 
-    const agentConfig = findAgentConfig(config, session.agentRef.agent);
+    return findAgentConfig(config, session.agentRef.agent);
+}
+
+export function requireAgentConfigBySession<T extends BaseAgentViewConfig>(config: T, session: SessionBase): NonNullable<T["agents"]>[number] {
+    const agentConfig = findAgentConfigBySession(config, session);
     if (!agentConfig) {
-        throw new AgentViewError(`Agent config not found for agent '${session.agentRef.agent}'`, 400);
+        throw new AgentViewError(`Agent config not found for session '${session.id}'`, 404);
     }
     return agentConfig;
 }

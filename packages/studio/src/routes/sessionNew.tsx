@@ -5,10 +5,10 @@ import { agentview, AgentViewError } from "../lib/agentview";
 import { getListParams, toQueryParams } from "../lib/listParams";
 import { type ActionResponse } from "../lib/errors";
 import { config } from "../config";
-import { requireAgentConfig, requireChannelConfig } from "agentview/baseConfigUtils";
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { AlertCircleIcon } from "lucide-react";
 import { getSessionCached } from "../lib/auth-client";
+import { requireAgentConfigByName } from "agentview/baseConfigUtils";
 
 function getAgentNameFromRequest(request: Request): string {
   const url = new URL(request.url);
@@ -30,10 +30,10 @@ function getAgentNameFromRequest(request: Request): string {
 }
 
 async function loader({ request }: LoaderFunctionArgs) {
-  const channelConfig = requireChannelConfig(config, { type: 'api', name: getAgentNameFromRequest(request) });
+  const agentConfig = requireAgentConfigByName(config, getAgentNameFromRequest(request));
 
   return {
-    channelConfig
+    agentConfig
   }
 }
 
@@ -41,7 +41,9 @@ async function action({ request, params }: ActionFunctionArgs): Promise<ActionRe
   const authSession = (await getSessionCached())!;
   const agentName = getAgentNameFromRequest(request);
 
-  const channelConfig = requireChannelConfig(config, { type: 'api', name: agentName });
+  const agentConfig = requireAgentConfigByName(config, agentName);
+
+  // const channelConfig = requireChannelConfig(config, { type: 'api', name: agentName });
   // const agentConfig = requireAgentConfig(config, channelConfig.agent);
   const listParams = getListParams(request);
 
@@ -51,7 +53,7 @@ async function action({ request, params }: ActionFunctionArgs): Promise<ActionRe
     payload = await request.json();
   }
 
-  if (!payload && channelConfig.newSessionComponent) {
+  if (!payload && agentConfig.newSessionComponent) {
     return redirect(`/sessions/new?agent=${agentName}&${toQueryParams(listParams)}`, { status: 303 });
   }
 
@@ -73,7 +75,7 @@ async function action({ request, params }: ActionFunctionArgs): Promise<ActionRe
 }
 
 function Component() {
-  const { channelConfig } = useLoaderData<typeof loader>();
+  const { agentConfig } = useLoaderData<typeof loader>();
 
   const actionData = useActionData<typeof action>();
   const fetcher = useFetcher();
@@ -103,14 +105,14 @@ function Component() {
           <AlertDescription>{error.message}</AlertDescription>
         </Alert>}
 
-        {channelConfig.newSessionComponent && <channelConfig.newSessionComponent
+        {agentConfig.newSessionComponent && <agentConfig.newSessionComponent
           submit={(values) => { 
             fetcher.submit(values ?? {}, { method: 'post', encType: 'application/json' }) 
           }}
           isRunning={fetcher.state === "submitting"}
         />}
 
-        {!channelConfig.newSessionComponent && !error && <Alert variant="default">
+        {!agentConfig.newSessionComponent && !error && <Alert variant="default">
           <AlertCircleIcon className="h-4 w-4" />
           <AlertTitle>No New Session Form</AlertTitle>
           <AlertDescription>

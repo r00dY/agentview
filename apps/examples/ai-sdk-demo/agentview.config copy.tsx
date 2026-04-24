@@ -8,18 +8,49 @@ import { z } from "zod";
 import { CustomPage } from "./components/CustomPage";
 
 export default defineConfig({
-  publicApiKey: process.env.NEXT_PUBLIC_AGENTVIEW_PUBLIC_API_KEY!,
+  publicApiKey: process.env.NEXT_PUBLIC_AGENTVIEW_API_KEY!,
   env: process.env.NEXT_PUBLIC_AGENTVIEW_ENV!,
-  agents: [
+  channels: [
     {
+      type: "gmail",
+      address: "agentviewtest@gmail.com",
+      agent: "weather-chat"
+    },
+    {
+      type: "api",
+      name: "test",
+      agent: "weather-chat",
+      
+    },
+    {
+      type: "api",
       name: "weather-chat",
-      version: "0.0.2",
-      url: "http://localhost:3000/api/chat",
-      adapter: "ai-sdk",
-
+      agent: "weather-chat",
       metadata: {
         userLocation: z.string().nullable()
       },
+      inputComponent: ({ submit2, cancel, isRunning, session, token }) => <UserMessageInput
+        onSubmit={(val) => {
+          submit2([{
+            type: "message",
+            role: "user",
+            parts: [
+              {
+                type: "text",
+                text: val,
+              }
+            ]
+          }])
+        }}
+        onCancel={cancel}
+        isRunning={isRunning}
+      />,
+      displayProperties: [
+        {
+          title: "User Location",
+          value: ({ session }) => session?.metadata?.userLocation
+        }
+      ],
       newSessionComponent: ({ submit, isRunning }) => {
         const [selectedCity, setSelectedCity] = React.useState<string>("");
 
@@ -38,7 +69,6 @@ export default defineConfig({
           "Warsaw"
         ];
 
-        
         return (
           <form onSubmit={handleSubmit} className="space-y-4">
             <Select value={selectedCity} onValueChange={setSelectedCity}>
@@ -62,30 +92,36 @@ export default defineConfig({
           </form>
         );
       },
-      displayProperties: [
-        {
-          title: "User Location",
-          value: ({ session }) => session?.metadata?.userLocation
-        }
-      ],
-      inputComponent: ({ submit2, cancel, isRunning, session, token }) => <UserMessageInput
-        onSubmit={(val) => {
-          submit2([{
-            type: "message",
-            role: "user",
-            parts: [
-              {
-                type: "text",
-                text: val,
-              }
-            ]
-          }])
-        }}
-        onCancel={cancel}
-        isRunning={isRunning}
-      />,
-
-
+      // displayProperties: [
+      //   {
+      //     title: "User Location",
+      //     value: ({ session }) => session?.metadata?.userLocation
+      //   }
+      // ],
+      // inputComponent: ({ submit2, cancel, isRunning, session, token }) => <UserMessageInput
+      //   onSubmit={(val) => {
+      //     submit2([{
+      //       type: "message",
+      //       role: "user",
+      //       parts: [
+      //         {
+      //           type: "text",
+      //           text: val,
+      //         }
+      //       ]
+      //     }])
+      //   }}
+      //   onCancel={cancel}
+      //   isRunning={isRunning}
+      // />
+    }
+  ],
+  agents: [
+    {
+      name: "weather-chat",
+      version: "0.0.2",
+      url: "http://localhost:3000/api/chat",
+      adapter: "ai-sdk",
       runs: [
         {
           input: {
@@ -100,84 +136,74 @@ export default defineConfig({
               return <UserMessage>{item.parts?.map((part: any) => part.text).join("\n\n")}</UserMessage>;
             },
           },
-          output: [],
-          validateOutput: false,
-          // output: [
-          //   {
-          //     schema: z.looseObject({
-          //       type: z.literal("reasoning"),
-          //       text: z.string(),
-          //     }),
-          //     displayComponent: ({ item }) => {
-          //       const textNormalized = item.text?.trim() == "" ? null : item.text;
+          steps: [
+            {
+              schema: z.looseObject({
+                type: z.literal("reasoning"),
+                text: z.string(),
+              }),
+              displayComponent: ({ item }) => {
+                const textNormalized = item.text?.trim() == "" ? null : item.text;
 
-          //       return <Step collapsible>
-          //         <StepTitle><Brain /> Thinking</StepTitle>
-          //         <StepContent>
-          //           {textNormalized ?? "Empty."}
-          //         </StepContent>
-          //       </Step>
-          //     }
-          //   },
-          //   {
-          //     schema: z.looseObject({
-          //       type: z.literal("data-weather"),
-          //       data: z.any(),
-          //     }),
-          //     displayComponent: ({ item }) => {
-          //       return <Step>
-          //         <StepTitle><Brain /> Weather</StepTitle>
-          //         <StepContent>
-          //           {item.data.location} {item.data.temperature}°C
-          //         </StepContent>
-          //       </Step>
-          //     }
-          //   },
-          //   {
-          //     schema: z.looseObject({
-          //       type: z.literal("data-status"),
-          //       data: z.any(),
-          //     }),
-          //     displayComponent: ({ item }) => {
-          //       return <Step collapsible>
-          //         <StepTitle><Brain /> Status</StepTitle>
-          //         <StepContent>
-          //           {item.data}
-          //         </StepContent>
-          //       </Step>
-          //     }
-          //   },
-          //   // { 
-          //   //   schema: z.looseObject({
-          //   //     type: z.literal("function_call"),
-          //   //     name: z.literal("weather_tool"),
-          //   //     callId: z.string().meta({ callId: true }),
-          //   //   }),
-          //   //   callResult: {
-          //   //     schema: z.looseObject({
-          //   //       type: z.literal("function_call_result"),
-          //   //       callId: z.string().meta({ callId: true }),
-          //   //     })
-          //   //   },
-          //   //   displayComponent: WeatherItem
-          //   // }
-          //   {
-          //     // schema: z.looseObject({
-          //     //   type: z.literal("text"),
-          //     //   text: z.string(),
-          //     // }),
-          //     schema: z.any(),
-          //     displayComponent: ({ item }) => <AssistantMessage>{item.text}</AssistantMessage>,
-          //   }
-          // ],
-          // output: {
-          //   // schema: z.looseObject({
-          //   //   type: z.literal("text"),
-          //   //   text: z.string(),
-          //   // }),
-          //   schema: z.any(),
-          //   displayComponent: ({ item }) => <AssistantMessage>{item.text}</AssistantMessage>,
-          // },
+                return <Step collapsible>
+                  <StepTitle><Brain /> Thinking</StepTitle>
+                  <StepContent>
+                    {textNormalized ?? "Empty."}
+                  </StepContent>
+                </Step>
+              }
+            },
+            {
+              schema: z.looseObject({
+                type: z.literal("data-weather"),
+                data: z.any(),
+              }),
+              displayComponent: ({ item }) => {
+                return <Step>
+                  <StepTitle><Brain /> Weather</StepTitle>
+                  <StepContent>
+                    {item.data.location} {item.data.temperature}°C
+                  </StepContent>
+                </Step>
+              }
+            },
+            {
+              schema: z.looseObject({
+                type: z.literal("data-status"),
+                data: z.any(),
+              }),
+              displayComponent: ({ item }) => {
+                return <Step collapsible>
+                  <StepTitle><Brain /> Status</StepTitle>
+                  <StepContent>
+                    {item.data}
+                  </StepContent>
+                </Step>
+              }
+            },
+            // { 
+            //   schema: z.looseObject({
+            //     type: z.literal("function_call"),
+            //     name: z.literal("weather_tool"),
+            //     callId: z.string().meta({ callId: true }),
+            //   }),
+            //   callResult: {
+            //     schema: z.looseObject({
+            //       type: z.literal("function_call_result"),
+            //       callId: z.string().meta({ callId: true }),
+            //     })
+            //   },
+            //   displayComponent: WeatherItem
+            // }
+          ],
+          output: {
+            // schema: z.looseObject({
+            //   type: z.literal("text"),
+            //   text: z.string(),
+            // }),
+            schema: z.any(),
+            displayComponent: ({ item }) => <AssistantMessage>{item.text}</AssistantMessage>,
+          },
           scores: [
               select({
                 name: "forecast_accuracy",
@@ -211,12 +237,6 @@ export default defineConfig({
           // ]
         },
       ],
-      channels: [
-        {
-          type: "gmail",
-          address: "agentviewtest@gmail.com",
-        }
-      ]
       // inputComponent: ({ submit2, cancel, isRunning, session, token }) => <UserMessageInput
       //   onSubmit={(val) => {
       //     submit2([{

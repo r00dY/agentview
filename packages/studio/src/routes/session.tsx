@@ -1,8 +1,8 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { type ChannelMessage, type CommentMessage, type InputTarget, type StandardRun, type Score, type StandardSession, type SessionBase, type SessionItem, type SessionsStats, type SessionStats } from "agentview/apiTypes";
-import { findAgentConfig, findItemConfigById, findRunConfig, requireAgentConfig, requireChannelConfig } from "agentview/baseConfigUtils";
+import { findAgentConfig, findItemConfigById, findRunConfig, requireAgentConfigByName, requireAgentConfigBySession } from "agentview/baseConfigUtils";
 import { enhanceSession, getActiveRuns, getAllSessionItems, getLastRun } from "agentview/sessionUtils";
-import type { AgentConfig, ChannelConfig, ScoreConfig, SessionItemConfig, SessionItemDisplayComponentProps } from "../types";
+import type { AgentConfig, ScoreConfig, SessionItemConfig, SessionItemDisplayComponentProps } from "../types";
 import { AlertCircleIcon, ChevronDown, CircleGauge, InfoIcon, Loader2, Lock, MessageCirclePlus, UsersIcon } from "lucide-react";
 import { useEffect, useLayoutEffect, useOptimistic, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -81,14 +81,14 @@ function Component() {
 
 function SessionShell({
     sessionBase,
-    channelConfig,
+    agentConfig,
     headerExtra,
     children,
     footer,
     outletContext
 }: {
     sessionBase: SessionBase,
-    channelConfig: ChannelConfig,
+    agentConfig: AgentConfig,
     headerExtra?: React.ReactNode,
     children: React.ReactNode,
     footer?: React.ReactNode,
@@ -102,7 +102,7 @@ function SessionShell({
             </Header>
             <div className="flex-1 overflow-y-auto">
                 <div className="p-6 border-b">
-                    <SessionDetails sessionBase={sessionBase} channelConfig={channelConfig} />
+                    <SessionDetails sessionBase={sessionBase} agentConfig={agentConfig} />
                 </div>
                 {children}
             </div>
@@ -113,10 +113,10 @@ function SessionShell({
 }
 
 function SessionPageSkeleton({ sessionBase }: { sessionBase: SessionBase }) {
-    const channelConfig = requireChannelConfig(config, sessionBase.channel);
+    const agentConfig = requireAgentConfigBySession(config, sessionBase);
 
     return (
-        <SessionShell sessionBase={sessionBase} channelConfig={channelConfig}>
+        <SessionShell sessionBase={sessionBase} agentConfig={agentConfig}>
             <div className="p-6">
                 <LoadingIndicator />
             </div>
@@ -146,8 +146,7 @@ function SessionPage(props: { session: StandardSession, comments: CommentMessage
     const activeItems = getAllSessionItems(session, { activeOnly: true })
     const lastRun = getLastRun(session)
 
-    const channelConfig = requireChannelConfig(config, session.channel);
-    // const agentConfig = requireAgentConfig(config, channelConfig.agent);
+    const agentConfig = requireAgentConfigBySession(config, session);
 
     const searchParams = new URLSearchParams(window.location.search);
     const selectedItemId = searchParams.get('itemId') ?? undefined;
@@ -248,9 +247,9 @@ function SessionPage(props: { session: StandardSession, comments: CommentMessage
     return (
         <SessionShell
             sessionBase={session}
-            channelConfig={channelConfig}
+            agentConfig={agentConfig}
             headerExtra={session.user.ownerId === me.id && <ShareForm session={session} />}
-            footer={session.user.ownerId === me.id && <InputForm session={session} channelConfig={channelConfig} styles={styles} createRun={createRun} cancelRun={cancelRun} isRunning={isRunning} />}
+            footer={session.user.ownerId === me.id && <InputForm session={session} agentConfig={agentConfig} styles={styles} createRun={createRun} cancelRun={cancelRun} isRunning={isRunning} />}
             outletContext={{ session }}
         >
             <div ref={bodyRef}>
@@ -319,7 +318,7 @@ function SessionPage(props: { session: StandardSession, comments: CommentMessage
 
                     type CommentsThreadData = { comments: CommentMessage[], scoreConfigs: ScoreConfig[], target: InputTarget };
 
-                    const agentConfig = findAgentConfig(config, run.agentRef?.agent);
+                    // const agentConfig = findAgentConfig(config, session.agentRef?.agent);
                     const runConfig = agentConfig ? findRunConfig(agentConfig, run.sessionItems[0].content) : undefined;
                     const runScoreConfigs = (runConfig?.scores ?? []) as ScoreConfig[]; // fixme: types should be automatic without cast
                     const runComments: CommentMessage[] = props.comments.filter((c) => c.runId === run.id && !c.channelMessageId && !c.sessionItemId);
@@ -516,7 +515,7 @@ function SessionPage(props: { session: StandardSession, comments: CommentMessage
 }
 
 
-function SessionDetails({ sessionBase, channelConfig }: { sessionBase: SessionBase, channelConfig: ChannelConfig }) {
+function SessionDetails({ sessionBase, agentConfig }: { sessionBase: SessionBase, agentConfig: AgentConfig }) {
     const { organization: { members } } = useSessionContext();
     const agentRefs = sessionBase.agentRefs;
     const owner = members.find((member) => member.userId === sessionBase.user.ownerId);
@@ -564,7 +563,7 @@ function SessionDetails({ sessionBase, channelConfig }: { sessionBase: SessionBa
                     </PropertyListTextValue>
                 </PropertyListItem>
 
-                {channelConfig.displayProperties && <DisplayProperties displayProperties={channelConfig.displayProperties} inputArgs={{ session: sessionBase }} />}
+                {agentConfig.displayProperties && <DisplayProperties displayProperties={agentConfig.displayProperties} inputArgs={{ session: sessionBase }} />}
             </PropertyList>
         </div>
     );
@@ -611,7 +610,7 @@ function DefaultToolComponent({ item, resultItem }: SessionItemDisplayComponentP
     </Step>
 }
 
-function InputForm({ session, channelConfig, styles, createRun, cancelRun, isRunning }: { session: StandardSession, channelConfig: ChannelConfig, styles: Record<string, number>, createRun: (input: any) => Promise<void>, cancelRun: () => Promise<void>, isRunning: boolean }) {
+function InputForm({ session, agentConfig, styles, createRun, cancelRun, isRunning }: { session: StandardSession, agentConfig: AgentConfig, styles: Record<string, number>, createRun: (input: any) => Promise<void>, cancelRun: () => Promise<void>, isRunning: boolean }) {
     const lastRun = getLastRun(session)
 
     const submit2 = async (items: any[]) => {
@@ -623,7 +622,7 @@ function InputForm({ session, channelConfig, styles, createRun, cancelRun, isRun
         }
     }
 
-    const InputComponent = channelConfig.inputComponent;
+    const InputComponent = agentConfig.inputComponent;
     if (InputComponent === null) {
         return null;
     }

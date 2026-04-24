@@ -34,7 +34,11 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
 
         const [inputItem, ...outputParts] = run.sessionItems;
 
-        messages.push(inputItem.content);
+        messages.push({
+            ...inputItem.content,
+            _runId: run.id,
+            _sessionItemId: inputItem.id,
+        });
 
         if (!isRunFinished(run)) {
             continue;
@@ -51,7 +55,12 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
             id: assistantMessageId,
             metadata: assistantMessageMetadata,
             role: 'assistant',
-            parts: outputParts.map(part => part.content),
+            parts: outputParts.map(part => ({
+                ...part.content,
+                _sessionItemId: part.id,
+            })),
+            // @ts-ignore
+            _runId: run.id,
         })
     }
 

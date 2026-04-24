@@ -90,20 +90,19 @@ export type NewSessionComponentProps = {
 
 export type NewSessionComponent = React.ComponentType<NewSessionComponentProps>
 
-export type ChannelConfig = BaseChannelConfig & {
+// export type ChannelConfig = BaseChannelConfig & {
+//   displayProperties?: DisplayProperty<{ session: SessionBase }>[];
+//   newSessionComponent?: NewSessionComponent;
+//   inputComponent?: AgentInputComponent;
+// }
+
+export type AgentConfig = BaseAgentConfig<RunConfig> & {
   displayProperties?: DisplayProperty<{ session: SessionBase }>[];
   newSessionComponent?: NewSessionComponent;
   inputComponent?: AgentInputComponent;
 }
 
-export type AgentConfig = BaseAgentConfig<RunConfig> & {
-  // displayProperties?: DisplayProperty<{ session: SessionBase }>[];
-  // newSessionComponent?: NewSessionComponent;
-  // inputComponent?: AgentInputComponent;
-  // run?: RunConfig;
-}
-
-export type AgentViewConfig = BaseAgentViewConfig<AgentConfig, ChannelConfig> & {
+export type AgentViewConfig = BaseAgentViewConfig<AgentConfig> & {
   publicApiKey: string;
   env: string; // required for playground, we know which environment to use
   customRoutes?: CustomRoute[],

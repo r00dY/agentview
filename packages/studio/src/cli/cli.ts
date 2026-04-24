@@ -204,15 +204,23 @@ async function runProxyServer(client: StandardAgentViewClient) {
 
 async function pushConfig() {
   const config = await loadConfig();
-  await updateEnvironment(client, { config });
-  console.log(`Config pushed`);
+
+  try {
+    await updateEnvironment(client, { config });
+    console.log(`Config pushed`);
+  } catch (e) {
+    console.log('CONFIG ERROR');
+    console.error((e as Error).message);
+    console.error(JSON.stringify((e as any)?.details?.cause, null, 2));
+    throw e;
+  }
 }
 
 async function watchConfig() {
   console.log(`[agentview] watching for config changes...`);
 
   // Push once on startup
-  try { await pushConfig(); } catch (e) { console.error((e as Error).message); }
+  try { await pushConfig(); } catch (e) { }
 
   let debounceTimer: NodeJS.Timeout | null = null;
   fs.watch(process.cwd(), { recursive: true }, (_event, filename) => {

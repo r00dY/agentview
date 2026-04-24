@@ -9,7 +9,7 @@ import { getListParams, toQueryParams } from "../lib/listParams";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { PropertyList, PropertyListItem, PropertyListTextValue, PropertyListTitle } from "../components/PropertyList";
 import { AlertCircleIcon, TerminalIcon } from "lucide-react";
-import { requireRunConfig, requireAgentConfig, requireChannelConfig, findChannelConfig, findAgentConfig } from "agentview/baseConfigUtils";
+import { requireRunConfig, findAgentConfig, findAgentConfigBySession } from "agentview/baseConfigUtils";
 import { config } from "../config";
 import { DisplayProperties } from "../components/DisplayProperties";
 import type { ActionResponse } from "../lib/errors";
@@ -36,10 +36,10 @@ function Component() {
         throw data({ message: "Run not found" }, { status: 404 });
     }
 
-    const channelConfig = findChannelConfig(config, session.channel);
+    // const channelConfig = findChannelConfig(config, session.channel);
 
-    const agentName = typeof channelConfig?.agent === 'string' ? channelConfig.agent : channelConfig?.agent?.name;
-    const agentConfig = findAgentConfig(config, agentName);
+    // const agentName = typeof channelConfig?.agent === 'string' ? channelConfig.agent : channelConfig?.agent?.name;
+    const agentConfig = findAgentConfigBySession(config, session);
 
     let runConfig: RunConfig | undefined = undefined;
     let error: string | undefined = undefined;

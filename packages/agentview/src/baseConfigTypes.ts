@@ -140,7 +140,7 @@ function baseConfigSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
     const externalChannelSchema = z.object({
         type: z.union([z.literal('gmail'), z.literal('mock')]),
         address: z.string(),
-        agent: z.union([z.string(), z.object({ name: z.string(), initialState: z.any().optional() })]),
+        // agent: z.union([z.string(), z.object({ name: z.string(), initialState: z.any().optional() })]),
         metadata: z.record(z.string(), z.any()).optional(),
         initialState: z.any().optional(),
     });
@@ -178,3 +178,7 @@ export const BaseConfigSchemaZodToJsonSchema = baseConfigSchema(ZodToJsonSchema)
 function isJSONSchema(value: any): boolean { // temporarily simple check
     return typeof value === 'object' && value !== null && '$schema' in value;
 }
+
+
+
+
