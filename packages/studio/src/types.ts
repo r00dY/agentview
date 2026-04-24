@@ -120,12 +120,12 @@ export interface AISDKAgentConfig extends SharedAgentConfig {
 
   // custom fields for ai-sdk
   userMessage: {
-    displayComponent?: React.ComponentType;
+    displayComponent?: React.ComponentType<any>;
   }
   assistantMessage: {
       parts: Array<{
           type: string,
-          displayComponent?: React.ComponentType
+          displayComponent?: React.ComponentType<any>
           // scores?: BaseScoreConfig[] // - we do not support scores for items now
       }>
       displayProperties?: DisplayProperty<{ session: StandardSession, run: StandardRun }>[];

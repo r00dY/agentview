@@ -38,7 +38,7 @@ export default defineConfig({
           "Warsaw"
         ];
 
-        
+
         return (
           <form onSubmit={handleSubmit} className="space-y-4">
             <Select value={selectedCity} onValueChange={setSelectedCity}>
@@ -85,132 +85,171 @@ export default defineConfig({
         isRunning={isRunning}
       />,
 
+      userMessage: {
+        displayComponent: ({ item }) => {
+          return <UserMessage>{item.parts?.map((part: any) => part.text).join("\n\n")}</UserMessage>;
+        },
+      },
 
-      runs: [
-        {
-          input: {
-            schema: z.looseObject({
-              role: z.literal("user"),
-              parts: z.array(z.object({
-                type: z.literal("text"),
-                text: z.string(),
-              })),
-            }),
+      assistantMessage: {
+        parts: [
+          {
+            type: "text",
             displayComponent: ({ item }) => {
-              return <UserMessage>{item.parts?.map((part: any) => part.text).join("\n\n")}</UserMessage>;
+              return <AssistantMessage>{item.text}</AssistantMessage>;
             },
           },
-          output: [],
-          validateOutput: false,
-          // output: [
-          //   {
-          //     schema: z.looseObject({
-          //       type: z.literal("reasoning"),
-          //       text: z.string(),
-          //     }),
-          //     displayComponent: ({ item }) => {
-          //       const textNormalized = item.text?.trim() == "" ? null : item.text;
+        ],
 
-          //       return <Step collapsible>
-          //         <StepTitle><Brain /> Thinking</StepTitle>
-          //         <StepContent>
-          //           {textNormalized ?? "Empty."}
-          //         </StepContent>
-          //       </Step>
-          //     }
-          //   },
-          //   {
-          //     schema: z.looseObject({
-          //       type: z.literal("data-weather"),
-          //       data: z.any(),
-          //     }),
-          //     displayComponent: ({ item }) => {
-          //       return <Step>
-          //         <StepTitle><Brain /> Weather</StepTitle>
-          //         <StepContent>
-          //           {item.data.location} {item.data.temperature}°C
-          //         </StepContent>
-          //       </Step>
-          //     }
-          //   },
-          //   {
-          //     schema: z.looseObject({
-          //       type: z.literal("data-status"),
-          //       data: z.any(),
-          //     }),
-          //     displayComponent: ({ item }) => {
-          //       return <Step collapsible>
-          //         <StepTitle><Brain /> Status</StepTitle>
-          //         <StepContent>
-          //           {item.data}
-          //         </StepContent>
-          //       </Step>
-          //     }
-          //   },
-          //   // { 
-          //   //   schema: z.looseObject({
-          //   //     type: z.literal("function_call"),
-          //   //     name: z.literal("weather_tool"),
-          //   //     callId: z.string().meta({ callId: true }),
-          //   //   }),
-          //   //   callResult: {
-          //   //     schema: z.looseObject({
-          //   //       type: z.literal("function_call_result"),
-          //   //       callId: z.string().meta({ callId: true }),
-          //   //     })
-          //   //   },
-          //   //   displayComponent: WeatherItem
-          //   // }
-          //   {
-          //     // schema: z.looseObject({
-          //     //   type: z.literal("text"),
-          //     //   text: z.string(),
-          //     // }),
-          //     schema: z.any(),
-          //     displayComponent: ({ item }) => <AssistantMessage>{item.text}</AssistantMessage>,
-          //   }
-          // ],
-          // output: {
-          //   // schema: z.looseObject({
-          //   //   type: z.literal("text"),
-          //   //   text: z.string(),
-          //   // }),
-          //   schema: z.any(),
-          //   displayComponent: ({ item }) => <AssistantMessage>{item.text}</AssistantMessage>,
-          // },
-          scores: [
-              select({
-                name: "forecast_accuracy",
-                title: "Forecast Accuracy",
-                options: [
-                  { value: "accurate", label: "Accurate", color: Colors.green },
-                  { value: "partially_accurate", label: "Partially Accurate", color: Colors.yellow },
-                  { value: "inaccurate", label: "Inaccurate", color: Colors.red },
-                ]
-              }),
-              multiSelect({
-                name: "style",
-                title: "Style",
-                options: [
-                  { value: "too-long", label: "Too long" },
-                  { value: "too-brief", label: "Too brief" },
-                  { value: "confusing", label: "Confusing" },
-                  { value: "overly-technical", label: "Overly technical" },
-                ]
-              })
+        scores: [
+          select({
+            name: "forecast_accuracy",
+            title: "Forecast Accuracy",
+            options: [
+              { value: "accurate", label: "Accurate", color: Colors.green },
+              { value: "partially_accurate", label: "Partially Accurate", color: Colors.yellow },
+              { value: "inaccurate", label: "Inaccurate", color: Colors.red },
             ]
-          // displayProperties: [
-          //   {
-          //     title: "Input tokens",
-          //     value: ({ run }) => run?.metadata?.usage?.inputTokens
-          //   },
-          //   {
-          //     title: "Output tokens",
-          //     value: ({ run }) => run?.metadata?.usage?.outputTokens
-          //   }
-          // ]
-        },
-      ],
+          }),
+          multiSelect({
+            name: "style",
+            title: "Style",
+            options: [
+              { value: "too-long", label: "Too long" },
+              { value: "too-brief", label: "Too brief" },
+              { value: "confusing", label: "Confusing" },
+              { value: "overly-technical", label: "Overly technical" },
+            ]
+          })
+        ]
+      },
+
+
+      // runs: [
+      //   {
+      //     input: {
+      //       schema: z.looseObject({
+      //         role: z.literal("user"),
+      //         parts: z.array(z.object({
+      //           type: z.literal("text"),
+      //           text: z.string(),
+      //         })),
+      //       }),
+      //       displayComponent: ({ item }) => {
+      //         return <UserMessage>{item.parts?.map((part: any) => part.text).join("\n\n")}</UserMessage>;
+      //       },
+      //     },
+      //     output: [],
+      //     validateOutput: false,
+      //     // output: [
+      //     //   {
+      //     //     schema: z.looseObject({
+      //     //       type: z.literal("reasoning"),
+      //     //       text: z.string(),
+      //     //     }),
+      //     //     displayComponent: ({ item }) => {
+      //     //       const textNormalized = item.text?.trim() == "" ? null : item.text;
+
+      //     //       return <Step collapsible>
+      //     //         <StepTitle><Brain /> Thinking</StepTitle>
+      //     //         <StepContent>
+      //     //           {textNormalized ?? "Empty."}
+      //     //         </StepContent>
+      //     //       </Step>
+      //     //     }
+      //     //   },
+      //     //   {
+      //     //     schema: z.looseObject({
+      //     //       type: z.literal("data-weather"),
+      //     //       data: z.any(),
+      //     //     }),
+      //     //     displayComponent: ({ item }) => {
+      //     //       return <Step>
+      //     //         <StepTitle><Brain /> Weather</StepTitle>
+      //     //         <StepContent>
+      //     //           {item.data.location} {item.data.temperature}°C
+      //     //         </StepContent>
+      //     //       </Step>
+      //     //     }
+      //     //   },
+      //     //   {
+      //     //     schema: z.looseObject({
+      //     //       type: z.literal("data-status"),
+      //     //       data: z.any(),
+      //     //     }),
+      //     //     displayComponent: ({ item }) => {
+      //     //       return <Step collapsible>
+      //     //         <StepTitle><Brain /> Status</StepTitle>
+      //     //         <StepContent>
+      //     //           {item.data}
+      //     //         </StepContent>
+      //     //       </Step>
+      //     //     }
+      //     //   },
+      //     //   // { 
+      //     //   //   schema: z.looseObject({
+      //     //   //     type: z.literal("function_call"),
+      //     //   //     name: z.literal("weather_tool"),
+      //     //   //     callId: z.string().meta({ callId: true }),
+      //     //   //   }),
+      //     //   //   callResult: {
+      //     //   //     schema: z.looseObject({
+      //     //   //       type: z.literal("function_call_result"),
+      //     //   //       callId: z.string().meta({ callId: true }),
+      //     //   //     })
+      //     //   //   },
+      //     //   //   displayComponent: WeatherItem
+      //     //   // }
+      //     //   {
+      //     //     // schema: z.looseObject({
+      //     //     //   type: z.literal("text"),
+      //     //     //   text: z.string(),
+      //     //     // }),
+      //     //     schema: z.any(),
+      //     //     displayComponent: ({ item }) => <AssistantMessage>{item.text}</AssistantMessage>,
+      //     //   }
+      //     // ],
+      //     // output: {
+      //     //   // schema: z.looseObject({
+      //     //   //   type: z.literal("text"),
+      //     //   //   text: z.string(),
+      //     //   // }),
+      //     //   schema: z.any(),
+      //     //   displayComponent: ({ item }) => <AssistantMessage>{item.text}</AssistantMessage>,
+      //     // },
+      //     scores: [
+      //         select({
+      //           name: "forecast_accuracy",
+      //           title: "Forecast Accuracy",
+      //           options: [
+      //             { value: "accurate", label: "Accurate", color: Colors.green },
+      //             { value: "partially_accurate", label: "Partially Accurate", color: Colors.yellow },
+      //             { value: "inaccurate", label: "Inaccurate", color: Colors.red },
+      //           ]
+      //         }),
+      //         multiSelect({
+      //           name: "style",
+      //           title: "Style",
+      //           options: [
+      //             { value: "too-long", label: "Too long" },
+      //             { value: "too-brief", label: "Too brief" },
+      //             { value: "confusing", label: "Confusing" },
+      //             { value: "overly-technical", label: "Overly technical" },
+      //           ]
+      //         })
+      //       ]
+      //     // displayProperties: [
+      //     //   {
+      //     //     title: "Input tokens",
+      //     //     value: ({ run }) => run?.metadata?.usage?.inputTokens
+      //     //   },
+      //     //   {
+      //     //     title: "Output tokens",
+      //     //     value: ({ run }) => run?.metadata?.usage?.outputTokens
+      //     //   }
+      //     // ]
+      //   },
+      // ],
       channels: [
         {
           type: "gmail",
