@@ -1,5 +1,6 @@
-import type { AgentViewConfig } from "./types";
+import type { AgentViewConfig, AISDKAgentViewConfig } from "./types";
 
-export function defineConfig(config: AgentViewConfig) {
+export function defineConfig(config: AISDKAgentViewConfig) : AgentViewConfig {
+
   return config;
 }

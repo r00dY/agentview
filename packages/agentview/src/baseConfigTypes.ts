@@ -33,8 +33,7 @@ export interface ExternalChannelConfig {
 
 export type BaseChannelConfig = ExternalChannelConfig;
 
-
-export interface BaseAgentConfig<TRunConfig extends BaseRunConfig = BaseRunConfig> {
+export interface SharedAgentConfig {
     name: string;
     version: string;
 
@@ -43,9 +42,12 @@ export interface BaseAgentConfig<TRunConfig extends BaseRunConfig = BaseRunConfi
 
     url?: string;
     adapter?: 'agentview' | 'ai-sdk';
-    runs?: TRunConfig[];
 
     channels?: BaseChannelConfig[];
+}
+
+export interface BaseAgentConfig<TRunConfig extends BaseRunConfig = BaseRunConfig> extends SharedAgentConfig {
+    runs?: TRunConfig[];
 }
 
 
@@ -151,4 +153,28 @@ function isJSONSchema(value: any): boolean { // temporarily simple check
 
 
 
+// /**
+//  * ai-sdk
+//  */
 
+// export interface AISDKAgentConfig {
+//     name: string;
+//     version: string;
+
+//     metadata?: Metadata | undefined;
+//     allowUnknownMetadata?: boolean;
+
+//     url?: string;
+
+//     channels?: BaseChannelConfig[];
+
+//     // custom fields for ai-sdk
+//     userMessage: {}
+//     assistantMessage: {
+//         parts: Array<{
+//             type: string,
+//             // scores?: BaseScoreConfig[] // - we do not support scores for items now
+//         }>,
+//         scores?: BaseScoreConfig[];
+//     }
+// }

@@ -1,5 +1,5 @@
 import type { RouteObject } from "react-router";
-import type { BaseScoreConfig, BaseSessionItemConfig, BaseAgentConfig, BaseAgentViewConfig, BaseRunConfig, BaseChannelConfig } from "agentview/baseConfigTypes";
+import type { BaseScoreConfig, BaseSessionItemConfig, BaseAgentConfig, BaseAgentViewConfig, BaseRunConfig, BaseChannelConfig, Metadata, SharedAgentConfig } from "agentview/baseConfigTypes";
 import type { StandardRun, StandardSession, SessionBase, SessionItem } from "agentview/apiTypes";
 import { enhanceSession } from "agentview/sessionUtils";
 import { z } from "zod";
@@ -67,7 +67,6 @@ export type SessionItemConfig = BaseSessionItemConfig<ScoreConfig> & {
 };
 
 export type RunConfig = BaseRunConfig<SessionItemConfig, SessionItemConfig> & {
-  title?: string;
   displayProperties?: DisplayProperty<{ session: StandardSession, run: StandardRun }>[];
   disableLike?: boolean;
 };
@@ -107,3 +106,37 @@ export type AgentViewConfig = BaseAgentViewConfig<AgentConfig> & {
   env: string; // required for playground, we know which environment to use
   customRoutes?: CustomRoute[],
 }
+
+
+
+/**
+ * AISDK 
+ */
+
+export interface AISDKAgentConfig extends SharedAgentConfig {
+  displayProperties?: DisplayProperty<{ session: SessionBase }>[];
+  newSessionComponent?: NewSessionComponent;
+  inputComponent?: AgentInputComponent;
+
+  // custom fields for ai-sdk
+  userMessage: {
+    displayComponent?: React.ComponentType;
+  }
+  assistantMessage: {
+      parts: Array<{
+          type: string,
+          displayComponent?: React.ComponentType
+          // scores?: BaseScoreConfig[] // - we do not support scores for items now
+      }>
+      displayProperties?: DisplayProperty<{ session: StandardSession, run: StandardRun }>[];
+      disableLike?: boolean;  
+      scores?: ScoreConfig[];
+  }
+}
+
+export type AISDKAgentViewConfig = BaseAgentViewConfig<AISDKAgentConfig> & {
+  publicApiKey: string;
+  env: string; // required for playground, we know which environment to use
+  customRoutes?: CustomRoute[],
+}
+
