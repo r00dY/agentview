@@ -38,7 +38,7 @@ import {
   type StandardSession
 } from 'agentview/apiTypes';
 import { BaseConfigSchema, BaseRunSchemaToZod } from 'agentview/baseConfigTypes';
-import { getChannelAgent, requireAgentConfig, requireChannelConfig, requireItemConfig, requireRunConfig, requireScoreConfig } from 'agentview/baseConfigUtils';
+import { requireAgentConfigBySession, requireItemConfig, requireRunConfig, requireScoreConfig } from 'agentview/baseConfigUtils';
 import { getLastRun } from 'agentview/sessionUtils';
 import { and, countDistinct, DrizzleQueryError, eq, inArray, isNull, or, sql, type InferSelectModel } from 'drizzle-orm';
 import packageJson from '../package.json';
@@ -57,7 +57,7 @@ import { applyRunPatch, createAutoRun2, createManualRun, DEFAULT_IDLE_TIME, fast
 import { createRunStreamConsumer } from './runStream';
 import { organizations, users } from './schemas/auth-schema';
 import { commentMessages, endUsers, environments, inboxItems, runs, scores, sessions } from './schemas/schema';
-import { activateSession, createSession, getSessionListFilter, getSessions, updateSession } from './sessions';
+import { activateSession, createSession, getSessionListFilter, getSessions, setAgentForSession, updateSession } from './sessions';
 import { createUser, requireUser, updateUser } from './users';
 import { withOrg, withTenant } from './withOrg';
 
@@ -635,7 +635,14 @@ app.openapi(sessionsPOSTRoute, async (c) => {
   }
 
   return withTenant(principal, async (tx) => {
-    const newSession = await createSession(tx, body, { active: true });
+    const newSession = await createSession(tx, {
+      channel: { type: 'api', name: body.agent },
+      userId: body.userId,
+      summary: body.summary,
+    });
+    await setAgentForSession(tx, newSession.id, { agent: body.agent, metadata: body.metadata, initialState: body.initialState });
+    await activateSession(tx, newSession.id);
+    
     const fullSession = await requireSession(tx, newSession.id);
     return c.json(fullSession, 201);
   })
@@ -672,7 +679,15 @@ app.openapi(sessionsAISDKPOSTRoute, async (c) => {
   // session without run - just create active session and return it
   if (!body.input) {
     return await withTenant(principal, async (tx) => {
-      const newSession = await createSession(tx, body, { active: true });
+
+      const newSession = await createSession(tx, {
+        channel: { type: 'api', name: body.agent },
+        userId: body.userId,
+        summary: body.summary,
+      });
+      await setAgentForSession(tx, newSession.id, { agent: body.agent, metadata: body.metadata, initialState: body.initialState });
+      await activateSession(tx, newSession.id);
+
       const fullSession = await requireSession(tx, newSession.id);
       return c.json(standardToDefaultSession(fullSession), 201);
     })
@@ -680,7 +695,13 @@ app.openapi(sessionsAISDKPOSTRoute, async (c) => {
   // inactive session -> create run -> activate if successful
   else {
     const newSession = await withTenant(principal, async (tx) => {
-      return await createSession(tx, body, { active: false });
+      const newSession = await createSession(tx, {
+        channel: { type: 'api', name: body.agent },
+        userId: body.userId,
+        summary: body.summary,
+      });
+
+      return await setAgentForSession(tx, newSession.id, { agent: body.agent, metadata: body.metadata, initialState: body.initialState });
     })
 
     const { response, success } = await createAutoRun2(principal, newSession.id, body.input, c.req.raw.signal);
@@ -1092,8 +1113,7 @@ app.openapi(runKeepAliveRoute, async (c) => {
     authorize(principal, { action: "end-user:update", user: session.user });
 
     const config = await requireConfig(tx);
-    const channelConfig = requireChannelConfig(config, session.channel);
-    const agentConfig = requireAgentConfig(config, getChannelAgent(channelConfig)?.name);
+    const agentConfig = requireAgentConfigBySession(config, session);
 
     const inputItem = (await getRunInput(tx, run_id))?.content;
     const runConfig = requireRunConfig(agentConfig, inputItem);
@@ -1353,8 +1373,7 @@ app.openapi(scoresPATCHRoute, async (c) => {
     const run = target.run;
 
     // Resolve score configs based on target type
-    const channelConfig = requireChannelConfig(config, session.channel);
-    const agentConfig = requireAgentConfig(config, getChannelAgent(channelConfig)?.name);
+    const agentConfig = requireAgentConfigBySession(config, session);
     const runConfig = requireRunConfig(agentConfig, getRunInputContent(run.sessionItems));
 
     let scoreConfigs: { name: string; schema: any }[] | undefined;

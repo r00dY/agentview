@@ -446,11 +446,11 @@ describe('API', () => {
       const avAlice = createStandardClient({ apiKey: org.apiKeySecret.key, env: `local:alice@${org.organization.slug}.com` });
 
       // Bob uploads his config
-      const BOB_CONFIG = { agents: [{ name: "bob-agent", version: "1.0.0" }], channels: [{ type: 'api' as const, name: "bob-agent", agent: "bob-agent" }], __internal: { disableSummaries: true } };
+      const BOB_CONFIG = { agents: [{ name: "bob-agent", version: "1.0.0" }], __internal: { disableSummaries: true } };
       await updateEnvironment(avBob, { config: BOB_CONFIG });
 
       // Alice uploads her config
-      const ALICE_CONFIG = { agents: [{ name: "alice-agent", version: "1.0.0" }], channels: [{ type: 'api' as const, name: "alice-agent", agent: "alice-agent" }], __internal: { disableSummaries: true } };
+      const ALICE_CONFIG = { agents: [{ name: "alice-agent", version: "1.0.0" }], __internal: { disableSummaries: true } };
       await updateEnvironment(avAlice, { config: ALICE_CONFIG });
 
       // Verify each developer sees only their own config
@@ -700,7 +700,7 @@ describe('API', () => {
     })
 
     test("create / optional & nullable metadata / all saved as null", async () => {
-      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { x: z.nullable(z.string()), y: z.nullable(z.number()) } }] } })
+      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0", metadata: { x: z.nullable(z.string()), y: z.nullable(z.number()) } }] } })
 
       const session = await av.createSession({ agent: "test", userId: initUser1.id })
       expect(session).toMatchObject({
@@ -723,7 +723,7 @@ describe('API', () => {
     })
 
     test("create / with unknown metadata / saved", async () => {
-      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
+      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }] } })
 
       const session = await av.createSession({ agent: "test", userId: initUser1.id, metadata: { product_id: "123" } })
       expect(session).toMatchObject({
@@ -734,7 +734,7 @@ describe('API', () => {
     })
 
     test("create / with unknown metadata + allowUnknownMetadata=false / failed", async () => {
-      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", allowUnknownMetadata: false }] } })
+      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0", allowUnknownMetadata: false }] } })
 
       await expect(av.createSession({ agent: "test", userId: initUser1.id, metadata: { product_id: "123" } })).rejects.toThrowError(expect.objectContaining({
         statusCode: 422,
@@ -743,7 +743,7 @@ describe('API', () => {
     })
 
     test("create / with incompatible metadata / fails", async () => {
-      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { product_id: z.string() } }] } })
+      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0", metadata: { product_id: z.string() } }] } })
 
       await expect(av.createSession({ agent: "test", userId: initUser1.id, metadata: { product_id: 123 } })).rejects.toThrowError(expect.objectContaining({
         statusCode: 422,
@@ -753,7 +753,7 @@ describe('API', () => {
 
 
     test("update metadata", async () => {
-      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { field1: z.string(), field2: z.number() }, allowUnknownMetadata: false }] } })
+      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0", metadata: { field1: z.string(), field2: z.number() }, allowUnknownMetadata: false }] } })
 
       const session = await av.createSession({ agent: "test", metadata: { field1: "A", field2: 0 }, userId: initUser1.id })
 
@@ -765,7 +765,7 @@ describe('API', () => {
     })
 
     test("update metadata - partial update", async () => {
-      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { field1: z.string(), field2: z.number() }, allowUnknownMetadata: false }] } })
+      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0", metadata: { field1: z.string(), field2: z.number() }, allowUnknownMetadata: false }] } })
 
       const session = await av.createSession({ agent: "test", metadata: { field1: "A", field2: 0 }, userId: initUser1.id })
 
@@ -777,7 +777,7 @@ describe('API', () => {
     })
 
     test("update metadata - make field null", async () => {
-      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { field1: z.string(), field2: z.number().nullable() }, allowUnknownMetadata: false }] } })
+      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0", metadata: { field1: z.string(), field2: z.number().nullable() }, allowUnknownMetadata: false }] } })
 
       const session = await av.createSession({ agent: "test", metadata: { field1: "A", field2: 0 }, userId: initUser1.id })
 
@@ -789,7 +789,7 @@ describe('API', () => {
     })
 
     test("update metadata only - validation enforced", async () => {
-      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test", metadata: { product_id: z.string() }, allowUnknownMetadata: false }] } })
+      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0", metadata: { product_id: z.string() }, allowUnknownMetadata: false }] } })
 
       const session = await av.createSession({ agent: "test", metadata: { product_id: "A" }, userId: initUser1.id })
 

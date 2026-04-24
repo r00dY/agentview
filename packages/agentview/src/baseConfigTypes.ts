@@ -25,37 +25,43 @@ export interface BaseRunConfig<TSessionItemConfig extends BaseSessionItemConfig 
     idleTimeout?: number;
 }
 
-export interface BaseAgentConfig<TRunConfig extends BaseRunConfig = BaseRunConfig> {
-    name: string;
-    version: string;
-    url?: string;
-    adapter?: 'agentview' | 'ai-sdk';
-    runs?: TRunConfig[];
-}
-
-export interface ApiChannelConfig {
-    type: 'api';
-    name: string;
-    agent: string;
-    metadata?: Metadata | undefined;
-    allowUnknownMetadata?: boolean;
-}
+// export interface ApiChannelConfig {
+//     type: 'api';
+//     name: string;
+// }
 
 export interface ExternalChannelConfig {
     type: 'gmail' | 'mock';
     address: string;
-    agent?: string | { name: string; initialState?: any };
+    metadata?: Record<string, any>;
+    initialState?: any;
 }
 
-export type BaseChannelConfig = ApiChannelConfig | ExternalChannelConfig;
+// export type BaseChannelConfig = ApiChannelConfig | ExternalChannelConfig;
+export type BaseChannelConfig = ExternalChannelConfig;
+
+
+export interface BaseAgentConfig<TRunConfig extends BaseRunConfig = BaseRunConfig> {
+    name: string;
+    version: string;
+
+    metadata?: Metadata | undefined;
+    allowUnknownMetadata?: boolean;
+
+    url?: string;
+    adapter?: 'agentview' | 'ai-sdk';
+    runs?: TRunConfig[];
+
+    channels?: BaseChannelConfig[];
+}
+
 
 export type InternalConfig = {
     disableSummaries?: boolean;
 }
 
-export type BaseAgentViewConfig<TAgentConfig extends BaseAgentConfig = BaseAgentConfig, TChannelConfig extends BaseChannelConfig = BaseChannelConfig> = {
+export type BaseAgentViewConfig<TAgentConfig extends BaseAgentConfig = BaseAgentConfig> = {
     agents?: TAgentConfig[],
-    channels?: TChannelConfig[],
     webhookUrl?: string,
     __internal?: InternalConfig,
 }
@@ -125,21 +131,23 @@ function baseConfigSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
     //     callResult: BaseSessionItemConfigSchema.optional(),
     // });
 
-    const apiChannelSchema = z.object({
-        type: z.literal('api'),
-        name: z.string(),
-        agent: z.string(),
-        metadata: z.record(z.string(), jsonSchemaSchema).optional(),
-        allowUnknownMetadata: z.boolean().optional(),
-    });
+    // const apiChannelSchema = z.object({
+    //     type: z.literal('api'),
+    //     name: z.string(),
+    //     agent: z.string(),
+    //     metadata: z.record(z.string(), jsonSchemaSchema).optional(),
+    //     allowUnknownMetadata: z.boolean().optional(),
+    // });
 
     const externalChannelSchema = z.object({
         type: z.union([z.literal('gmail'), z.literal('mock')]),
         address: z.string(),
         agent: z.union([z.string(), z.object({ name: z.string(), initialState: z.any().optional() })]),
+        metadata: z.record(z.string(), z.any()).optional(),
+        initialState: z.any().optional(),
     });
 
-    const channelSchema = z.discriminatedUnion('type', [apiChannelSchema, externalChannelSchema]);
+    // const channelSchema = z.discriminatedUnion('type', [apiChannelSchema, externalChannelSchema]);
 
     return z.object({
         agents: z.array(z.object({
@@ -148,8 +156,12 @@ function baseConfigSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
             url: z.string().optional(),
             adapter: z.enum(['agentview', 'ai-sdk']).optional(),
             runs: z.array(baseRunSchema(jsonSchemaSchema)).optional(),
+            channels: z.array(externalChannelSchema).optional(),
+
+            metadata: z.record(z.string(), jsonSchemaSchema).optional(),
+            allowUnknownMetadata: z.boolean().optional(),
+            
         })).optional(),
-        channels: z.array(channelSchema).optional(),
         webhookUrl: z.string().optional(),
         __internal: z.object({
             disableSummaries: z.boolean().optional(),

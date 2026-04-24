@@ -6,11 +6,13 @@ import { log } from '../logger';
 import { db__dangerous } from '../db';
 import { createAutoRun2, terminateRun } from '../runs';
 import { channelMessages, channels, channelThreads, runs, sessions } from '../schemas/schema';
-import { activateSession, createInactiveSession } from '../sessions';
+import { activateSession, createSession, setAgentForSession } from '../sessions';
 import type { Transaction } from '../types';
 import { ensureUserForEmail } from '../users';
 import { withOrg, withTenant } from '../withOrg';
 import type { WorkerHandle } from '../workers/utils';
+import { getConfigFromEnvironment } from '../environments';
+import type { ExternalChannelConfig } from 'agentview/baseConfigTypes';
 
 export type Channel = typeof channels.$inferSelect;
 type ChannelThread = typeof channelThreads.$inferSelect;
@@ -278,11 +280,10 @@ export function channelProvider(type: string) {
        */
       if (!session) {
         log.info({ sourceId: params.sourceId }, 'creating new session');
-        session = await createInactiveSession(tx, {
-          environment,
-          channelRef,
-          userId,
+        session = await createSession(tx, {
+          channel: channelRef,
           channelThreadId: thread.id,
+          userId,
         });
         await activateSession(tx, session.id); // channel sessions should be active immediately
 
@@ -304,10 +305,51 @@ export function channelProvider(type: string) {
       return result; // if not ingested, return
     }
 
-    createAutoRun2(principal, result.sessionId, undefined).catch((error) => {
-      log.warn({ sourceId: params.sourceId, err: error }, 'failed to create run from channel messages');
-    });
 
+    /**
+     * This is on purpose async, it should not block and should go to the worker soon.
+     * 
+     * IMPORTANT: It's not perfect, and requires improvement.
+     * 
+     * There's no retry here, IF THERE IS NO AGENT ASSIGNED IT MEANS ERROR.
+     * 
+     * But actually also, if for some reason run can't be run, then it's also final error.
+     * 
+     * Needs work.
+     */
+
+    (async () => {
+      try {
+        // Set up session agent, metadata, initialState
+        await withTenant(principal, async (tx) => {
+          const config = getConfigFromEnvironment(environment);
+    
+          let channelConfig: ExternalChannelConfig | undefined = undefined;
+          let agentName: string | undefined = undefined;
+    
+          config.agents?.forEach((agent) => {
+            channelConfig = agent.channels?.find((channel) => channel.type === channel.type && channel.address === channel.address)
+            if (channelConfig) {
+              agentName = agent.name;
+              return;
+            }
+          });
+    
+          if (!agentName) {
+            throw new Error(`No agent found for this channel: ${channel.type} ${channel.address}`);
+          }
+    
+          await setAgentForSession(tx, result.sessionId, { agent: agentName, metadata: channelConfig!.metadata, initialState: channelConfig!.initialState });
+        })
+
+        // Start run
+        await createAutoRun2(principal, result.sessionId, undefined);
+      }
+      catch (error) {
+        log.warn({ sourceId: params.sourceId, err: error }, 'failed to create run from channel messages');
+      }
+    })();
+   
     return result;
   }
 

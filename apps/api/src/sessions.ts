@@ -1,6 +1,5 @@
 import { AgentViewError } from "agentview";
 import type { ChannelRef, Environment, SessionBase, SessionsGetQueryParams, SessionsGetQueryParamsSchema, SessionStatus, SessionUpdate, StandardSession, StandardSessionCreate } from "agentview/apiTypes";
-import { findChannelConfig, getChannelAgent, requireAgentConfig, requireChannelConfig } from "agentview/baseConfigUtils";
 import { randomBytes } from "crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
 import type z from "zod";
@@ -14,6 +13,7 @@ import type { Transaction } from "./types";
 import { updateInboxes } from "./updateInboxes";
 import { createUser, requireUser } from "./users";
 import type { OrgTransaction, TenantTransaction } from "./withOrg";
+import { requireAgentConfigByName, requireAgentConfigBySession } from "agentview/baseConfigUtils";
 
 export type LastRunStatus = {
   id: string;
@@ -408,22 +408,35 @@ export async function getSessions(tx: TenantTransaction, params: SessionsGetQuer
  * Mutations. Locks required.
  */
 
-export async function createSession(tx: TenantTransaction, body: StandardSessionCreate, options: { active: boolean }) {
+
+/**
+ * Session creation
+ * 
+ * It's split into 2 phases:
+ * 1. Create session without agent assigned (required for channels, where we must create the session, but agent assignment is postponed)
+ * 2. Assign agent.
+ * 
+ * There's also a step: activate session, which can happen after 1., but not necessarily before 2.
+ * 
+ * ISSUE!!!
+ * 
+ * Right now for channel session there's no place where we can set metadata / initial state. They're by default undefined (so is session.agent)
+ */
+
+export type CreateSessionWithoutAgentBody = {
+  userId?: string;
+  summary?: string | null;
+  channel: ChannelRef
+  channelThreadId?: string | null;
+}
+
+export async function createSession(tx: TenantTransaction, params: CreateSessionWithoutAgentBody) {
   await tx.acquireLock({ type: "create_resource" });
-
-  const config = await requireConfig(tx)
-
-  // in API channel and agent must exist
-  const channelRef: ChannelRef = { type: 'api', name: body.agent }
-
-  // TODO: when wrong agent name is provided, we shouldn't throw CHANNEL ERROR
-  const channelConfig = requireChannelConfig(config, channelRef)
-  const agentConfig = requireAgentConfig(config, getChannelAgent(channelConfig)?.name)
 
   // find user or create new one if not found
   const user = await (async () => {
-    if (body.userId) {
-      return await requireUser(tx, { id: body.userId });
+    if (params.userId) {
+      return await requireUser(tx, { id: params.userId });
     }
 
     if (tx.principal.type === 'user') {
@@ -437,77 +450,105 @@ export async function createSession(tx: TenantTransaction, body: StandardSession
 
   authorize(tx.principal, { action: "end-user:update", user });
 
-  const environment = await requireEnvironment(tx);
+  const [newSessionRow] = await tx.insert(sessions).values({
+    organizationId: tx.organizationId,
+    handleNumber: 0,
+    handleSuffix: randomBytes(32).toString('hex'),
+    channelType: params.channel.type,
+    channelAddress: params.channel.type === 'api' ? params.channel.name : params.channel.address,
+    userId: user.id,
+    summary: params.summary ?? null,
+    channelThreadId: params.channelThreadId ?? null,
+    active: false
+  }).returning();
+
+  return newSessionRow;
+}
+
+
+export type SetAgentForSessionBody = {
+  agent: string // obsolete for API sessions, this is already encoded in channel name
+  metadata?: Record<string, any> | null;
+  initialState?: any;
+}
+
+export async function setAgentForSession(tx: TenantTransaction, sessionId: string, body: SetAgentForSessionBody) {
+  await tx.acquireLock({ type: "create_resource" });
+
+  const session = await requireSessionBase(tx, sessionId);
+  const config = await requireConfig(tx)
+
+  const agentConfig = requireAgentConfigByName(config, body.agent);
+
+  const metadata = parseMetadata(agentConfig.metadata, agentConfig.allowUnknownMetadata ?? true, body.metadata ?? {}, {});
+
+  // const environment = await requireEnvironment(tx);
 
   // Resolve agent ref at session creation
   const agentRefWithId = await resolveAgentRef(tx, {
     agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
   });
 
-  const newSessionRow = await createInactiveSession(tx, {
-    environment,
-    channelRef,
-    userId: user.id,
-    metadata: body.metadata,
-    summary: body.summary,
+  const [updatedSession] = await tx.update(sessions).set({
     agentRefId: agentRefWithId.id,
+    metadata: metadata,
     initialState: body.initialState,
-  });
+  }).where(eq(sessions.id, session.id)).returning();
 
-  if (options.active) {
-    await activateSession(tx, newSessionRow.id, tx.principal.type === 'member' ? tx.principal.session.user.id : undefined);
-  }
-
-  return newSessionRow;
+  return updatedSession;
 }
 
 
+// export async function createInactiveSession(tx: OrgTransaction, params: {
+//   environment: Environment;
+//   channelRef: ChannelRef;
+//   userId: string;
+//   metadata?: Record<string, any> | null;
+//   summary?: string | null;
+//   channelThreadId?: string | null;
+//   agentRefId?: string | null;
+//   initialState?: any;
+// }) {
+//   await tx.acquireLock({ type: "create_resource" });
 
+//   const config = getConfigFromEnvironment(params.environment);
+//   // const channelConfig = requireChannelConfig(config, params.channelRef);
 
+//   let metadata: Record<string, any> = {};
 
-export async function createInactiveSession(tx: OrgTransaction, params: {
-  environment: Environment;
-  channelRef: ChannelRef;
-  userId: string;
-  metadata?: Record<string, any> | null;
-  summary?: string | null;
-  channelThreadId?: string | null;
-  agentRefId?: string | null;
-  initialState?: any;
-}) {
-  await tx.acquireLock({ type: "create_resource" });
+//   if (params.channelRef.type === 'api') {
+//     const agentConfig = requireAgentConfigByName(config, params.channelRef.name);
+//     metadata = parseMetadata(agentConfig.metadata, agentConfig.allowUnknownMetadata ?? true, params.metadata ?? {}, {});
+//   }
 
-  const config = getConfigFromEnvironment(params.environment);
-  const channelConfig = requireChannelConfig(config, params.channelRef);
+//   // const metadata: Record<string, any> = channelConfig.type === 'api' ?
+//   //   parseMetadata(channelConfig.metadata, channelConfig.allowUnknownMetadata ?? true, params.metadata ?? {}, {}) :
+//   //   {};
 
-  const metadata: Record<string, any> = channelConfig.type === 'api' ?
-    parseMetadata(channelConfig.metadata, channelConfig.allowUnknownMetadata ?? true, params.metadata ?? {}, {}) :
-    {};
+//   const user = await tx.query.endUsers.findFirst({
+//     where: eq(endUsers.id, params.userId),
+//   });
+//   if (!user) {
+//     throw new Error("[Internal Error] User not found");
+//   }
 
-  const user = await tx.query.endUsers.findFirst({
-    where: eq(endUsers.id, params.userId),
-  });
-  if (!user) {
-    throw new Error("[Internal Error] User not found");
-  }
+//   const [newSessionRow] = await tx.insert(sessions).values({
+//     organizationId: tx.organizationId,
+//     handleNumber: 0,
+//     handleSuffix: randomBytes(32).toString('hex'),
+//     metadata,
+//     channelType: params.channelRef.type,
+//     channelAddress: params.channelRef.type === 'api' ? params.channelRef.name : params.channelRef.address,
+//     userId: params.userId,
+//     summary: params.summary ?? null,
+//     channelThreadId: params.channelThreadId ?? null,
+//     agentRefId: params.agentRefId ?? null,
+//     initialState: params.initialState ?? null,
+//     active: false
+//   }).returning();
 
-  const [newSessionRow] = await tx.insert(sessions).values({
-    organizationId: tx.organizationId,
-    handleNumber: 0,
-    handleSuffix: randomBytes(32).toString('hex'),
-    metadata,
-    channelType: params.channelRef.type,
-    channelAddress: params.channelRef.type === 'api' ? params.channelRef.name : params.channelRef.address,
-    userId: params.userId,
-    summary: params.summary ?? null,
-    channelThreadId: params.channelThreadId ?? null,
-    agentRefId: params.agentRefId ?? null,
-    initialState: params.initialState ?? null,
-    active: false
-  }).returning();
-
-  return newSessionRow;
-}
+//   return newSessionRow;
+// }
 
 export async function activateSession(tx: OrgTransaction, sessionId: string, authorId?: string) {
   await tx.acquireLock({ type: "edit_session", sessionId });
@@ -562,11 +603,9 @@ export async function updateSession(tx: TenantTransaction, session_id: string, b
   authorize(tx.principal, { action: "end-user:update", user: session.user });
 
   const config = await requireConfig(tx)
-  const channelConfig = findChannelConfig(config, session.channel);
+  const agentConfig = requireAgentConfigBySession(config, session);
 
-  const channelMetadata = channelConfig && 'metadata' in channelConfig ? channelConfig.metadata : undefined;
-  const allowUnknownMetadata = channelConfig && 'allowUnknownMetadata' in channelConfig ? (channelConfig.allowUnknownMetadata ?? true) : true;
-  const metadata = parseMetadata(channelMetadata, allowUnknownMetadata, body.metadata, session.metadata);
+  const metadata = parseMetadata(agentConfig.metadata, agentConfig.allowUnknownMetadata, body.metadata, session.metadata);
 
   const [updatedSession] = await tx.update(sessions).set({
     metadata,

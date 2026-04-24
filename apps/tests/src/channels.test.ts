@@ -42,11 +42,11 @@ describe('Channels', () => {
             input: { schema: z.looseObject({ role: z.literal('user'), parts: z.array(z.any()) }) },
             output: { schema: z.looseObject({ type: z.literal('text'), text: z.string() }) },
           }],
-        }],
-        channels: [{
-          type: 'mock',
-          address: ADDRESS,
-          agent: 'support-agent',
+          channels: [{
+            type: 'mock',
+            address: ADDRESS,
+            agent: 'support-agent',
+          }],
         }],
         __internal: { disableSummaries: true },
       },

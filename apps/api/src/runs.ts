@@ -1,7 +1,7 @@
 import { AgentViewError } from 'agentview/AgentViewError';
 import type { Environment, ManualRunCreate, ManualRunUpdate } from 'agentview/apiTypes';
 import type { BaseAgentConfig, BaseRunConfig } from 'agentview/baseConfigTypes';
-import { findItemConfig, requireAgentConfig, requireChannelConfig, requireRunConfig, serializeRunConfig } from 'agentview/baseConfigUtils';
+import { findItemConfig, requireAgentConfigBySession, requireRunConfig, serializeRunConfig } from 'agentview/baseConfigUtils';
 import { getLastRun } from 'agentview/sessionUtils';
 import { and, eq, inArray, isNull, not, or } from 'drizzle-orm';
 import { log } from './logger';
@@ -324,15 +324,14 @@ async function prepareRunCreation(tx: OrgTransaction, environment: Environment, 
   }
 
   const config = getConfigFromEnvironment(environment);
-  const channelConfig = requireChannelConfig(config, session.channel);
-  const agentConfig = requireAgentConfig(config, typeof channelConfig.agent === 'string' ? channelConfig.agent : channelConfig.agent?.name);
+  const agentConfig = requireAgentConfigBySession(config, session);
 
   const agentRefWithId = await resolveAgentRef(tx, {
     agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
     previousAgentRef: lastRun?.agentRef ?? session.agentRef,
   });
 
-  return { session, lastRun, config, agentConfig, channelConfig, agentRefId: agentRefWithId.id };
+  return { session, lastRun, config, agentConfig, agentRefId: agentRefWithId.id };
 }
 
 async function processInput(agentConfig: BaseAgentConfig, input: any) {
@@ -641,7 +640,7 @@ export async function applyRunPatch(
       throw new AgentViewError("You're trying to update run items, metadata or state, but the run doesn't have an agent assigned yet.", 422);
     }
 
-    const agentConfig = requireAgentConfig(config, agentName);
+    const agentConfig = requireAgentConfigBySession(config, session);
     runConfig = requireRunConfig(agentConfig, inputItem);
 
     /** Validate items */

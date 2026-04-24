@@ -1,4 +1,4 @@
-import type { SessionItem, ChannelRef } from "./apiTypes.js";
+import type { SessionItem, ChannelRef, SessionBase } from "./apiTypes.js";
 import type { BaseAgentViewConfig, BaseAgentConfig, BaseChannelConfig, BaseSessionItemConfig, BaseRunConfig } from "./baseConfigTypes.js";
 import { BaseConfigSchemaZodToJsonSchema, BaseRunSchemaZodToJsonSchema } from "./baseConfigTypes.js";
 import { z } from "zod";
@@ -16,11 +16,11 @@ z.string().register(z.globalRegistry, {
     callId: true
 });
 
-export function findAgentConfig<T extends BaseAgentViewConfig>(config: T, agentName?: string | null): NonNullable<T["agents"]>[number] | undefined {
+export function findAgentConfig<T extends BaseAgentViewConfig>(config: T, agentName: string): NonNullable<T["agents"]>[number] | undefined {
     return config.agents?.find((agent) => agent.name === agentName);
 }
 
-export function requireAgentConfig<T extends BaseAgentViewConfig>(config: T, agentName?: string | null): NonNullable<T["agents"]>[number] {
+export function requireAgentConfigByName<T extends BaseAgentViewConfig>(config: T, agentName: string): NonNullable<T["agents"]>[number] {
     const agentConfig = findAgentConfig(config, agentName);
     if (!agentConfig) {
         throw new AgentViewError(`Agent config not found for agent '${agentName}'`, 404);
@@ -28,38 +28,54 @@ export function requireAgentConfig<T extends BaseAgentViewConfig>(config: T, age
     return agentConfig;
 }
 
-export function findChannelConfig<T extends BaseAgentViewConfig>(config: T, channelRef: ChannelRef): NonNullable<T["channels"]>[number] | undefined {
-    if (channelRef.type === 'api') {
-        return config.channels?.find((c) => c.type === 'api' && c.name === channelRef.name);
+export function requireAgentConfigBySession<T extends BaseAgentViewConfig>(config: T, session: SessionBase): NonNullable<T["agents"]>[number] {
+    if (!session.agentRef) {
+        throw new AgentViewError(`Session has no agent ref`, 400);
     }
 
-    const channelConfig = config.channels?.find((c) => c.type === channelRef.type && c.address === channelRef.address);
-    if (!channelConfig) {
-        return {
-            ...channelRef,
-            agent: undefined
-        }
+    const agentConfig = findAgentConfig(config, session.agentRef.agent);
+    if (!agentConfig) {
+        throw new AgentViewError(`Agent config not found for agent '${session.agentRef.agent}'`, 400);
     }
-
-    return channelConfig;
+    return agentConfig;
 }
 
-export function getChannelAgent(channelConfig: BaseChannelConfig): { name: string; initialState?: any } | undefined {
-    if (channelConfig.type === 'api') {
-        return { name: channelConfig.agent };
-    }
-    if (!channelConfig.agent) return undefined;
-    if (typeof channelConfig.agent === 'string') return { name: channelConfig.agent };
-    return channelConfig.agent;
-}
 
-export function requireChannelConfig<T extends BaseAgentViewConfig>(config: T, channelRef: ChannelRef) {
-    const channelConfig = findChannelConfig(config, channelRef);
-    if (!channelConfig) {
-        throw new AgentViewError(`Channel config not found for channelRef: ${JSON.stringify(channelRef)}`, 404);
-    }
-    return channelConfig;
-}
+
+
+// export function findChannelConfig<T extends BaseAgentViewConfig>(config: T, channelRef: ChannelRef): NonNullable<T["channels"]>[number] | undefined {
+//     if (channelRef.type === 'api') {
+//         return config.channels?.find((c) => c.type === 'api' && c.name === channelRef.name);
+//     }
+
+//     const channelConfig = config.channels?.find((c) => c.type === channelRef.type && c.address === channelRef.address);
+//     if (!channelConfig) {
+//         return {
+//             ...channelRef,
+//             agent: undefined
+//         }
+//     }
+
+//     return channelConfig;
+// }
+
+
+// export function getChannelAgent(channelConfig: BaseChannelConfig): { name: string; initialState?: any } | undefined {
+//     if (channelConfig.type === 'api') {
+//         return { name: channelConfig.agent };
+//     }
+//     if (!channelConfig.agent) return undefined;
+//     if (typeof channelConfig.agent === 'string') return { name: channelConfig.agent };
+//     return channelConfig.agent;
+// }
+
+// export function requireChannelConfig<T extends BaseAgentViewConfig>(config: T, channelRef: ChannelRef) {
+//     const channelConfig = findChannelConfig(config, channelRef);
+//     if (!channelConfig) {
+//         throw new AgentViewError(`Channel config not found for channelRef: ${JSON.stringify(channelRef)}`, 404);
+//     }
+//     return channelConfig;
+// }
 
 export function findMatchingRunConfigs<T extends BaseAgentConfig>(agentConfig: T, inputItemContent: any) {
     let matchingRunConfigs: NonNullable<T["runs"]>[number][] = [];
