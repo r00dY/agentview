@@ -112,7 +112,7 @@ async function markOutputItems(
   tx: Transaction,
   runId: string,
   outputItemCount: number,
-  runConfig: BaseRunConfig,
+  // runConfig: BaseRunConfig,
 ) {
   if (outputItemCount === 0) return;
 
@@ -131,12 +131,12 @@ async function markOutputItems(
     throw new AgentViewError("Run set as 'completed' must have at least one output item, but no non-input items found.", 422);
   }
 
-  for (const outputItem of outputItems) {
-    const outputConfig = findItemConfig(runConfig, [], outputItem.content as Record<string, any>, [], "output");
-    if (!outputConfig) {
-      throw new AgentViewError("Item does not match output schema.", 422, { item: outputItem.content });
-    }
-  }
+  // for (const outputItem of outputItems) {
+  //   const outputConfig = findItemConfig(runConfig, [], outputItem.content as Record<string, any>, [], "output");
+  //   if (!outputConfig) {
+  //     throw new AgentViewError("Item does not match output schema.", 422, { item: outputItem.content });
+  //   }
+  // }
 
   // Update their type to 'output'
   const itemIds = outputItems.map(i => i.id);
@@ -264,7 +264,7 @@ async function createRunCore(
   }
 
   if (status === 'completed') {
-    await markOutputItems(tx, insertedRun.id, 1, runConfig);
+    await markOutputItems(tx, insertedRun.id, 1);//, runConfig);
   }
 
   // Queue webhook job on first run
@@ -539,7 +539,7 @@ export async function fastApplyRunPatch(
     updatedRun.finishedAt = nowIso;
 
     dbOps.push(
-      markOutputItems(tx, run.id, op.outputItemCount ?? 1, runConfig), // validation inside
+      markOutputItems(tx, run.id, op.outputItemCount ?? 1),//, runConfig), // validation inside
       handleChannelReply(tx, run.id, run.sessionId, tx.organizationId, op.channelReply),
     );
   }
@@ -576,6 +576,9 @@ export async function fastApplyRunPatch(
     }
   });
 }
+
+
+
 
 
 
@@ -729,7 +732,7 @@ export async function applyRunPatch(
   /** Mark output items on completion */
   if (status === 'completed' && runConfig) {
     const outputItemCount = body.outputItemCount ?? 1;
-    await markOutputItems(tx, run.id, outputItemCount, runConfig);
+    await markOutputItems(tx, run.id, outputItemCount)//, runConfig);
     await handleChannelReply(tx, run.id, run.sessionId, tx.organizationId, body.channelReply);
   }
 

@@ -61,6 +61,10 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
             })),
             // @ts-ignore
             _runId: run.id,
+            _agentRef: {
+                agent: run.agentRef!.agent,
+                version: run.agentRef!.version,
+            },
         })
     }
 

@@ -16,6 +16,8 @@ z.string().register(z.globalRegistry, {
     callId: true
 });
 
+
+
 export function findAgentConfig<T extends BaseAgentViewConfig>(config: T, agentName: string): NonNullable<T["agents"]>[number] | undefined {
     return config.agents?.find((agent) => agent.name === agentName);
 }
@@ -47,41 +49,12 @@ export function requireAgentConfigBySession<T extends BaseAgentViewConfig>(confi
 
 
 
-// export function findChannelConfig<T extends BaseAgentViewConfig>(config: T, channelRef: ChannelRef): NonNullable<T["channels"]>[number] | undefined {
-//     if (channelRef.type === 'api') {
-//         return config.channels?.find((c) => c.type === 'api' && c.name === channelRef.name);
-//     }
-
-//     const channelConfig = config.channels?.find((c) => c.type === channelRef.type && c.address === channelRef.address);
-//     if (!channelConfig) {
-//         return {
-//             ...channelRef,
-//             agent: undefined
-//         }
-//     }
-
-//     return channelConfig;
-// }
 
 
-// export function getChannelAgent(channelConfig: BaseChannelConfig): { name: string; initialState?: any } | undefined {
-//     if (channelConfig.type === 'api') {
-//         return { name: channelConfig.agent };
-//     }
-//     if (!channelConfig.agent) return undefined;
-//     if (typeof channelConfig.agent === 'string') return { name: channelConfig.agent };
-//     return channelConfig.agent;
-// }
 
-// export function requireChannelConfig<T extends BaseAgentViewConfig>(config: T, channelRef: ChannelRef) {
-//     const channelConfig = findChannelConfig(config, channelRef);
-//     if (!channelConfig) {
-//         throw new AgentViewError(`Channel config not found for channelRef: ${JSON.stringify(channelRef)}`, 404);
-//     }
-//     return channelConfig;
-// }
 
-export function findMatchingRunConfigs<T extends BaseAgentConfig>(agentConfig: T, inputItemContent: any) {
+
+function findMatchingRunConfigs<T extends BaseAgentConfig>(agentConfig: T, inputItemContent: any) {
     let matchingRunConfigs: NonNullable<T["runs"]>[number][] = [];
 
     for (const runConfig of agentConfig.runs ?? []) {
@@ -283,9 +256,6 @@ function matchItemConfigs<T extends BaseSessionItemConfig>(itemConfigs: T[], ite
 
     return matches;
 }
-
-
-
 
 export function serializeConfig(config: any) {
     const { data, success, error } = BaseConfigSchemaZodToJsonSchema.safeParse(config);
