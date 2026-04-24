@@ -24,11 +24,6 @@ export interface BaseRunConfig<TSessionItemConfig extends BaseSessionItemConfig 
     idleTimeout?: number;
 }
 
-// export interface ApiChannelConfig {
-//     type: 'api';
-//     name: string;
-// }
-
 export interface ExternalChannelConfig {
     type: 'gmail' | 'mock';
     address: string;
@@ -36,7 +31,6 @@ export interface ExternalChannelConfig {
     initialState?: any;
 }
 
-// export type BaseChannelConfig = ApiChannelConfig | ExternalChannelConfig;
 export type BaseChannelConfig = ExternalChannelConfig;
 
 
@@ -117,35 +111,12 @@ function baseRunSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
 
 
 function baseConfigSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
-    // const BaseSessionItemConfigSchema = z.object({
-    //     schema: jsonSchemaSchema,
-    //     scores: z.array(z.object({
-    //         name: z.string(),
-    //         schema: jsonSchemaSchema,
-    //     })).optional(),
-    // });
-
-    // const BaseSessionItemConfigSchemaWithTools = BaseSessionItemConfigSchema.extend({
-    //     callResult: BaseSessionItemConfigSchema.optional(),
-    // });
-
-    // const apiChannelSchema = z.object({
-    //     type: z.literal('api'),
-    //     name: z.string(),
-    //     agent: z.string(),
-    //     metadata: z.record(z.string(), jsonSchemaSchema).optional(),
-    //     allowUnknownMetadata: z.boolean().optional(),
-    // });
-
     const externalChannelSchema = z.object({
         type: z.union([z.literal('gmail'), z.literal('mock')]),
         address: z.string(),
-        // agent: z.union([z.string(), z.object({ name: z.string(), initialState: z.any().optional() })]),
         metadata: z.record(z.string(), z.any()).optional(),
         initialState: z.any().optional(),
     });
-
-    // const channelSchema = z.discriminatedUnion('type', [apiChannelSchema, externalChannelSchema]);
 
     return z.object({
         agents: z.array(z.object({
@@ -155,7 +126,6 @@ function baseConfigSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
             adapter: z.enum(['agentview', 'ai-sdk']).optional(),
             runs: z.array(baseRunSchema(jsonSchemaSchema)).optional(),
             channels: z.array(externalChannelSchema).optional(),
-
             metadata: z.record(z.string(), jsonSchemaSchema).optional(),
             allowUnknownMetadata: z.boolean().optional(),
             

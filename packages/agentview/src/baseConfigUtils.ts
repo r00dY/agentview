@@ -1,5 +1,5 @@
-import type { SessionItem, ChannelRef, SessionBase } from "./apiTypes.js";
-import type { BaseAgentViewConfig, BaseAgentConfig, BaseChannelConfig, BaseSessionItemConfig, BaseRunConfig } from "./baseConfigTypes.js";
+import type { SessionItem, SessionBase } from "./apiTypes.js";
+import type { BaseAgentViewConfig, BaseAgentConfig, BaseSessionItemConfig, BaseRunConfig } from "./baseConfigTypes.js";
 import { BaseConfigSchemaZodToJsonSchema, BaseRunSchemaZodToJsonSchema } from "./baseConfigTypes.js";
 import { z } from "zod";
 import { AgentViewError } from "./AgentViewError.js";
@@ -45,6 +45,7 @@ export function requireAgentConfigBySession<T extends BaseAgentViewConfig>(confi
     }
     return agentConfig;
 }
+
 
 
 
