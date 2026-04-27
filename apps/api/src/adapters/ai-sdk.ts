@@ -45,6 +45,7 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
             ...inputItem.content,
             _run: runBase,
             _item: getItemBase(inputItem),
+            _channelMessages: run.channelMessages.filter(cm => cm.direction === 'incoming'),
         });
 
         if (!isRunFinished(run)) {
@@ -68,6 +69,7 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
             })),
             // @ts-ignore
             _run: runBase,
+            _channelMessage: run.channelMessages.find(cm => cm.direction === 'outgoing'),
         })
     }
 
