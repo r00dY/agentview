@@ -36,7 +36,6 @@ import {
 
 // Removed Framework Mode type import
 import { spaceAllowedValues, type Space } from "agentview/apiTypes";
-import type { ApiChannelConfig } from "agentview/baseConfigTypes";
 import type { AgentCustomRoute } from "../types";
 import { getWebAppUrl } from "agentview/urls";
 import { matchPath } from "react-router";
@@ -48,6 +47,7 @@ import { agentview } from "../lib/agentview";
 import { getSessionCached, getOrganizationCached, type User, type Member, type Organization } from "../lib/auth-client";
 import { getCurrentAgent } from "../lib/currentAgent";
 import { SessionContext } from "../lib/SessionContext";
+import { updateEnvironment } from "agentview/updateEnvironment";
 
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -66,7 +66,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   const agent = getCurrentAgent(request);
-  const envUpdate = agentview().updateEnvironment({ config });
+  const envUpdate = updateEnvironment(agentview(), { config });
 
   const organization = await getOrganizationCached();
   const member = organization.members.find(m => m.userId === session.user.id);
@@ -82,7 +82,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (config.agents) {
     const statsPromises = config.agents.flatMap(agentConfig =>
       spaceAllowedValues.map(space =>
-        agentview().getSessionsStats({ space })
+        agentview().sessions.getStats({ space })
           .then(stats => ({ space, data: stats }))
       )
     );
@@ -123,9 +123,9 @@ function Component() {
   const location = useLocation();
   const submitForm = useSubmit();
 
-  const apiChannels = (config.channels ?? []).filter(
-    (c): c is ApiChannelConfig => c.type === 'api'
-  );
+  // const apiChannels = (config.channels ?? []).filter(
+  //   (c): c is ApiChannelConfig => c.type === 'api'
+  // );
 
   // Helper function to get unseen count for a specific session type and list name
   const getUnseenCount = (space: Space) => {
@@ -163,6 +163,8 @@ function Component() {
     }
   }
 
+  const agents = config.agents ?? [];
+
   return (<SessionContext.Provider value={{ me, organization, locale }}>
     <Suspense fallback={null}>
       <EnvUpdateWatcher promise={envUpdate} />
@@ -198,14 +200,14 @@ function Component() {
               </SidebarMenuItem> */}
 
               <SidebarMenuItem>
-                {apiChannels.length === 1 ? (
-                  <Form action={`/sessions/new?agent=${apiChannels[0].name}&space=playground`} method="post" className="flex flex-col items-stretch relative mt-1 px-1">
+                {agents.length === 1 ? (
+                  <Form action={`/sessions/new?agent=${agents[0].name}&space=playground`} method="post" className="flex flex-col items-stretch relative mt-1 px-1">
                     <Button variant="outline" size="sm" type="submit">
                       <PlusIcon className="h-4 w-4" />
                       New Session
                     </Button>
                   </Form>
-                ) : apiChannels.length > 1 ? (
+                ) : agents.length > 1 ? (
                   <div className="flex flex-col items-stretch relative mt-1 px-1">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -215,11 +217,11 @@ function Component() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" className="w-[--radix-popper-anchor-width]">
-                        {apiChannels.map(channel => (
-                          <DropdownMenuItem key={channel.name} onClick={() => {
-                            submitForm(null, { method: 'post', action: `/sessions/new?agent=${channel.name}&space=playground` });
+                        {agents.map(agent => (
+                          <DropdownMenuItem key={agent.name} onClick={() => {
+                            submitForm(null, { method: 'post', action: `/sessions/new?agent=${agent.name}&space=playground` });
                           }}>
-                            {channel.name}
+                            {agent.name}
                           </DropdownMenuItem>
                         ))}
                       </DropdownMenuContent>

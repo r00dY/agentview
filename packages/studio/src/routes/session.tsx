@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { type ChannelMessage, type CommentMessage, type InputTarget, type StandardRun, type Score, type StandardSession, type SessionBase, type SessionItem, type SessionsStats, type SessionStats } from "agentview/apiTypes";
+import { type ChannelMessage, type CommentMessage, type InputTarget, type StandardRun, type Score, type Session, type SessionBase, type SessionItem, type SessionsStats, type SessionStats, type StandardSession } from "agentview/apiTypes";
 import { findAgentConfig, findItemConfigById, findRunConfig, requireAgentConfigByName, requireAgentConfigBySession } from "agentview/baseConfigUtils";
 import { enhanceSession, getActiveRuns, getAllSessionItems, getLastRun } from "agentview/sessionUtils";
 import type { AgentConfig, ScoreConfig, SessionItemConfig, SessionItemDisplayComponentProps } from "../types";
@@ -40,9 +40,15 @@ async function loader({ request, params, context }: LoaderFunctionArgs) {
     try {
         const shouldLoadImmediately = !window.location.pathname.includes(`/sessions/${sessionId}`);
 
-        const [session, comments, scores] = shouldLoadImmediately ?
-            [agentview().getSessionSync({ id: sessionId }), agentview().getSessionCommentsSync({ id: sessionId }), agentview().getSessionScoresSync({ id: sessionId })] :
-            await Promise.all([agentview().getSession({ id: sessionId }), agentview().getSessionComments({ id: sessionId }), agentview().getSessionScores({ id: sessionId })] as const);
+        // const [session, comments, scores] = shouldLoadImmediately ?
+        //     [agentview().getSessionSync({ id: sessionId }), agentview().getSessionCommentsSync({ id: sessionId }), agentview().getSessionScoresSync({ id: sessionId })] :
+        //     await Promise.all([agentview().getSession({ id: sessionId }), agentview().getSessionComments({ id: sessionId }), agentview().getSessionScores({ id: sessionId })] as const);
+
+
+        const [session, comments, scores] = await Promise.all([
+            agentview().sessions.get(sessionId), 
+            agentview().comments.list({ sessionId: sessionId }), 
+            agentview().scores.list({ sessionId: sessionId })] as const);
 
         return {
             session,
@@ -124,7 +130,7 @@ function SessionPageSkeleton({ sessionBase }: { sessionBase: SessionBase }) {
     );
 }
 
-function SessionPage(props: { session: StandardSession, comments: CommentMessage[], scores: Score[], sessionStats?: SessionStats }) {
+function SessionPage(props: { session: Session, comments: CommentMessage[], scores: Score[], sessionStats?: SessionStats }) {
     // console.log('[SessionPage]');
     const loaderData = useLoaderData<typeof loader>();
     const revalidator = useRevalidator();
@@ -140,11 +146,93 @@ function SessionPage(props: { session: StandardSession, comments: CommentMessage
         )?.unseenEvents;
     };
 
-    const { session, createRun, cancelRun, isRunning } = useSession(props.session);
+    // const { session, createRun, cancelRun, isRunning } = useSession(props.session);
+
+    /**
+     * 
+     * WE NEED BOTH:
+     * - session
+     * - standardSession
+     * 
+     * sessions is needed obviously for STREAMING
+     * but also for the InputComponent!!! Any CALLBACK in UI should be ai-sdk.
+     * 
+     * so essentially... Whehter we like it or not... this view is NOT STANDARD anymore.
+     * 
+     * Maybe we should make this view 100%-ai-sdk compatible???
+     * 
+     * Just send _target etc...? 
+     * 
+     * IT WON'T BE NICE BUT IT WILL BE 100% AI-SDK CLIENT. AND THAT'S WHAT WE WANT.
+     * - there's gonna be a tiny "rule" that input is an item and parts are items. That's all there is.
+     * - also some metadata for other stuff like 'output', 'channelMessages' etc... but it's trivial.
+     * 
+     * It's gonna be CLEAN.
+     * 
+     */
+
+    const runs: StandardRun[] = []
+    props.session.messages.forEach((message) => {
+        if (message.role === 'user') {
+            const { _run, _item, ...content } = message;
+            runs.push({
+                ..._run,
+                sessionItems: [{
+                    ..._item,
+                    content,
+                }],
+            });
+        }
+        else if (message.role === 'assistant') {
+            const { _run, metadata, parts } = message;
+
+            // metadata TO DO
+            const run = runs.find(r => r.id === _run.id);
+            if (!run) {
+                throw new Error(`unexpected error: run not found`);
+            }
+
+            for (const part of parts) {
+                const { _item, ...content } = part;
+
+                // const item = _item ?? {
+                //     id: crypto.randomUUID(),
+                //     createdAt: new Date(),
+                //     updatedAt: new Date(),
+                //     type: 'output',
+                //     content,
+                //     runId: run.id,
+                //     sessionId: props.session.id,
+                // }
+                
+                run.sessionItems.push({
+                    ..._item,
+                    content,
+                });
+            }
+        }
+    });
+       
+    const session : StandardSession = {
+        ...props.session,
+        runs
+    }
+
+    const createRun = async (input: any) => {
+        alert('createRun');
+    }
+
+    const cancelRun = async () => {
+        alert('cancelRun');
+    }
+
+    const isRunning = props.session.status == 'in_progress';
+
+    console.log(session);
 
     const listParams = loaderData.listParams;
-    const activeItems = getAllSessionItems(session, { activeOnly: true })
-    const lastRun = getLastRun(session)
+    // const activeItems = getAllSessionItems(session, { activeOnly: true })
+    // const lastRun = getLastRun(session)
 
     const agentConfig = requireAgentConfigBySession(config, session);
 
@@ -182,7 +270,7 @@ function SessionPage(props: { session: StandardSession, comments: CommentMessage
         // Session-level inbox items: no runId, sessionItemId, or channelMessageId
         const sessionLevelUnreads = sessionStats?.inboxItems?.some(i => !i.runId && !i.sessionItemId && !i.channelMessageId && i.unseenEvents.length > 0);
         if (sessionLevelUnreads) {
-            agentview().markSeen({ sessionId: session.id }) // only mark as seen if there are unseen events (do not overload backend and clean cache unnecessarily)
+            agentview().comments.markSeen({ sessionId: session.id }) // only mark as seen if there are unseen events (do not overload backend and clean cache unnecessarily)
                 .then(() => revalidator.revalidate())
                 .catch((error) => console.error(error))
         };
@@ -321,7 +409,7 @@ function SessionPage(props: { session: StandardSession, comments: CommentMessage
                     // const agentConfig = findAgentConfig(config, session.agentRef?.agent);
                     const runConfig = agentConfig ? findRunConfig(agentConfig, run.sessionItems[0].content) : undefined;
                     const runScoreConfigs = (runConfig?.scores ?? []) as ScoreConfig[]; // fixme: types should be automatic without cast
-                    const runComments: CommentMessage[] = props.comments.filter((c) => c.runId === run.id && !c.channelMessageId && !c.sessionItemId);
+                    const runComm   ents: CommentMessage[] = props.comments.filter((c) => c.runId === run.id && !c.channelMessageId && !c.sessionItemId);
                     const runScores: Score[] = props.scores.filter((s) => s.runId === run.id && !s.channelMessageId && !s.sessionItemId);
 
                     const runTarget: InputTarget = { sessionId: session.id, runId: run.id };

@@ -26,7 +26,7 @@ export const authClient = createBetterAuthClient({ baseURL: new URL('/api/auth',
 
 
 export async function getFullOrganization() {
-    const organizationBase = await agentview().getOrganization();
+    const organizationBase = await agentview().organization.get();
 
     const response = await authClient.organization.getFullOrganization({ query: { organizationId: organizationBase.id } })
 

@@ -1,4 +1,4 @@
-import type { StandardSession, UIMessage } from 'agentview/apiTypes';
+import type { SessionItem, StandardSession, UIMessage } from 'agentview/apiTypes';
 import { isRunFinished } from '../runs';
 import { getSessionStatusFields } from '../sessions';
 import { type Adapter } from './adapters';
@@ -24,6 +24,11 @@ export const aiSDKAdapter = {
 } satisfies Adapter;
 
 
+function getItemBase(item: SessionItem) {
+    const { content, ...itemBase } = item;
+    return itemBase;
+}
+
 function sessionToUIMessages(session: StandardSession): UIMessage[] {
     const messages: UIMessage[] = [];
 
@@ -32,12 +37,14 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
             throw new Error("[sessionToUIMessages] Run is not an AI SDK run");
         }
 
-        const [inputItem, ...outputParts] = run.sessionItems;
+        const { sessionItems, ...runBase } = run;
+
+        const [inputItem, ...outputParts] = sessionItems;
 
         messages.push({
             ...inputItem.content,
-            _runId: run.id,
-            _sessionItemId: inputItem.id,
+            _run: runBase,
+            _item: getItemBase(inputItem),
         });
 
         if (!isRunFinished(run)) {
@@ -57,14 +64,10 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
             role: 'assistant',
             parts: outputParts.map(part => ({
                 ...part.content,
-                _sessionItemId: part.id,
+                _item: getItemBase(part),
             })),
             // @ts-ignore
-            _runId: run.id,
-            _agentRef: {
-                agent: run.agentRef!.agent,
-                version: run.agentRef!.version,
-            },
+            _run: runBase,
         })
     }
 
