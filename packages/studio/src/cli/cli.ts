@@ -13,6 +13,7 @@ import { AgentViewError } from "agentview";
 import { startStudioServer } from "./studioServer.js";
 import { startProxyServer, PROXY_PORT, type ProxyServer } from "./proxyServer.js";
 import { startCloudflareTunnel, type CloudflareTunnel } from "./tunnel.js";
+import { toBaseConfig } from '../toBaseConfig.js';
 
 const DEFAULT_CONFIG_FILES = [
   "agentview.config.ts",
@@ -206,7 +207,7 @@ async function pushConfig() {
   const config = await loadConfig();
 
   try {
-    await updateEnvironment(client, { config });
+    await updateEnvironment(client, { config: toBaseConfig(config) });
     console.log(`Config pushed`);
   } catch (e) {
     console.log('CONFIG ERROR');

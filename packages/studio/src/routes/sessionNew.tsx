@@ -59,7 +59,7 @@ async function action({ request, params }: ActionFunctionArgs): Promise<ActionRe
 
   try {
     const { user } = await agentview().users.createAnon();
-    const session = await agentview().createSession({
+    const session = await agentview().sessions.create({
       agent: agentName,
       userId: user.id,
       metadata: payload?.metadata

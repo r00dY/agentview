@@ -3,7 +3,7 @@ import { agentview } from "./agentview";
 
 
 export async function requireEnvironment() {
-    const environment = await agentview().getEnvironment();
+    const environment = await agentview().environments.getActive();
     if (!environment) {
         throw data({ message: "Environment not found." });
     }

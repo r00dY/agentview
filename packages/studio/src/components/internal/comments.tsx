@@ -239,7 +239,7 @@ export function CommentsThread({ target, scoreConfigs, selected = false, onSelec
                 (entries) => {
                     entries.forEach((entry) => {
                         if (entry.isIntersecting) {
-                            agentview().markSeen(target)
+                            agentview().comments.markSeen(target)
                                 .then(() => revalidator.revalidate())
                                 .catch((error) => console.error(error))
                             observer.disconnect();

@@ -19,7 +19,7 @@ async function action({ request, context }: ActionFunctionArgs): Promise<ActionR
     }
 
     return await withErrorHandling(() =>
-        agentview().createComment({ ...target, content })
+        agentview().comments.create({ ...target, content })
     );
 }
 

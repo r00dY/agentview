@@ -24,16 +24,16 @@ export type DisplayProperty<TInputArgs = any> = {
   value: (args: TInputArgs) => React.ReactNode;
 }
 
-export type FormComponentProps<TSchema extends z.ZodTypeAny> = {
-  value?: z.infer<TSchema> | undefined, 
-  submit: (value: z.infer<TSchema> | null) => void,
-  cancel: () => void,
-  isRunning: boolean,
-  error?: any,
-  schema: TSchema,
-}
+// export type FormComponentProps<TSchema extends z.ZodTypeAny> = {
+//   value?: z.infer<TSchema> | undefined, 
+//   submit: (value: z.infer<TSchema> | null) => void,
+//   cancel: () => void,
+//   isRunning: boolean,
+//   error?: any,
+//   schema: TSchema,
+// }
 
-export type FormComponent<TSchema extends z.ZodTypeAny> = React.ComponentType<FormComponentProps<TSchema>>;
+// export type FormComponent<TSchema extends z.ZodTypeAny> = React.ComponentType<FormComponentProps<TSchema>>;
 
 export type ControlComponentProps<TValue> = {
   value: TValue | undefined | null;
@@ -95,17 +95,23 @@ export type NewSessionComponent = React.ComponentType<NewSessionComponentProps>
 //   inputComponent?: AgentInputComponent;
 // }
 
-export type AgentConfig = BaseAgentConfig<RunConfig> & {
-  displayProperties?: DisplayProperty<{ session: SessionBase }>[];
-  newSessionComponent?: NewSessionComponent;
-  inputComponent?: AgentInputComponent;
-}
 
-export type AgentViewConfig = BaseAgentViewConfig<AgentConfig> & {
-  publicApiKey: string;
-  env: string; // required for playground, we know which environment to use
-  customRoutes?: CustomRoute[],
-}
+
+
+
+
+// export type AgentConfig = BaseAgentConfig<RunConfig> & {
+//   displayProperties?: DisplayProperty<{ session: SessionBase }>[];
+//   newSessionComponent?: NewSessionComponent;
+//   inputComponent?: AgentInputComponent;
+// }
+
+// export type AgentViewConfig = BaseAgentViewConfig<AgentConfig> & {
+//   publicApiKey: string;
+//   env: string; // required for playground, we know which environment to use
+//   customRoutes?: CustomRoute[],
+// }
+
 
 
 
@@ -113,7 +119,7 @@ export type AgentViewConfig = BaseAgentViewConfig<AgentConfig> & {
  * AISDK 
  */
 
-export interface AISDKAgentConfig extends SharedAgentConfig {
+export interface AgentConfig extends SharedAgentConfig {
   displayProperties?: DisplayProperty<{ session: SessionBase }>[];
   newSessionComponent?: NewSessionComponent;
   inputComponent?: AgentInputComponent;
@@ -134,7 +140,7 @@ export interface AISDKAgentConfig extends SharedAgentConfig {
   }
 }
 
-export type AISDKAgentViewConfig = BaseAgentViewConfig<AISDKAgentConfig> & {
+export type AgentViewConfig = BaseAgentViewConfig<AgentConfig> & {
   publicApiKey: string;
   env: string; // required for playground, we know which environment to use
   customRoutes?: CustomRoute[],

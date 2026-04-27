@@ -48,6 +48,7 @@ import { getSessionCached, getOrganizationCached, type User, type Member, type O
 import { getCurrentAgent } from "../lib/currentAgent";
 import { SessionContext } from "../lib/SessionContext";
 import { updateEnvironment } from "agentview/updateEnvironment";
+import { toBaseConfig } from "../toBaseConfig.js";
 
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -66,7 +67,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   const agent = getCurrentAgent(request);
-  const envUpdate = updateEnvironment(agentview(), { config });
+  const envUpdate = updateEnvironment(agentview(), { config: toBaseConfig(config) });
 
   const organization = await getOrganizationCached();
   const member = organization.members.find(m => m.userId === session.user.id);

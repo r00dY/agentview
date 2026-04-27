@@ -245,8 +245,8 @@ class UsersResource {
     return await this.client._request<User>('GET', `/api/users/by-external-id/${externalId}`)
   }
 
-  async update(options: UserCreate & { id: string }): Promise<User> {
-    return await this.client._request<User>('PATCH', `/api/users/${options.id}`, options)
+  async update(id: string, options: UserCreate): Promise<User> {
+    return await this.client._request<User>('PATCH', `/api/users/${id}`, options)
   }
 }
 

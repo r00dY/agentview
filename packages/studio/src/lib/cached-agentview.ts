@@ -160,7 +160,7 @@ export class CachedAgentView extends StandardAgentViewClient {
   }
 
   async updateUser(options: UserCreate & { id: string }) {
-    const result = await this.users.update(options)
+    const result = await this.users.update(options.id, options)
     // .user is part of session list and also single session object. That's why we literally nuke cache here. Good for now.
     invalidateByPrefix('session');
     invalidateByPrefix('sessions');

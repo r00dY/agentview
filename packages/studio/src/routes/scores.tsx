@@ -11,7 +11,8 @@ async function action({ request }: ActionFunctionArgs): Promise<ActionResponse> 
     const { scores, ...target } = body;
 
     return await withErrorHandling(() =>
-        agentview().updateScores({ ...target, scores })
+        // agentview().updateScores({ ...target, scores })
+        agentview().scores.update({ ...target, scores })
     );
 }
 

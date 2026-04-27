@@ -7,21 +7,23 @@ export function loadConfig(): AgentViewConfig {
         throw new Error("Config not found");
     }
 
-    return {
-        ...config,
-        agents: config.agents?.map((agent) => {
-            return {
-                ...agent,
-                runs: agent.runs?.map((run) => {
-                    const runScores = [...(run.scores ?? [])];
-                    if (!run.disableLike) {
-                        runScores.unshift(like());
-                    }
-                    return { ...run, scores: runScores }
-                })
-            }
-        })
-    }
+    return config;
+
+    // return {
+    //     ...config,
+    //     agents: config.agents?.map((agent) => {
+    //         return {
+    //             ...agent,
+    //             runs: agent.runs?.map((run) => {
+    //                 const runScores = [...(run.scores ?? [])];
+    //                 if (!run.disableLike) {
+    //                     runScores.unshift(like());
+    //                 }
+    //                 return { ...run, scores: runScores }
+    //             })
+    //         }
+    //     })
+    // }
 }
 
 export const config = loadConfig();
