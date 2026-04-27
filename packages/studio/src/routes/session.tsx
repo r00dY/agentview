@@ -133,7 +133,6 @@ function SessionPageSkeleton({ sessionBase }: { sessionBase: SessionBase }) {
 type CommentsThreadData = { target: InputTarget, comments: CommentMessage[], scores?: Score[], scoreConfigs?: ScoreConfig[] };
 
 function SessionPage(props: { session: Session, comments: CommentMessage[], scores: Score[], sessionStats?: SessionStats }) {
-    // console.log('[SessionPage]');
     const loaderData = useLoaderData<typeof loader>();
     const revalidator = useRevalidator();
     const navigate = useNavigate();
@@ -243,10 +242,10 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
             const runComments: CommentMessage[] = props.comments.filter((c) => c.runId === _run.id && !c.channelMessageId && !c.sessionItemId);
             const runScores: Score[] = props.scores.filter((s) => s.runId === _run.id && !s.channelMessageId && !s.sessionItemId);
             const runTarget: InputTarget = { sessionId: session.id, runId: _run.id };
-            const runCommentsAndScores: CommentsThreadData = { 
-                target: runTarget, 
-                comments: runComments, 
-                scoreConfigs: runScoreConfigs, 
+            const runCommentsAndScores: CommentsThreadData = {
+                target: runTarget,
+                comments: runComments,
+                scoreConfigs: runScoreConfigs,
                 scores: runScores,
             };
 
