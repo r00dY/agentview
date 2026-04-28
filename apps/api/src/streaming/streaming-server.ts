@@ -5,11 +5,11 @@ import { startMeasuring } from '../performance';
 import { startCpuProfiling, stopCpuProfiling } from './profiler';
 
 import { RunTerminationError, type RunTerminationReason } from '../runs';
-import { createState, processEvent, StreamUpstreamError } from './processEvent';
+import { createState, processChunk, StreamUpstreamError } from './processEvent';
 import { GracefulRunTerminationError, type LiveConnection } from './types';
 import { saveDataAll } from './saveData';
 import { createParser, type EventSourceMessage } from 'eventsource-parser';
-import { ChunkParseError } from './parseUIMessageChunk';
+import { ChunkParseError, parseUIMessageChunk, type ExtendedUIMessageChunk } from './parseUIMessageChunk';
 import { UIMessageStreamError } from 'ai';
 import { cleanupStreamingUIMessageState } from './processUIMessageStream';
 
@@ -140,11 +140,22 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
      */
     let conn: LiveConnection;
 
-    const state = createState(runId);
+    const state = createState(crypto.randomUUID()); // random message id (it can be overriden by user anyway in 'start' chunk)
 
     upstreamRes.setEncoding('utf-8'); // automatic decoding of stream to the string
 
     let streamFinishReason : { type: 'error', message: string, code: string, [key: string]: any } | { type: 'abort' } | { type: 'complete' } | undefined = undefined;
+
+    function sendInternalMetadata(metadata: Record<string, any>) {
+      const newChunk : ExtendedUIMessageChunk = {
+        type: 'message-metadata',
+        messageMetadata: {
+          _agentview: metadata
+        },
+      };
+      processChunk({ state, chunk: newChunk })
+      pushToBuffer(conn, JSON.stringify(newChunk));
+    }
 
     const sseParser = createParser({
       onEvent: function onSSEEvent(event: EventSourceMessage) {
@@ -160,12 +171,16 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
         }
 
         try {
-          processEvent({
-            state,
-            data
-          });
-
+          const chunk = parseUIMessageChunk(data);
+          processChunk({ state, chunk });
           pushToBuffer(conn, data);
+
+          // add runId to message metadata
+          if (chunk.type === 'start') {
+            sendInternalMetadata({
+              runId
+            })
+          }
 
         } catch (error) {
 
@@ -263,6 +278,11 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
         log.error({ runId }, '[streaming] unknown finish reason, setting to error');
         streamFinishReason = { type: 'error', code: "STREAM_INTERNAL_ERROR", message: "Unknown finish reason. It's internal error, please report." };
       }
+
+      // // Update last metadata (finishReason)
+      // sendInternalMetadata({
+      //   finishReason: streamFinishReason
+      // })
 
       // The only case when we push to buffer ourselves.
       if (streamFinishReason.type === 'abort') {
@@ -399,11 +419,12 @@ function handleGetStream(req: http.IncomingMessage, res: http.ServerResponse, ru
   }
 
   function writeChunk(data: string): boolean {
+    res.write(`data: ${data}\n\n`);
+
     if (data === DONE_MSG) {
       cleanup();
       return false;
     }
-    res.write(`data: ${data}\n\n`);
     return true;
   }
 

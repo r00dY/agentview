@@ -43,9 +43,15 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
 
         messages.push({
             ...inputItem.content,
-            _run: runBase,
-            _item: getItemBase(inputItem),
-            _channelMessages: run.channelMessages.filter(cm => cm.direction === 'incoming'),
+            metadata: {
+                ...inputItem.content.metadata,
+                _agentview: {
+                    channelMessages: session.channel.type === 'api' ? undefined : run.channelMessages.filter(cm => cm.direction === 'incoming'),
+                }
+            }
+            // _run: runBase,
+            // _item: getItemBase(inputItem),
+            // _channelMessages: run.channelMessages.filter(cm => cm.direction === 'incoming'),
         });
 
         if (!isRunFinished(run)) {
@@ -61,15 +67,21 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
 
         messages.push({
             id: assistantMessageId,
-            metadata: assistantMessageMetadata,
+            metadata: {
+                ...assistantMessageMetadata,
+                _agentview: {
+                    ...assistantMessageMetadata?._agentview,
+                    channelMessage: run.channelMessages.find(cm => cm.direction === 'outgoing'),
+                }
+            },
             role: 'assistant',
             parts: outputParts.map(part => ({
                 ...part.content,
-                _item: getItemBase(part),
+                // _item: getItemBase(part),
             })),
-            // @ts-ignore
-            _run: runBase,
-            _channelMessage: run.channelMessages.find(cm => cm.direction === 'outgoing'),
+            // // @ts-ignore
+            // _run: runBase,
+            // _channelMessage: run.channelMessages.find(cm => cm.direction === 'outgoing'),
         })
     }
 

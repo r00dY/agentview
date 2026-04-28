@@ -76,11 +76,10 @@ export type AgentInputComponentProps<TSchema extends z.ZodTypeAny = z.ZodAny> = 
   token: string,
   isRunning: boolean,
   cancel: () => void,
-  submit2: (items: any[]) => Promise<void>,
+  sendMessage: (input: any) => Promise<void>,
 }
 
 export type AgentInputComponent<TSchema extends z.ZodTypeAny = z.ZodAny> = React.ComponentType<AgentInputComponentProps<TSchema>>
-
 
 export type NewSessionComponentProps = {
   submit: (values?: { metadata?: any }) => void,
@@ -129,7 +128,7 @@ export interface AgentConfig extends SharedAgentConfig {
     displayComponent?: React.ComponentType<any>;
   }
   assistantMessage: {
-      parts: Array<{
+      parts?: Array<{
           type: string,
           displayComponent?: React.ComponentType<any>
           // scores?: BaseScoreConfig[] // - we do not support scores for items now

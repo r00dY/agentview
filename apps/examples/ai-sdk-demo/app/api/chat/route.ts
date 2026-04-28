@@ -117,10 +117,10 @@ export async function POST(req: Request) {
           console.error(error);
         },
         onFinish() {
-          writer.write({
-            type: 'data-session-state',
-            data: { count: messages.length + 1 }
-          });
+          // writer.write({
+          //   type: 'data-session-state',
+          //   data: { count: messages.length + 1 }
+          // });
         },
     
         experimental_telemetry: {

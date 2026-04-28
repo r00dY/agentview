@@ -68,9 +68,9 @@ export default defineConfig({
           value: ({ session }) => session?.metadata?.userLocation
         }
       ],
-      inputComponent: ({ submit2, cancel, isRunning, session, token }) => <UserMessageInput
+      inputComponent: ({ sendMessage, cancel, isRunning, session, token }) => <UserMessageInput
         onSubmit={(val) => {
-          submit2([{
+          sendMessage({
             type: "message",
             role: "user",
             parts: [
@@ -79,7 +79,7 @@ export default defineConfig({
                 text: val,
               }
             ]
-          }])
+          })
         }}
         onCancel={cancel}
         isRunning={isRunning}
@@ -92,15 +92,16 @@ export default defineConfig({
       },
 
       assistantMessage: {
-        parts: [
-          {
-            type: "text",
-            displayComponent: ({ item }) => {
-              return <AssistantMessage>{item.text}</AssistantMessage>;
-            },
-          },
-        ],
+        // parts: [
+        //   {
+        //     type: "text",
+        //     displayComponent: ({ item }) => {
+        //       return <AssistantMessage>{item.text}</AssistantMessage>;
+        //     },
+        //   },
+        // ],
 
+        
         scores: [
           select({
             name: "forecast_accuracy",

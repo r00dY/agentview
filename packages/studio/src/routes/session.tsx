@@ -3,7 +3,7 @@ import { type ChannelMessage, type CommentMessage, type InputTarget, type Standa
 import { findAgentConfig, findAgentConfigBySession, findItemConfigById, findRunConfig, requireAgentConfigByName, requireAgentConfigBySession } from "agentview/baseConfigUtils";
 import { enhanceSession, getActiveRuns, getAllSessionItems, getLastRun } from "agentview/sessionUtils";
 import type { AgentConfig, ScoreConfig, SessionItemConfig, SessionItemDisplayComponentProps } from "../types";
-import { AlertCircleIcon, ChevronDown, CircleGauge, InfoIcon, Loader2, Lock, MessageCirclePlus, UsersIcon } from "lucide-react";
+import { AlertCircleIcon, Brain, ChevronDown, CircleGauge, InfoIcon, Loader2, Lock, MessageCirclePlus, UsersIcon, Wrench } from "lucide-react";
 import { useEffect, useLayoutEffect, useOptimistic, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import type { LoaderFunctionArgs, RouteObject } from "react-router";
@@ -33,6 +33,7 @@ import { useSessionContext } from "../lib/SessionContext";
 import { useSession } from "../lib/useSession";
 import React from "react";
 import { LoadingIndicator } from "../components/internal/LoadingIndicator";
+import { useChat } from '@ai-sdk/react'
 
 async function loader({ request, params, context }: LoaderFunctionArgs) {
     const sessionId = params.id!;
@@ -132,6 +133,31 @@ function SessionPageSkeleton({ sessionBase }: { sessionBase: SessionBase }) {
 
 type CommentsThreadData = { target: InputTarget, comments: CommentMessage[], scores?: Score[], scoreConfigs?: ScoreConfig[] };
 
+type SendMessageFunction = ReturnType<typeof useChat>['sendMessage'];
+
+
+// function useError(session: Session, useChatError: Error | undefined) {
+//     const [wasChatErrorEverSet] = useState(session.status === 'failed' && !useChatError);
+
+//     useEffect(() => {
+//         if (session.status === 'failed' && !useChatError) {
+//             setIsSessionErrorActive(true);
+//         }
+//         else {
+//             setIsSessionErrorActive(false);
+//         }
+//     }, [useChatError]);
+
+//     if (isSessionErrorActive) {
+//         return session.failReason;
+//     }
+//     else {
+//         return useChatError;
+//     }
+// }
+
+
+
 function SessionPage(props: { session: Session, comments: CommentMessage[], scores: Score[], sessionStats?: SessionStats }) {
     const loaderData = useLoaderData<typeof loader>();
     const revalidator = useRevalidator();
@@ -147,29 +173,61 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         )?.unseenEvents;
     };
 
+    const { messages, sendMessage, status, error, stop } = useChat({
+        id: session.id,
+        generateId: () => crypto.randomUUID(),
+        messages: session.messages,
+        resume: session.resume,
+        transport: agentview().asUser({ id: session.user.id }).createTransport()
+    });
+
+
+
+    /**
+     * TODO:
+     * 
+     * Session-level error is BAD ABSTRACTION IF IT'S NOT HOOK.
+     * 
+     * Session might come with error. Then useChat creates "live error". Then it might actually ERASE this error (by regenerate or whatever). 
+     * 
+     * Then OLD SESSION ERROR STAYS. It makes zero fucking sense.
+     */
+    let finalError : { message: string, [key: string]: any } | undefined = undefined;
+    if (error) {
+        finalError = {
+            message: error.message,
+        };
+    }
+    else if (session.status === 'failed') {
+        finalError = session.failReason;
+    }
+
     /**
      * Build wall
      */
 
     console.log(session);
 
+    // return <div>dupa</div>
+
     const agentConfig = requireAgentConfigBySession(config, session);
 
     type WallItem = {
         id: string,
         element: React.ReactNode,
-        commentsAndScores: CommentsThreadData,
+        commentsAndScores?: CommentsThreadData,
         isLastRunItem?: boolean
-        run: RunBase
+        runId?: string
     };
 
     const wallItems: WallItem[] = [];
 
-    session.messages.forEach(_message => {
+    messages.forEach((message, index) => {
 
-        if (_message.role === "user") {
+        if (message.role === "user") {
             // @ts-ignore
-            const { _item, _run, _channelMessages, ...message } = _message;
+            // const { _item, _run, _channelMessages, ...message } = _message;
+            const runId = messages[index + 1]?.metadata?._agentview?.runId; // next assistant message has run info
 
             if (session.channel.type === 'api') {
                 const Component = agentConfig?.userMessage.displayComponent ?? DefaultInputComponent;
@@ -177,113 +235,167 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                     <Component item={message} session={session} />
                 </div>
 
-                // no scores for input session items for now
-                const commentsAndScores: CommentsThreadData = {
-                    target: { sessionId: session.id, runId: _run.id, sessionItemId: _item.id },
-                    comments: props.comments.filter((c) => c.sessionItemId === _item.id),
-                };
+                // // no scores for input session items for now
+                // const commentsAndScores: CommentsThreadData = {
+                //     target: { sessionId: session.id, runId: _run.id, sessionItemId: _item.id },
+                //     comments: props.comments.filter((c) => c.sessionItemId === _item.id),
+                // };
 
                 wallItems.push({
-                    id: _item.id,
+                    id: message.id,
                     element,
-                    commentsAndScores,
-                    run: _run,
+                    // commentsAndScores,
+                    runId
                 })
             }
             else {
-                for (const channelMessage of _channelMessages) {
+                const channelMessages = message.metadata?._agentview?.channelMessages;
+
+                for (const channelMessage of channelMessages) {
                     const element = <div className="pl-[10%] relative">
                         <UserMessage>{channelMessage.text}</UserMessage>
                     </div>
 
-                    const commentsAndScores: CommentsThreadData = {
-                        target: { sessionId: session.id, runId: _run.id, channelMessageId: channelMessage.id },
-                        comments: props.comments.filter((c) => c.channelMessageId === channelMessage.id),
-                    }
+                    // const commentsAndScores: CommentsThreadData = {
+                    //     target: { sessionId: session.id, runId: _run.id, channelMessageId: channelMessage.id },
+                    //     comments: props.comments.filter((c) => c.channelMessageId === channelMessage.id),
+                    // }
 
                     wallItems.push({
                         id: channelMessage.id,
                         element,
-                        commentsAndScores,
-                        run: _run,
+                        // commentsAndScores,
+                        runId
                     })
                 }
             }
         }
-        else if (_message.role === "assistant") {
-            // @ts-ignore
-            const { _run, _channelMessage, ...message } = _message;
+        else if (message.role === "assistant") {
+            const isInProgress = index === messages.length - 1 && (status === 'streaming' || status === 'submitted');
 
-            const stepParts = message.parts.filter((part) => part._item.type === 'step');
-            const outputParts = message.parts.filter((part) => part._item.type === 'output');
+            const runId = message.metadata?._agentview?.runId;
 
-            // step parts (separate wall items)
-            for (const _part of stepParts) {
-                const { _item, ...part } = _part;
+            // all parts for now (separate wall items)
+            for (const [index, part] of message.parts.entries()) {
+                let DefaultComponent: React.ComponentType<SessionItemDisplayComponentProps> | null | undefined = undefined;
 
-                const Component = /* load from agentConfig */ DefaultStepComponent;
+                switch (part.type) {
+                    case "text":
+                        DefaultComponent = DefaultTextPartComponent;
+                        break;
+                    case "reasoning":
+                        DefaultComponent = DefaultReasoningPartComponent;
+                        break;
+                    case "step-start":
+                        DefaultComponent = null;
+                        break;
+                    case "image":
+                        DefaultComponent = DefaultToolPartComponent;
+                        break;
+                    default:
+                        if (part.type.startsWith("tool-")) {
+                            DefaultComponent = DefaultToolPartComponent;
+                            break;
+                        }
+                        else {
+                            DefaultComponent = DefaultPartComponent;
+                            break;
+                        }
+                }
+
+                if (DefaultComponent === null) {
+                    continue;
+                }
+
+                const Component = /* load from agentConfig */ DefaultComponent;
                 const element = <Component item={part} session={session} />
 
-                const commentsAndScores: CommentsThreadData = {
-                    target: { sessionId: session.id, runId: _run.id, sessionItemId: _item.id },
-                    comments: props.comments.filter((c) => c.sessionItemId === _item.id),
-                };
+                // const commentsAndScores: CommentsThreadData = {
+                //     target: { sessionId: session.id, runId, sessionItemId: _item.id },
+                //     comments: props.comments.filter((c) => c.sessionItemId === _item.id),
+                // };
 
                 wallItems.push({
-                    id: _item.id,
+                    id: message.id + "." + index,
                     element,
-                    commentsAndScores,
-                    run: _run,
+                    // commentsAndScores,
+                    runId,
                 })
             }
 
-            // output parts - single wall item
-            const runScoreConfigs = agentConfig?.assistantMessage?.scores ?? []
-            const runComments: CommentMessage[] = props.comments.filter((c) => c.runId === _run.id && !c.channelMessageId && !c.sessionItemId);
-            const runScores: Score[] = props.scores.filter((s) => s.runId === _run.id && !s.channelMessageId && !s.sessionItemId);
-            const runTarget: InputTarget = { sessionId: session.id, runId: _run.id };
-            const runCommentsAndScores: CommentsThreadData = {
-                target: runTarget,
-                comments: runComments,
-                scoreConfigs: runScoreConfigs,
-                scores: runScores,
-            };
 
-            const elements: React.ReactNode[] = [];
 
-            /**
-             * TODO:
-             * - what if no output parts?
-             * - what if output CHANNEL MESSAGE IS THERE???
-             */
 
-            for (const _part of outputParts) {
-                const { _item, ...part } = _part;
+            // const stepParts = message.parts.filter((part) => part._item.type === 'step');
+            // const outputParts = message.parts.filter((part) => part._item.type === 'output');
 
-                const Component = /* load from agentConfig */ DefaultStepComponent;
-                const element = <Component item={part} session={session} />
-                elements.push(element);
-            }
+            // // step parts (separate wall items)
+            // for (const _part of stepParts) {
+            //     const { _item, ...part } = _part;
 
-            if (elements.length === 0) {
-                elements.push(<div>No output parts</div>); // fixme: temporary!
-            }
+            //     const Component = /* load from agentConfig */ DefaultStepComponent;
+            //     const element = <Component item={part} session={session} />
 
-            wallItems.push({
-                id: _run.id,
-                element: <div>
-                    {elements}
-                </div>,
-                commentsAndScores: runCommentsAndScores,
-                isLastRunItem: true,
-                run: _run,
-            })
+            //     const commentsAndScores: CommentsThreadData = {
+            //         target: { sessionId: session.id, runId: _run.id, sessionItemId: _item.id },
+            //         comments: props.comments.filter((c) => c.sessionItemId === _item.id),
+            //     };
+
+            //     wallItems.push({
+            //         id: _item.id,
+            //         element,
+            //         commentsAndScores,
+            //         run: _run,
+            //     })
+            // }
+
+            // // output parts - single wall item
+            // const runScoreConfigs = agentConfig?.assistantMessage?.scores ?? []
+            // const runComments: CommentMessage[] = props.comments.filter((c) => c.runId === _run.id && !c.channelMessageId && !c.sessionItemId);
+            // const runScores: Score[] = props.scores.filter((s) => s.runId === _run.id && !s.channelMessageId && !s.sessionItemId);
+            // const runTarget: InputTarget = { sessionId: session.id, runId: _run.id };
+            // const runCommentsAndScores: CommentsThreadData = {
+            //     target: runTarget,
+            //     comments: runComments,
+            //     scoreConfigs: runScoreConfigs,
+            //     scores: runScores,
+            // };
+
+            // const elements: React.ReactNode[] = [];
+
+            // /**
+            //  * TODO:
+            //  * - what if no output parts?
+            //  * - what if output CHANNEL MESSAGE IS THERE???
+            //  */
+
+            // for (const _part of outputParts) {
+            //     const { _item, ...part } = _part;
+
+            //     const Component = /* load from agentConfig */ DefaultStepComponent;
+            //     const element = <Component item={part} session={session} />
+            //     elements.push(element);
+            // }
+
+            // if (elements.length === 0) {
+            //     elements.push(<div>No output parts</div>); // fixme: temporary!
+            // }
+
+            // wallItems.push({
+            //     id: _run.id,
+            //     element: <div>
+            //         {elements}
+            //     </div>,
+            //     commentsAndScores: runCommentsAndScores,
+            //     isLastRunItem: true,
+            //     run: _run,
+            // })
         }
     })
 
-    const createRun = async (input: any) => {
-        alert('createRun');
-    }
+    // const createRun = async (input: any) => {
+    //     alert('createRun');
+    // }
 
     const cancelRun = async () => {
         alert('cancelRun');
@@ -397,12 +509,12 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
             sessionBase={session}
             agentConfig={agentConfig}
             headerExtra={session.user.ownerId === me.id && <ShareForm session={session} />}
-            footer={session.user.ownerId === me.id && <InputForm session={session} agentConfig={agentConfig} styles={styles} createRun={createRun} cancelRun={cancelRun} isRunning={isRunning} />}
+            footer={session.user.ownerId === me.id && <InputForm session={session} agentConfig={agentConfig} styles={styles} sendMessage={sendMessage} cancelRun={cancelRun} isRunning={isRunning} />}
             outletContext={{ session }}
         >
             <div ref={bodyRef}>
                 <ItemsWithCommentsLayout items={wallItems.map((wallItem) => {
-                    const { id, element, commentsAndScores, isLastRunItem, run } = wallItem;
+                    const { id, element, commentsAndScores, isLastRunItem, runId } = wallItem;
 
                     const isSelected = selectedItemId === wallItem.id;
                     const hasComments = commentsAndScores ? commentsAndScores.comments.length > 0 : false;
@@ -426,9 +538,13 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                     </ErrorBoundary>
                                 </div>
 
-                                {isLastRunItem && <RunFooter
+                                { session.status === 'in_progress' && <div className="text-muted-foreground mt-6">
+                                    <Loader />
+                                </div> }
+
+                                {session.status !== 'in_progress' && isLastRunItem && <RunFooter
                                     session={session}
-                                    run={run}
+                                    runId={runId}
                                     commentsAndScores={commentsAndScores}
                                     listParams={listParams}
                                     isSelected={isSelected}
@@ -543,7 +659,31 @@ function DefaultAssistantComponent({ item }: SessionItemDisplayComponentProps) {
     return <AssistantMessage>{item}</AssistantMessage>
 }
 
-function DefaultStepComponent({ item }: SessionItemDisplayComponentProps) {
+function DefaultTextPartComponent({ item }: SessionItemDisplayComponentProps) {
+    return <AssistantMessage>{item.text}</AssistantMessage>
+}
+
+function DefaultReasoningPartComponent({ item }: SessionItemDisplayComponentProps) {
+    return <Step collapsible>
+        <StepTitle><Brain /> Thinking</StepTitle>
+        <StepContent>
+            {item.text}
+        </StepContent>
+    </Step>
+}
+
+function DefaultToolPartComponent({ item }: SessionItemDisplayComponentProps) {
+    const toolName = item.type.substring(5);
+
+    return <Step collapsible>
+        <StepTitle><Wrench /> {toolName}</StepTitle>
+        <StepContent>
+            {item}
+        </StepContent>
+    </Step>
+}
+
+function DefaultPartComponent({ item }: SessionItemDisplayComponentProps) {
     return <Step>
         <StepContent>
             {item}
@@ -565,12 +705,12 @@ function DefaultToolComponent({ item, resultItem }: SessionItemDisplayComponentP
     </Step>
 }
 
-function InputForm({ session, agentConfig, styles, createRun, cancelRun, isRunning }: { session: Session, agentConfig: AgentConfig, styles: Record<string, number>, createRun: (input: any) => Promise<void>, cancelRun: () => Promise<void>, isRunning: boolean }) {
+function InputForm({ session, agentConfig, styles, sendMessage, cancelRun, isRunning }: { session: Session, agentConfig: AgentConfig, styles: Record<string, number>, sendMessage: SendMessageFunction, cancelRun: () => Promise<void>, isRunning: boolean }) {
     // const lastRun = getLastRun(session)
 
-    const submit2 = async (items: any[]) => {
+    const submit = async (input: any) => {
         try {
-            await createRun(items[0]);
+            await sendMessage(input);
         } catch (error: any) {
             console.error('Error creating run:', error);
             toast.error(`Error: "${error.message}". Check console.`);
@@ -590,7 +730,7 @@ function InputForm({ session, agentConfig, styles, createRun, cancelRun, isRunni
                 <div>
                     <InputComponent
                         cancel={cancelRun}
-                        submit2={submit2}
+                        sendMessage={submit}
                         isRunning={isRunning}
                         session={session}
                         token={session.user.token}
@@ -623,17 +763,16 @@ export const sessionRoute: RouteObject = {
 
 type RunFooterProps = {
     session: Session,
-    commentsAndScores: CommentsThreadData,
     listParams: ReturnType<typeof getListParams>,
     isSelected: boolean,
     isSmallSize: boolean,
-    isLastRunItem: boolean,
-    run: RunBase
+    commentsAndScores?: CommentsThreadData,
+    runId?: string
 }
 
 
 function RunFooter(props: RunFooterProps) {
-    const { commentsAndScores: { target, comments, scores = [], scoreConfigs = [] }, isSmallSize, isLastRunItem, run, session, listParams } = props;
+    const { commentsAndScores: { target, comments, scores = [], scoreConfigs = [] }, isSmallSize, runId, session, listParams } = props;
     const [scoreDialogOpen, setScoreDialogOpen] = useState(false);
 
     if (run.status === "in_progress") {

@@ -43,8 +43,6 @@ export async function saveData(
       });
     }
 
-    conn.state.message.metadata
-
     await saveData(conn, {
       type: 'metadata',
       metadata: {

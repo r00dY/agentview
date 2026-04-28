@@ -25,7 +25,7 @@ function mapAgent(agent: AgentConfig): BaseAgentConfig {
       }),
       displayComponent: userMessage.displayComponent// ?? DefaultUserMessageDisplayComponent
     },
-    output: assistantMessage.parts.map((part) => ({
+    output: (assistantMessage.parts ?? []).map((part) => ({
       schema: z.looseObject({
         type: z.literal(part.type),
       }),
@@ -42,3 +42,4 @@ function mapAgent(agent: AgentConfig): BaseAgentConfig {
     runs: [run],
   };
 }
+
