@@ -231,10 +231,20 @@ export function UserMessageInput(props: { isRunning: boolean, onCancel: () => vo
 
     return <form onSubmit={(e) => {
         e.preventDefault();
+        if (value.trim() === "") return;
         props.onSubmit(value);
+        setValue("");
     }}>
         <InputGroup>
-            <InputGroupTextarea placeholder={props.placeholder ?? "Enter your message..."} rows={2} className="min-h-0 pb-0 md:text-md" value={value} onChange={(e) => setValue(e.target.value)} />
+            <InputGroupTextarea placeholder={props.placeholder ?? "Enter your message..."} rows={2} className="min-h-0 pb-0 md:text-md" value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        if (value.trim() !== "" && !props.isRunning) {
+                            props.onSubmit(value);
+                            setValue("");
+                        }
+                    }
+                }} />
 
             <InputGroupAddon align="block-end">
                 <InputGroupButton

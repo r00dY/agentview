@@ -226,10 +226,10 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
      * Build the wall
      */
 
-    console.log('#########')
-    console.log(JSON.parse(JSON.stringify(messages, null, 2)));
+    // console.log('#########')
+    // console.log(JSON.parse(JSON.stringify(messages, null, 2)));
 
-    console.log('error', error);
+    // console.log('error', error);
 
     // return <div>dupa</div>
 
@@ -274,15 +274,15 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                         <UserMessage>{channelMessage.text}</UserMessage>
                     </div>
 
-                    // const commentsAndScores: CommentsThreadData = {
-                    //     target: { sessionId: session.id, runId: _run.id, channelMessageId: channelMessage.id },
-                    //     comments: props.comments.filter((c) => c.channelMessageId === channelMessage.id),
-                    // }
+                    const commentsAndScores: CommentsThreadData | undefined = run && {
+                        target: { sessionId: session.id, runId: run.id, channelMessageId: channelMessage.id },
+                        comments: props.comments.filter((c) => c.channelMessageId === channelMessage.id),
+                    }
 
                     wallItems.push({
                         id: channelMessage.id,
                         element,
-                        // commentsAndScores,
+                        commentsAndScores,
                         run
                     })
                 }
@@ -290,6 +290,12 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         }
         else if (message.role === "assistant") {
             const isLast = index === messages.length - 1;
+
+            const stepParts : any[] = []
+            const outputParts : any[] = []
+
+            
+            
 
             // all parts for now (separate wall items)
             for (const [index, part] of message.parts.entries()) {
