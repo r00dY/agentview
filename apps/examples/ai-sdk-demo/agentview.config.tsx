@@ -67,28 +67,28 @@ export default defineConfig({
           value: ({ session }) => session?.metadata?.userLocation
         }
       ],
-      inputComponent: ({ sendMessage, cancel, isRunning, session, token }) => <UserMessageInput
-        onSubmit={(val) => {
-          sendMessage({
-            type: "message",
-            role: "user",
-            parts: [
-              {
-                type: "text",
-                text: val,
-              }
-            ]
-          })
-        }}
-        onCancel={cancel}
-        isRunning={isRunning}
-      />,
+      // inputComponent: ({ sendMessage, cancel, isRunning, session, token }) => <UserMessageInput
+      //   onSubmit={(val) => {
+      //     sendMessage({
+      //       type: "message",
+      //       role: "user",
+      //       parts: [
+      //         {
+      //           type: "text",
+      //           text: val,
+      //         }
+      //       ]
+      //     })
+      //   }}
+      //   onCancel={cancel}
+      //   isRunning={isRunning}
+      // />,
 
-      userMessage: {
-        displayComponent: ({ item }) => {
-          return <UserMessage>{item.parts?.map((part: any) => part.text).join("\n\n")}</UserMessage>;
-        },
-      },
+      // userMessage: {
+      //   displayComponent: ({ item }) => {
+      //     return <UserMessage>{item.parts?.map((part: any) => part.text).join("\n\n")}</UserMessage>;
+      //   },
+      // },
 
       assistantMessage: {
         // parts: [

@@ -2,7 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { type ChannelMessage, type CommentMessage, type InputTarget, type StandardRun, type Score, type Session, type SessionBase, type SessionItem, type SessionsStats, type SessionStats, type StandardSession, type RunBase } from "agentview/apiTypes";
 import { findAgentConfig, findAgentConfigBySession, findItemConfigById, findRunConfig, requireAgentConfigByName, requireAgentConfigBySession } from "agentview/baseConfigUtils";
 import { enhanceSession, getActiveRuns, getAllSessionItems, getLastRun } from "agentview/sessionUtils";
-import type { AgentConfig, ScoreConfig, SessionItemConfig, SessionItemDisplayComponentProps } from "../types";
+import type { AgentConfig, AgentInputComponent, ScoreConfig, SessionItemConfig, SessionItemDisplayComponentProps } from "../types";
 import { AlertCircleIcon, Brain, ChevronDown, CircleGauge, InfoIcon, Loader2, Lock, MessageCirclePlus, UsersIcon, Wrench } from "lucide-react";
 import { useEffect, useLayoutEffect, useOptimistic, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -19,7 +19,7 @@ import { ItemsWithCommentsLayout } from "../components/internal/ItemsWithComment
 import { Loader } from "../components/internal/Loader";
 import { Pill } from "../components/Pill";
 import { PropertyList, PropertyListItem, PropertyListTextValue, PropertyListTitle } from "../components/PropertyList";
-import { AssistantMessage, Step, StepContent, StepTitle, UserMessage } from "../components/session-item";
+import { AssistantMessage, Step, StepContent, StepTitle, UserMessage, UserMessageInput } from "../components/session-item";
 import { Alert, AlertDescription } from "../components/ui/alert";
 import { Button } from "../components/ui/button";
 import { Form as HookForm } from "../components/ui/form";
@@ -249,21 +249,20 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 
         if (message.role === "user") {
             if (session.channel.type === 'api') {
-                const Component = agentConfig?.userMessage.displayComponent ?? DefaultInputComponent;
+                const Component = agentConfig?.userMessage?.displayComponent ?? DefaultUserMessageComponent;
                 const element = <div className="pl-[10%] relative">
                     <Component item={message} session={session} />
                 </div>
 
-                // // no scores for input session items for now
-                // const commentsAndScores: CommentsThreadData = {
-                //     target: { sessionId: session.id, runId: _run.id, sessionItemId: _item.id },
-                //     comments: props.comments.filter((c) => c.sessionItemId === _item.id),
-                // };
+                const commentsAndScores: CommentsThreadData | undefined = run && {
+                    target: { sessionId: session.id, runId: run.id, sessionItemIndex: 0 },
+                    comments: props.comments.filter((c) => c.sessionItemIndex === 0),
+                };
 
                 wallItems.push({
                     id: message.id,
                     element,
-                    // commentsAndScores,
+                    commentsAndScores,
                     run
                 })
             }
@@ -689,8 +688,9 @@ function ShareForm({ session }: { session: SessionBase }) {
     </fetcher.Form>
 }
 
-function DefaultInputComponent({ item }: SessionItemDisplayComponentProps) {
-    return <UserMessage>{item}</UserMessage>
+
+function DefaultUserMessageComponent({ item }: SessionItemDisplayComponentProps) {
+    return <UserMessage>{item.parts?.filter((part: any) => part.type === "text").map((part: any) => part.text).join("\n\n")}</UserMessage>
 }
 
 function DefaultAssistantComponent({ item }: SessionItemDisplayComponentProps) {
@@ -729,18 +729,21 @@ function DefaultPartComponent({ item }: SessionItemDisplayComponentProps) {
     </Step>
 }
 
-function DefaultToolComponent({ item, resultItem }: SessionItemDisplayComponentProps) {
-    const result = {
-        call: item,
-        result: resultItem
+const DefaultUserInputComponent : AgentInputComponent = ({ session, isRunning, cancel, sendMessage }) => {
+    const submit = async (stringVal: string) => {
+        await sendMessage({
+            type: "message",
+            role: "user",
+            parts: [
+                {
+                    type: "text",
+                    text: stringVal,
+                }
+            ]
+        })
     }
 
-    return <Step>
-        <StepContent>
-            {/* @ts-ignore */}
-            {result}
-        </StepContent>
-    </Step>
+    return <UserMessageInput isRunning={isRunning} onCancel={cancel} onSubmit={submit} />
 }
 
 function InputForm({ session, agentConfig, styles, sendMessage, cancelRun, isRunning }: { session: Session, agentConfig: AgentConfig, styles: Record<string, number>, sendMessage: SendMessageFunction, cancelRun: () => Promise<void>, isRunning: boolean }) {
@@ -755,10 +758,11 @@ function InputForm({ session, agentConfig, styles, sendMessage, cancelRun, isRun
         }
     }
 
-    const InputComponent = agentConfig.inputComponent;
-    if (InputComponent === null) {
-        return null;
-    }
+    const InputComponent = agentConfig.inputComponent ?? DefaultUserInputComponent;
+
+    // if (InputComponent === null) {
+    //     return null;
+    // }
 
     return <div className="border-t">
         <div className={`p-6 pr-0`} style={{ maxWidth: `${styles.textWidth + styles.padding}px` }}>
@@ -771,7 +775,7 @@ function InputForm({ session, agentConfig, styles, sendMessage, cancelRun, isRun
                         sendMessage={submit}
                         isRunning={isRunning}
                         session={session}
-                        token={session.user.token}
+                        // token={session.user.token}
                     />
                 </div>
             )}
@@ -823,13 +827,14 @@ function RunFooter(props: RunFooterProps) {
     let blocks: React.ReactNode[] = [];
 
     // Error
-    if (run.status === "failed" || run.status === "cancelled") {
-        const errorMessage = run.status === "failed" ?
-            (run.failReason?.message ?? "Failed for unknown reason") :
-            "Cancelled by user";
-
+    if (run.status === "failed") {
         blocks.push(<div className="text-md mt-6 mb-3 text-red-500">
-            <span className="">{errorMessage}</span>
+            <span className="">{ run.failReason?.message ?? "Failed for unknown reason" }</span>
+        </div>);
+    }
+    else if (run.status === "cancelled") {
+        blocks.push(<div className="text-md mt-6 mb-3 text-muted-foreground italic">
+            <span className="">Cancelled by user.</span>
         </div>);
     }
 

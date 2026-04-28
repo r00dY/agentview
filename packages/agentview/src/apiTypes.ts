@@ -5,6 +5,7 @@ export const InputTargetSchema = z.object({
   runId: z.string().optional(),
   channelMessageId: z.string().optional(),
   sessionItemId: z.string().optional(),
+  sessionItemIndex: z.number().int().min(0).optional(),
 })
 export type InputTarget = z.infer<typeof InputTargetSchema>
 
@@ -47,6 +48,7 @@ export const ScoreSchema = z.object({
 
   sessionId: z.string(),
   sessionItemId: z.string().nullable(),
+  sessionItemIndex: z.number().int().min(0).nullable(),
   channelMessageId: z.string().nullable(),
   runId: z.string().nullable(),
 
@@ -77,6 +79,7 @@ export const CommentMessageSchema = z.object({
 
   sessionId: z.string(),
   sessionItemId: z.string().nullable(),
+  sessionItemIndex: z.number().int().min(0).nullable(),
   runId: z.string().nullable(),
   channelMessageId: z.string().nullable(),
 

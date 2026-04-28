@@ -23,17 +23,17 @@ function mapAgent(agent: AgentConfig): BaseAgentConfig {
           type: z.string(),
         })),
       }),
-      displayComponent: userMessage.displayComponent// ?? DefaultUserMessageDisplayComponent
+      // displayComponent: userMessage?.displayComponent// ?? DefaultUserMessageDisplayComponent
     },
-    output: (assistantMessage.parts ?? []).map((part) => ({
+    output: (assistantMessage?.parts ?? []).map((part) => ({
       schema: z.looseObject({
         type: z.literal(part.type),
       }),
-      displayComponent: part.displayComponent
+      // displayComponent: part.displayComponent
     })),
-    scores: assistantMessage.scores,
-    displayProperties: assistantMessage.displayProperties,
-    disableLike: assistantMessage.disableLike,
+    scores: assistantMessage?.scores,
+    // displayProperties: assistantMessage?.displayProperties,
+    disableLike: assistantMessage?.disableLike,
     validateOutput: false,
   };
 

@@ -80,6 +80,52 @@ export function targetFilter(
 /** Derive the session + item + runId + channelMessageId from a comment target for inbox updates */
 export async function resolveTarget(tx: Transaction, target: InputTarget): Promise<Target> {
 
+    if (target.sessionItemId !== undefined && target.sessionItemIndex !== undefined) {
+        throw new AgentViewError("Cannot specify both sessionItemId and sessionItemIndex", 400);
+    }
+
+    if (typeof target.sessionItemIndex === 'number') {
+        if (typeof target.runId !== 'string') {
+            throw new AgentViewError("runId is required when using sessionItemIndex", 400);
+        }
+
+        const run = await tx.query.runs.findFirst({
+            where: eq(runs.id, target.runId),
+        });
+        if (!run) {
+            throw new AgentViewError("Run not found", 404);
+        }
+
+        if (target.sessionId && run.sessionId !== target.sessionId) {
+            throw new AgentViewError("Run does not belong to the session", 400);
+        }
+
+        const items = await tx.query.sessionItems.findMany({
+            where: and(
+                eq(sessionItems.runId, target.runId),
+                eq(sessionItems.isState, false),
+            ),
+            orderBy: (si, { asc }) => [asc(si.sortOrder)],
+            offset: target.sessionItemIndex,
+            limit: 1,
+        });
+
+        if (!items.length) {
+            throw new AgentViewError(`Session item not found at index ${target.sessionItemIndex}`, 404);
+        }
+
+        const sessionItem = items[0];
+
+        return {
+            type: 'sessionItem',
+            ids: {
+                sessionId: sessionItem.sessionId,
+                runId: sessionItem.runId,
+                sessionItemId: sessionItem.id,
+            }
+        };
+    }
+
     if (typeof target.sessionItemId === 'string') {
         const sessionItem = await tx.query.sessionItems.findFirst({
             where: eq(sessionItems.id, target.sessionItemId),

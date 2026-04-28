@@ -309,9 +309,6 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
         })
       }
 
-
-
-
       // The only case when we push to buffer ourselves.
       if (streamFinishReason.type === 'abort') {
         pushToBuffer(conn, JSON.stringify({ type: 'abort', reason: 'Cancelled by user' }));

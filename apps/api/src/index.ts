@@ -530,6 +530,16 @@ app.openapi(sessionPATCHRoute, async (c) => {
 })
 
 
+function buildSessionItemIndexMap(session: StandardSession): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const run of session.runs) {
+    for (let i = 0; i < run.sessionItems.length; i++) {
+      map.set(run.sessionItems[i].id, i);
+    }
+  }
+  return map;
+}
+
 const sessionCommentsGETRoute = createRoute({
   method: 'get',
   path: '/api/sessions/{session_id}/comments',
@@ -565,7 +575,13 @@ app.openapi(sessionCommentsGETRoute, async (c) => {
       }
     });
 
-    return c.json(comments, 200);
+    const indexMap = buildSessionItemIndexMap(session);
+
+    return c.json(comments.map(c => ({
+      ...c,
+      sessionItemIndex: c.sessionItemId ? indexMap.get(c.sessionItemId) ?? null : null,
+      score: c.score ? { ...c.score, sessionItemIndex: c.score.sessionItemId ? indexMap.get(c.score.sessionItemId) ?? null : null } : null,
+    })), 200);
   })
 })
 
@@ -601,7 +617,12 @@ app.openapi(sessionScoresGETRoute, async (c) => {
       orderBy: (score, { asc }) => [asc(score.createdAt)],
     });
 
-    return c.json(sessionScores, 200);
+    const indexMap = buildSessionItemIndexMap(session);
+
+    return c.json(sessionScores.map(s => ({
+      ...s,
+      sessionItemIndex: s.sessionItemId ? indexMap.get(s.sessionItemId) ?? null : null,
+    })), 200);
   })
 })
 

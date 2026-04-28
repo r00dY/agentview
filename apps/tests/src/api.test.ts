@@ -2678,6 +2678,7 @@ describe('API', () => {
       expect(comments.length).toBe(1);
       expect(comments[0].content).toBe("Great output!");
       expect(comments[0].sessionItemId).toBe(outputItem.id);
+      expect(comments[0].sessionItemIndex).toBe(1); // output is 2nd item (index 1)
       expect(comments[0].runId).toBe(run.id);
       expect(comments[0].sessionId).toBe(session.id);
       expect(comments[0].channelMessageId).toBeNull();
@@ -2714,6 +2715,7 @@ describe('API', () => {
       expect(runComment).toBeDefined();
       expect(runComment!.content).toBe("Run comment");
       expect(runComment!.sessionItemId).toBeNull();
+      expect(runComment!.sessionItemIndex).toBeNull();
     });
 
     test("incorrect target throws", async () => {
@@ -2856,6 +2858,65 @@ describe('API', () => {
       await expectToFail(
         av.scores.update({ sessionItemId: outputItem.id, scores: [{ name: "quality", value: "invalid" }] }),
         400
+      );
+    });
+
+    test("target session item by index", async () => {
+      await updateConfig({
+        itemScores: [{ name: "quality", schema: z.enum(["good", "bad"]) }],
+      });
+
+      const session = await createSession();
+      const run = await av.createManualRun({ sessionId: session.id, items: [baseInput] });
+      await av.updateManualRun({ id: run.id, items: [baseOutput], status: "completed" });
+
+      const updatedSession = await av.getSession({ id: session.id });
+      const items = updatedSession.runs[0].sessionItems;
+      const inputItem = items.find(i => i.type === "input")!;
+      const outputItem = items.find(i => i.type === "output")!;
+
+      // Comment on item by index 0 (input)
+      await av.comments.create({ runId: run.id, sessionItemIndex: 0, content: "Comment on input" });
+
+      let comments = await av.comments.list({ sessionId: session.id });
+      expect(comments.length).toBe(1);
+      expect(comments[0].sessionItemId).toBe(inputItem.id);
+      expect(comments[0].sessionItemIndex).toBe(0);
+
+      // Score on item by index 1 (output)
+      await av.scores.update({ runId: run.id, sessionItemIndex: 1, scores: [{ name: "quality", value: "good" }] });
+
+      const sessionScores = await av.scores.list({ sessionId: session.id });
+      expect(sessionScores.length).toBe(1);
+      expect(sessionScores[0].sessionItemId).toBe(outputItem.id);
+      expect(sessionScores[0].sessionItemIndex).toBe(1);
+    });
+
+    test("sessionItemIndex error cases", async () => {
+      await updateConfig();
+
+      const session = await createSession();
+      const run = await av.createManualRun({ sessionId: session.id, items: [baseInput, baseOutput], status: "completed" });
+
+      const updatedSession = await av.getSession({ id: session.id });
+      const inputItem = updatedSession.runs[0].sessionItems.find(i => i.type === "input")!;
+
+      // Both sessionItemId and sessionItemIndex
+      await expectToFail(
+        av.comments.create({ sessionItemId: inputItem.id, sessionItemIndex: 0, runId: run.id, content: "both" }),
+        400
+      );
+
+      // sessionItemIndex without runId
+      await expectToFail(
+        av.comments.create({ sessionItemIndex: 0, content: "no run" }),
+        400
+      );
+
+      // Out of bounds index
+      await expectToFail(
+        av.comments.create({ runId: run.id, sessionItemIndex: 999, content: "oob" }),
+        404
       );
     });
 

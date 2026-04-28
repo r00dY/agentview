@@ -124,10 +124,10 @@ export interface AgentConfig extends SharedAgentConfig {
   inputComponent?: AgentInputComponent;
 
   // custom fields for ai-sdk
-  userMessage: {
+  userMessage?: {
     displayComponent?: React.ComponentType<any>;
   }
-  assistantMessage: {
+  assistantMessage?: {
       parts?: Array<{
           type: string,
           displayComponent?: React.ComponentType<any>
