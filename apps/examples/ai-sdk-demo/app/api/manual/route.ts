@@ -1,10 +1,18 @@
 export async function POST() {
+
+  return new Response('Something went wrong', {
+    status: 400,
+    headers: { 'Content-Type': 'text/plain' },
+  });
+
   const encoder = new TextEncoder();
   const messageId = `msg_${crypto.randomUUID()}`;
   const textId1 = `txt_${crypto.randomUUID()}`;
   const textId2 = `txt_${crypto.randomUUID()}`;
 
   const parts = [
+    { type: "data-xxx", data: { whatever: "blablabla" } },
+
     { type: "start", messageId },
     { type: "start-step" },
     // Data parts
@@ -15,13 +23,13 @@ export async function POST() {
     { type: "text-delta", id: textId1, delta: "Here is the " },
     { type: "text-delta", id: textId1, delta: "first text part." },
     { type: "text-end", id: textId1 },
-    { type: "error", errorText: "gówno"},
+    // { type: "error", errorText: "gówno"},
     // Second text part
     { type: "text-start", id: textId2 },
     { type: "text-delta", id: textId2, delta: "And here is " },
     { type: "text-delta", id: textId2, delta: "the second text part." },
     { type: "text-end", id: textId2 },
-    { type: "custom", kind: "dupa.dupa" },
+    // { type: "custom", kind: "dupa.dupa" },
     { type: "finish-step" },
     { type: "finish" },
   ];
@@ -32,7 +40,7 @@ export async function POST() {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(part)}\n\n`));
         await new Promise((r) => setTimeout(r, 100));
       }
-      // controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       controller.close();
     },
   });

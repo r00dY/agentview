@@ -72,6 +72,9 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
                 _agentview: {
                     ...assistantMessageMetadata?._agentview,
                     channelMessage: run.channelMessages.find(cm => cm.direction === 'outgoing'),
+                    id: run.id,
+                    status: run.status,
+                    failReason: run.failReason,
                 }
             },
             role: 'assistant',

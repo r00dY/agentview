@@ -14,7 +14,7 @@ export default defineConfig({
     {
       name: "weather-chat",
       version: "0.0.2",
-      url: "http://localhost:3000/api/chat",
+      url: "http://localhost:3000/api/manual",
       adapter: "ai-sdk",
 
       metadata: {
@@ -37,7 +37,6 @@ export default defineConfig({
           "Paris",
           "Warsaw"
         ];
-
 
         return (
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -101,7 +100,7 @@ export default defineConfig({
         //   },
         // ],
 
-        
+
         scores: [
           select({
             name: "forecast_accuracy",

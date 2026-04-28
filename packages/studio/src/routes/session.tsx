@@ -79,11 +79,11 @@ function Component() {
 
     // Stage 2: Have sessionBase but not full data - show header only
     if (!session || !comments || !scores) {
-        return <SessionPageSkeleton sessionBase={sessionBase!} />;
+        return <SessionPageSkeleton sessionBase={sessionBase!} key={sessionBase!.id}/>;
     }
 
     // Stage 3: Full data available
-    return <SessionPage session={session} comments={comments} scores={scores} sessionStats={sessionStats} />;
+    return <SessionPage session={session} comments={comments} scores={scores} sessionStats={sessionStats} key={session.id} />;
 }
 
 function SessionShell({
@@ -157,6 +157,22 @@ type SendMessageFunction = ReturnType<typeof useChat>['sendMessage'];
 // }
 
 
+type WallItem = {
+    id: string,
+    element: React.ReactNode,
+    commentsAndScores?: CommentsThreadData,
+
+    // run settings
+    run?: {
+        id: string,
+        status: string,
+        failReason: any,
+    }
+
+    // is last run item -> show run footer
+    showRunFooter?: boolean
+};
+
 
 function SessionPage(props: { session: Session, comments: CommentMessage[], scores: Score[], sessionStats?: SessionStats }) {
     const loaderData = useLoaderData<typeof loader>();
@@ -173,7 +189,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         )?.unseenEvents;
     };
 
-    const { messages, sendMessage, status, error, stop } = useChat({
+    const { messages, sendMessage, status, error } = useChat({
         id: session.id,
         generateId: () => crypto.randomUUID(),
         messages: session.messages,
@@ -181,54 +197,57 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         transport: agentview().asUser({ id: session.user.id }).createTransport()
     });
 
-
-
-    /**
-     * TODO:
-     * 
-     * Session-level error is BAD ABSTRACTION IF IT'S NOT HOOK.
-     * 
-     * Session might come with error. Then useChat creates "live error". Then it might actually ERASE this error (by regenerate or whatever). 
-     * 
-     * Then OLD SESSION ERROR STAYS. It makes zero fucking sense.
-     */
-    let finalError : { message: string, [key: string]: any } | undefined = undefined;
-    if (error) {
-        finalError = {
-            message: error.message,
-        };
-    }
-    else if (session.status === 'failed') {
-        finalError = session.failReason;
-    }
+    const isRunning = (status === 'streaming' || status === 'submitted');
 
     /**
-     * Build wall
+     * ERROR HANDLING
+     * 
+     * There are 2 types of errors:
+     * - error while streaming after run was created (assistant message exists)
+     * - error *before* streaming and before run was created (no run, therefore no assistant message).
+     * 
+     * Streaming errors:
+     * 
+     * They're stored in assistant message metadata. We use this info OVER the `error` from `useChat`.
+     * It's because when app is reloaded the `error` is gone anyway, and if we use the one from assistant message metadata, it's still there.
+     * Also, we might actually show errors in previous messages, if the session was continued with error run (or aborted).
+     * 
+     * Connection errors:
+     * 
+     * Here we don't have any other way than use `error` from `useChat`. `useChat` optimistically adds user message, and we can't override this.
+     * The UX is not super good... after reload the "temporary" user message disappears which I don't really like.
+     * But for now it's good enough.
      */
 
-    console.log(session);
+    const userMessageError = (messages.length > 0 && messages[messages.length - 1]?.role === "user") ? error : undefined;
+
+    
+    /**
+     * Build the wall
+     */
+
+    console.log('#########')
+    console.log(JSON.parse(JSON.stringify(messages, null, 2)));
+
+    console.log('error', error);
 
     // return <div>dupa</div>
 
     const agentConfig = requireAgentConfigBySession(config, session);
 
-    type WallItem = {
-        id: string,
-        element: React.ReactNode,
-        commentsAndScores?: CommentsThreadData,
-        isLastRunItem?: boolean
-        runId?: string
-    };
-
     const wallItems: WallItem[] = [];
 
     messages.forEach((message, index) => {
 
-        if (message.role === "user") {
-            // @ts-ignore
-            // const { _item, _run, _channelMessages, ...message } = _message;
-            const runId = messages[index + 1]?.metadata?._agentview?.runId; // next assistant message has run info
+        const runMetadata = message.role === "user" ? messages[index + 1]?.metadata?._agentview : message.metadata?._agentview;
+        const run = runMetadata?.id ? {
+            id: runMetadata.id,
+            status: runMetadata.status,
+            failReason: runMetadata.failReason,
+        } : undefined;
 
+
+        if (message.role === "user") {
             if (session.channel.type === 'api') {
                 const Component = agentConfig?.userMessage.displayComponent ?? DefaultInputComponent;
                 const element = <div className="pl-[10%] relative">
@@ -245,7 +264,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                     id: message.id,
                     element,
                     // commentsAndScores,
-                    runId
+                    run
                 })
             }
             else {
@@ -265,15 +284,13 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                         id: channelMessage.id,
                         element,
                         // commentsAndScores,
-                        runId
+                        run
                     })
                 }
             }
         }
         else if (message.role === "assistant") {
-            const isInProgress = index === messages.length - 1 && (status === 'streaming' || status === 'submitted');
-
-            const runId = message.metadata?._agentview?.runId;
+            const isLast = index === messages.length - 1;
 
             // all parts for now (separate wall items)
             for (const [index, part] of message.parts.entries()) {
@@ -319,9 +336,26 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                     id: message.id + "." + index,
                     element,
                     // commentsAndScores,
-                    runId,
+                    run,
                 })
             }
+
+            /**
+             * Final item (run level)
+             */
+            const status = message.metadata?._agentview?.status;
+            const failReason = message.metadata?._agentview?.failReason;
+
+            const showRunFooter = !isLast || !isRunning
+
+            wallItems.push({
+                id: message.id,
+                element: <div className="text-blue-500">[[[{ status }{ failReason && `: ${failReason.message}` }]]]</div>,
+                run,
+                // status: message.metadata?._agentview?.status,
+                // failReason: message.metadata?._agentview?.failReason,
+                showRunFooter
+            })
 
 
 
@@ -401,7 +435,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         alert('cancelRun');
     }
 
-    const isRunning = props.session.status == 'in_progress';
+    // const isRunning = props.session.status == 'in_progress';
 
     const listParams = loaderData.listParams;
     // const activeItems = getAllSessionItems(session, { activeOnly: true })
@@ -486,8 +520,6 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         };
     }
 
-    // console.log(session);
-
     const rerender = useRerender();
 
     useLayoutEffect(() => {
@@ -513,14 +545,16 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
             outletContext={{ session }}
         >
             <div ref={bodyRef}>
-                <ItemsWithCommentsLayout items={wallItems.map((wallItem) => {
-                    const { id, element, commentsAndScores, isLastRunItem, runId } = wallItem;
+                <ItemsWithCommentsLayout items={wallItems.map((wallItem, index) => {
+                    const isLastWallItem = index === wallItems.length - 1;
+
+                    const { id, element, commentsAndScores, showRunFooter, run } = wallItem;
 
                     const isSelected = selectedItemId === wallItem.id;
                     const hasComments = commentsAndScores ? commentsAndScores.comments.length > 0 : false;
 
                     return {
-                        id: wallItem.id,
+                        id,
                         itemComponent: <div
                             className={`relative group`}
                         >
@@ -538,18 +572,21 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                     </ErrorBoundary>
                                 </div>
 
-                                { session.status === 'in_progress' && <div className="text-muted-foreground mt-6">
+                                { isLastWallItem && isRunning && <div className="text-muted-foreground mt-6">
                                     <Loader />
                                 </div> }
 
-                                {session.status !== 'in_progress' && isLastRunItem && <RunFooter
+                                { isLastWallItem && userMessageError && <div className="text-muted-foreground mt-6">
+                                    <span className="text-red-500">{userMessageError.message}</span>
+                                </div> }
+
+                                { showRunFooter && <RunFooter
                                     session={session}
-                                    runId={runId}
+                                    run={run}
                                     commentsAndScores={commentsAndScores}
                                     listParams={listParams}
                                     isSelected={isSelected}
                                     isSmallSize={styles.isSmallSize}
-                                    isLastRunItem={isLastRunItem}
                                 />}
 
                             </div>
@@ -766,28 +803,26 @@ type RunFooterProps = {
     listParams: ReturnType<typeof getListParams>,
     isSelected: boolean,
     isSmallSize: boolean,
+
     commentsAndScores?: CommentsThreadData,
-    runId?: string
+    run: WallItem['run']
 }
 
 
+// : { target, comments, scores = [], scoreConfigs = [] }
+
 function RunFooter(props: RunFooterProps) {
-    const { commentsAndScores: { target, comments, scores = [], scoreConfigs = [] }, isSmallSize, runId, session, listParams } = props;
+    const { commentsAndScores, isSmallSize, run, session, listParams } = props;
     const [scoreDialogOpen, setScoreDialogOpen] = useState(false);
 
-    if (run.status === "in_progress") {
-        return <div className="text-muted-foreground mt-6">
-            <Loader />
-        </div>
+    if (!run) {
+        throw new Error("Run is required in RunFooter");
     }
-
-    const actionBarScores = scoreConfigs.filter(scoreConfig => scoreConfig.actionBarComponent);
-    const remainingScores = scoreConfigs.filter(scoreConfig => !scoreConfig.actionBarComponent);
 
     let blocks: React.ReactNode[] = [];
 
     // Error
-    if (isLastRunItem && (run.status === "failed" || run.status === "cancelled")) {
+    if (run.status === "failed" || run.status === "cancelled") {
         const errorMessage = run.status === "failed" ?
             (run.failReason?.message ?? "Failed for unknown reason") :
             "Cancelled by user";
@@ -800,32 +835,38 @@ function RunFooter(props: RunFooterProps) {
     // Toolbar
     const toolbarBlocks: React.ReactNode[] = [];
 
-    if (actionBarScores.length > 0) {
-        toolbarBlocks.push(...actionBarScores.map((scoreConfig) => (
-            <ActionBarScoreForm
+    if (commentsAndScores) {
+        const { target, comments, scores = [], scoreConfigs = [] } = commentsAndScores;
+
+        const actionBarScores = scoreConfigs.filter(scoreConfig => scoreConfig.actionBarComponent);
+        const remainingScores = scoreConfigs.filter(scoreConfig => !scoreConfig.actionBarComponent);
+    
+        if (actionBarScores.length > 0) {
+            toolbarBlocks.push(...actionBarScores.map((scoreConfig) => (
+                <ActionBarScoreForm
+                    scores={scores}
+                    key={scoreConfig.name}
+                    target={target}
+                    scoreConfig={scoreConfig}
+                />
+            )));
+        }
+    
+        if (remainingScores.length > 0) {
+            toolbarBlocks.push(<ScoreDialog
                 scores={scores}
-                key={scoreConfig.name}
                 target={target}
-                scoreConfig={scoreConfig}
-            />
-        )));
+                open={scoreDialogOpen}
+                onOpenChange={setScoreDialogOpen}
+                scoreConfigs={remainingScores}
+            />);
+        }
+    
     }
 
-    if (remainingScores.length > 0) {
-        toolbarBlocks.push(<ScoreDialog
-            scores={scores}
-            target={target}
-            open={scoreDialogOpen}
-            onOpenChange={setScoreDialogOpen}
-            scoreConfigs={remainingScores}
-        />);
-    }
-
-    if (run.status !== "in_progress" && isLastRunItem) {
-        toolbarBlocks.push(<Button variant="ghost" size="sm" asChild>
-            <Link to={`/sessions/${session.id}/runs/${run.id}?${toQueryParams(listParams)}`}><InfoIcon className="size-4" />Run</Link>
-        </Button>);
-    }
+    toolbarBlocks.push(<Button variant="ghost" size="sm" asChild>
+        <Link to={`/sessions/${session.id}/runs/${run.id}?${toQueryParams(listParams)}`}><InfoIcon className="size-4" />Run</Link>
+    </Button>);
 
     if (toolbarBlocks.length > 0) {
         blocks.push(<div>

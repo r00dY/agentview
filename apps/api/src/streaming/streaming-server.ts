@@ -178,7 +178,8 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
           // add runId to message metadata
           if (chunk.type === 'start') {
             sendInternalMetadata({
-              runId
+              id: runId,
+              status: 'in_progress'
             })
           }
 
@@ -279,10 +280,37 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
         streamFinishReason = { type: 'error', code: "STREAM_INTERNAL_ERROR", message: "Unknown finish reason. It's internal error, please report." };
       }
 
-      // // Update last metadata (finishReason)
-      // sendInternalMetadata({
-      //   finishReason: streamFinishReason
-      // })
+      /**
+       * Let's also send updated status in metadata 
+       * 
+       * IMPORTANT: WE NEED TO ADD 'id' here!!!
+       * 
+       * It's a cleanup phase which *always runs* (unless the machine goes down), but we can't assume 'start' was already sent.
+       * It means that there is a scenario where the front-end doesn't have runId in the metadata. This prevents this scenario.
+       */
+      if (streamFinishReason.type === 'complete') {
+        sendInternalMetadata({
+          id: runId,
+          status: 'completed'
+        })
+      }
+      else if (streamFinishReason.type === 'abort') {
+        sendInternalMetadata({
+          id: runId,
+          status: 'cancelled'
+        })
+      }
+      else {
+        const { type, ...failReason } = streamFinishReason;
+        sendInternalMetadata({
+          id: runId,
+          status: 'failed',
+          failReason
+        })
+      }
+
+
+
 
       // The only case when we push to buffer ourselves.
       if (streamFinishReason.type === 'abort') {
