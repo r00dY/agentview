@@ -12,7 +12,7 @@ export async function POST() {
 
   const DELTA = 100;
 
-  const deltasFor20s = Array.from({ length: 20 * 1000 / DELTA }, (_, i) => ({ type: "text-delta", id: textId1, delta: `.${i}` }));
+  const deltasFor20s = Array.from({ length: 20 * 1000 / DELTA }, (_, i) => ({ type: "text-delta", id: textId1, delta: `.${i} ` }));
 
   const parts = [
     { type: "data-xxx", data: { whatever: "blablabla" } },

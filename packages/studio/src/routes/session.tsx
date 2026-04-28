@@ -79,7 +79,7 @@ function Component() {
 
     // Stage 2: Have sessionBase but not full data - show header only
     if (!session || !comments || !scores) {
-        return <SessionPageSkeleton sessionBase={sessionBase!} key={sessionBase!.id}/>;
+        return <SessionPageSkeleton sessionBase={sessionBase!} key={sessionBase!.id} />;
     }
 
     // Stage 3: Full data available
@@ -291,14 +291,44 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         else if (message.role === "assistant") {
             const isLast = index === messages.length - 1;
 
-            const stepParts : any[] = []
-            const outputParts : any[] = []
+            /**
+             * OUTPUT PARTS HEURISTICS 
+             *
+             * Here we need to split parts into step parts and output parts. There are 2 reasons for this:
+             * - scores belong to the run and should be displayed with comments in a single thread
+             * - we might collapse steps in the future and just show output (like ChatGPT / Claude)
+             * 
+             * Since in 99% of cases the output is single 'text' node (potentially with some data nodes), we can make it super simply.
+             * 
+             * Algorithm: we essentially look for the last "block" (after last step-start) and look for the first text part. That's the start of output.
+             * 
+             */
+            const stepParts: any[] = [];
+            const outputParts: any[] = [];
 
-            
-            
+            message.parts.forEach((part, index) => {
+                if (part.type === 'step-start' || part.type === 'reasoning') { // reasoning or step-start "resets" and pushes all speculated output parts into step parts
+                    stepParts.push(...outputParts);
+                    outputParts.length = 0;
+                    stepParts.push(part);
+                }
+                else if (outputParts.length === 0 && part.type !== 'text') {
+                    stepParts.push(part);
+                }
+                else {
+                    outputParts.push(part);
+                }
+            });
 
-            // all parts for now (separate wall items)
-            for (const [index, part] of message.parts.entries()) {
+            // const partsWithType = [
+            //     ...stepParts.map((part) => ({ type: 'item', part })),
+            //     ...outputParts.map((part) => ({ type: 'output', part })),
+            // ]
+
+            /**
+             * Generate component
+             */
+            const generateComponent = (part: any) => {
                 let DefaultComponent: React.ComponentType<SessionItemDisplayComponentProps> | null | undefined = undefined;
 
                 switch (part.type) {
@@ -310,9 +340,6 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                         break;
                     case "step-start":
                         DefaultComponent = null;
-                        break;
-                    case "image":
-                        DefaultComponent = DefaultToolPartComponent;
                         break;
                     default:
                         if (part.type.startsWith("tool-")) {
@@ -326,41 +353,112 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                 }
 
                 if (DefaultComponent === null) {
+                    return null;
+                }
+
+                return DefaultComponent;
+            }
+
+
+            // step parts (separate wall items)
+            for (const [index, part] of stepParts.entries()) {
+                const Component = /* load from agentConfig */ generateComponent(part);
+
+                if (Component === null) {
                     continue;
                 }
 
-                const Component = /* load from agentConfig */ DefaultComponent;
                 const element = <Component item={part} session={session} />
 
-                // const commentsAndScores: CommentsThreadData = {
-                //     target: { sessionId: session.id, runId, sessionItemId: _item.id },
-                //     comments: props.comments.filter((c) => c.sessionItemId === _item.id),
-                // };
+                let commentsAndScores: CommentsThreadData | undefined = run && {
+                    target: { sessionId: session.id, runId: run.id, sessionItemIndex: index + 1 },
+                    comments: props.comments.filter((c) => c.sessionItemIndex === index + 1),
+                };
 
                 wallItems.push({
                     id: message.id + "." + index,
                     element,
-                    // commentsAndScores,
+                    commentsAndScores,
                     run,
                 })
             }
 
-            /**
-             * Final item (run level)
-             */
-            const status = message.metadata?._agentview?.status;
-            const failReason = message.metadata?._agentview?.failReason;
+            // LAST ITEM - run level
+            let runCommentsAndScores: CommentsThreadData | undefined = undefined;
+            if (run) {
+                const runScoreConfigs = agentConfig?.assistantMessage?.scores ?? []
+                const runComments: CommentMessage[] = props.comments.filter((c) => c.runId === run.id && !c.channelMessageId && !c.sessionItemId);
+                const runScores: Score[] = props.scores.filter((s) => s.runId === run.id && !s.channelMessageId && !s.sessionItemId);
+                const runTarget: InputTarget = { sessionId: session.id, runId: run.id };
 
+                runCommentsAndScores = {
+                    target: runTarget,
+                    comments: runComments,
+                    scoreConfigs: runScoreConfigs,
+                    scores: runScores,
+                };
+            }
+        
+            /**
+             * BUG!!!
+             * 
+             * The output parts *should only be inferred* when status is COMPLETED. Otherwise it makes no sense.
+             */
             const showRunFooter = !isLast || !isRunning
 
-            wallItems.push({
-                id: message.id,
-                element: <div className="text-blue-500">[[[{ status }{ failReason && `: ${failReason.message}` }]]]</div>,
-                run,
-                // status: message.metadata?._agentview?.status,
-                // failReason: message.metadata?._agentview?.failReason,
-                showRunFooter
-            })
+            if (outputParts.length > 0) {
+                const elements: React.ReactNode[] = [];
+                for (const [index, part] of outputParts.entries()) {
+                    const Component = /* load from agentConfig */ generateComponent(part);
+                    if (Component === null) {
+                        continue;
+                    }
+                    const element = <Component item={part} session={session} />
+                    elements.push(element);
+                }
+
+                const element = <div className="space-y-4">{elements}</div>
+
+                wallItems.push({
+                    id: message.id,
+                    element,
+                    commentsAndScores: runCommentsAndScores,
+                    run,
+                    showRunFooter
+                })
+            }
+            else {
+                const status = message.metadata?._agentview?.status;
+                const failReason = message.metadata?._agentview?.failReason;
+
+                if (status === 'failed' || status === 'cancelled') {
+                    const element = <div className="text-blue-500">[[[{status}{failReason && `: ${failReason.message}`}]]]</div>;
+                    wallItems.push({
+                        id: message.id,
+                        element: <div>No output parts</div>,
+                        commentsAndScores: runCommentsAndScores,
+                        run,
+                        showRunFooter
+                    })
+                }
+            }
+
+            // /**
+            //  * Final item (run level)
+            //  */
+            // const status = message.metadata?._agentview?.status;
+            // const failReason = message.metadata?._agentview?.failReason;
+
+            // const showRunFooter = !isLast || !isRunning
+
+            // wallItems.push({
+            //     id: message.id,
+            //     element: <div className="text-blue-500">[[[{status}{failReason && `: ${failReason.message}`}]]]</div>,
+            //     run,
+            //     // status: message.metadata?._agentview?.status,
+            //     // failReason: message.metadata?._agentview?.failReason,
+            //     showRunFooter
+            // })
 
 
 
@@ -578,15 +676,15 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                     </ErrorBoundary>
                                 </div>
 
-                                { isLastWallItem && isRunning && <div className="text-muted-foreground mt-6">
+                                {isLastWallItem && isRunning && <div className="text-muted-foreground mt-6">
                                     <Loader />
-                                </div> }
+                                </div>}
 
-                                { isLastWallItem && userMessageError && <div className="text-muted-foreground mt-6">
+                                {isLastWallItem && userMessageError && <div className="text-muted-foreground mt-6">
                                     <span className="text-red-500">{userMessageError.message}</span>
-                                </div> }
+                                </div>}
 
-                                { showRunFooter && <RunFooter
+                                {showRunFooter && <RunFooter
                                     session={session}
                                     run={run}
                                     commentsAndScores={commentsAndScores}
@@ -735,7 +833,7 @@ function DefaultPartComponent({ item }: SessionItemDisplayComponentProps) {
     </Step>
 }
 
-const DefaultUserInputComponent : AgentInputComponent = ({ session, isRunning, cancel, sendMessage }) => {
+const DefaultUserInputComponent: AgentInputComponent = ({ session, isRunning, cancel, sendMessage }) => {
     const submit = async (stringVal: string) => {
         await sendMessage({
             type: "message",
@@ -781,7 +879,7 @@ function InputForm({ session, agentConfig, styles, sendMessage, cancelRun, isRun
                         sendMessage={submit}
                         isRunning={isRunning}
                         session={session}
-                        // token={session.user.token}
+                    // token={session.user.token}
                     />
                 </div>
             )}
@@ -835,7 +933,7 @@ function RunFooter(props: RunFooterProps) {
     // Error
     if (run.status === "failed") {
         blocks.push(<div className="text-md mt-6 mb-3 text-red-500">
-            <span className="">{ run.failReason?.message ?? "Failed for unknown reason" }</span>
+            <span className="">{run.failReason?.message ?? "Failed for unknown reason"}</span>
         </div>);
     }
     else if (run.status === "cancelled") {
@@ -852,7 +950,7 @@ function RunFooter(props: RunFooterProps) {
 
         const actionBarScores = scoreConfigs.filter(scoreConfig => scoreConfig.actionBarComponent);
         const remainingScores = scoreConfigs.filter(scoreConfig => !scoreConfig.actionBarComponent);
-    
+
         if (actionBarScores.length > 0) {
             toolbarBlocks.push(...actionBarScores.map((scoreConfig) => (
                 <ActionBarScoreForm
@@ -863,7 +961,7 @@ function RunFooter(props: RunFooterProps) {
                 />
             )));
         }
-    
+
         if (remainingScores.length > 0) {
             toolbarBlocks.push(<ScoreDialog
                 scores={scores}
@@ -873,7 +971,7 @@ function RunFooter(props: RunFooterProps) {
                 scoreConfigs={remainingScores}
             />);
         }
-    
+
     }
 
     toolbarBlocks.push(<Button variant="ghost" size="sm" asChild>
