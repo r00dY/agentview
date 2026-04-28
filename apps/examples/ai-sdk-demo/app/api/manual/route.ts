@@ -1,14 +1,18 @@
 export async function POST() {
 
-  return new Response('Something went wrong', {
-    status: 400,
-    headers: { 'Content-Type': 'text/plain' },
-  });
+  // return new Response('Something went wrong', {
+  //   status: 400,
+  //   headers: { 'Content-Type': 'text/plain' },
+  // });
 
   const encoder = new TextEncoder();
   const messageId = `msg_${crypto.randomUUID()}`;
   const textId1 = `txt_${crypto.randomUUID()}`;
   const textId2 = `txt_${crypto.randomUUID()}`;
+
+  const DELTA = 100;
+
+  const deltasFor20s = Array.from({ length: 20 * 1000 / DELTA }, (_, i) => ({ type: "text-delta", id: textId1, delta: `.${i} ` }));
 
   const parts = [
     { type: "data-xxx", data: { whatever: "blablabla" } },
@@ -22,6 +26,8 @@ export async function POST() {
     { type: "text-start", id: textId1 },
     { type: "text-delta", id: textId1, delta: "Here is the " },
     { type: "text-delta", id: textId1, delta: "first text part." },
+    ...deltasFor20s,
+
     { type: "text-end", id: textId1 },
     // { type: "error", errorText: "gówno"},
     // Second text part
@@ -38,7 +44,7 @@ export async function POST() {
     async start(controller) {
       for (const part of parts) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(part)}\n\n`));
-        await new Promise((r) => setTimeout(r, 100));
+        await new Promise((r) => setTimeout(r, DELTA));
       }
       controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       controller.close();

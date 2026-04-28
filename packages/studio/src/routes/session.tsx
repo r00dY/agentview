@@ -221,7 +221,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 
     const userMessageError = (messages.length > 0 && messages[messages.length - 1]?.role === "user") ? error : undefined;
 
-    
+
     /**
      * Build the wall
      */
@@ -432,7 +432,8 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
     // }
 
     const cancelRun = async () => {
-        alert('cancelRun');
+        console.log('cancelling run');
+        agentview().sessions.cancelRun(session.id)
     }
 
     // const isRunning = props.session.status == 'in_progress';
