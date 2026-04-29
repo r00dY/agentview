@@ -6,6 +6,7 @@ import { Book, Brain, CloudRain, ThermometerSun } from "lucide-react";
 import * as React from "react";
 import { z } from "zod";
 import { CustomPage } from "./components/CustomPage";
+import { NewSessionComponent, NewSessionComponentProps } from "../../../packages/studio/src/types";
 
 export default defineConfig({
   publicApiKey: process.env.NEXT_PUBLIC_AGENTVIEW_PUBLIC_API_KEY!,
@@ -20,75 +21,16 @@ export default defineConfig({
       metadata: {
         userLocation: z.string()
       },
-      newSessionComponent: ({ client, agent, redirectToSession }) => {
-        const [selectedCity, setSelectedCity] = React.useState<string>("");
-        const [error, setError] = React.useState<string | null>(null);
-        const [isRunning, setIsRunning] = React.useState(false);
-
-        const handleSubmit = async (e: React.FormEvent) => {
-          e.preventDefault();
-          setError(null);
-          setIsRunning(true);
-
-          try {
-            const { user } = await client.users.createAnon();
-            const session = await client.sessions.create({
-              agent,
-              active: false,
-              metadata: { userLocation: selectedCity },
-              userId: user.id
-            });
-
-            redirectToSession(session.id);
-          } catch (error) {
-            setError(error instanceof Error ? error.message : "An unknown error occurred");
-          } finally {
-            setIsRunning(false);
-          }
-        };
-
-        const cities = [
-          "New York",
-          "London",
-          "Tokyo",
-          "Paris",
-          "Warsaw"
-        ];
-
-        return (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <Select value={selectedCity} onValueChange={setSelectedCity}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select a city" />
-              </SelectTrigger>
-              <SelectContent>
-                {cities.map((city) => (
-                  <SelectItem key={city} value={city}>
-                    {city}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              type="submit"
-              disabled={!selectedCity || isRunning}
-            >
-              {isRunning ? "Creating session..." : "Create Session"}
-            </Button>
-          </form>
-        );
-      },
+      newSessionComponent: WeatherChatNewSessionComponent,
       displayProperties: [
         {
           title: "User Location",
           value: ({ session }) => session?.metadata?.userLocation
         }
       ],
-      // inputComponent: ({ sendMessage, cancel, isRunning, session, token }) => <UserMessageInput
+      // inputComponent: ({ sendMessage, cancel, isRunning, session }) => <UserMessageInput
       //   onSubmit={(val) => {
       //     sendMessage({
-      //       type: "message",
-      //       role: "user",
       //       parts: [
       //         {
       //           type: "text",
@@ -101,11 +43,11 @@ export default defineConfig({
       //   isRunning={isRunning}
       // />,
 
-      userMessage: {
-        displayComponent: ({ value }) => {
-          return <UserMessage>CUSTOM: {value.parts?.map((part: any) => part.text).join("\n\n")}</UserMessage>;
-        },
-      },
+      // userMessage: {
+      //   displayComponent: ({ value }) => {
+      //     return <UserMessage>CUSTOM: {value.parts?.map((part: any) => part.text).join("\n\n")}</UserMessage>;
+      //   },
+      // },
 
       assistantMessage: {
         parts: [
@@ -304,3 +246,63 @@ export default defineConfig({
     }
   ]
 });
+
+
+function WeatherChatNewSessionComponent ({ client, agent, redirectToSession } : NewSessionComponentProps) {
+  const [selectedCity, setSelectedCity] = React.useState<string>("");
+  const [error, setError] = React.useState<string | null>(null);
+  const [isRunning, setIsRunning] = React.useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setIsRunning(true);
+
+    try {
+      const { user } = await client.users.createAnon();
+      const session = await client.sessions.create({
+        agent,
+        active: false,
+        metadata: { userLocation: selectedCity },
+        userId: user.id
+      });
+
+      redirectToSession(session.id);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "An unknown error occurred");
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  const cities = [
+    "New York",
+    "London",
+    "Tokyo",
+    "Paris",
+    "Warsaw"
+  ];
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <Select value={selectedCity} onValueChange={setSelectedCity}>
+        <SelectTrigger>
+          <SelectValue placeholder="Select a city" />
+        </SelectTrigger>
+        <SelectContent>
+          {cities.map((city) => (
+            <SelectItem key={city} value={city}>
+              {city}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Button
+        type="submit"
+        disabled={!selectedCity || isRunning}
+      >
+        {isRunning ? "Creating session..." : "Create Session"}
+      </Button>
+    </form>
+  );
+}
