@@ -1,5 +1,4 @@
-import type { AgentConfig, AgentViewConfig } from "./types";
-import { like } from "./scores";
+import type { AgentViewConfig } from "./types";
 
 export function loadConfig(): AgentViewConfig {
     const config: AgentViewConfig | undefined = (window as any).agentview?.config;
@@ -8,22 +7,6 @@ export function loadConfig(): AgentViewConfig {
     }
 
     return config;
-
-    // return {
-    //     ...config,
-    //     agents: config.agents?.map((agent) => {
-    //         return {
-    //             ...agent,
-    //             runs: agent.runs?.map((run) => {
-    //                 const runScores = [...(run.scores ?? [])];
-    //                 if (!run.disableLike) {
-    //                     runScores.unshift(like());
-    //                 }
-    //                 return { ...run, scores: runScores }
-    //             })
-    //         }
-    //     })
-    // }
 }
 
 export const config = loadConfig();
