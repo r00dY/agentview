@@ -101,11 +101,11 @@ export default defineConfig({
       //   isRunning={isRunning}
       // />,
 
-      // userMessage: {
-      //   displayComponent: ({ item }) => {
-      //     return <UserMessage>{item.parts?.map((part: any) => part.text).join("\n\n")}</UserMessage>;
-      //   },
-      // },
+      userMessage: {
+        displayComponent: ({ value }) => {
+          return <UserMessage>CUSTOM: {value.parts?.map((part: any) => part.text).join("\n\n")}</UserMessage>;
+        },
+      },
 
       assistantMessage: {
         // parts: [

@@ -1,6 +1,7 @@
 import type { RouteObject } from "react-router";
 import type { BaseScoreConfig, BaseAgentViewConfig, SharedAgentConfig } from "agentview/baseConfigTypes";
 import type { AgentViewClient, Session, SessionBase } from "agentview";
+import type { UIMessage } from "ai";
 import { z } from "zod";
 
 export type RootCustomRoute = {
@@ -57,6 +58,14 @@ export type NewSessionComponentProps = {
 
 export type NewSessionComponent = React.ComponentType<NewSessionComponentProps>
 
+export type AssistantMessagePartConfig<TPart = UIMessage['parts'][number]> =
+  TPart extends { type: infer TType } ? {
+    type: TType,
+    displayComponent?: React.ComponentType<{ value: TPart, session: Session }> | null;
+  } : never;
+
+export type UserMessageDisplayComponent = React.ComponentType<{ value: UIMessage, session: Session }>;
+
 export interface AgentConfig extends SharedAgentConfig {
   displayProperties?: DisplayProperty<{ session: SessionBase }>[];
   newSessionComponent?: NewSessionComponent;
@@ -64,14 +73,11 @@ export interface AgentConfig extends SharedAgentConfig {
 
   // custom fields for ai-sdk
   userMessage?: {
-    displayComponent?: React.ComponentType<{ value: any, session: Session }>
+    displayComponent?: UserMessageDisplayComponent | null;
   }
   assistantMessage?: {
-      parts?: Array<{
-          type: string,
-          displayComponent?: React.ComponentType<{ value: any, session: Session }>
-      }>
-      displayProperties?: DisplayProperty<{ session: Session, userMessage: any, assistantMessage: any }>[];
+      parts?: AssistantMessagePartConfig[];
+      displayProperties?: DisplayProperty<{ session: Session, userMessage: UIMessage, assistantMessage: UIMessage }>[];
       disableLike?: boolean;
       scores?: ScoreConfig[];
   }

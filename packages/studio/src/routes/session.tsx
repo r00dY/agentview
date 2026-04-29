@@ -3,7 +3,7 @@ import { type ChannelMessage, type CommentMessage, type InputTarget, type Standa
 import { findAgentConfig, findAgentConfigBySession, findItemConfigById, findRunConfig, requireAgentConfigByName, requireAgentConfigBySession } from "agentview/baseConfigUtils";
 import { enhanceSession, getActiveRuns, getAllSessionItems, getLastRun } from "agentview/sessionUtils";
 import { unwrapError } from "agentview";
-import type { AgentConfig, AgentInputComponent, ScoreConfig } from "../types";
+import type { AgentConfig, AgentInputComponent, ScoreConfig, UserMessageDisplayComponent } from "../types";
 import { AlertCircleIcon, Brain, ChevronDown, CircleGauge, InfoIcon, Loader2, Lock, MessageCirclePlus, UsersIcon, Wrench } from "lucide-react";
 import { useEffect, useLayoutEffect, useOptimistic, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -254,9 +254,14 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 
         if (message.role === "user") {
             if (session.channel.type === 'api') {
-                const Component = agentConfig?.userMessage?.displayComponent ?? DefaultUserMessageComponent;
+
+                if (agentConfig?.userMessage?.displayComponent === null) {
+                    return;
+                }
+                
+                const Component = agentConfig?.userMessage?.displayComponent ?? DefaultUserMessageDisplayComponent;
                 const element = <div className="pl-[10%] relative">
-                    <Component item={message} session={session} />
+                    <Component value={message} session={session} />
                 </div>
 
                 const commentsAndScores: CommentsThreadData | undefined = run && {
@@ -800,8 +805,8 @@ function ShareForm({ session }: { session: SessionBase }) {
 }
 
 
-function DefaultUserMessageComponent({ item }: SessionItemDisplayComponentProps) {
-    return <UserMessage>{item.parts?.filter((part: any) => part.type === "text").map((part: any) => part.text).join("\n\n")}</UserMessage>
+const DefaultUserMessageDisplayComponent: UserMessageDisplayComponent = ({ value }) => {
+    return <UserMessage>{value.parts?.filter((part: any) => part.type === "text").map((part: any) => part.text).join("\n\n")}</UserMessage>
 }
 
 function DefaultAssistantComponent({ item }: SessionItemDisplayComponentProps) {
