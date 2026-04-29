@@ -15,22 +15,33 @@ export async function POST() {
   const deltasFor20s = Array.from({ length: 20 * 1000 / DELTA }, (_, i) => ({ type: "text-delta", id: textId1, delta: `.${i} ` }));
 
   const parts = [
-    { type: "data-xxx", data: { whatever: "blablabla" } },
+    // { type: "data-xxx", data: { whatever: "blablabla" } },
 
     { type: "start", messageId },
     { type: "start-step" },
+
+    { type: "reasoning-start", id: "reasoning_1" },
+    { type: "reasoning-delta", id: "reasoning_1", delta: "Thinking " },
+    { type: "reasoning-delta", id: "reasoning_1", delta: "about " },
+    { type: "reasoning-delta", id: "reasoning_1", delta: "the " }, 
+    { type: "reasoning-delta", id: "reasoning_1", delta: "first text part " },
+    { type: "reasoning-delta", id: "reasoning_1", delta: "and then " },
+    { type: "reasoning-delta", id: "reasoning_1", delta: "the second text part." },
+    { type: "reasoning-end", id: "reasoning_1" },
+
     // Data parts
     { type: "data-weather", data: { location: "San Francisco", temperature: 18 } },
-    { type: "data-status", data: { progress: 100, message: "Analysis complete" } },
+
     // First text part
     { type: "text-start", id: textId1 },
     { type: "text-delta", id: textId1, delta: "Here is the " },
     { type: "text-delta", id: textId1, delta: "first text part." },
+
     // ...deltasFor20s,
 
     { type: "text-end", id: textId1 },
     // { type: "error", errorText: "This is some error from the stream part"},
-    { type: "dupa" }, // incorrect chunk
+    // { type: "dupa" }, // incorrect chunk
 
     // Second text part
     { type: "text-start", id: textId2 },

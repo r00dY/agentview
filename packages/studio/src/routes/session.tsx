@@ -35,6 +35,9 @@ import { useSession } from "../lib/useSession";
 import React from "react";
 import { LoadingIndicator } from "../components/internal/LoadingIndicator";
 import { useChat } from '@ai-sdk/react'
+import type { UIMessage } from "ai"
+
+type PartDisplayProps = { value: UIMessage['parts'][number], session: Session };
 
 async function loader({ request, params, context }: LoaderFunctionArgs) {
     const sessionId = params.id!;
@@ -233,7 +236,9 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 
     const userMessageError = (messages.length > 0 && messages[messages.length - 1]?.role === "user") ? unwrapError(error) : undefined;
 
-    console.log('session', session);
+    // console.log('session', session);
+    console.log('----');
+    // console.log('messages', messages.length);
 
     /**
      * Build the wall
@@ -250,7 +255,6 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
             status: runMetadata.status,
             failReason: runMetadata.failReason,
         } : undefined;
-
 
         if (message.role === "user") {
             if (session.channel.type === 'api') {
@@ -313,8 +317,8 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
              * Algorithm: we essentially look for the last "block" (after last step-start) and look for the first text part. That's the start of output.
              * 
              */
-            const stepParts: any[] = [];
-            const outputParts: any[] = [];
+            const stepParts: UIMessage['parts'][number][] = [];
+            const outputParts: UIMessage['parts'][number][] = [];
 
             message.parts.forEach((part, index) => {
                 if (part.type === 'step-start' || part.type === 'reasoning') { // reasoning or step-start "resets" and pushes all speculated output parts into step parts
@@ -336,49 +340,39 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
             // ]
 
             /**
-             * Generate component
+             * Get display component for a part: config override first, then defaults.
              */
-            const generateComponent = (agentConfig: AgentConfig, part: any) => {
-                let DefaultComponent: React.ComponentType<any> | null | undefined = undefined;
+            const getPartComponent = (part: UIMessage['parts'][number]): React.ComponentType<PartDisplayProps> | null => {
+                const partConfig = agentConfig.assistantMessage?.parts?.find(p => p.type === part.type);
+                if (partConfig?.displayComponent !== undefined) {
+                    return partConfig.displayComponent as React.ComponentType<PartDisplayProps> | null;
+                }
 
                 switch (part.type) {
                     case "text":
-                        DefaultComponent = DefaultTextPartComponent;
-                        break;
+                        return DefaultTextPartComponent;
                     case "reasoning":
-                        DefaultComponent = DefaultReasoningPartComponent;
-                        break;
+                        return DefaultReasoningPartComponent;
                     case "step-start":
-                        DefaultComponent = null;
-                        break;
+                        return null;
                     default:
                         if (part.type.startsWith("tool-")) {
-                            DefaultComponent = DefaultToolPartComponent;
-                            break;
+                            return DefaultToolPartComponent;
                         }
-                        else {
-                            DefaultComponent = DefaultPartComponent;
-                            break;
-                        }
+                        return DefaultPartComponent;
                 }
-
-                if (DefaultComponent === null) {
-                    return null;
-                }
-
-                return DefaultComponent;
             }
 
 
             // step parts (separate wall items)
             for (const [index, part] of stepParts.entries()) {
-                const Component = /* load from agentConfig */ generateComponent(agentConfig, part);
+                const Component = getPartComponent(part);
 
                 if (Component === null) {
                     continue;
                 }
 
-                const element = <Component item={part} session={session} />
+                const element = <Component value={part} session={session} />
 
                 let commentsAndScores: CommentsThreadData | undefined = run && {
                     target: { sessionId: session.id, runId: run.id, sessionItemIndex: index + 1 },
@@ -419,11 +413,11 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
             if (outputParts.length > 0) {
                 const elements: React.ReactNode[] = [];
                 for (const [index, part] of outputParts.entries()) {
-                    const Component = /* load from agentConfig */ generateComponent(agentConfig, part);
+                    const Component = getPartComponent(part);
                     if (Component === null) {
                         continue;
                     }
-                    const element = <Component item={part} session={session} />
+                    const element = <Component value={part} session={session} />
                     elements.push(element);
                 }
 
@@ -541,6 +535,8 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
             // })
         }
     })
+
+    console.log('wall items', wallItems.length);
 
     // const createRun = async (input: any) => {
     //     alert('createRun');
@@ -809,38 +805,40 @@ const DefaultUserMessageDisplayComponent: UserMessageDisplayComponent = ({ value
     return <UserMessage>{value.parts?.filter((part: any) => part.type === "text").map((part: any) => part.text).join("\n\n")}</UserMessage>
 }
 
-function DefaultAssistantComponent({ item }: SessionItemDisplayComponentProps) {
-    return <AssistantMessage>{item}</AssistantMessage>
+function DefaultTextPartComponent({ value }: PartDisplayProps) {
+    if (value.type !== 'text') {
+        throw new Error(`DefaultTextPartComponent expected 'text' part, got ${value.type}`);
+    }
+    return <AssistantMessage>{value.text}</AssistantMessage>
 }
 
-function DefaultTextPartComponent({ item }: SessionItemDisplayComponentProps) {
-    return <AssistantMessage>{item.text}</AssistantMessage>
-}
-
-function DefaultReasoningPartComponent({ item }: SessionItemDisplayComponentProps) {
+function DefaultReasoningPartComponent({ value }: PartDisplayProps) {
+    if (value.type !== 'reasoning') {
+        throw new Error(`DefaultReasoningPartComponent expected 'reasoning' part, got ${value.type}`);
+    }
     return <Step collapsible>
         <StepTitle><Brain /> Thinking</StepTitle>
         <StepContent>
-            {item.text}
+            {value.text}
         </StepContent>
     </Step>
 }
 
-function DefaultToolPartComponent({ item }: SessionItemDisplayComponentProps) {
-    const toolName = item.type.substring(5);
+function DefaultToolPartComponent({ value }: PartDisplayProps) {
+    const toolName = value.type.substring(5);
 
     return <Step collapsible>
         <StepTitle><Wrench /> {toolName}</StepTitle>
         <StepContent>
-            {item}
+            {value as any}
         </StepContent>
     </Step>
 }
 
-function DefaultPartComponent({ item }: SessionItemDisplayComponentProps) {
+function DefaultPartComponent({ value }: PartDisplayProps) {
     return <Step>
         <StepContent>
-            {item}
+            {value as any}
         </StepContent>
     </Step>
 }
