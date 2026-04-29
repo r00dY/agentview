@@ -41,11 +41,13 @@ export type ScoreConfig<TValue = any> = BaseScoreConfig & {
   actionBarComponent?: ControlComponent<TValue>;
 }
 
+export type InputUIMessage = string | (Omit<UIMessage, 'id' | 'role'> & { role?: 'user', id?: string });
+
 export type AgentInputComponentProps = {
   session: Session,
   isRunning: boolean,
   cancel: () => void,
-  sendMessage: (userMessage: any) => Promise<void>,
+  sendMessage: (userMessage: InputUIMessage) => Promise<void>,
 }
 
 export type AgentInputComponent = React.ComponentType<AgentInputComponentProps>

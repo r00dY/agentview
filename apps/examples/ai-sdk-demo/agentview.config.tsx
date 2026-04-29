@@ -119,16 +119,6 @@ export default defineConfig({
             },
           }
         ],
-        // parts: [
-        //   {
-        //     type: "text",
-        //     displayComponent: ({ item }) => {
-        //       return <AssistantMessage>{item.text}</AssistantMessage>;
-        //     },
-        //   },
-        // ],
-
-
         scores: [
           select({
             name: "forecast_accuracy",

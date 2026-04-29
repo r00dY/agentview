@@ -3,7 +3,7 @@ import { type ChannelMessage, type CommentMessage, type InputTarget, type Standa
 import { findAgentConfig, findAgentConfigBySession, findItemConfigById, findRunConfig, requireAgentConfigByName, requireAgentConfigBySession } from "agentview/baseConfigUtils";
 import { enhanceSession, getActiveRuns, getAllSessionItems, getLastRun } from "agentview/sessionUtils";
 import { unwrapError } from "agentview";
-import type { AgentConfig, AgentInputComponent, ScoreConfig, UserMessageDisplayComponent } from "../types";
+import type { AgentConfig, AgentInputComponent, InputUIMessage, ScoreConfig, UserMessageDisplayComponent } from "../types";
 import { AlertCircleIcon, Brain, ChevronDown, CircleGauge, InfoIcon, Loader2, Lock, MessageCirclePlus, UsersIcon, Wrench } from "lucide-react";
 import { useEffect, useLayoutEffect, useOptimistic, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -846,25 +846,23 @@ function DefaultPartComponent({ value }: PartDisplayProps) {
 
 const DefaultUserInputComponent: AgentInputComponent = ({ session, isRunning, cancel, sendMessage }) => {
     const submit = async (stringVal: string) => {
-        await sendMessage({
-            type: "message",
-            role: "user",
-            parts: [
-                {
-                    type: "text",
-                    text: stringVal,
-                }
-            ]
-        })
+        await sendMessage(stringVal)
     }
 
     return <UserMessageInput isRunning={isRunning} onCancel={cancel} onSubmit={submit} />
 }
 
 function InputForm({ session, agentConfig, styles, sendMessage, cancelRun, isRunning }: { session: Session, agentConfig: AgentConfig, styles: Record<string, number>, sendMessage: SendMessageFunction, cancelRun: () => Promise<void>, isRunning: boolean }) {
-    // const lastRun = getLastRun(session)
+    const submit = async (input: InputUIMessage) => {
+        if (typeof input === 'string') {
+            input = {
+                role: "user",
+                parts: [
+                    { type: "text", text: input }
+                ]
+            }
+        }
 
-    const submit = async (input: any) => {
         try {
             await sendMessage(input);
         } catch (error: any) {
@@ -874,10 +872,6 @@ function InputForm({ session, agentConfig, styles, sendMessage, cancelRun, isRun
     }
 
     const InputComponent = agentConfig.inputComponent ?? DefaultUserInputComponent;
-
-    // if (InputComponent === null) {
-    //     return null;
-    // }
 
     return <div className="border-t">
         <div className={`p-6 pr-0`} style={{ maxWidth: `${styles.textWidth + styles.padding}px` }}>
@@ -890,7 +884,6 @@ function InputForm({ session, agentConfig, styles, sendMessage, cancelRun, isRun
                         sendMessage={submit}
                         isRunning={isRunning}
                         session={session}
-                    // token={session.user.token}
                     />
                 </div>
             )}
