@@ -1,5 +1,5 @@
 import { AgentViewError } from 'agentview/AgentViewError';
-import type { Environment, ManualRunCreate, ManualRunUpdate } from 'agentview/apiTypes';
+import type { Environment, ManualRunCreate, ManualRunUpdate, RunUpdate } from 'agentview/apiTypes';
 import type { BaseAgentConfig, BaseRunConfig } from 'agentview/baseConfigTypes';
 import { findItemConfig, requireAgentConfigBySession, requireRunConfig, serializeRunConfig } from 'agentview/baseConfigUtils';
 import { getLastRun } from 'agentview/sessionUtils';
@@ -8,7 +8,7 @@ import { log } from './logger';
 import { getAdapter } from './adapters/adapters';
 import { resolveAgentRef } from './agentRefs';
 import { authorize, type Principal } from './authMiddleware';
-import { getConfigFromEnvironment, requireEnvironment } from './environments';
+import { getConfigFromEnvironment, requireConfig, requireEnvironment } from './environments';
 import { requireUUID } from './isUUID';
 import { parseMetadata } from './parseMetadata';
 import { publishEvent } from './redisPubSub';
@@ -1113,4 +1113,35 @@ export async function createManualRun(
     runConfig,
     lastRun,
   });
+}
+
+
+export async function updateRun(tx: TenantTransaction, sessionId: string, runId: string,body: RunUpdate) {
+  await tx.acquireLock({ type: "edit_session", sessionId });
+
+  const session = await requireSessionBase(tx, sessionId);
+  const runBase = await requireRunBase(tx, runId);
+
+  authorize(tx.principal, { action: "end-user:update", user: session.user });
+
+  const config = await requireConfig(tx)
+  const agentConfig = requireAgentConfigBySession(config, session);
+
+  if (agentConfig.adapter !== 'ai-sdk') {
+    throw new AgentViewError("Update is only supported for AI SDK runs.", 422);
+  }
+
+  if (!agentConfig.runs || agentConfig.runs.length === 0) {
+    throw new AgentViewError("Run config not found.", 422);
+  }
+
+  const runConfig = agentConfig.runs[0];
+  const metadata = parseMetadata(runConfig.metadata, runConfig.allowUnknownMetadata, body.metadata, runBase.metadata ?? {});
+
+  const [updatedRun] = await tx.update(runs).set({
+    metadata,
+    updatedAt: new Date().toISOString(),
+  }).where(eq(runs.id, runId)).returning();
+
+  return updatedRun;
 }

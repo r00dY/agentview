@@ -460,3 +460,8 @@ export const RunCreateSchema = z.object({
 
 export type RunCreate = z.infer<typeof RunCreateSchema>
 
+export const RunUpdateSchema = z.object({
+  metadata: z.record(z.string(), z.any()).optional(),
+});
+
+export type RunUpdate = z.infer<typeof RunUpdateSchema>

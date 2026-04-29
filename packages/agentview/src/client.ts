@@ -17,7 +17,8 @@ import type {
   SessionsStats,
   InputTarget,
   ScoreCreate,
-  Channel
+  Channel,
+  RunUpdate
 } from './apiTypes.js'
 
 import { AgentViewError } from './AgentViewError.js'
@@ -271,6 +272,10 @@ class SessionsResource {
 
   async cancelRun(id: string) {
     return await this.client._request<Session>('POST', `/api/sessions/${id}/cancel`)
+  }
+
+  async updateRun(sessionId: string, runId: string, options: RunUpdate) {
+    return await this.client._request<Run>('PATCH', `/api/sessions/${sessionId}/runs/${runId}`, options)
   }
 
   async list(options?: SessionsGetQueryParams) {

@@ -21,6 +21,7 @@ import {
   ManualRunCreateSchema,
   ManualRunUpdateSchema,
   RunCreateSchema,
+  RunUpdateSchema,
   ScoreCreateSchema,
   ScoreSchema,
   SessionCreateSchema,
@@ -53,7 +54,7 @@ import { isInboxItemUnread } from './inboxItems';
 import { initDb } from './initDb';
 import { requireValidInvitation } from './invitations';
 import { requireUUID } from './isUUID';
-import { applyRunPatch, createAutoRun2, createManualRun, DEFAULT_IDLE_TIME, fastApplyRunPatch, getRunInput, getRunInputContent, isRunFinished, requireRunBase, RunTerminationError, sendRunTerminationSignal, terminateRun } from './runs';
+import { applyRunPatch, createAutoRun2, createManualRun, DEFAULT_IDLE_TIME, fastApplyRunPatch, getRunInput, getRunInputContent, isRunFinished, requireRunBase, RunTerminationError, sendRunTerminationSignal, terminateRun, updateRun } from './runs';
 import { createRunStreamConsumer } from './runStream';
 import { organizations, users } from './schemas/auth-schema';
 import { commentMessages, endUsers, environments, inboxItems, runs, scores, sessions } from './schemas/schema';
@@ -977,7 +978,6 @@ const runsAISDKPOSTRoute = createRoute({
   },
 })
 
-
 app.post('/internal/fast-patch', async (c) => {
   const body = await c.req.json()
 
@@ -1033,6 +1033,39 @@ app.openapi(runsAISDKPOSTRoute, async (c) => {
   return createStreamResponse(c, runId, response)
 })
 
+/**
+ * For metadata purpose only
+ */
+const runsAISDKPatchRoute = createRoute({
+  method: 'patch',
+  path: '/api/sessions/{session_id}/runs/{run_id}',
+  summary: 'Update a run',
+  tags: ['Sessions and Runs'],
+  request: {
+    params: z.object({
+      session_id: z.string(),
+      run_id: z.string(),
+    }),
+    body: body(RunUpdateSchema)
+  },
+  responses: {
+    200: response_data(SessionSchema),
+    400: response_error(),
+    404: response_error()
+  },
+})
+
+app.openapi(runsAISDKPatchRoute, async (c) => {
+  const principal = await authn(c.req.raw.headers)
+  const body = await c.req.valid('json')
+  const params = await c.req.param();
+
+  return await withTenant(principal, async (tx) => {
+    await updateRun(tx, params.session_id, params.run_id, body);
+    const standardSession = await requireSession(tx, params.session_id);
+    return c.json(standardToDefaultSession(standardSession), 200);
+  })
+})
 
 const sessionStandardCancelRoute = createRoute({
   method: 'post',
