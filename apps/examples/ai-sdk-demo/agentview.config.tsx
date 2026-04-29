@@ -108,6 +108,17 @@ export default defineConfig({
       },
 
       assistantMessage: {
+        parts: [
+          {
+            type: "data-weather",
+            displayComponent: ({ value }) => {
+              return <Step>
+                <StepTitle><Brain /> Weather</StepTitle>
+                <StepContent>{value.data as any}</StepContent>
+              </Step>
+            },
+          }
+        ],
         // parts: [
         //   {
         //     type: "text",

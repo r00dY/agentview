@@ -338,8 +338,8 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
             /**
              * Generate component
              */
-            const generateComponent = (part: any) => {
-                let DefaultComponent: React.ComponentType<SessionItemDisplayComponentProps> | null | undefined = undefined;
+            const generateComponent = (agentConfig: AgentConfig, part: any) => {
+                let DefaultComponent: React.ComponentType<any> | null | undefined = undefined;
 
                 switch (part.type) {
                     case "text":
@@ -372,7 +372,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 
             // step parts (separate wall items)
             for (const [index, part] of stepParts.entries()) {
-                const Component = /* load from agentConfig */ generateComponent(part);
+                const Component = /* load from agentConfig */ generateComponent(agentConfig, part);
 
                 if (Component === null) {
                     continue;
@@ -419,7 +419,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
             if (outputParts.length > 0) {
                 const elements: React.ReactNode[] = [];
                 for (const [index, part] of outputParts.entries()) {
-                    const Component = /* load from agentConfig */ generateComponent(part);
+                    const Component = /* load from agentConfig */ generateComponent(agentConfig, part);
                     if (Component === null) {
                         continue;
                     }

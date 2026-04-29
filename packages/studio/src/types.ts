@@ -64,6 +64,7 @@ export type AssistantMessagePartConfig<TPart = UIMessage['parts'][number]> =
     displayComponent?: React.ComponentType<{ value: TPart, session: Session }> | null;
   } : never;
 
+
 export type UserMessageDisplayComponent = React.ComponentType<{ value: UIMessage, session: Session }>;
 
 export interface AgentConfig extends SharedAgentConfig {
