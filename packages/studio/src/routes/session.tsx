@@ -2,6 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { type ChannelMessage, type CommentMessage, type InputTarget, type StandardRun, type Score, type Session, type SessionBase, type SessionItem, type SessionsStats, type SessionStats, type StandardSession, type RunBase } from "agentview/apiTypes";
 import { findAgentConfig, findAgentConfigBySession, findItemConfigById, findRunConfig, requireAgentConfigByName, requireAgentConfigBySession } from "agentview/baseConfigUtils";
 import { enhanceSession, getActiveRuns, getAllSessionItems, getLastRun } from "agentview/sessionUtils";
+import { unwrapError } from "agentview";
 import type { AgentConfig, AgentInputComponent, ScoreConfig, SessionItemConfig, SessionItemDisplayComponentProps } from "../types";
 import { AlertCircleIcon, Brain, ChevronDown, CircleGauge, InfoIcon, Loader2, Lock, MessageCirclePlus, UsersIcon, Wrench } from "lucide-react";
 import { useEffect, useLayoutEffect, useOptimistic, useRef, useState } from "react";
@@ -194,7 +195,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         generateId: () => crypto.randomUUID(),
         messages: session.messages,
         resume: session.resume,
-        transport: agentview().asUser({ id: session.user.id }).createTransport()
+        transport: agentview().asUser({ id: "xxx" }).createTransport()
     });
 
     const isRunning = (status === 'streaming' || status === 'submitted');
@@ -219,33 +220,23 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
      * But for now it's good enough.
      */
 
-    const userMessageError = (messages.length > 0 && messages[messages.length - 1]?.role === "user") ? error : undefined;
+    const userMessageError = (messages.length > 0 && messages[messages.length - 1]?.role === "user") ? unwrapError(error) : undefined;
 
 
     /**
      * Build the wall
      */
-
-    // console.log('#########')
-    // console.log(JSON.parse(JSON.stringify(messages, null, 2)));
-
-    // console.log('error', error);
-
-    // return <div>dupa</div>
-
     const agentConfig = requireAgentConfigBySession(config, session);
 
     const wallItems: WallItem[] = [];
 
     messages.forEach((message, index) => {
-
         const runMetadata = message.role === "user" ? messages[index + 1]?.metadata?._agentview : message.metadata?._agentview;
         const run = runMetadata?.id ? {
             id: runMetadata.id,
             status: runMetadata.status,
             failReason: runMetadata.failReason,
         } : undefined;
-
 
         if (message.role === "user") {
             if (session.channel.type === 'api') {
@@ -442,6 +433,8 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                     })
                 }
             }
+
+            console.log('error', unwrapError(error))
 
             // /**
             //  * Final item (run level)

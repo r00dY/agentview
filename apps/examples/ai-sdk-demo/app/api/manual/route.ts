@@ -26,10 +26,12 @@ export async function POST() {
     { type: "text-start", id: textId1 },
     { type: "text-delta", id: textId1, delta: "Here is the " },
     { type: "text-delta", id: textId1, delta: "first text part." },
-    ...deltasFor20s,
+    // ...deltasFor20s,
 
     { type: "text-end", id: textId1 },
-    // { type: "error", errorText: "gówno"},
+    // { type: "error", errorText: "This is some error from the stream part"},
+    { type: "dupa" }, // incorrect chunk
+
     // Second text part
     { type: "text-start", id: textId2 },
     { type: "text-delta", id: textId2, delta: "And here is " },

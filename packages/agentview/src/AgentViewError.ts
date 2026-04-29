@@ -30,3 +30,23 @@ export class AgentViewError extends Error {
 export type AgentViewErrorBody = AgentViewErrorDetails & {
     message: string
 }
+
+
+export function unwrapError(error: Error | undefined): Error | AgentViewErrorBody | undefined {
+    if (!error) {
+        return;
+    }
+
+    try {
+        const json = JSON.parse(error.message);
+
+        // const { message, code, ...rest } = json;
+
+        if (json.source === 'agentview') {
+            return json
+        }
+
+    } catch (e) {}
+    
+    return error;
+}
