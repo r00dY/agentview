@@ -2,7 +2,7 @@ import { AssistantMessage, Colors, Step, StepContent, StepTitle, UserMessage, Us
 import { Button } from "@agentview/studio/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@agentview/studio/components/ui/select";
 import { defineConfig } from "@agentview/studio";
-import { Book, Brain } from "lucide-react";
+import { Book, Brain, CloudRain, ThermometerSun } from "lucide-react";
 import * as React from "react";
 import { z } from "zod";
 import { CustomPage } from "./components/CustomPage";
@@ -112,8 +112,8 @@ export default defineConfig({
           {
             type: "data-weather",
             displayComponent: ({ value }) => {
-              return <Step>
-                <StepTitle><Brain /> Weather</StepTitle>
+              return <Step collapsible>
+                <StepTitle><ThermometerSun /> Weather Data</StepTitle>
                 <StepContent>{value.data as any}</StepContent>
               </Step>
             },

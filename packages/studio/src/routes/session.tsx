@@ -193,11 +193,13 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         )?.unseenEvents;
     };
 
+    const [initialResume] = useState(session.resume);
+
     const { messages, sendMessage, status, error } = useChat({
         id: session.id,
         generateId: () => crypto.randomUUID(),
         messages: session.messages,
-        resume: session.resume,
+        resume: initialResume,
         transport: agentview().asUser({ id: session.user.id }).createTransport(),
     });
 
@@ -206,7 +208,6 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
     // Revalidate when we start streaming (session could have become active) 
     useEffect(() => {
         if (!session.active && status === 'streaming') {
-            console.log('REVALIDATE!!!');
             revalidator.revalidate();
         }
     }, [session.active, status]);
@@ -237,8 +238,8 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
     const userMessageError = (messages.length > 0 && messages[messages.length - 1]?.role === "user") ? unwrapError(error) : undefined;
 
     // console.log('session', session);
-    console.log('----');
-    // console.log('messages', messages.length);
+    // console.log('----');
+    // console.log('last message parts', messages[messages.length - 1]?.parts);
 
     /**
      * Build the wall
@@ -536,7 +537,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         }
     })
 
-    console.log('wall items', wallItems.length);
+    // console.log('wall items', wallItems.length);
 
     // const createRun = async (input: any) => {
     //     alert('createRun');

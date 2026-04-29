@@ -37,7 +37,7 @@ export async function POST() {
     { type: "text-delta", id: textId1, delta: "Here is the " },
     { type: "text-delta", id: textId1, delta: "first text part." },
 
-    // ...deltasFor20s,
+    ...deltasFor20s,
 
     { type: "text-end", id: textId1 },
     // { type: "error", errorText: "This is some error from the stream part"},
