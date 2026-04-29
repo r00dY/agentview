@@ -1,8 +1,6 @@
 import type { RouteObject } from "react-router";
-import type { BaseScoreConfig, BaseSessionItemConfig, BaseAgentConfig, BaseAgentViewConfig, BaseRunConfig, BaseChannelConfig, Metadata, SharedAgentConfig } from "agentview/baseConfigTypes";
-import type { StandardRun, StandardSession, SessionBase, SessionItem } from "agentview/apiTypes";
-import type { AgentViewClient, Session, SessionCreate } from "agentview";
-import { enhanceSession } from "agentview/sessionUtils";
+import type { BaseScoreConfig, BaseAgentViewConfig, SharedAgentConfig } from "agentview/baseConfigTypes";
+import type { AgentViewClient, Session, SessionBase } from "agentview";
 import { z } from "zod";
 
 export type RootCustomRoute = {
@@ -25,17 +23,6 @@ export type DisplayProperty<TInputArgs = any> = {
   value: (args: TInputArgs) => React.ReactNode;
 }
 
-// export type FormComponentProps<TSchema extends z.ZodTypeAny> = {
-//   value?: z.infer<TSchema> | undefined, 
-//   submit: (value: z.infer<TSchema> | null) => void,
-//   cancel: () => void,
-//   isRunning: boolean,
-//   error?: any,
-//   schema: TSchema,
-// }
-
-// export type FormComponent<TSchema extends z.ZodTypeAny> = React.ComponentType<FormComponentProps<TSchema>>;
-
 export type ControlComponentProps<TValue> = {
   value: TValue | undefined | null;
   onChange: (value: TValue | null) => void;
@@ -53,76 +40,22 @@ export type ScoreConfig<TValue = any> = BaseScoreConfig & {
   actionBarComponent?: ControlComponent<TValue>;
 }
 
-export type SessionItemDisplayComponentProps<TItemSchema extends z.ZodTypeAny = z.ZodAny> = {
-  item: z.infer<TItemSchema>,
-  resultItem?: any, // fixme
-  sessionItem: SessionItem;
-  run: StandardRun;
-  session: StandardSession;
-}
-
-export type SessionItemConfig = BaseSessionItemConfig<ScoreConfig> & {
-  displayComponent?: React.ComponentType<SessionItemDisplayComponentProps> | null;
-  // disableLike?: boolean;
-  // callResult?: SessionItemConfig;
-};
-
-export type RunConfig = BaseRunConfig<SessionItemConfig, SessionItemConfig> & {
-  displayProperties?: DisplayProperty<{ session: StandardSession, run: StandardRun }>[];
-  disableLike?: boolean;
-};
-
-export type AgentInputComponentProps<TSchema extends z.ZodTypeAny = z.ZodAny> = {
-  session: ReturnType<typeof enhanceSession>,
-  token: string,
+export type AgentInputComponentProps = {
+  session: Session,
   isRunning: boolean,
   cancel: () => void,
-  sendMessage: (input: any) => Promise<void>,
+  sendMessage: (userMessage: any) => Promise<void>,
 }
 
-export type AgentInputComponent<TSchema extends z.ZodTypeAny = z.ZodAny> = React.ComponentType<AgentInputComponentProps<TSchema>>
+export type AgentInputComponent = React.ComponentType<AgentInputComponentProps>
 
-// thin wrapper over client.sessions.create
 export type NewSessionComponentProps = {
-  // createSession: (values: Omit<SessionCreate, 'agent' | 'userId'> & Partial<Pick<SessionCreate, 'userId'>>) => Promise<void>,
-
-  // any custom experience is possible with these props
   client: AgentViewClient,
   agent: string,
   redirectToSession: (sessionId: string) => void,
 }
 
 export type NewSessionComponent = React.ComponentType<NewSessionComponentProps>
-
-// export type ChannelConfig = BaseChannelConfig & {
-//   displayProperties?: DisplayProperty<{ session: SessionBase }>[];
-//   newSessionComponent?: NewSessionComponent;
-//   inputComponent?: AgentInputComponent;
-// }
-
-
-
-
-
-
-// export type AgentConfig = BaseAgentConfig<RunConfig> & {
-//   displayProperties?: DisplayProperty<{ session: SessionBase }>[];
-//   newSessionComponent?: NewSessionComponent;
-//   inputComponent?: AgentInputComponent;
-// }
-
-// export type AgentViewConfig = BaseAgentViewConfig<AgentConfig> & {
-//   publicApiKey: string;
-//   env: string; // required for playground, we know which environment to use
-//   customRoutes?: CustomRoute[],
-// }
-
-
-
-
-/**
- * AISDK 
- */
 
 export interface AgentConfig extends SharedAgentConfig {
   displayProperties?: DisplayProperty<{ session: SessionBase }>[];
@@ -131,15 +64,14 @@ export interface AgentConfig extends SharedAgentConfig {
 
   // custom fields for ai-sdk
   userMessage?: {
-    displayComponent?: React.ComponentType<any>;
+    displayComponent?: React.ComponentType<any>; // { value: userMessage, session }
   }
   assistantMessage?: {
       parts?: Array<{
           type: string,
-          displayComponent?: React.ComponentType<any>
-          // scores?: BaseScoreConfig[] // - we do not support scores for items now
+          displayComponent?: React.ComponentType<any> // { value: part, session }
       }>
-      displayProperties?: DisplayProperty<{ session: StandardSession, run: StandardRun }>[];
+      displayProperties?: DisplayProperty<{ session: Session, userMessage: any, assistantMessage: any }>[];
       disableLike?: boolean;  
       scores?: ScoreConfig[];
   }

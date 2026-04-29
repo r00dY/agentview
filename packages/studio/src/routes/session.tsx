@@ -3,7 +3,7 @@ import { type ChannelMessage, type CommentMessage, type InputTarget, type Standa
 import { findAgentConfig, findAgentConfigBySession, findItemConfigById, findRunConfig, requireAgentConfigByName, requireAgentConfigBySession } from "agentview/baseConfigUtils";
 import { enhanceSession, getActiveRuns, getAllSessionItems, getLastRun } from "agentview/sessionUtils";
 import { unwrapError } from "agentview";
-import type { AgentConfig, AgentInputComponent, ScoreConfig, SessionItemConfig, SessionItemDisplayComponentProps } from "../types";
+import type { AgentConfig, AgentInputComponent, ScoreConfig } from "../types";
 import { AlertCircleIcon, Brain, ChevronDown, CircleGauge, InfoIcon, Loader2, Lock, MessageCirclePlus, UsersIcon, Wrench } from "lucide-react";
 import { useEffect, useLayoutEffect, useOptimistic, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
