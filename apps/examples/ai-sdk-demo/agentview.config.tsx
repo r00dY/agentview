@@ -18,7 +18,7 @@ export default defineConfig({
       adapter: "ai-sdk",
 
       metadata: {
-        userLocation: z.string().nullable()
+        userLocation: z.string()
       },
       newSessionComponent: ({ submit, isRunning }) => {
         const [selectedCity, setSelectedCity] = React.useState<string>("");

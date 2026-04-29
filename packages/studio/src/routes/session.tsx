@@ -195,7 +195,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         generateId: () => crypto.randomUUID(),
         messages: session.messages,
         resume: session.resume,
-        transport: agentview().asUser({ id: "xxx" }).createTransport()
+        transport: agentview().asUser({ id: session.user.id }).createTransport()
     });
 
     const isRunning = (status === 'streaming' || status === 'submitted');
@@ -231,12 +231,14 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
     const wallItems: WallItem[] = [];
 
     messages.forEach((message, index) => {
+
         const runMetadata = message.role === "user" ? messages[index + 1]?.metadata?._agentview : message.metadata?._agentview;
         const run = runMetadata?.id ? {
             id: runMetadata.id,
             status: runMetadata.status,
             failReason: runMetadata.failReason,
         } : undefined;
+
 
         if (message.role === "user") {
             if (session.channel.type === 'api') {
@@ -434,7 +436,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                 }
             }
 
-            console.log('error', unwrapError(error))
+            // console.log('error', unwrapError(error))
 
             // /**
             //  * Final item (run level)
