@@ -64,15 +64,15 @@ export interface AgentConfig extends SharedAgentConfig {
 
   // custom fields for ai-sdk
   userMessage?: {
-    displayComponent?: React.ComponentType<any>; // { value: userMessage, session }
+    displayComponent?: React.ComponentType<{ value: any, session: Session }>
   }
   assistantMessage?: {
       parts?: Array<{
           type: string,
-          displayComponent?: React.ComponentType<any> // { value: part, session }
+          displayComponent?: React.ComponentType<{ value: any, session: Session }>
       }>
       displayProperties?: DisplayProperty<{ session: Session, userMessage: any, assistantMessage: any }>[];
-      disableLike?: boolean;  
+      disableLike?: boolean;
       scores?: ScoreConfig[];
   }
 }
