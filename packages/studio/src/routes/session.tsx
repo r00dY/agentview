@@ -265,11 +265,11 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         if (message.role === "user") {
             if (session.channel.type === 'api') {
 
-                if (agentConfig?.userMessage?.displayComponent === null) {
+                if (agentConfig?.run?.userMessage?.displayComponent === null) {
                     return;
                 }
                 
-                const Component = agentConfig?.userMessage?.displayComponent ?? DefaultUserMessageDisplayComponent;
+                const Component = agentConfig?.run?.userMessage?.displayComponent ?? DefaultUserMessageDisplayComponent;
                 const element = <div className="pl-[10%] relative">
                     <Component value={message} session={session} />
                 </div>
@@ -349,7 +349,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
              * Get display component for a part: config override first, then defaults.
              */
             const getPartComponent = (part: UIMessage['parts'][number]): React.ComponentType<PartDisplayProps> | null => {
-                const partConfig = agentConfig.assistantMessage?.parts?.find(p => p.type === part.type);
+                const partConfig = agentConfig.run?.assistantMessage?.parts?.find(p => p.type === part.type);
                 if (partConfig?.displayComponent !== undefined) {
                     return partConfig.displayComponent as React.ComponentType<PartDisplayProps> | null;
                 }
@@ -396,7 +396,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
             // LAST ITEM - run level
             let runCommentsAndScores: CommentsThreadData | undefined = undefined;
             if (run) {
-                const runScoreConfigs = agentConfig?.assistantMessage?.scores ?? []
+                const runScoreConfigs = agentConfig?.run?.scores ?? []
                 const runComments: CommentMessage[] = props.comments.filter((c) => c.runId === run.id && !c.channelMessageId && !c.sessionItemId);
                 const runScores: Score[] = props.scores.filter((s) => s.runId === run.id && !s.channelMessageId && !s.sessionItemId);
                 const runTarget: InputTarget = { sessionId: session.id, runId: run.id };

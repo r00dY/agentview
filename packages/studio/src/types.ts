@@ -73,14 +73,17 @@ export interface AgentConfig extends Omit<SharedAgentConfig, 'adapter'> {
   newSessionComponent?: NewSessionComponent;
   inputComponent?: AgentInputComponent;
 
-  userMessage?: {
-    displayComponent?: UserMessageDisplayComponent | null;
-  }
-  assistantMessage?: {
+  run?: {
+    userMessage?: {
+      displayComponent?: UserMessageDisplayComponent | null;
+    }
+    assistantMessage?: {
       parts?: AssistantMessagePartConfig[];
-      displayProperties?: DisplayProperty<{ session: Session, userMessage: UIMessage, assistantMessage: UIMessage }>[];
-      disableLike?: boolean;
-      scores?: ScoreConfig[];
+    }
+
+    displayProperties?: DisplayProperty<{ session: Session, userMessage: UIMessage, assistantMessage: UIMessage }>[];
+    disableLike?: boolean;
+    scores?: ScoreConfig[];
   }
 }
 

@@ -12,9 +12,9 @@ export function toBaseConfig(config: AgentViewConfig): BaseAgentViewConfig {
 }
 
 function mapAgent(agent: AgentConfig): BaseAgentConfig {
-  const { userMessage, assistantMessage, ...shared } = agent;
+  const { run, ...shared } = agent;
 
-  const run: BaseRunConfig = {
+  const baseRun: BaseRunConfig = {
     input: {
       schema: z.looseObject({
         id: z.string(),
@@ -24,19 +24,19 @@ function mapAgent(agent: AgentConfig): BaseAgentConfig {
         })),
       }),
     },
-    output: (assistantMessage?.parts ?? []).map((part) => ({
+    output: (run?.assistantMessage?.parts ?? []).map((part) => ({
       schema: z.looseObject({
         type: z.literal(part.type),
       }),
     })),
-    scores: assistantMessage?.scores,
+    scores: run?.scores,
     validateOutput: false,
   };
 
   return {
     ...shared,
     adapter: 'ai-sdk',
-    runs: [run],
+    runs: [baseRun],
   };
 }
 

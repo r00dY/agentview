@@ -6,15 +6,15 @@ export function defineConfig(config: AgentViewConfig): AgentViewConfig {
     ...config,
     agents: config.agents?.map((agent) => {
 
-      const scores = [...(agent.assistantMessage?.scores ?? [])];
-      if (!agent.assistantMessage?.disableLike) {
+      const scores = [...(agent.run?.scores ?? [])];
+      if (!agent.run?.disableLike) {
         scores.unshift(like());
       }
 
       return {
         ...agent,
-        assistantMessage: {
-          ...agent.assistantMessage,
+        run: {
+          ...agent.run,
           scores,
         },
       }

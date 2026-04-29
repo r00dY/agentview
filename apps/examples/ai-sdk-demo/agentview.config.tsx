@@ -20,13 +20,14 @@ export default defineConfig({
       metadata: {
         userLocation: z.string()
       },
-      newSessionComponent: WeatherChatNewSessionComponent,
       displayProperties: [
         {
           title: "User Location",
           value: ({ session }) => session?.metadata?.userLocation
         }
       ],
+      newSessionComponent: WeatherChatNewSessionComponent,
+
       // inputComponent: ({ sendMessage, cancel, isRunning, session }) => <UserMessageInput
       //   onSubmit={(val) => {
       //     sendMessage({
@@ -48,18 +49,25 @@ export default defineConfig({
       //   },
       // },
 
-      assistantMessage: {
-        parts: [
-          {
-            type: "data-weather",
-            displayComponent: ({ value }) => {
-              return <Step collapsible>
-                <StepTitle><ThermometerSun /> Weather Data</StepTitle>
-                <StepContent>{value.data as any}</StepContent>
-              </Step>
-            },
-          }
-        ],
+      run: {
+        // userMessage: {
+        //   displayComponent: ({ value }) => {
+        //     return <UserMessage>CUSTOM: {value.parts?.map((part: any) => part.text).join("\n\n")}</UserMessage>;
+        //   },
+        // },
+        assistantMessage: {
+          parts: [
+            {
+              type: "data-weather",
+              displayComponent: ({ value }) => {
+                return <Step collapsible>
+                  <StepTitle><ThermometerSun /> Weather Data</StepTitle>
+                  <StepContent>{value.data as any}</StepContent>
+                </Step>
+              },
+            }
+          ]
+        },
         scores: [
           select({
             name: "forecast_accuracy",
@@ -82,6 +90,8 @@ export default defineConfig({
           })
         ]
       },
+
+
       channels: [
         {
           type: "gmail",
@@ -104,7 +114,7 @@ export default defineConfig({
 });
 
 
-function WeatherChatNewSessionComponent ({ client, agent, redirectToSession } : NewSessionComponentProps) {
+function WeatherChatNewSessionComponent({ client, agent, redirectToSession }: NewSessionComponentProps) {
   const [selectedCity, setSelectedCity] = React.useState<string>("");
   const [error, setError] = React.useState<string | null>(null);
   const [isRunning, setIsRunning] = React.useState(false);
