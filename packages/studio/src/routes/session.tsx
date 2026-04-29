@@ -195,10 +195,21 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         generateId: () => crypto.randomUUID(),
         messages: session.messages,
         resume: session.resume,
-        transport: agentview().asUser({ id: session.user.id }).createTransport()
+        transport: agentview().asUser({ id: session.user.id }).createTransport(),
     });
 
     const isRunning = (status === 'streaming' || status === 'submitted');
+
+    // Revalidate when we start streaming (session could have become active) 
+    useEffect(() => {
+        if (!session.active && status === 'streaming') {
+            console.log('REVALIDATE!!!');
+            revalidator.revalidate();
+        }
+    }, [session.active, status]);
+
+
+
 
     /**
      * ERROR HANDLING
@@ -222,6 +233,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 
     const userMessageError = (messages.length > 0 && messages[messages.length - 1]?.role === "user") ? unwrapError(error) : undefined;
 
+    console.log('session', session);
 
     /**
      * Build the wall

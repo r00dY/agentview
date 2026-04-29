@@ -20,13 +20,30 @@ export default defineConfig({
       metadata: {
         userLocation: z.string()
       },
-      newSessionComponent: ({ submit, isRunning }) => {
+      newSessionComponent: ({ client, agent, redirectToSession }) => {
         const [selectedCity, setSelectedCity] = React.useState<string>("");
+        const [error, setError] = React.useState<string | null>(null);
+        const [isRunning, setIsRunning] = React.useState(false);
 
-        const handleSubmit = (e: React.FormEvent) => {
+        const handleSubmit = async (e: React.FormEvent) => {
           e.preventDefault();
-          if (selectedCity) {
-            submit({ metadata: { userLocation: selectedCity } });
+          setError(null);
+          setIsRunning(true);
+
+          try {
+            const { user } = await client.users.createAnon();
+            const session = await client.sessions.create({
+              agent,
+              active: false,
+              metadata: { userLocation: selectedCity },
+              userId: user.id
+            });
+
+            redirectToSession(session.id);
+          } catch (error) {
+            setError(error instanceof Error ? error.message : "An unknown error occurred");
+          } finally {
+            setIsRunning(false);
           }
         };
 

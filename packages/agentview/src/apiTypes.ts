@@ -447,10 +447,12 @@ export type Session = z.infer<typeof SessionSchema>
 
 export const SessionCreateSchema = SessionCreateBaseSchema.extend({
   input: UserUIMessageSchema.optional(),
-  active: z.boolean().default(true),
+  active: z.boolean().optional()
 })
 
+
 export type SessionCreate = z.infer<typeof SessionCreateSchema>
+
 
 export const RunCreateSchema = z.object({
   input: UserUIMessageSchema,

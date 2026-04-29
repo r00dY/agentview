@@ -696,6 +696,7 @@ const sessionsAISDKPOSTRoute = createRoute({
 app.openapi(sessionsAISDKPOSTRoute, async (c) => {
   const principal = await authnAllowUser(c.req.raw.headers)
   const body = await c.req.valid('json')
+  const active = body.active ?? true; // default active: true
 
   // session without run - just create active session and return it
   if (!body.input) {
@@ -708,7 +709,7 @@ app.openapi(sessionsAISDKPOSTRoute, async (c) => {
       });
       await setAgentForSession(tx, newSession.id, { agent: body.agent, metadata: body.metadata, initialState: body.initialState });
 
-      if (body.active) {
+      if (active) {
         await activateSession(tx, newSession.id);
       }
 

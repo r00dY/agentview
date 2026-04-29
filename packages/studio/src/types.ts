@@ -1,6 +1,7 @@
 import type { RouteObject } from "react-router";
 import type { BaseScoreConfig, BaseSessionItemConfig, BaseAgentConfig, BaseAgentViewConfig, BaseRunConfig, BaseChannelConfig, Metadata, SharedAgentConfig } from "agentview/baseConfigTypes";
 import type { StandardRun, StandardSession, SessionBase, SessionItem } from "agentview/apiTypes";
+import type { AgentViewClient, Session, SessionCreate } from "agentview";
 import { enhanceSession } from "agentview/sessionUtils";
 import { z } from "zod";
 
@@ -81,9 +82,14 @@ export type AgentInputComponentProps<TSchema extends z.ZodTypeAny = z.ZodAny> = 
 
 export type AgentInputComponent<TSchema extends z.ZodTypeAny = z.ZodAny> = React.ComponentType<AgentInputComponentProps<TSchema>>
 
+// thin wrapper over client.sessions.create
 export type NewSessionComponentProps = {
-  submit: (values?: { metadata?: any }) => void,
-  isRunning: boolean
+  // createSession: (values: Omit<SessionCreate, 'agent' | 'userId'> & Partial<Pick<SessionCreate, 'userId'>>) => Promise<void>,
+
+  // any custom experience is possible with these props
+  client: AgentViewClient,
+  agent: string,
+  redirectToSession: (sessionId: string) => void,
 }
 
 export type NewSessionComponent = React.ComponentType<NewSessionComponentProps>

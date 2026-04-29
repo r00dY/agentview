@@ -1,4 +1,4 @@
-import { redirect, Form, useActionData, useFetcher, data, useLoaderData } from "react-router";
+import { redirect, Form, useActionData, useFetcher, data, useLoaderData, useNavigate } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs, RouteObject } from "react-router";
 import { Header, HeaderTitle } from "../components/header";
 import { agentview, AgentViewError } from "../lib/agentview";
@@ -31,9 +31,11 @@ function getAgentNameFromRequest(request: Request): string {
 
 async function loader({ request }: LoaderFunctionArgs) {
   const agentConfig = requireAgentConfigByName(config, getAgentNameFromRequest(request));
+  const listParams = getListParams(request);
 
   return {
-    agentConfig
+    agentConfig,
+    listParams
   }
 }
 
@@ -58,11 +60,13 @@ async function action({ request, params }: ActionFunctionArgs): Promise<ActionRe
   }
 
   try {
-    const { user } = await agentview().users.createAnon();
+    const userId = payload?.userId ?? (await agentview().users.createAnon()).user.id;
     const session = await agentview().sessions.create({
+      ...payload,
+
       agent: agentName,
-      userId: user.id,
-      metadata: payload?.metadata
+      active: false,
+      userId
     });
 
     return redirect(`/sessions/${session.id}?${toQueryParams(listParams)}`);
@@ -75,7 +79,8 @@ async function action({ request, params }: ActionFunctionArgs): Promise<ActionRe
 }
 
 function Component() {
-  const { agentConfig } = useLoaderData<typeof loader>();
+  const { agentConfig, listParams } = useLoaderData<typeof loader>();
+  const navigate = useNavigate();
 
   const actionData = useActionData<typeof action>();
   const fetcher = useFetcher();
@@ -106,10 +111,37 @@ function Component() {
         </Alert>}
 
         {agentConfig.newSessionComponent && <agentConfig.newSessionComponent
-          submit={(values) => { 
-            fetcher.submit(values ?? {}, { method: 'post', encType: 'application/json' }) 
+          client={agentview()}
+          agent={agentConfig.name}
+          redirectToSession={(sessionId) => {
+            navigate(`/sessions/${sessionId}?${toQueryParams(listParams)}`);
           }}
-          isRunning={fetcher.state === "submitting"}
+
+          // createSession={async (values) => {
+
+          //   fetcher.submit(values ?? {}, { method: 'post', encType: 'application/json' }) 
+
+          //   // try {
+          //   //   const userId = values.userId ?? (await agentview().users.createAnon()).user.id;
+          //   //   const session = await agentview().sessions.create({
+          //   //     agent: agentConfig.name,
+          //   //     userId,
+          //   //     active: false,
+          //   //     ...values
+          //   //   });
+
+          //   //   alert('YESSSSS!!!');
+
+          //   // } catch (error) {
+          //   //   throw error;
+          //   // }
+
+          //   // fetcher.submit(values ?? {}, { method: 'post', encType: 'application/json' }) 
+          // }}
+          // submit={(values) => { 
+          //   fetcher.submit(values ?? {}, { method: 'post', encType: 'application/json' }) 
+          // }}
+          // isRunning={fetcher.state === "submitting"}
         />}
 
         {!agentConfig.newSessionComponent && !error && <Alert variant="default">
