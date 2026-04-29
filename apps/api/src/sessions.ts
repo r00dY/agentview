@@ -100,6 +100,7 @@ export async function fetchSessionBase(tx: Transaction, session_id: string): Pro
     summary: row.summary,
     agentRef: row.agentRef ?? null,
     agentRefs: row.agentRefs ?? [],
+    active: row.active,
   } as SessionBase
 }
 
@@ -169,6 +170,7 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
     summary: row.summary,
     agentRef: row.agentRef ?? null,
     agentRefs: row.agentRefs ?? [],
+    active: row.active,
     runs: row.runs
       .filter((run, index) => {
         if (run.status === "completed") {

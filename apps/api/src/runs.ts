@@ -1019,6 +1019,10 @@ export async function createAutoRun2(
     // Stream established.
     log.debug(`[${sessionId}] [createAutoRun2] stream established`);
 
+    await withTenant(principal, async (tx) => {
+      await activateSession(tx, sessionId);
+    });
+
     return { response: responseCopy, runId, success: true }
 
   } catch (err) {

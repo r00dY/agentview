@@ -1133,7 +1133,8 @@ describe('API', () => {
             [[baseInput], [baseStep, wrongOutput]],
           ],
           lastRunStatus: ["completed"],
-          error: 422
+          error: 422,
+          validateOutput: true,
         },
         {
           title: "incorrect output item",

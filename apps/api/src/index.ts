@@ -707,7 +707,10 @@ app.openapi(sessionsAISDKPOSTRoute, async (c) => {
         summary: body.summary,
       });
       await setAgentForSession(tx, newSession.id, { agent: body.agent, metadata: body.metadata, initialState: body.initialState });
-      await activateSession(tx, newSession.id);
+
+      if (body.active) {
+        await activateSession(tx, newSession.id);
+      }
 
       const fullSession = await requireSession(tx, newSession.id);
       return c.json(standardToDefaultSession(fullSession), 201);
@@ -730,7 +733,7 @@ app.openapi(sessionsAISDKPOSTRoute, async (c) => {
     // on success -> just return new session
     if (success) {
       return await withTenant(principal, async (tx) => {
-        await activateSession(tx, newSession.id);
+        // await activateSession(tx, newSession.id);
         const fullSession = await requireSession(tx, newSession.id);
         return c.json(standardToDefaultSession(fullSession), 201);
       })

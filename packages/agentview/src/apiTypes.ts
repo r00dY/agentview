@@ -255,6 +255,7 @@ export const SessionBaseSchema = z.object({
   summary: z.string().nullable(),
   agentRef: AgentRefSchema.nullable(),
   agentRefs: z.array(AgentRefSchema),
+  active: z.boolean()
 })
 
 export type SessionBase = z.infer<typeof SessionBaseSchema>
@@ -446,6 +447,7 @@ export type Session = z.infer<typeof SessionSchema>
 
 export const SessionCreateSchema = SessionCreateBaseSchema.extend({
   input: UserUIMessageSchema.optional(),
+  active: z.boolean().default(true),
 })
 
 export type SessionCreate = z.infer<typeof SessionCreateSchema>
