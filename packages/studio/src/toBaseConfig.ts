@@ -35,6 +35,7 @@ function mapAgent(agent: AgentConfig): BaseAgentConfig {
 
   return {
     ...shared,
+    adapter: 'ai-sdk',
     runs: [run],
   };
 }

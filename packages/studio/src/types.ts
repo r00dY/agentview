@@ -68,7 +68,7 @@ export type AssistantMessagePartConfig<TPart = UIMessage['parts'][number]> =
 
 export type UserMessageDisplayComponent = React.ComponentType<{ value: UIMessage, session: Session }>;
 
-export interface AgentConfig extends SharedAgentConfig {
+export interface AgentConfig extends Omit<SharedAgentConfig, 'adapter'> {
   displayProperties?: DisplayProperty<{ session: SessionBase }>[];
   newSessionComponent?: NewSessionComponent;
   inputComponent?: AgentInputComponent;
