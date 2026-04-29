@@ -2,7 +2,6 @@ import type { RouteObject } from "react-router";
 import type { BaseScoreConfig, BaseAgentViewConfig, SharedAgentConfig } from "agentview/baseConfigTypes";
 import type { AgentViewClient, Session, SessionBase } from "agentview";
 import type { UIMessage } from "ai";
-import { z } from "zod";
 
 export type RootCustomRoute = {
   type: "root",
@@ -74,7 +73,6 @@ export interface AgentConfig extends SharedAgentConfig {
   newSessionComponent?: NewSessionComponent;
   inputComponent?: AgentInputComponent;
 
-  // custom fields for ai-sdk
   userMessage?: {
     displayComponent?: UserMessageDisplayComponent | null;
   }

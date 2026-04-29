@@ -4,7 +4,7 @@ import { findAgentConfig, findAgentConfigBySession, findItemConfigById, findRunC
 import { enhanceSession, getActiveRuns, getAllSessionItems, getLastRun } from "agentview/sessionUtils";
 import { unwrapError } from "agentview";
 import type { AgentConfig, AgentInputComponent, InputUIMessage, ScoreConfig, UserMessageDisplayComponent } from "../types";
-import { AlertCircleIcon, Brain, ChevronDown, CircleGauge, InfoIcon, Loader2, Lock, MessageCirclePlus, UsersIcon, Wrench } from "lucide-react";
+import { AlertCircleIcon, Brain, ChevronDown, CircleGauge, Ellipsis, InfoIcon, Loader2, Lock, MessageCirclePlus, UsersIcon, Wrench } from "lucide-react";
 import { useEffect, useLayoutEffect, useOptimistic, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import type { LoaderFunctionArgs, RouteObject } from "react-router";
@@ -24,6 +24,7 @@ import { AssistantMessage, Step, StepContent, StepTitle, UserMessage, UserMessag
 import { Alert, AlertDescription } from "../components/ui/alert";
 import { Button } from "../components/ui/button";
 import { Form as HookForm } from "../components/ui/form";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
 import { config } from "../config";
 import { useFetcherSuccess } from "../hooks/useFetcherSuccess";
@@ -183,7 +184,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
     const revalidator = useRevalidator();
     const navigate = useNavigate();
     const { me } = useSessionContext();
-    const { sessionStats, session } = props;
+    const { sessionStats, session: initialSession } = props;
 
     const getUnseenEvents = (target: InputTarget): any[] | undefined => {
         return sessionStats?.inboxItems?.find(i =>
@@ -193,25 +194,29 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         )?.unseenEvents;
     };
 
-    const [initialResume] = useState(session.resume);
+    const [initialResume] = useState(initialSession.resume);
 
     const { messages, sendMessage, status, error } = useChat({
-        id: session.id,
+        id: initialSession.id,
         generateId: () => crypto.randomUUID(),
-        messages: session.messages,
+        messages: initialSession.messages,
         resume: initialResume,
-        transport: agentview().asUser({ id: session.user.id }).createTransport(),
+        transport: agentview().asUser({ id: initialSession.user.id }).createTransport(),
     });
 
     const isRunning = (status === 'streaming' || status === 'submitted');
 
-    // Revalidate when we start streaming (session could have become active) 
+    // Revalidate when we start streaming (initialSession could have become active) 
     useEffect(() => {
-        if (!session.active && status === 'streaming') {
+        if (!initialSession.active && status === 'streaming') {
             revalidator.revalidate();
         }
-    }, [session.active, status]);
+    }, [initialSession.active, status]);
 
+    const session = {
+        ...initialSession,
+        messages,
+    }
 
 
 
@@ -653,7 +658,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         <SessionShell
             sessionBase={session}
             agentConfig={agentConfig}
-            headerExtra={session.user.ownerId === me.id && <ShareForm session={session} />}
+            headerExtra={session.user.ownerId === me.id && <SessionHeaderActions session={session} />}
             footer={session.user.ownerId === me.id && <InputForm session={session} agentConfig={agentConfig} styles={styles} sendMessage={sendMessage} cancelRun={cancelRun} isRunning={isRunning} />}
             outletContext={{ session }}
         >
@@ -788,6 +793,24 @@ function SessionDetails({ sessionBase, agentConfig }: { sessionBase: SessionBase
             </PropertyList>
         </div>
     );
+}
+
+function SessionHeaderActions({ session }: { session: Session }) {
+    return <div className="flex items-center gap-2">
+        <ShareForm session={session} />
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon_sm">
+                    <Ellipsis className="size-4" />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => console.log(session)}>
+                    Print Session to console
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    </div>
 }
 
 function ShareForm({ session }: { session: SessionBase }) {

@@ -1,5 +1,5 @@
-import type { BaseAgentConfig, BaseAgentViewConfig } from "agentview/baseConfigTypes";
-import type { AgentConfig, AgentViewConfig, RunConfig } from "./types";
+import type { BaseAgentConfig, BaseRunConfig,BaseAgentViewConfig } from "agentview/baseConfigTypes";
+import type { AgentConfig, AgentViewConfig } from "./types";
 import { z } from "zod";
 
 export function toBaseConfig(config: AgentViewConfig): BaseAgentViewConfig {
@@ -14,7 +14,7 @@ export function toBaseConfig(config: AgentViewConfig): BaseAgentViewConfig {
 function mapAgent(agent: AgentConfig): BaseAgentConfig {
   const { userMessage, assistantMessage, ...shared } = agent;
 
-  const run: RunConfig = {
+  const run: BaseRunConfig = {
     input: {
       schema: z.looseObject({
         id: z.string(),
@@ -23,17 +23,13 @@ function mapAgent(agent: AgentConfig): BaseAgentConfig {
           type: z.string(),
         })),
       }),
-      // displayComponent: userMessage?.displayComponent// ?? DefaultUserMessageDisplayComponent
     },
     output: (assistantMessage?.parts ?? []).map((part) => ({
       schema: z.looseObject({
         type: z.literal(part.type),
       }),
-      // displayComponent: part.displayComponent
     })),
     scores: assistantMessage?.scores,
-    // displayProperties: assistantMessage?.displayProperties,
-    disableLike: assistantMessage?.disableLike,
     validateOutput: false,
   };
 
