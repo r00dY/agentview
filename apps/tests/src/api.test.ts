@@ -66,7 +66,7 @@ describe('API', () => {
     }))
   }
 
-  const updateConfig = async (options: { strictMatching?: boolean, runMetadata?: Record<string, z.ZodType>, allowUnknownMetadata?: boolean, validateOutput?: boolean, prod?: boolean, itemScores?: { name: string, schema: z.ZodType }[], runScores?: { name: string, schema: z.ZodType }[], version?: string } = {}) => {
+  const updateConfig = async (options: { strictMatching?: boolean, runMetadata?: Record<string, z.ZodType>, allowUnknownMetadata?: boolean, validateOutput?: boolean, prod?: boolean, itemScores?: { name: string, schema: z.ZodType }[], runScores?: { name: string, schema: z.ZodType }[], version?: string, adapter?: 'agentview' | 'ai-sdk' } = {}) => {
 
     let inputSchema = z.looseObject({ type: z.literal("message"), role: z.literal("user"), content: z.string() })
     let stepSchema = z.looseObject({ type: z.literal("reasoning"), content: z.string() })
@@ -86,6 +86,7 @@ describe('API', () => {
         {
           name: "test",
           version: options.version ?? "1.0.0",
+          ...(options.adapter && { adapter: options.adapter }),
           runs: [
             {
               input: { schema: inputSchema },
@@ -1582,6 +1583,81 @@ describe('API', () => {
         })
       })
 
+    })
+
+    // sessions.updateRun (PATCH /api/sessions/:session_id/runs/:run_id) — ai-sdk adapter only
+    describe("updateRun metadata (ai-sdk)", () => {
+      test("update metadata", async () => {
+        await updateConfig({ adapter: 'ai-sdk', runMetadata: { field1: z.string(), field2: z.number() }, allowUnknownMetadata: false })
+        const session = await createSession()
+        const run = await av.createManualRun({ sessionId: session.id, items: [baseInput], metadata: { field1: "A", field2: 0 } })
+
+        await av.updateRun({ sessionId: session.id, runId: run.id, metadata: { field1: "B", field2: 1 } })
+        const fetched = await av.getSession({ id: session.id })
+        const updatedRun = fetched.runs.find(r => r.id === run.id)
+        expect(updatedRun!.metadata).toEqual({ field1: "B", field2: 1 })
+      })
+
+      test("update metadata - partial update", async () => {
+        await updateConfig({ adapter: 'ai-sdk', runMetadata: { field1: z.string(), field2: z.number() }, allowUnknownMetadata: false })
+        const session = await createSession()
+        const run = await av.createManualRun({ sessionId: session.id, items: [baseInput], metadata: { field1: "A", field2: 0 } })
+
+        await av.updateRun({ sessionId: session.id, runId: run.id, metadata: { field1: "B" } })
+        const fetched = await av.getSession({ id: session.id })
+        const updatedRun = fetched.runs.find(r => r.id === run.id)
+        expect(updatedRun!.metadata).toEqual({ field1: "B", field2: 0 })
+      })
+
+      test("update metadata - make field null", async () => {
+        await updateConfig({ adapter: 'ai-sdk', runMetadata: { field1: z.string(), field2: z.number().nullable() }, allowUnknownMetadata: false })
+        const session = await createSession()
+        const run = await av.createManualRun({ sessionId: session.id, items: [baseInput], metadata: { field1: "A", field2: 0 } })
+
+        await av.updateRun({ sessionId: session.id, runId: run.id, metadata: { field2: null } })
+        const fetched = await av.getSession({ id: session.id })
+        const updatedRun = fetched.runs.find(r => r.id === run.id)
+        expect(updatedRun!.metadata).toEqual({ field1: "A", field2: null })
+      })
+
+      test("update metadata - validation enforced", async () => {
+        await updateConfig({ adapter: 'ai-sdk', runMetadata: { product_id: z.string() }, allowUnknownMetadata: false })
+        const session = await createSession()
+        const run = await av.createManualRun({ sessionId: session.id, items: [baseInput], metadata: { product_id: "A" } })
+
+        await expect(av.updateRun({ sessionId: session.id, runId: run.id, metadata: { wrong: "x" } })).rejects.toThrowError(expect.objectContaining({
+          statusCode: 422,
+          message: expect.any(String),
+        }))
+      })
+
+      test("metadata can be updated AFTER the run is completed", async () => {
+        await updateConfig({ adapter: 'ai-sdk', runMetadata: { product_id: z.string() } })
+        const session = await createSession()
+        const run = await av.createManualRun({
+          sessionId: session.id,
+          items: [baseInput],
+          metadata: { product_id: "123", assistantMessage: { id: "assistant-1" } }
+        })
+
+        await av.updateManualRun({ id: run.id, items: [baseOutput], status: "completed" })
+
+        await av.updateRun({ sessionId: session.id, runId: run.id, metadata: { product_id: "456" } })
+        const fetched = await av.getSession({ id: session.id })
+        const updatedRun = fetched.runs.find(r => r.id === run.id)
+        expect(updatedRun!.metadata).toMatchObject({ product_id: "456" })
+      })
+
+      test("fails for non-ai-sdk adapter", async () => {
+        await updateConfig({ runMetadata: { product_id: z.string() } })
+        const session = await createSession()
+        const run = await av.createManualRun({ sessionId: session.id, items: [baseInput], metadata: { product_id: "123" } })
+
+        await expect(av.updateRun({ sessionId: session.id, runId: run.id, metadata: { product_id: "456" } })).rejects.toThrowError(expect.objectContaining({
+          statusCode: 422,
+          message: expect.any(String),
+        }))
+      })
     })
 
     describe("step/output item types", () => {

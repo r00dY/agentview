@@ -4,6 +4,7 @@ import {
     type StandardRunCreate,
     type ManualRunCreate,
     type ManualRunUpdate,
+    type RunUpdate,
     type StandardSessionCreate,
     type SessionUpdate,
     type SessionStreamEvent,
@@ -49,6 +50,11 @@ export class StandardAgentViewClient extends AgentViewBase {
 
     async updateManualRun(options: ManualRunUpdate & { id: string }) {
         return await this._request<StandardRun>('PATCH', `/api/runs/${options.id}/manual`, options)
+    }
+
+    async updateRun(options: RunUpdate & { sessionId: string, runId: string }) {
+        const { sessionId, runId, ...body } = options;
+        return await this._request<StandardSession>('PATCH', `/api/sessions/${sessionId}/runs/${runId}`, body)
     }
 
     async cancelRun(options: { sessionId: string }) {
