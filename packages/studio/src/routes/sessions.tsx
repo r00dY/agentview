@@ -154,26 +154,26 @@ export function SessionCard({ session, listParams, sessionStats }: { session: Se
 
             <div className="flex flex-row gap-1 justify-between">
 
-              <div className="flex flex-row gap-2 items-center">
-                { !author && <MessageCircle className="size-4 text-neutral-500" />}
+              <div className="flex flex-row gap-2 items-center min-w-0">
+                { !author && <MessageCircle className="size-4 flex-shrink-0 text-neutral-500" />}
                 { author && <UserAvatar image={author?.user.image} className="flex-shrink-0" size="sm" />}
 
-                <div className={`text-sm ${hasUnreads ? 'font-semibold' : 'font-normal'}`}>
-                  Session {session.handle}
+                <div className={`text-sm truncate ${hasUnreads ? 'font-semibold' : 'font-normal'}`}>
+                  {session.summary ?? "Untitled"}
                 </div>
 
                 {/* {isPending && <Loader2 className="size-3 animate-spin text-neutral-500" />} */}
 
               </div>
 
-              <div className="flex flex-row gap-1 items-center">
+              <div className="flex flex-row gap-1 items-center flex-shrink-0">
                 <div className="text-xs text-neutral-500">{timeAgoShort(date)}</div>
                 {itemsMentionsCount > 0 && <NotificationBadge>@</NotificationBadge>}
                 {itemsMentionsCount === 0 && itemsEventsCount > 0 && <NotificationDot />}
               </div>
 
             </div>
-            { session.summary && <div className="text-sm truncate  text-neutral-600">{session.summary}</div> }
+            {/* { session.summary && <div className="text-sm truncate  text-neutral-600">{session.summary}</div> } */}
             {/* <div className="text-xs text-neutral-500 mt-1">0.0.1-dev</div> */}
           </div>
         </div>

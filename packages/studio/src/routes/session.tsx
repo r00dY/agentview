@@ -103,7 +103,7 @@ function SessionShell({
     return <>
         <div className="flex-grow-1 border-r flex flex-col">
             <Header className="py-1" trigger={false}>
-                <HeaderTitle title={`Session ${sessionBase.handle}`} />
+                <HeaderTitle title={`${sessionBase.summary ?? "Untitled"}`} />
                 {headerExtra}
             </Header>
             <div className="flex-1 overflow-y-auto">
@@ -203,6 +203,10 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
     // Revalidate when we start streaming (initialSession could have become active) 
     useEffect(() => {
         if (!initialSession.active && status === 'streaming') {
+            
+            /**
+             * TODO: clear cache here. Lists gets updated.
+             */
             revalidator.revalidate();
         }
     }, [initialSession.active, status]);
