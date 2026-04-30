@@ -30,21 +30,25 @@ function Component() {
     const { session } = useOutletContext<{ session: Session }>();
     const { listParams } = useLoaderData<typeof loader>();
 
-    const userMessage = session.messages.find((message) => message.role === "user" && message.metadata?._agentview?.id === params.runId);
-    const assistantMessage = session.messages.find((message) => message.role === "user" && message.metadata?._agentview?.id === params.runId);
+    const assistantMessageIndex = session.messages.findIndex((message) => message.role === "assistant" && message.metadata?._agentview?.id === params.runId);
 
-    if (!userMessage || !assistantMessage) {
-        throw data({ message: "User or assistant message not found" }, { status: 404 });
+    if (assistantMessageIndex === -1) {
+        throw data({ message: "Run not found" }, { status: 404 });
+    }
+    const assistantMessage = session.messages[assistantMessageIndex];
+
+    const userMessage = session.messages[assistantMessageIndex - 1]
+    if (!userMessage) {
+        throw data({ message: "Run not found" }, { status: 404 });
     }
 
-    // const channelConfig = findChannelConfig(config, session.channel);
-
-    // const agentName = typeof channelConfig?.agent === 'string' ? channelConfig.agent : channelConfig?.agent?.name;
+    const run = assistantMessage?.metadata?._agentview;
+    if (!run) {
+        throw data({ message: "Run not found" }, { status: 404 });
+    }
+    
     const agentConfig = findAgentConfigBySession(config, session);
     let runConfig = agentConfig?.run
-
-    // const runConfig = requireRunConfig(agentConfig, run.sessionItems[0].content);
-
 
     const close = () => {
         navigate(`../?${toQueryParams(listParams)}`);
@@ -111,12 +115,12 @@ function Component() {
                         </PropertyListTextValue>
                     </PropertyListItem>
 
-                    {runConfig && runConfig.displayProperties && <DisplayProperties displayProperties={runConfig.displayProperties} inputArgs={{ session, run }} />}
+                    {runConfig && runConfig.displayProperties && <DisplayProperties displayProperties={runConfig.displayProperties} inputArgs={{ session, run, userMessage, assistantMessage }} />}
 
-                    {!runConfig && error && <Alert variant="destructive">
+                    {/* {!runConfig && error && <Alert variant="destructive">
                         <AlertCircleIcon className="h-4 w-4" />
                         <AlertDescription>{error}</AlertDescription>
-                    </Alert>}
+                    </Alert>} */}
                 </PropertyList>
 
                 {/* <div className="mt-8 border p-4 rounded-lg flex flex-row gap-4 items-center">

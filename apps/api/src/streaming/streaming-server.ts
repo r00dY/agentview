@@ -105,7 +105,8 @@ async function handleProfileStop(res: http.ServerResponse) {
 }
 
 async function handleCreateStream(req: http.IncomingMessage, res: http.ServerResponse) {
-  const { runId, url, body, metadata, headers: extraHeaders } = await readJsonBody(req);
+  const { run, url, body, metadata, headers: extraHeaders } = await readJsonBody(req);
+  const runId = run.id;
 
   log.info(`LIVE CONNECTION run:${runId}`);
 
@@ -178,10 +179,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
           // add runId to message metadata
           if (chunk.type === 'start') {
-            sendInternalMetadata({
-              id: runId,
-              status: 'in_progress'
-            })
+            sendInternalMetadata(run)
           }
 
         } catch (error) {
@@ -289,24 +287,32 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
        * It's a cleanup phase which *always runs* (unless the machine goes down), but we can't assume 'start' was already sent.
        * It means that there is a scenario where the front-end doesn't have runId in the metadata. This prevents this scenario.
        */
+
+      const finishedAt = new Date().toISOString();
+
       if (streamFinishReason.type === 'complete') {
         sendInternalMetadata({
-          id: runId,
-          status: 'completed'
+          ...run,
+          status: 'completed',
+          failReason: null,
+          finishedAt,
         })
       }
       else if (streamFinishReason.type === 'abort') {
         sendInternalMetadata({
-          id: runId,
-          status: 'cancelled'
+          ...run,
+          status: 'cancelled',
+          failReason: null,
+          finishedAt,
         })
       }
       else {
         const { type, ...failReason } = streamFinishReason;
         sendInternalMetadata({
-          id: runId,
+          ...run,
           status: 'failed',
-          failReason
+          failReason,
+          finishedAt,
         })
       }
 
@@ -337,7 +343,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     });
 
     conn = {
-      runId,
+      run,
       metadata,
 
       upstreamRes,

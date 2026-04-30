@@ -162,7 +162,11 @@ export async function getRunBase(tx: Transaction, runId: string) {
 
   return {
     ...row.runs,
-    agentRef: row.agent_refs,
+    agentRef: row.agent_refs ? {
+      agent: row.agent_refs.agent,
+      version: row.agent_refs.version,
+      adapter: row.agent_refs.adapter,
+    } : null
   };
 }
 
@@ -843,7 +847,7 @@ export async function createAutoRun2(
   log.debug(`[${sessionId}] [createAutoRun2] start`);
 
   // 1. Prepare run creation (authorization, validation, etc)
-  const { runId, standardSession, runConfig, agentUrl, tunnelUrl, isLocalEnv } = await withTenant(principal, async (tx) => {
+  const { runBase, standardSession, runConfig, agentUrl, tunnelUrl, isLocalEnv } = await withTenant(principal, async (tx) => {
     await tx.acquireLock({ type: "edit_session", sessionId });
 
     const session = await requireSessionBase(tx, sessionId);
@@ -950,8 +954,10 @@ export async function createAutoRun2(
     }
 
     const standardSession = await requireSession(tx, sessionId);
+    const runBase = await requireRunBase(tx, run.id);
+
     return {
-      runId: run.id,
+      runBase,
       standardSession,
       runConfig,
       agentUrl,
@@ -959,6 +965,8 @@ export async function createAutoRun2(
       isLocalEnv,
     }
   });
+
+  const runId = runBase.id;
 
   const session = standardToDefaultSession(standardSession);
   const messages = session.messages;
@@ -981,7 +989,15 @@ export async function createAutoRun2(
       },
       body: JSON.stringify({
         url: targetUrl,
-        runId,
+        run: {
+          id: runBase.id,
+          agentRef: runBase.agentRef,
+          status: runBase.status,
+          failReason: runBase.failReason,
+          createdAt: runBase.createdAt,
+          finishedAt: runBase.finishedAt,
+          metadata: runBase.metadata,
+        },
         headers: extraHeaders,
         body: JSON.stringify({ messages, session }), // as string, no unnecessary parsing on the other end
         metadata: JSON.stringify({

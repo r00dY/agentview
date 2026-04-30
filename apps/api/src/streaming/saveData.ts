@@ -6,12 +6,12 @@ export async function saveData(
     conn: LiveConnection,
     op: FastPatchOp,
   ) {
-    log.info({ runId: conn.runId, op }, '[streaming] saving data');
+    log.info({ runId: conn.run.id, op }, '[streaming] saving data');
     const resp = await fetch(`${process.env.HTTP_SERVER_URL}/internal/fast-patch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        runId: conn.runId,
+        runId: conn.run.id,
         metadata: conn.metadata,
         op,
       }),

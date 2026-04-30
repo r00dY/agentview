@@ -89,6 +89,13 @@ export default defineConfig({
               { value: "overly-technical", label: "Overly technical" },
             ]
           })
+        ],
+
+        displayProperties: [
+          {
+            title: "Random",
+            value: ({ assistantMessage }) => assistantMessage?.metadata?.random ?? "unknown"
+          }
         ]
       },
 

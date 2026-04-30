@@ -8,7 +8,19 @@ export class GracefulRunTerminationError extends RunTerminationError {}
 
 
 export interface LiveConnection {
-  runId: string;
+  run: {
+    id: string;
+    agentRef: {
+      agent: string;
+      version: string;
+      adapter: string;
+    };
+    status: string;
+    failReason: any | null;
+    createdAt: string;
+    finishedAt: string | null;
+    metadata: Record<string, any> | null;
+  };
 
   upstreamRes: IncomingMessage;
   metadata: string;

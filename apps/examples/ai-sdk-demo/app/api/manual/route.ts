@@ -29,6 +29,8 @@ export async function POST() {
     { type: "reasoning-delta", id: "reasoning_1", delta: "the second text part." },
     { type: "reasoning-end", id: "reasoning_1" },
 
+    { type: "message-metadata", messageMetadata: { random: crypto.randomUUID() } },
+
     // Data parts
     { type: "data-weather", data: { location: "San Francisco", temperature: 18 } },
 
@@ -42,7 +44,7 @@ export async function POST() {
     { type: "text-end", id: textId1 },
     // { type: "error", errorText: "This is some error from the stream part"},
     // { type: "dupa" }, // incorrect chunk
-
+    
     // Second text part
     { type: "text-start", id: textId2 },
     { type: "text-delta", id: textId2, delta: "And here is " },
