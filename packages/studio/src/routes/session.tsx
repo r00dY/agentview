@@ -320,14 +320,15 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
              * 
              * Since in 99% of cases the output is single 'text' node (potentially with some data nodes), we can make it super simply.
              * 
-             * Algorithm: we essentially look for the last "block" (after last step-start) and look for the first text part. That's the start of output.
+             * Algorithm: we essentially take all the "last consecutive blocks" that don't have any 'step-start', 'reasoning' or tool parts.
              * 
+             * Btw, this is 100% UI only.
              */
             const stepParts: UIMessage['parts'][number][] = [];
             const outputParts: UIMessage['parts'][number][] = [];
 
             message.parts.forEach((part, index) => {
-                if (part.type === 'step-start' || part.type === 'reasoning') { // reasoning or step-start "resets" and pushes all speculated output parts into step parts
+                if (part.type === 'step-start' || part.type === 'reasoning' || part.type.startsWith('tool-')) { // reasoning or step-start "resets" and pushes all speculated output parts into step parts
                     stepParts.push(...outputParts);
                     outputParts.length = 0;
                     stepParts.push(part);
