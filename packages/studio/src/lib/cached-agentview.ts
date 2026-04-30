@@ -1,8 +1,5 @@
-import { type AgentViewClientOptions } from 'agentview'
-import { StandardAgentViewClient } from 'agentview/clientStandard'
-import type { InputTarget, ScoreCreate, EnvironmentCreate, UserCreate } from 'agentview/apiTypes'
-import { updateEnvironment as _updateEnvironment } from 'agentview/updateEnvironment'
-import { invalidateByPrefix, invalidateCache, swr, swrSync } from './swr-cache'
+import { AgentViewClient, type UserIdentifier } from 'agentview'
+import { invalidateByPrefix, invalidateCache, swr, swrCached } from './swr-cache'
 
 // Cache key helpers
 export const cacheKeys = {
@@ -15,164 +12,220 @@ export const cacheKeys = {
   environment: () => `environment`,
 }
 
-export class CachedAgentView extends StandardAgentViewClient {
-  constructor(options: AgentViewClientOptions) {
-    super(options)
+type Cached<M extends (...args: any) => any> = (...args: Parameters<M>) => Awaited<ReturnType<M>> | null
+
+export class CachedAgentViewClient {
+  client: AgentViewClient
+
+  sessions: {
+    get: AgentViewClient['sessions']['get']
+    list: AgentViewClient['sessions']['list']
+    getStats: AgentViewClient['sessions']['getStats']
+    create: AgentViewClient['sessions']['create']
+    update: AgentViewClient['sessions']['update']
+    createRun: AgentViewClient['sessions']['createRun']
+    updateRun: AgentViewClient['sessions']['updateRun']
+    cancelRun: AgentViewClient['sessions']['cancelRun']
+
+    // sync options
+    getCached: Cached<AgentViewClient['sessions']['get']>
+    listCached: Cached<AgentViewClient['sessions']['list']>
+    getStatsCached: Cached<AgentViewClient['sessions']['getStats']>
   }
 
-  // === CACHED READS (methods on StandardAgentViewClient) ===
+  comments: {
+    list: AgentViewClient['comments']['list']
+    create: AgentViewClient['comments']['create']
+    update(id: string, options: { content: string }, cacheOptions: { sessionId: string }): Promise<void>
+    delete(id: string, cacheOptions: { sessionId: string }): Promise<void>
+    markSeen: AgentViewClient['comments']['markSeen']
 
-  override async getSession(...args: Parameters<StandardAgentViewClient['getSession']>) {
-    return await swr(cacheKeys.session(args[0].id), () => super.getSession(...args))
+    // Cached
+    listCached: Cached<AgentViewClient['comments']['list']>
   }
 
-  getSessionSync(...args: Parameters<StandardAgentViewClient['getSession']>) {
-    return swrSync(cacheKeys.session(args[0].id), () => super.getSession(...args))
+  scores: {
+    list: AgentViewClient['scores']['list']
+    update: AgentViewClient['scores']['update']
+
+    // Cached
+    listCached: Cached<AgentViewClient['scores']['list']>
   }
 
-  override async getSessions(...args: Parameters<StandardAgentViewClient['getSessions']>) {
-    const paramKey = JSON.stringify(args[0] ?? {})
-    return swr(cacheKeys.sessions(paramKey), () => super.getSessions(...args))
+  environments: {
+    getActive: AgentViewClient['environments']['getActive']
   }
 
-  getSessionsSync(...args: Parameters<StandardAgentViewClient['getSessions']>) {
-    const paramKey = JSON.stringify(args[0] ?? {})
-    return swrSync(cacheKeys.sessions(paramKey), () => super.getSessions(...args))
+  organization: AgentViewClient['organization']
+  channels: AgentViewClient['channels']
+
+  users: {
+    create: AgentViewClient['users']['create']
+    createAnon: AgentViewClient['users']['createAnon']
+    me: AgentViewClient['users']['me']
+    get: AgentViewClient['users']['get']
+    getByExternalId: AgentViewClient['users']['getByExternalId']
+    update: AgentViewClient['users']['update']
   }
 
-  // === CACHED READS (methods moved to subresources) ===
+  constructor(client: AgentViewClient) {
+    this.client = client;
 
-  override async getSessionsStats(...args: Parameters<StandardAgentViewClient['getSessionsStats']>) {
-    const paramKey = JSON.stringify(args[0] ?? {})
-    return swr(cacheKeys.sessionsStats(paramKey), () => super.getSessionsStats(...args))
-  }
+    this.organization = this.client.organization
+    this.channels = this.client.channels
 
-  getSessionsStatsSync(...args: Parameters<StandardAgentViewClient['getSessionsStats']>) {
-    const paramKey = JSON.stringify(args[0] ?? {})
-    return swrSync(cacheKeys.sessionsStats(paramKey), () => super.getSessionsStats(...args))
-  }
+    // === Sessions ===
 
-  async getEnvironment() {
-    return swr(cacheKeys.environment(), () => this.environments.getActive())
-  }
+    const { sessions } = this.client
 
-  async getSessionComments(options: { id: string }) {
-    return swr(cacheKeys.sessionComments(options.id), () => this.comments.list({ sessionId: options.id }))
-  }
+    this.sessions = {
+      get: (id) =>
+        swr(cacheKeys.session(id), () => sessions.get(id)),
+      
+      getCached: (id) =>
+        swrCached(cacheKeys.session(id), () => sessions.get(id)),
 
-  getSessionCommentsSync(options: { id: string }) {
-    return swrSync(cacheKeys.sessionComments(options.id), () => this.comments.list({ sessionId: options.id }))
-  }
+      list: (options?) => {
+        console.log('sessions.list', options);
+        const paramKey = JSON.stringify(options ?? {})
+        return swr(cacheKeys.sessions(paramKey), () => sessions.list(options))
+      },
+      listCached: (options?) => {
+        const paramKey = JSON.stringify(options ?? {})
+        return swrCached(cacheKeys.sessions(paramKey), () => sessions.list(options))
+      },
 
-  async getSessionScores(options: { id: string }) {
-    return swr(cacheKeys.sessionScores(options.id), () => this.scores.list({ sessionId: options.id }))
-  }
+      getStats: (options?) => {
+        const paramKey = JSON.stringify(options ?? {})
+        return swr(cacheKeys.sessionsStats(paramKey), () => sessions.getStats(options))
+      },
+      getStatsCached: (options?) => {
+        const paramKey = JSON.stringify(options ?? {})
+        return swrCached(cacheKeys.sessionsStats(paramKey), () => sessions.getStats(options))
+      },
 
-  getSessionScoresSync(options: { id: string }) {
-    return swrSync(cacheKeys.sessionScores(options.id), () => this.scores.list({ sessionId: options.id }))
-  }
-
-  async getOrganization() {
-    return this.organization.get()
-  }
-
-  // === MUTATIONS (methods on StandardAgentViewClient) ===
-
-  override async createSession(...args: Parameters<StandardAgentViewClient['createSession']>) {
-    const result = await super.createSession(...args)
-    invalidateByPrefix('sessions')
-    invalidateByPrefix('sessions-stats')
-    return result
-  }
-
-  override async updateSession(...args: Parameters<StandardAgentViewClient['updateSession']>) {
-    const result = await super.updateSession(...args)
-    invalidateCache(cacheKeys.session(args[0].id))
-    invalidateByPrefix('sessions')
-    invalidateByPrefix('sessions-stats')
-    return result
-  }
-
-  override async createRun(...args: Parameters<StandardAgentViewClient['createRun']>) {
-    const result = await super.createRun(...args)
-    invalidateCache(cacheKeys.session(args[0].sessionId))
-    return result
-  }
-
-  override async createManualRun(...args: Parameters<StandardAgentViewClient['createManualRun']>) {
-    const result = await super.createManualRun(...args)
-    invalidateCache(cacheKeys.session(args[0].sessionId))
-    return result
-  }
-
-  // cached version of updateRun need extra param sessionId to invalidate the correct cache
-  override async updateManualRun(options_: Parameters<StandardAgentViewClient['updateManualRun']>[0] & { sessionId: string }) {
-    const { sessionId, ...options } = options_;
-    const result = await super.updateManualRun(options)
-    invalidateCache(cacheKeys.session(sessionId))
-    return result
-  }
-
-  override async cancelRun(options: Parameters<StandardAgentViewClient['cancelRun']>[0]) {
-    const result = await super.cancelRun(options)
-    invalidateCache(cacheKeys.session(options.sessionId))
-    return result
-  }
-
-  // === MUTATIONS (methods moved to subresources) ===
-
-  async createComment(options: WithRequired<InputTarget & { content: string }, 'sessionId'>) { // we make sessionId mandatory in Target to simplify cache invalidation
-    const result = await this.comments.create(options)
-    invalidateCache(cacheKeys.sessionScores(options.sessionId))
-    invalidateCache(cacheKeys.sessionComments(options.sessionId))
-    return result
-  }
-
-  async updateComment(options: { id: string, content: string, sessionId: string }) {
-    const { sessionId, id, ...rest } = options
-    const result = await this.comments.update(id, rest)
-    invalidateCache(cacheKeys.sessionScores(sessionId))
-    invalidateCache(cacheKeys.sessionComments(sessionId))
-    return result
-  }
-
-  async deleteComment(options: { id: string, sessionId: string }) {
-    const { sessionId, id } = options
-    const result = await this.comments.delete(id)
-    invalidateCache(cacheKeys.sessionScores(sessionId))
-    invalidateCache(cacheKeys.sessionComments(sessionId))
-    return result
-  }
-
-  async updateScores(options: WithRequired<InputTarget, 'sessionId'> & { scores: ScoreCreate[] }) {
-    const result = await this.scores.update(options)
-    if (options.sessionId) {
-      invalidateCache(cacheKeys.sessionScores(options.sessionId))
-      invalidateCache(cacheKeys.sessionComments(options.sessionId))
+      create: async (options) => {
+        const result = await sessions.create(options)
+        invalidateByPrefix('sessions')
+        invalidateByPrefix('sessions-stats')
+        return result
+      },
+      update: async (id, options) => {
+        const result = await sessions.update(id, options)
+        invalidateCache(cacheKeys.session(id))
+        invalidateByPrefix('sessions')
+        invalidateByPrefix('sessions-stats')
+        return result
+      },
+      createRun: async (id, options) => {
+        const result = await sessions.createRun(id, options)
+        invalidateCache(cacheKeys.session(id))
+        return result
+      },
+      updateRun: async (sessionId, runId, options) => {
+        const result = await sessions.updateRun(sessionId, runId, options)
+        invalidateCache(cacheKeys.session(sessionId))
+        return result
+      },
+      cancelRun: async (id) => {
+        const result = await sessions.cancelRun(id)
+        invalidateCache(cacheKeys.session(id))
+        return result
+      },
     }
-    return result
+
+    // === Comments ===
+
+    const { comments } = this.client
+
+    this.comments = {
+      list: (options) =>
+        swr(cacheKeys.sessionComments(options.sessionId), () => comments.list(options)),
+      listCached: (options) =>
+        swrCached(cacheKeys.sessionComments(options.sessionId), () => comments.list(options)),
+
+      create: async (options) => {
+        const result = await comments.create(options)
+        if (options.sessionId) {
+          invalidateCache(cacheKeys.sessionScores(options.sessionId))
+          invalidateCache(cacheKeys.sessionComments(options.sessionId))
+        }
+        return result
+      },
+      update: async (id, options, cacheOptions) => {
+        const result = await comments.update(id, options)
+        invalidateCache(cacheKeys.sessionScores(cacheOptions.sessionId))
+        invalidateCache(cacheKeys.sessionComments(cacheOptions.sessionId))
+        return result
+      },
+      delete: async (id, cacheOptions) => {
+        const result = await comments.delete(id)
+        invalidateCache(cacheKeys.sessionScores(cacheOptions.sessionId))
+        invalidateCache(cacheKeys.sessionComments(cacheOptions.sessionId))
+        return result
+      },
+      markSeen: async (options) => {
+        const result = await comments.markSeen(options)
+        invalidateByPrefix('sessions-stats')
+        return result
+      },
+    }
+
+    // === Scores ===
+
+    const { scores } = this.client
+
+    this.scores = {
+      list: (options) =>
+        swr(cacheKeys.sessionScores(options.sessionId), () => scores.list(options)),
+      listCached: (options) =>
+        swrCached(cacheKeys.sessionScores(options.sessionId), () => scores.list(options)),
+
+      update: async (options) => {
+        const result = await scores.update(options)
+        if (options.sessionId) {
+          invalidateCache(cacheKeys.sessionScores(options.sessionId))
+          invalidateCache(cacheKeys.sessionComments(options.sessionId))
+        }
+        return result
+      },
+    }
+
+    // === Environments ===
+
+    const { environments } = this.client
+
+    this.environments = {
+      getActive: () => environments.getActive(),
+    }
+
+    // === Users (wrap update for invalidation, delegate the rest) ===
+
+    const { users } = this.client
+
+    this.users = {
+      create: (options?) => users.create(options),
+      createAnon: () => users.createAnon(),
+      me: () => users.me(),
+      get: (id) => users.get(id),
+      getByExternalId: (externalId) => users.getByExternalId(externalId),
+      update: async (id, options) => {
+        const result = await users.update(id, options)
+        // .user is part of session list and single session object — nuke cache
+        invalidateByPrefix('session')
+        invalidateByPrefix('sessions')
+        invalidateByPrefix('sessions-stats')
+        return result
+      },
+    }
   }
 
-  async updateEnvironment(body: EnvironmentCreate) {
-    const result = await _updateEnvironment(this, body)
-    invalidateCache(cacheKeys.environment())
-    return result
+  createTransport() {
+    return this.client.createTransport()
   }
 
-  async updateUser(options: UserCreate & { id: string }) {
-    const result = await this.users.update(options.id, options)
-    // .user is part of session list and also single session object. That's why we literally nuke cache here. Good for now.
-    invalidateByPrefix('session');
-    invalidateByPrefix('sessions');
-    invalidateByPrefix('sessions-stats')
-    return result
-  }
-
-  async markSeen(options: InputTarget) {
-    const result = await this.comments.markSeen(options)
-    invalidateByPrefix('sessions-stats')
-    return result
+  asUser(userIdentifier: UserIdentifier): CachedAgentViewClient {
+    const client = this.client.asUser(userIdentifier)
+    return new CachedAgentViewClient(client)
   }
 }
-
-type WithRequired<T, K extends keyof T> = T & Required<Pick<T, K>>;

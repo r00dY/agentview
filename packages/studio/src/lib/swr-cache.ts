@@ -117,7 +117,7 @@ export async function swr<T>(
   return data;
 }
 
-export function swrSync<T>(
+export function swrCached<T>(
   key: string,
   fetcher: () => Promise<T>
 ): T | null {

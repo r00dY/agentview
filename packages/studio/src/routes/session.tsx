@@ -46,15 +46,9 @@ async function loader({ request, params, context }: LoaderFunctionArgs) {
     try {
         const shouldLoadImmediately = !window.location.pathname.includes(`/sessions/${sessionId}`);
 
-        // const [session, comments, scores] = shouldLoadImmediately ?
-        //     [agentview().getSessionSync({ id: sessionId }), agentview().getSessionCommentsSync({ id: sessionId }), agentview().getSessionScoresSync({ id: sessionId })] :
-        //     await Promise.all([agentview().getSession({ id: sessionId }), agentview().getSessionComments({ id: sessionId }), agentview().getSessionScores({ id: sessionId })] as const);
-
-
-        const [session, comments, scores] = await Promise.all([
-            agentview().sessions.get(sessionId),
-            agentview().comments.list({ sessionId: sessionId }),
-            agentview().scores.list({ sessionId: sessionId })] as const);
+        const [session, comments, scores] = shouldLoadImmediately ?
+            [agentview().sessions.getCached(sessionId), agentview().comments.listCached({ sessionId }), agentview().scores.listCached({ sessionId })] :
+            await Promise.all([agentview().sessions.get(sessionId), agentview().comments.list({ sessionId }), agentview().scores.list({ sessionId })] as const);
 
         return {
             session,

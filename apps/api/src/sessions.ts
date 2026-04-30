@@ -8,7 +8,7 @@ import { authorize } from "./authMiddleware";
 import { getConfigFromEnvironment, requireConfig, requireEnvironment } from "./environments";
 import { isUUID, requireUUID } from "./isUUID";
 import { parseMetadata } from "./parseMetadata";
-import { endUsers, events, runs, sessionItems, sessions } from "./schemas/schema";
+import { agentRefs, endUsers, events, runs, sessionItems, sessions } from "./schemas/schema";
 import type { Transaction } from "./types";
 import { updateInboxes } from "./updateInboxes";
 import { createUser, requireUser } from "./users";
@@ -341,7 +341,7 @@ function buildPaginationMetadata(totalCount: number, page: number, limit: number
   };
 }
 
-function mapSessionRow(row: { sessions: typeof sessions.$inferSelect; end_users: typeof endUsers.$inferSelect | null }) {
+function mapSessionRow(row: { sessions: typeof sessions.$inferSelect; end_users: typeof endUsers.$inferSelect | null, agent_refs: typeof agentRefs.$inferSelect | null }) {
   return {
     id: row.sessions.id,
     handle: row.sessions.handleNumber.toString() + (row.sessions.handleSuffix ?? ""),
@@ -355,7 +355,7 @@ function mapSessionRow(row: { sessions: typeof sessions.$inferSelect; end_users:
     user: row.end_users!,
     space: row.end_users!.space,
     userId: row.end_users!.id,
-    agentRef: null, // not resolved in list view
+    agentRef: row.agent_refs ?? null,
     agentRefs: row.sessions.agentRefs ?? []
   };
 }
@@ -386,12 +386,13 @@ export async function getSessions(tx: TenantTransaction, params: SessionsGetQuer
 
   // Build sessions query
   const sessionsQuery = tx
-    .select({ sessions, end_users: endUsers })
+    .select({ sessions, end_users: endUsers, agent_refs: agentRefs })
     .from(sessions)
     .$dynamic();
 
   const result = await sessionsQuery
     .leftJoin(endUsers, eq(sessions.userId, endUsers.id))
+    .leftJoin(agentRefs, eq(sessions.agentRefId, agentRefs.id))
     .where(baseFilter)
     .orderBy(desc(sessions.updatedAt))
     .limit(limit)

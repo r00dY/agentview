@@ -47,7 +47,6 @@ import { agentview } from "../lib/agentview";
 import { getSessionCached, getOrganizationCached, type User, type Member, type Organization } from "../lib/auth-client";
 import { getCurrentAgent } from "../lib/currentAgent";
 import { SessionContext } from "../lib/SessionContext";
-import { updateEnvironment } from "agentview/updateEnvironment";
 import { toBaseConfig } from "../toBaseConfig.js";
 
 
@@ -67,7 +66,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   const agent = getCurrentAgent(request);
-  const envUpdate = updateEnvironment(agentview(), { config: toBaseConfig(config) });
 
   const organization = await getOrganizationCached();
   const member = organization.members.find(m => m.userId === session.user.id);
@@ -110,17 +108,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     listStats,
     agent,
     organization,
-    envUpdate
   };
 }
 
-function EnvUpdateWatcher({ promise }: { promise: Promise<unknown> }) {
-  use(promise);
-  return null;
-}
-
 function Component() {
-  const { me, organization, locale, listStats, agent, envUpdate } = useLoaderData<typeof loader>()
+  const { me, organization, locale, listStats, agent } = useLoaderData<typeof loader>()
   const location = useLocation();
   const submitForm = useSubmit();
 
@@ -167,10 +159,6 @@ function Component() {
   const agents = config.agents ?? [];
 
   return (<SessionContext.Provider value={{ me, organization, locale }}>
-    <Suspense fallback={null}>
-      <EnvUpdateWatcher promise={envUpdate} />
-    </Suspense>
-
     <SidebarProvider>
       <div className="flex h-screen bg-background w-full">
         <Sidebar className="border-r">
