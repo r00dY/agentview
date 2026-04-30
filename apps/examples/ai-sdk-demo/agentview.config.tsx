@@ -8,8 +8,9 @@ import { z } from "zod";
 import { CustomPage } from "./components/CustomPage";
 import { NewSessionComponent, NewSessionComponentProps } from "../../../packages/studio/src/types";
 
+
 export default defineConfig({
-  publicApiKey: process.env.NEXT_PUBLIC_AGENTVIEW_PUBLIC_API_KEY!,
+  publicApiKey: process.env.NEXT_PUBLIC_AGENTVIEW_API_KEY!,
   env: process.env.NEXT_PUBLIC_AGENTVIEW_ENV!,
   agents: [
     {

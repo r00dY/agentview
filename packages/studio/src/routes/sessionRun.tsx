@@ -1,7 +1,7 @@
 import { data, useLoaderData, useNavigate, useOutletContext, useParams, useRevalidator } from "react-router";
 import type { LoaderFunctionArgs, RouteObject } from "react-router";
 import { Header, HeaderTitle } from "../components/header";
-import type { StandardSession } from "agentview/apiTypes";
+import type { Session } from "agentview";
 import { getAllSessionItems } from "agentview/sessionUtils";
 import { useEffect } from "react";
 import { Button } from "../components/ui/button";
@@ -13,7 +13,6 @@ import { requireRunConfig, findAgentConfig, findAgentConfigBySession } from "age
 import { config } from "../config";
 import { DisplayProperties } from "../components/DisplayProperties";
 import type { ActionResponse } from "../lib/errors";
-import type { RunConfig } from "../types";
 import { type AgentViewError } from "agentview";
 import { Alert, AlertDescription } from "../components/ui/alert";
 
@@ -28,35 +27,21 @@ function loader({ request, params }: LoaderFunctionArgs) {
 function Component() {
     const navigate = useNavigate();
     const params = useParams();
-    const { session } = useOutletContext<{ session: StandardSession }>();
+    const { session } = useOutletContext<{ session: Session }>();
     const { listParams } = useLoaderData<typeof loader>();
-    const run = session.runs.find((run) => run.id === params.runId);
 
-    if (!run) {
-        throw data({ message: "Run not found" }, { status: 404 });
+    const userMessage = session.messages.find((message) => message.role === "user" && message.metadata?._agentview?.id === params.runId);
+    const assistantMessage = session.messages.find((message) => message.role === "user" && message.metadata?._agentview?.id === params.runId);
+
+    if (!userMessage || !assistantMessage) {
+        throw data({ message: "User or assistant message not found" }, { status: 404 });
     }
 
     // const channelConfig = findChannelConfig(config, session.channel);
 
     // const agentName = typeof channelConfig?.agent === 'string' ? channelConfig.agent : channelConfig?.agent?.name;
     const agentConfig = findAgentConfigBySession(config, session);
-
-    let runConfig: RunConfig | undefined = undefined;
-    let error: string | undefined = undefined;
-
-    if (agentConfig) {
-        try {
-            runConfig = requireRunConfig(agentConfig, run.sessionItems[0].content);
-        } catch (err) {
-            error = (err as AgentViewError).message;
-        }
-    }
-
-    if (!runConfig && !error) {
-        error = "Agent config not found";
-    }
-
-    console.log({ runConfig, error });
+    let runConfig = agentConfig?.run
 
     // const runConfig = requireRunConfig(agentConfig, run.sessionItems[0].content);
 

@@ -75,6 +75,7 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
                     id: run.id,
                     status: run.status,
                     failReason: run.failReason,
+                    metadata: run.metadata
                 }
             },
             role: 'assistant',

@@ -10,7 +10,7 @@ export function OptionDisplay<T extends string | number | boolean = string>({ va
 
     return (
         <Pill size="xs" color={option.color}>
-            {option.icon}
+            {option.icon && <option.icon />}
             {option.label ?? option.value}
         </Pill>
     );
@@ -29,7 +29,7 @@ export function OptionsDisplay<T extends string | number | boolean = string>({ v
         <div className="flex flex-wrap gap-1">
             {selectedOptions.map((option) => (
                 <Pill key={optionValueToString(option.value)} size="xs" color={option.color}>
-                    {option.icon}
+                    {option.icon && <option.icon />}
                     {option.label ?? option.value}
                 </Pill>
             ))}

@@ -20,7 +20,7 @@ export type LikeScoreProps = {
 export function like(options?: LikeScoreProps): ScoreConfig {
     const { name, title, likeLabel, dislikeLabel, showLabels } = options ?? {};
 
-    const likeOptions = [{ value: true, icon: <ThumbsUp />, label: likeLabel ?? "Like" }, { value: false, icon: <ThumbsDown />, label: dislikeLabel ?? "Don't Like" }]
+    const likeOptions = [{ value: true, icon: ThumbsUp, label: likeLabel ?? "Like" }, { value: false, icon: ThumbsDown, label: dislikeLabel ?? "Don't Like" }]
 
     return {
         name: name ?? "like",

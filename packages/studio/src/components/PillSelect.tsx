@@ -104,7 +104,7 @@ export function PillSelect<T extends string | number | boolean>(props: ControlCo
                 <Button variant="ghost" size="sm" className={cn("justify-start px-1.5", open && "bg-accent", className)}>
                     {selectedOption ? (
                         <Pill color={selectedOption.color}>
-                            {selectedOption.icon}
+                            {selectedOption.icon && <selectedOption.icon />}
                             {selectedOption.label ?? selectedOption.value}
                         </Pill>
                     ) : (
@@ -121,7 +121,7 @@ export function PillSelect<T extends string | number | boolean>(props: ControlCo
                         value={optionValueToString(option.value)}
                     >
                         <Pill color={option.color}>
-                            {option.icon}
+                            {option.icon && <option.icon />}
                             <SelectPrimitive.ItemText>{option.label ?? option.value}</SelectPrimitive.ItemText>
                         </Pill>
                     </SelectPrimitive.Item>

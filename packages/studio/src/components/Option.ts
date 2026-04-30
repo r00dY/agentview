@@ -1,8 +1,9 @@
 import type { Color } from "agentview/colors";
+import type { LucideIcon } from "lucide-react";
 
 export type Option<T extends string | number | boolean> = {
     value: T;
-    icon?: React.ReactNode;
+    icon?: LucideIcon;
     label?: string;
     color?: Color | string;
 }

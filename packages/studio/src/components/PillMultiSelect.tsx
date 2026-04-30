@@ -37,7 +37,7 @@ export function PillMultiSelect<T extends string | number | boolean>(props: Cont
                         <div className="flex flex-wrap items-center gap-1">
                             {selectedOptions.map((option) => (
                                 <Pill key={optionValueToString(option.value)} color={option.color} className={cn(open && "pr-0.5")}>
-                                    {option.icon}
+                                    {option.icon && <option.icon />}
                                     {option.label ?? option.value}
                                     {open && (
                                         <button
@@ -75,7 +75,7 @@ export function PillMultiSelect<T extends string | number | boolean>(props: Cont
                                 onClick={() => handleAdd(option.value)}
                             >
                                 <Pill color={option.color}>
-                                    {option.icon}
+                                    {option.icon && <option.icon />}
                                     {option.label ?? option.value}
                                 </Pill>
                             </div>

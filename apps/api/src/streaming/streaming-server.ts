@@ -124,7 +124,8 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     res.writeHead(statusCode, {
       ...upstreamRes.headers,
       'X-Upstream-Response': 'true',
-      'Access-Control-Expose-Headers': 'x-upstream-response',
+      'X-Upstream-URL': url,
+      'Access-Control-Expose-Headers': 'x-upstream-response, x-upstream-url',
     });
 
     if (statusCode >= 400) {

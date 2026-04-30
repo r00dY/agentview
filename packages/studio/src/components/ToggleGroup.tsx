@@ -49,7 +49,7 @@ export const ToggleGroupControl = <T extends string | number | boolean = string>
                 onClick={onClick}
 
             >
-                {option.icon}
+                {option.icon && <option.icon />}
                 {label}
             </Button>
         })}
