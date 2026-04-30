@@ -97,7 +97,7 @@ export async function fetchSessionBase(tx: Transaction, session_id: string): Pro
     user: row.user,
     userId: row.user.id,
     space: row.user.space,
-    summary: row.summary,
+    title: row.title,
     agentRef: row.agentRef ?? null,
     agentRefs: row.agentRefs ?? [],
     active: row.active,
@@ -167,7 +167,7 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
     user: row.user,
     userId: row.user.id,
     space: row.user.space,
-    summary: row.summary,
+    title: row.title,
     agentRef: row.agentRef ?? null,
     agentRefs: row.agentRefs ?? [],
     active: row.active,
@@ -348,7 +348,7 @@ function mapSessionRow(row: { sessions: typeof sessions.$inferSelect; end_users:
     createdAt: row.sessions.createdAt,
     updatedAt: row.sessions.updatedAt,
     metadata: row.sessions.metadata as Record<string, any>,
-    summary: row.sessions.summary,
+    title: row.sessions.title,
     channel: row.sessions.channelType === 'api'
       ? { type: 'api' as const, name: row.sessions.channelAddress }
       : { type: row.sessions.channelType as "gmail" | "mock", address: row.sessions.channelAddress },
@@ -428,7 +428,7 @@ export async function getSessions(tx: TenantTransaction, params: SessionsGetQuer
 
 export type CreateSessionWithoutAgentBody = {
   userId?: string;
-  summary?: string | null;
+  title?: string | null;
   channel: ChannelRef
   channelThreadId?: string | null;
 }
@@ -460,7 +460,7 @@ export async function createSession(tx: TenantTransaction, params: CreateSession
     channelType: params.channel.type,
     channelAddress: params.channel.type === 'api' ? params.channel.name : params.channel.address,
     userId: user.id,
-    summary: params.summary ?? null,
+    title: params.title ?? null,
     channelThreadId: params.channelThreadId ?? null,
     active: false
   }).returning();
@@ -543,7 +543,7 @@ export async function setAgentForSession(tx: TenantTransaction, sessionId: strin
 //     channelType: params.channelRef.type,
 //     channelAddress: params.channelRef.type === 'api' ? params.channelRef.name : params.channelRef.address,
 //     userId: params.userId,
-//     summary: params.summary ?? null,
+//     title: params.title ?? null,
 //     channelThreadId: params.channelThreadId ?? null,
 //     agentRefId: params.agentRefId ?? null,
 //     initialState: params.initialState ?? null,
@@ -612,7 +612,7 @@ export async function updateSession(tx: TenantTransaction, session_id: string, b
 
   const [updatedSession] = await tx.update(sessions).set({
     metadata,
-    summary: body.summary,
+    title: body.title,
     updatedAt: new Date().toISOString(),
   }).where(eq(sessions.id, session_id)).returning();
 

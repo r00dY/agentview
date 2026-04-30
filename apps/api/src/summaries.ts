@@ -33,22 +33,23 @@ export async function generateSessionSummary(sessionId: string, organizationId: 
 
   const response = await client.responses.parse({
     model: "gpt-5-nano",
-    instructions: `You're gonna be given a JSON with first item of an AI agent session. Your task is to generate a summary for the session. It must be ultra short 1-liner, it's gonna be displayed as a title in a session card 300px wide (one line).`,
+    instructions: `You're gonna be given a JSON with first item of an AI agent session. Your task is to generate a title for the session. It must be ultra short 1-liner, it's gonna be displayed as a title in a session card 300px wide (one line).`,
     input: JSON.stringify(firstItem.content),
     text: {
-      format: zodTextFormat(z.object({ summary: z.string() }), "response"),
+      format: zodTextFormat(z.object({ title: z.string() }), "response"),
     }
   });
 
-  const summary = response.output_parsed?.summary;
+  const title = response.output_parsed?.title;
 
-  if (summary) {
+
+  if (title) {
     await withOrg(organizationId, async (tx) => {
       await tx.update(sessions)
-        .set({ summary, updatedAt: new Date().toISOString() })
+        .set({ title, updatedAt: new Date().toISOString() })
         .where(eq(sessions.id, sessionId));
     });
   }
 
-  return summary;
+  return title;
 }

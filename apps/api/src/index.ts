@@ -660,7 +660,7 @@ app.openapi(sessionsPOSTRoute, async (c) => {
     const newSession = await createSession(tx, {
       channel: { type: 'api', name: body.agent },
       userId: body.userId,
-      summary: body.summary,
+      title: body.title,
     });
     await setAgentForSession(tx, newSession.id, { agent: body.agent, metadata: body.metadata, initialState: body.initialState });
     await activateSession(tx, newSession.id);
@@ -706,7 +706,7 @@ app.openapi(sessionsAISDKPOSTRoute, async (c) => {
       const newSession = await createSession(tx, {
         channel: { type: 'api', name: body.agent },
         userId: body.userId,
-        summary: body.summary,
+        title: body.title,
       });
       await setAgentForSession(tx, newSession.id, { agent: body.agent, metadata: body.metadata, initialState: body.initialState });
 
@@ -724,7 +724,7 @@ app.openapi(sessionsAISDKPOSTRoute, async (c) => {
       const newSession = await createSession(tx, {
         channel: { type: 'api', name: body.agent },
         userId: body.userId,
-        summary: body.summary,
+        title: body.title,
       });
 
       return await setAgentForSession(tx, newSession.id, { agent: body.agent, metadata: body.metadata, initialState: body.initialState });

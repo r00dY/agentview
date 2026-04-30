@@ -46,7 +46,7 @@ export const sessions = pgTable("sessions", {
   userId: uuid("end_user_id").notNull().references(() => endUsers.id, { onDelete: 'cascade' }),
   channelType: varchar("channel_type", { length: 64 }).notNull(),
   channelAddress: varchar("channel_address", { length: 255 }).notNull(),
-  summary: text("summary"),
+  title: text("title"),
   agentRefs: jsonb("agent_refs").$type<{ agent: string; version: string; adapter: "agentview" | "ai-sdk" }[]>().default([]),
   agentRefId: uuid("agent_ref_id").references(() => agentRefs.id),
   initialState: jsonb("initial_state"),

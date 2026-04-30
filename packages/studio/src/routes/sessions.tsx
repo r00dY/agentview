@@ -159,7 +159,7 @@ export function SessionCard({ session, listParams, sessionStats }: { session: Se
                 { author && <UserAvatar image={author?.user.image} className="flex-shrink-0" size="sm" />}
 
                 <div className={`text-sm truncate ${hasUnreads ? 'font-semibold' : 'font-normal'}`}>
-                  {session.summary ?? "Untitled"}
+                  {session.title ?? "Untitled"}
                 </div>
 
                 {/* {isPending && <Loader2 className="size-3 animate-spin text-neutral-500" />} */}

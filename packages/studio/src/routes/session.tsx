@@ -103,7 +103,7 @@ function SessionShell({
     return <>
         <div className="flex-grow-1 border-r flex flex-col">
             <Header className="py-1" trigger={false}>
-                <HeaderTitle title={`${sessionBase.summary ?? "Untitled"}`} />
+                <HeaderTitle title={`${sessionBase.title ?? "Untitled"}`} />
                 {headerExtra}
             </Header>
             <div className="flex-1 overflow-y-auto">

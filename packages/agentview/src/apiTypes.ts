@@ -252,7 +252,7 @@ export const SessionBaseSchema = z.object({
   user: UserSchema,
   userId: z.string(), // potential bloat
   space: SpaceSchema, // this is actually user.space, but allows to "think user-less"
-  summary: z.string().nullable(),
+  title: z.string().nullable(),
   agentRef: AgentRefSchema.nullable(),
   agentRefs: z.array(AgentRefSchema),
   active: z.boolean()
@@ -278,7 +278,7 @@ export const SessionCreateBaseSchema = z.object({
   // space: SpaceSchema.optional(),
   // createdBy: z.string().optional(),
 
-  summary: z.string().nullish()
+  title: z.string().nullish()
 })
 
 export const StandardSessionCreateSchema = SessionCreateBaseSchema.extend({
@@ -290,7 +290,7 @@ export type StandardSessionCreate = z.infer<typeof StandardSessionCreateSchema>
 
 export const SessionUpdateSchema = z.object({
   metadata: SessionCreateBaseSchema.shape.metadata,
-  summary: SessionCreateBaseSchema.shape.summary,
+  title: SessionCreateBaseSchema.shape.title,
 })
 
 export type SessionUpdate = z.infer<typeof SessionUpdateSchema>

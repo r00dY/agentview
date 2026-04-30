@@ -86,7 +86,6 @@ export class CachedAgentViewClient {
         swrCached(cacheKeys.session(id), () => sessions.get(id)),
 
       list: (options?) => {
-        console.log('sessions.list', options);
         const paramKey = JSON.stringify(options ?? {})
         return swr(cacheKeys.sessions(paramKey), () => sessions.list(options))
       },

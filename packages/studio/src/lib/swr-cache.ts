@@ -111,7 +111,7 @@ export async function swr<T>(
     // Expired: fall through to blocking fetch
   }
 
-  console.log('[cache] cache miss: ' + key);
+  // console.log('[cache] cache miss: ' + key);
   const data = await fetcher();
   cache.set(key, { data, timestamp: Date.now(), revalidating: false });
   return data;
