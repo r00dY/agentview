@@ -329,7 +329,7 @@ async function prepareRunCreation(tx: OrgTransaction, environment: Environment, 
     if (previousRunId) {
       const previousRun = session.runs.find(r => r.id === previousRunId);
       if (!previousRun) {
-        throw new AgentViewError("Run with id " + previousRunId + " not found", 404);
+        throw new AgentViewError("previousRunId '" + previousRunId + "' not found in the session", 404);
       }
       return previousRun;
     }

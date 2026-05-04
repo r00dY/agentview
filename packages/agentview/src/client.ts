@@ -183,13 +183,72 @@ export class AgentViewClient extends AgentViewBase {
      */
     return new DefaultChatTransport({
       headers: this._getHeaders(),
-      prepareSendMessagesRequest: ({ id, messages, messageId, trigger }) => ({
-        api: `${baseUrl}/api/sessions/${id}/runs`,
-        body: {
-          input: messages[messages.length - 1],
-          stream: true
-        },
-      }),
+      prepareSendMessagesRequest: ({ id, messages }) => {
+        /**
+         * Here we rely on some facts about ai-sdk:
+         * - messages is already truncated
+         * - `messages` can't be empty (aisdk throws)
+         * - ai-sdk makes sure last message is user message. It's technically possible to make last message assistant but we can safely throw on this case (it's incorrect for us anyway).
+         * 
+         * Essentially, if messages is already after truncation, so it's literally ui state, then we must keep it anyway. And we should assume last message is user message. The rest is follows.
+         */
+
+        const lastMessage = messages[messages.length - 1];
+
+        if (!lastMessage) {
+          throw new AgentViewError("Messages array is empty", 400);
+        }
+        if (lastMessage?.role !== 'user') {
+          throw new AgentViewError("Last message is not a user message", 400);
+        }
+
+        // Technically we could omit previousRunId for submit-message but this behaviour is even more consistent. Very universal and minimalistic, like it.
+        const previousRunId = (messages[messages.length - 2]?.metadata as any)?._agentview?.id; 
+
+        return {
+          api: `${baseUrl}/api/sessions/${id}/runs`,
+          body: {
+            input: lastMessage,
+            previousRunId,
+            stream: true
+          },
+        }
+
+        // if (trigger === 'submit-message') {
+        //   return {
+        //     api: `${baseUrl}/api/sessions/${id}/runs`,
+        //     body: {
+        //       input: lastMessage,
+        //       stream: true
+        //     },
+        //   }
+        // } else if (trigger === 'regenerate-message') {
+        //   const previousRunId = (messages[messages.length - 2]?.metadata as any)?._agentview?.id;
+          
+        //   return {
+        //     api: `${baseUrl}/api/sessions/${id}/runs`,
+        //     body: {
+        //       input: lastMessage,
+        //       stream: true
+        //     },
+        //   }
+        // } else {
+        //   throw new AgentViewError("unknown trigger: " + trigger, 500);
+        // }
+
+        // let previousRunId: string | undefined = undefined;
+        // if (trigger === 'regenerate-message') {
+        //   const message = messageId ? messages.find(m => m.id === messageId) : messages[messages.length - 1];
+        // }
+
+        // return {
+        //   api: `${baseUrl}/api/sessions/${id}/runs`,
+        //   body: {
+        //     input: messages[messages.length - 1],
+        //     stream: true
+        //   },
+        // }
+      },
       prepareReconnectToStreamRequest: ({ id }) => ({
         api: `${baseUrl}/api/sessions/${id}/stream`,
       })

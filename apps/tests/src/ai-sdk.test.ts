@@ -58,6 +58,23 @@ describe('ai-sdk', () => {
         abortSignal: undefined,
       })
     }
+
+    function regenerateMessageViaTransport(transport: ReturnType<typeof org.prodClient.createTransport>, sessionId: string, messages: UIMessage[], assistantMessageId: string) {
+      const assistantMessageIndex = messages.findIndex(m => m.id === assistantMessageId);
+      if (assistantMessageIndex === -1) {
+        throw new Error("Assistant message not found");
+      }
+      const truncatedMessages = messages.slice(0, assistantMessageIndex);
+
+      return transport.sendMessages({
+        chatId: sessionId,
+        messages: truncatedMessages,
+        trigger: "submit-message",
+        messageId: undefined,
+        abortSignal: undefined,
+      })
+    }
+
     async function consumeChunksFromTransportStream(stream: ReadableStream<UIMessageChunk<unknown, UIDataTypes>>) {
       let chunks : UIMessageChunk[] = []
       for await (const chunk of stream) {
