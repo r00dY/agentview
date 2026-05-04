@@ -378,10 +378,13 @@ app.openapi(sessionsGETStatsRoute, async (c) => {
       .from(inboxItems)
       .leftJoin(sessions, eq(inboxItems.sessionId, sessions.id))
       .leftJoin(endUsers, eq(sessions.userId, endUsers.id))
+      .leftJoin(runs, eq(inboxItems.runId, runs.id))
       .where(
         and(
           eq(inboxItems.userId, memberPrincipal.session.user.id),
           sql`${inboxItems.lastNotifiableEventId} > COALESCE(${inboxItems.lastReadEventId}, 0)`,
+          // If inbox item has a runId, only count it if the run is active
+          or(isNull(inboxItems.runId), eq(runs.active, true)),
           getSessionListFilter(tx, params)
         )
       )
@@ -402,6 +405,9 @@ app.openapi(sessionsGETStatsRoute, async (c) => {
           user: true,
           inboxItems: {
             where: eq(inboxItems.userId, memberPrincipal.session.user.id),
+            with: {
+              run: true,
+            },
           },
         },
         orderBy: (session, { desc }: any) => [desc(session.updatedAt)],
@@ -419,6 +425,9 @@ app.openapi(sessionsGETStatsRoute, async (c) => {
         const items: InboxItemStatsResponse[] = [];
 
         for (const inboxItem of session.inboxItems) {
+          // Skip inbox items tied to inactive runs
+          if (inboxItem.runId && !inboxItem.run?.active) continue;
+
           const unseenEvents = getUnseenEvents(inboxItem);
           if (unseenEvents.length === 0) continue;
 
