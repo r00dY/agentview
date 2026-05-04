@@ -730,7 +730,7 @@ app.openapi(sessionsAISDKPOSTRoute, async (c) => {
       return await setAgentForSession(tx, newSession.id, { agent: body.agent, metadata: body.metadata, initialState: body.initialState });
     })
 
-    const { response, success } = await createAutoRun2(principal, newSession.id, body.input, c.req.raw.signal);
+    const { response, success } = await createAutoRun2(principal, newSession.id, body.input, undefined, c.req.raw.signal);
 
     // on success -> just return new session
     if (success) {
@@ -1016,7 +1016,7 @@ app.openapi(runsAISDKPOSTRoute, async (c) => {
   const body = await c.req.valid('json')
   const params = await c.req.param();
 
-  const { response, runId, success } = await createAutoRun2(principal, params.session_id, body.input, c.req.raw.signal);
+  const { response, runId, success } = await createAutoRun2(principal, params.session_id, body.input, body.previousRunId, c.req.raw.signal);
 
   if (!success) {
     return response as any; // as any because we have no idea what the response is

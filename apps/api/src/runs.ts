@@ -216,11 +216,11 @@ async function createRunCore(
     manual: boolean;
     state: any | undefined;
     runConfig: BaseRunConfig;
-    lastRun: ReturnType<typeof getLastRun>;
+    previousRun: ReturnType<typeof getLastRun>;
     active: boolean
   }
 ): Promise<typeof runs.$inferSelect> {
-  const { parsedInput, parsedNonInputItems, status, failReason, expiresAt, finishedAt, metadata, agentRefId, manual, state, active, lastRun, id } = params;
+  const { parsedInput, parsedNonInputItems, status, failReason, expiresAt, finishedAt, metadata, agentRefId, manual, state, active, previousRun, id } = params;
 
   const [insertedRun] = await tx.insert(runs).values({
     id,
@@ -235,7 +235,7 @@ async function createRunCore(
     metadata,
     environmentId: environment.id,
     active,
-    previousRunId: lastRun?.id ?? null,
+    previousRunId: previousRun?.id ?? null,
   }).returning();
 
   await tx.insert(sessionItems).values(
@@ -276,7 +276,7 @@ async function createRunCore(
 
   // Queue webhook job on first run
   const config = getConfigFromEnvironment(environment);
-  const isFirstRun = lastRun === undefined;
+  const isFirstRun = previousRun === undefined;
   if (isFirstRun) {
     if (config.webhookUrl) {
       await tx.insert(webhookJobs).values({
@@ -317,7 +317,7 @@ async function createRunCore(
 /**
  * Prepares a session for run creation: fetches session, checks no in-progress run, finds config.
  */
-async function prepareRunCreation(tx: OrgTransaction, environment: Environment, sessionId: string) {
+async function prepareRunCreation(tx: OrgTransaction, environment: Environment, sessionId: string, previousRunId?: string) {
   const session = await requireSession(tx, sessionId); // todo: optimize
 
   const lastRun = getLastRun(session);
@@ -325,15 +325,26 @@ async function prepareRunCreation(tx: OrgTransaction, environment: Environment, 
     throw new AgentViewError(`Can't create a run because session has already a run in progress.`, 422);
   }
 
+  const previousRun = (() => {
+    if (previousRunId) {
+      const previousRun = session.runs.find(r => r.id === previousRunId);
+      if (!previousRun) {
+        throw new AgentViewError("Run with id " + previousRunId + " not found", 404);
+      }
+      return previousRun;
+    }
+    return lastRun;
+  })()
+
   const config = getConfigFromEnvironment(environment);
   const agentConfig = requireAgentConfigBySession(config, session);
 
   const agentRefWithId = await resolveAgentRef(tx, {
     agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
-    previousAgentRef: lastRun?.agentRef ?? session.agentRef,
+    previousAgentRef: previousRun?.agentRef ?? session.agentRef,
   });
 
-  return { session, lastRun, config, agentConfig, agentRefId: agentRefWithId.id };
+  return { session, previousRun, config, agentConfig, agentRefId: agentRefWithId.id };
 }
 
 async function processInput(agentConfig: BaseAgentConfig, input: any) {
@@ -844,6 +855,7 @@ export async function createAutoRun2(
   principal: Principal,
   sessionId: string,
   input_?: Record<string, any>,
+  previousRunId?: string,
   signal?: AbortSignal
 ): Promise<{ runId: string, response: Response, success: boolean }> {
 
@@ -866,7 +878,11 @@ export async function createAutoRun2(
       );
     }
 
-    const { lastRun, agentConfig, agentRefId } = await prepareRunCreation(tx, environment, sessionId);
+    if (session.channel.type !== 'api' && previousRunId) {
+      throw new AgentViewError("You can provide 'previousRunId' only for api channels.", 500);
+    }
+
+    const { previousRun, agentConfig, agentRefId } = await prepareRunCreation(tx, environment, sessionId, previousRunId);
     
     const newRunId = crypto.randomUUID();
 
@@ -899,7 +915,7 @@ export async function createAutoRun2(
             eq(channelMessages.channelThreadId, channelThreadId),
             or(
               isNull(channelMessages.runId),
-              (lastRun && lastRun.status !== 'completed') ? eq(channelMessages.runId, lastRun.id) : undefined,
+              (previousRun && previousRun.status !== 'completed') ? eq(channelMessages.runId, previousRun.id) : undefined,
             )
           ),
           orderBy: (cm, { asc }) => [asc(cm.date)],
@@ -940,7 +956,7 @@ export async function createAutoRun2(
       manual: false,
       state: undefined,
       runConfig,
-      lastRun,
+      previousRun,
       active: false // We treat new run freshly created as NEW BRANCH that is not activated YET. It will activate itself once first response is received.
     });
 
@@ -1047,7 +1063,7 @@ export async function createAutoRun2(
       await activateSession(tx, sessionId);
 
       /**
-       * Activate current lineage. All older runs will be deactivated.
+       * Activate current branch. All older runs will be deactivated.
        */
       const activeRunIds = standardSession.runs.map(r => r.id);
       await tx.update(runs).set({
@@ -1111,7 +1127,7 @@ export async function createManualRun(
 
   const environment = await requireEnvironment(tx);
 
-  const { lastRun, agentConfig, agentRefId } = await prepareRunCreation(tx, environment, sessionId);
+  const { previousRun, agentConfig, agentRefId } = await prepareRunCreation(tx, environment, sessionId);
   const { runConfig, parsedInput, idleTimeout } = await processInput(agentConfig, inputItem);
 
 
@@ -1143,7 +1159,7 @@ export async function createManualRun(
     manual: true,
     state: body.state,
     runConfig,
-    lastRun,
+    previousRun,
     active: true
   });
 }

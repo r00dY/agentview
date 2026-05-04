@@ -343,7 +343,7 @@ export function channelProvider(type: string) {
         })
 
         // Start run
-        await createAutoRun2(principal, result.sessionId, undefined);
+        await createAutoRun2(principal, result.sessionId);
       }
       catch (error) {
         log.warn({ sourceId: params.sourceId, err: error }, 'failed to create run from channel messages');
