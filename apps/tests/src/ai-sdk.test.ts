@@ -1036,6 +1036,39 @@ describe('ai-sdk', () => {
         expect(sessionState.messages[3].parts[0].text).toBe("regen: msg2");
       }, TEST_TIMEOUT);
 
+      test("regenerate: first assistant message removes all subsequent history", async () => {
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
+
+        // Build 2-turn history
+        setParrotHandler("copy");
+        await sendAndConsume(session.id, "first", "u1");
+        await sendAndConsume(session.id, "second", "u2");
+
+        // Verify initial state: 4 messages
+        let sessionState = await client.sessions.get(session.id);
+        expect(sessionState.messages.length).toBe(4);
+        expect(sessionState.messages[1].parts[0].text).toBe("copy: first");
+        expect(sessionState.messages[3].parts[0].text).toBe("copy: second");
+
+        // Regenerate first assistant (index 1) — should remove the 2nd turn entirely
+        setParrotHandler("regen");
+        const firstAssistantId = sessionState.messages[1].id;
+
+        const stream = await regenerateMessageViaTransport(
+          client.createTransport(), session.id,
+          sessionState.messages, firstAssistantId
+        );
+        await consumeChunksFromTransportStream(stream);
+
+        // Verify: only 2 messages remain (the first turn, regenerated)
+        sessionState = await client.sessions.get(session.id);
+        expect(sessionState.status).toBe("idle");
+        expect(sessionState.messages.length).toBe(2);
+        expect(sessionState.messages[0].parts[0].text).toBe("first");
+        expect(sessionState.messages[1].parts[0].text).toBe("regen: first");
+      }, TEST_TIMEOUT);
+
       test("regenerate: consecutive regenerations on different positions", async () => {
         await updateEnvironment(client, { config: buildConfig() });
         const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
