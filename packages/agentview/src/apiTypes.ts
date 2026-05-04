@@ -456,7 +456,7 @@ export type SessionCreate = z.infer<typeof SessionCreateSchema>
 
 export const RunCreateSchema = z.object({
   input: UserUIMessageSchema,
-  previousRunId: z.string().optional(),
+  previousRunId: z.string().optional().nullable(), // null -> regenerate from zero. undefined -> just not defined
 });
 
 export type RunCreate = z.infer<typeof RunCreateSchema>

@@ -183,7 +183,7 @@ export class AgentViewClient extends AgentViewBase {
      */
     return new DefaultChatTransport({
       headers: this._getHeaders(),
-      prepareSendMessagesRequest: ({ id, messages }) => {
+      prepareSendMessagesRequest: ({ id, messages, trigger }) => {
         /**
          * Here we rely on some facts about ai-sdk:
          * - messages is already truncated
@@ -203,7 +203,18 @@ export class AgentViewClient extends AgentViewBase {
         }
 
         // Technically we could omit previousRunId for submit-message but this behaviour is even more consistent. Very universal and minimalistic, like it.
-        const previousRunId = (messages[messages.length - 2]?.metadata as any)?._agentview?.id; 
+        let previousRunId : string | null | undefined = undefined; // null -> regenerate from root. undefined -> continue from last run.
+        if (trigger === 'regenerate-message') {
+          if (messages.length <= 1) {
+            previousRunId = null;
+          }
+          else {
+            previousRunId = (messages[messages.length - 2].metadata as any)?._agentview?.id;
+            if (!previousRunId) {
+              throw new AgentViewError("Previous run id is not found in messages history", 500);
+            }
+          }
+        }
 
         return {
           api: `${baseUrl}/api/sessions/${id}/runs`,

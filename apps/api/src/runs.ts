@@ -216,7 +216,7 @@ async function createRunCore(
     manual: boolean;
     state: any | undefined;
     runConfig: BaseRunConfig;
-    previousRun: ReturnType<typeof getLastRun>;
+    previousRun: ReturnType<typeof getLastRun> | null; // null / undefined -> start from root
     active: boolean
   }
 ): Promise<typeof runs.$inferSelect> {
@@ -317,7 +317,7 @@ async function createRunCore(
 /**
  * Prepares a session for run creation: fetches session, checks no in-progress run, finds config.
  */
-async function prepareRunCreation(tx: OrgTransaction, environment: Environment, sessionId: string, previousRunId?: string) {
+async function prepareRunCreation(tx: OrgTransaction, environment: Environment, sessionId: string, previousRunId?: string | null) {
   const session = await requireSession(tx, sessionId); // todo: optimize
 
   const lastRun = getLastRun(session);
@@ -326,6 +326,10 @@ async function prepareRunCreation(tx: OrgTransaction, environment: Environment, 
   }
 
   const previousRun = (() => {
+    if (previousRunId === null) {
+      return null; // null -> regenerate from root
+    }
+
     if (previousRunId) {
       const previousRun = session.runs.find(r => r.id === previousRunId);
       if (!previousRun) {
@@ -855,7 +859,7 @@ export async function createAutoRun2(
   principal: Principal,
   sessionId: string,
   input_?: Record<string, any>,
-  previousRunId?: string,
+  previousRunId?: string | null,
   signal?: AbortSignal
 ): Promise<{ runId: string, response: Response, success: boolean }> {
 
@@ -878,7 +882,7 @@ export async function createAutoRun2(
       );
     }
 
-    if (session.channel.type !== 'api' && previousRunId) {
+    if (session.channel.type !== 'api' && previousRunId !== undefined) {
       throw new AgentViewError("You can provide 'previousRunId' only for api channels.", 500);
     }
 

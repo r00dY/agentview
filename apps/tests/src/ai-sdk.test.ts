@@ -69,7 +69,7 @@ describe('ai-sdk', () => {
       return transport.sendMessages({
         chatId: sessionId,
         messages: truncatedMessages,
-        trigger: "submit-message",
+        trigger: "regenerate-message",
         messageId: undefined,
         abortSignal: undefined,
       })
