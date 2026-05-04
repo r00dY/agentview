@@ -1010,7 +1010,7 @@ function RunFooter(props: RunFooterProps) {
             />);
         }
 
-        // toolbarBlocks.push(<Button variant="ghost" size="icon_sm" onClick={props.regenerate}><RotateCcw className="size-4" /></Button>);
+        toolbarBlocks.push(<Button variant="ghost" size="icon_sm" onClick={props.regenerate}><RotateCcw className="size-4" /></Button>);
     }
 
     toolbarBlocks.push(<Button variant="ghost" size="sm" asChild>
