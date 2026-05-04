@@ -183,7 +183,7 @@ export class AgentViewClient extends AgentViewBase {
      */
     return new DefaultChatTransport({
       headers: this._getHeaders(),
-      prepareSendMessagesRequest: ({ id, messages }) => ({
+      prepareSendMessagesRequest: ({ id, messages, messageId, trigger }) => ({
         api: `${baseUrl}/api/sessions/${id}/runs`,
         body: {
           input: messages[messages.length - 1],

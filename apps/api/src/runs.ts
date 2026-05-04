@@ -233,6 +233,8 @@ async function createRunCore(
     agentRefId,
     metadata,
     environmentId: environment.id,
+    active: true,
+    previousRunId: lastRun?.id ?? null,
   }).returning();
 
   await tx.insert(sessionItems).values(
@@ -315,7 +317,7 @@ async function createRunCore(
  * Prepares a session for run creation: fetches session, checks no in-progress run, finds config.
  */
 async function prepareRunCreation(tx: OrgTransaction, environment: Environment, sessionId: string) {
-  const session = await requireSession(tx, sessionId, { includePendingRun: true, includeInitRun: true }); // todo: optimize
+  const session = await requireSession(tx, sessionId); // todo: optimize
 
   const lastRun = getLastRun(session);
   if (lastRun && !isRunFinished(lastRun)) {
@@ -807,6 +809,7 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
       finishedAt: nowIso,
       updatedAt: nowIso,
       expiresAt: null,
+      active: reason.status === 'discarded' ? false : undefined // set active: false for discarded runs. We basically treat them as "dead" branches (that were tried and failed and must be retried).
     }).where(eq(runs.id, runId));
 
     // Channel messages must be disconnected from the run.
@@ -922,14 +925,13 @@ export async function createAutoRun2(
       }
     })();
 
-
     const { runConfig, parsedInput, idleTimeout } = await processInput(agentConfig, input);
   
     const run = await createRunCore(tx, environment, sessionId, {
       id: newRunId,
       parsedInput,
       parsedNonInputItems: [],
-      status: 'in_progress',
+      status: 'in_progress', // in_progress is okay, if we're using only ai-sdk. Bascially it's invisible in other source than /stream until response is finished. But it's visible internally as a proper run.
       failReason: null,
       expiresAt: new Date(Date.now() + idleTimeout).toISOString(),
       finishedAt: null,
@@ -1024,7 +1026,10 @@ export async function createAutoRun2(
         await terminateRun(tx, sessionId, runId, {
           status: 'discarded',
           failReason: {
-            message: "Error response from AI Endpoint"
+            source: 'agentview',
+            message: "Error response from AI Endpoint",
+            statusCode: response.status
+            // todo: add response body here (for channel messages it will make debugging much easier)
           },
         });
       });

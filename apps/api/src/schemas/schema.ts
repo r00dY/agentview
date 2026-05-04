@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, varchar, jsonb, boolean, uniqueIndex, integer, bigserial, bigint, serial, unique, smallint, index, pgPolicy, check } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, varchar, jsonb, boolean, uniqueIndex, integer, bigserial, bigint, serial, unique, smallint, index, pgPolicy, check, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { users, accounts, verifications, authSessions, apikeys, organizations, members, invitations, invitationsRelations, organizationsRelations, membersRelations } from "./auth-schema";
 import { relations, sql } from "drizzle-orm";
 
@@ -75,6 +75,9 @@ export const runs = pgTable("runs", {
   metadata: jsonb("metadata"),
   manual: boolean("manual").notNull().default(false),
   environmentId: uuid("environment_id").references(() => environments.id), // required for auto-fetch
+
+  previousRunId: uuid("previous_run_id").references((): AnyPgColumn => runs.id, { onDelete: 'set null' }),
+  active: boolean("active").notNull(),
 }, (table) => [
   index('runs_expires_at_status_idx').on(table.expiresAt, table.status),
   index('runs_session_id_created_at_idx').on(table.sessionId, table.createdAt),

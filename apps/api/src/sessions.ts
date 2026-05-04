@@ -105,9 +105,7 @@ export async function fetchSessionBase(tx: Transaction, session_id: string): Pro
 }
 
 export type FetchSessionOptions = {
-  includeInitRun?: boolean;
-  includePendingRun?: boolean;
-  includeDiscardedRun?: boolean;
+
 }
 
 export async function fetchSession(tx: Transaction, session_id: string, options?: FetchSessionOptions): Promise<StandardSession | undefined> {
@@ -133,6 +131,7 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
           sessionId: true,
           agentRefId: true,
           manual: true,
+          active: true,
         },
         orderBy: (run, { asc }) => [asc(run.createdAt)],
         with: {
@@ -173,6 +172,10 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
     active: row.active,
     runs: row.runs
       .filter((run, index) => {
+        if (!run.active) {
+          return false;
+        }
+        // return true;
         if (run.status === "completed") {
           return true;
         }
@@ -182,18 +185,9 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
             return true;
           }
 
-          if (options?.includeInitRun && run.status === "init") {
-            return true;
-          }
-
-          if (options?.includePendingRun && run.status === "pending") {
-            return true;
-          }
-
-          if (options?.includeDiscardedRun && run.status === "discarded") {
-            return true;
-          }
-
+          // if (options?.includeInitRun && run.status === "init") {
+          //   return true;
+          // }
         }
         return false;
 

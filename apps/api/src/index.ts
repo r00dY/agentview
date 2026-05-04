@@ -100,7 +100,7 @@ app.onError((error, c) => {
   }
   else if (error instanceof DrizzleQueryError) {
     log.error({ errorType: 'DrizzleQueryError', err: error }, 'DB error');
-    return c.json({ source: 'agentview', ...error }, 500);
+    return c.json({ source: 'agentview', ...error, message: error.message ?? 'DB error' }, 500);
   }
   else if (error instanceof Error) {
     log.error({ errorType: 'Error', err: error }, error.message);
