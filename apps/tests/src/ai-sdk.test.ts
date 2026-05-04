@@ -931,6 +931,199 @@ describe('ai-sdk', () => {
         });
 
       }, TEST_TIMEOUT);
+
+      // ---------------------------------------------------------------
+      // Regeneration tests
+      // ---------------------------------------------------------------
+
+      function setParrotHandler(prefix: string = "copy") {
+        mockAISDKServer!.setHandler((body: any, res: any) => {
+          const messages = body.messages;
+          const lastMessage = messages[messages.length - 1];
+          const text = lastMessage.parts.find((p: any) => p.type === "text")?.text ?? "";
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: `${prefix}: ${text}` },
+            { type: "text-end", id: "t1" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+      }
+
+      async function sendAndConsume(sessionId: string, text: string, msgId: string) {
+        const stream = await sendMessageViaTransport(
+          client.createTransport(), sessionId,
+          { id: msgId, role: "user", parts: [{ type: "text", text }] }
+        );
+        await consumeChunksFromTransportStream(stream);
+      }
+
+      test("regenerate: last assistant message", async () => {
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
+
+        // Build 2-turn history with parrot handler
+        setParrotHandler("copy");
+        await sendAndConsume(session.id, "hello", "u1");
+        await sendAndConsume(session.id, "world", "u2");
+
+        // Verify initial state: 4 messages
+        let sessionState = await client.sessions.get(session.id);
+        expect(sessionState.messages.length).toBe(4);
+        expect(sessionState.messages[0].parts[0].text).toBe("hello");
+        expect(sessionState.messages[1].parts[0].text).toBe("copy: hello");
+        expect(sessionState.messages[2].parts[0].text).toBe("world");
+        expect(sessionState.messages[3].parts[0].text).toBe("copy: world");
+
+        // Regenerate last assistant message
+        setParrotHandler("regen");
+        const lastAssistantId = sessionState.messages[3].id;
+
+        const stream = await regenerateMessageViaTransport(
+          client.createTransport(), session.id,
+          sessionState.messages, lastAssistantId
+        );
+        await consumeChunksFromTransportStream(stream);
+
+        // Verify: same 4 messages, last one regenerated
+        sessionState = await client.sessions.get(session.id);
+        expect(sessionState.status).toBe("idle");
+        expect(sessionState.messages.length).toBe(4);
+        expect(sessionState.messages[0].parts[0].text).toBe("hello");
+        expect(sessionState.messages[1].parts[0].text).toBe("copy: hello");
+        expect(sessionState.messages[2].parts[0].text).toBe("world");
+        expect(sessionState.messages[3].parts[0].text).toBe("regen: world");
+      }, TEST_TIMEOUT);
+
+      test("regenerate: middle assistant message removes subsequent history", async () => {
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
+
+        // Build 3-turn history
+        setParrotHandler("copy");
+        await sendAndConsume(session.id, "msg1", "u1");
+        await sendAndConsume(session.id, "msg2", "u2");
+        await sendAndConsume(session.id, "msg3", "u3");
+
+        // Verify initial state: 6 messages
+        let sessionState = await client.sessions.get(session.id);
+        expect(sessionState.messages.length).toBe(6);
+        expect(sessionState.messages[1].parts[0].text).toBe("copy: msg1");
+        expect(sessionState.messages[3].parts[0].text).toBe("copy: msg2");
+        expect(sessionState.messages[5].parts[0].text).toBe("copy: msg3");
+
+        // Regenerate 2nd assistant (index 3) — should remove msg3 turn
+        setParrotHandler("regen");
+        const middleAssistantId = sessionState.messages[3].id;
+
+        const stream = await regenerateMessageViaTransport(
+          client.createTransport(), session.id,
+          sessionState.messages, middleAssistantId
+        );
+        await consumeChunksFromTransportStream(stream);
+
+        // Verify: only 4 messages remain (msg3 turn is gone)
+        sessionState = await client.sessions.get(session.id);
+        expect(sessionState.status).toBe("idle");
+        expect(sessionState.messages.length).toBe(4);
+        expect(sessionState.messages[0].parts[0].text).toBe("msg1");
+        expect(sessionState.messages[1].parts[0].text).toBe("copy: msg1");
+        expect(sessionState.messages[2].parts[0].text).toBe("msg2");
+        expect(sessionState.messages[3].parts[0].text).toBe("regen: msg2");
+      }, TEST_TIMEOUT);
+
+      test("regenerate: consecutive regenerations on different positions", async () => {
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
+
+        // Build 3-turn history
+        setParrotHandler("v1");
+        await sendAndConsume(session.id, "a", "u1");
+        await sendAndConsume(session.id, "b", "u2");
+        await sendAndConsume(session.id, "c", "u3");
+
+        let sessionState = await client.sessions.get(session.id);
+        expect(sessionState.messages.length).toBe(6);
+
+        // 1st regeneration: regenerate last assistant (index 5)
+        setParrotHandler("v2");
+        let stream = await regenerateMessageViaTransport(
+          client.createTransport(), session.id,
+          sessionState.messages, sessionState.messages[5].id
+        );
+        await consumeChunksFromTransportStream(stream);
+
+        sessionState = await client.sessions.get(session.id);
+        expect(sessionState.messages.length).toBe(6);
+        expect(sessionState.messages[5].parts[0].text).toBe("v2: c");
+        // earlier messages unchanged
+        expect(sessionState.messages[1].parts[0].text).toBe("v1: a");
+        expect(sessionState.messages[3].parts[0].text).toBe("v1: b");
+
+        // 2nd regeneration: regenerate middle assistant (index 3) — should drop the 3rd turn
+        setParrotHandler("v3");
+        stream = await regenerateMessageViaTransport(
+          client.createTransport(), session.id,
+          sessionState.messages, sessionState.messages[3].id
+        );
+        await consumeChunksFromTransportStream(stream);
+
+        sessionState = await client.sessions.get(session.id);
+        expect(sessionState.messages.length).toBe(4);
+        expect(sessionState.messages[0].parts[0].text).toBe("a");
+        expect(sessionState.messages[1].parts[0].text).toBe("v1: a");
+        expect(sessionState.messages[2].parts[0].text).toBe("b");
+        expect(sessionState.messages[3].parts[0].text).toBe("v3: b");
+
+        // 3rd regeneration: regenerate last remaining assistant again
+        setParrotHandler("v4");
+        stream = await regenerateMessageViaTransport(
+          client.createTransport(), session.id,
+          sessionState.messages, sessionState.messages[3].id
+        );
+        await consumeChunksFromTransportStream(stream);
+
+        sessionState = await client.sessions.get(session.id);
+        expect(sessionState.messages.length).toBe(4);
+        expect(sessionState.messages[1].parts[0].text).toBe("v1: a");
+        expect(sessionState.messages[3].parts[0].text).toBe("v4: b");
+        expect(sessionState.status).toBe("idle");
+      }, TEST_TIMEOUT);
+
+      test("regenerate: error when previousRunId is invalid", async () => {
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
+
+        // Build 2-turn history
+        setParrotHandler("copy");
+        await sendAndConsume(session.id, "hello", "u1");
+        await sendAndConsume(session.id, "world", "u2");
+
+        let sessionState = await client.sessions.get(session.id);
+        expect(sessionState.messages.length).toBe(4);
+
+        // Corrupt the _agentview.id on the previous assistant message
+        const corruptedMessages = structuredClone(sessionState.messages);
+        (corruptedMessages[1].metadata as any)._agentview.id = "00000000-0000-0000-0000-000000000000";
+
+        // Try to regenerate last assistant with corrupted previousRunId
+        setParrotHandler("regen");
+        const streamPromise = regenerateMessageViaTransport(
+          client.createTransport(), session.id,
+          corruptedMessages, corruptedMessages[3].id
+        );
+
+        await expect(streamPromise).rejects.toThrowError(/not found/);
+
+        // Session should be unchanged
+        sessionState = await client.sessions.get(session.id);
+        expect(sessionState.messages.length).toBe(4);
+        expect(sessionState.messages[3].parts[0].text).toBe("copy: world");
+      }, TEST_TIMEOUT);
     });
 
 
