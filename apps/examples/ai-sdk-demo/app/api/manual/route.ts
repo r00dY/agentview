@@ -1,6 +1,6 @@
 export async function POST() {
 
-  // return new Response('Something went wrong', {
+  // return new Response('Something went wrong in AI endpoint', {
   //   status: 400,
   //   headers: { 'Content-Type': 'text/plain' },
   // });

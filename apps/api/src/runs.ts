@@ -217,9 +217,10 @@ async function createRunCore(
     state: any | undefined;
     runConfig: BaseRunConfig;
     lastRun: ReturnType<typeof getLastRun>;
+    active: boolean
   }
 ): Promise<typeof runs.$inferSelect> {
-  const { parsedInput, parsedNonInputItems, status, failReason, expiresAt, finishedAt, metadata, agentRefId, manual, state, runConfig, lastRun, id } = params;
+  const { parsedInput, parsedNonInputItems, status, failReason, expiresAt, finishedAt, metadata, agentRefId, manual, state, active, lastRun, id } = params;
 
   const [insertedRun] = await tx.insert(runs).values({
     id,
@@ -233,7 +234,7 @@ async function createRunCore(
     agentRefId,
     metadata,
     environmentId: environment.id,
-    active: true,
+    active,
     previousRunId: lastRun?.id ?? null,
   }).returning();
 
@@ -809,7 +810,6 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
       finishedAt: nowIso,
       updatedAt: nowIso,
       expiresAt: null,
-      active: reason.status === 'discarded' ? false : undefined // set active: false for discarded runs. We basically treat them as "dead" branches (that were tried and failed and must be retried).
     }).where(eq(runs.id, runId));
 
     // Channel messages must be disconnected from the run.
@@ -941,6 +941,7 @@ export async function createAutoRun2(
       state: undefined,
       runConfig,
       lastRun,
+      active: false // We treat new run freshly created as NEW BRANCH that is not activated YET. It will activate itself once first response is received.
     });
 
     if (consumedChannelMessageIds.length > 0) {
@@ -955,7 +956,7 @@ export async function createAutoRun2(
       throw new AgentViewError("Agent URL not provided", 400);
     }
 
-    const standardSession = await requireSession(tx, sessionId);
+    const standardSession = await requireSession(tx, sessionId, { branchRunId: run.id });
     const runBase = await requireRunBase(tx, run.id);
 
     return {
@@ -1041,7 +1042,13 @@ export async function createAutoRun2(
     log.debug(`[${sessionId}] [createAutoRun2] stream established`);
 
     await withTenant(principal, async (tx) => {
+      await tx.acquireLock({ type: "edit_session", sessionId });
+
       await activateSession(tx, sessionId);
+
+      await tx.update(runs).set({
+        active: true
+      }).where(eq(runs.id, runId));
     });
 
     return { response: responseCopy, runId, success: true }
@@ -1133,6 +1140,7 @@ export async function createManualRun(
     state: body.state,
     runConfig,
     lastRun,
+    active: true
   });
 }
 

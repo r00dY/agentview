@@ -105,7 +105,7 @@ export async function fetchSessionBase(tx: Transaction, session_id: string): Pro
 }
 
 export type FetchSessionOptions = {
-
+  branchRunId?: string; // inactive run id that is BRANCH.
 }
 
 export async function fetchSession(tx: Transaction, session_id: string, options?: FetchSessionOptions): Promise<StandardSession | undefined> {
@@ -132,6 +132,7 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
           agentRefId: true,
           manual: true,
           active: true,
+          previousRunId: true,
         },
         orderBy: (run, { asc }) => [asc(run.createdAt)],
         with: {
@@ -154,6 +155,30 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
 
   const state = await fetchSessionState(tx, row.id);
 
+
+  /**
+   * Handle runs - build the correct lineage.
+   * Default: all active runs (the main line).
+   * branchRunId: trace from that run back via previousRunId to build the branch.
+   */
+  const activeRuns = (() => {
+    if (!options?.branchRunId) {
+      return row.runs.filter(r => r.active);
+    }
+
+    // Build branch by walking previousRunId chain
+    const runsById = new Map(row.runs.map(r => [r.id, r]));
+    const chain: typeof row.runs = [];
+    let current = runsById.get(options.branchRunId);
+    while (current) {
+      chain.unshift(current);
+      current = current.previousRunId ? runsById.get(current.previousRunId) : undefined;
+    }
+    return chain;
+  })();
+
+
+
   return {
     id: row.id,
     handle: row.handleNumber.toString() + (row.handleSuffix ?? ""),
@@ -170,34 +195,24 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
     agentRef: row.agentRef ?? null,
     agentRefs: row.agentRefs ?? [],
     active: row.active,
-    runs: row.runs
+    runs: activeRuns
       .filter((run, index) => {
-        if (!run.active) {
-          return false;
-        }
-        // return true;
         if (run.status === "completed") {
           return true;
         }
 
-        if (index === row.runs.length - 1) { // for last one
+        if (index === activeRuns.length - 1) { // for last one
           if (run.status === "in_progress" || run.status === "cancelled" || run.status === "failed") {
             return true;
           }
-
-          // if (options?.includeInitRun && run.status === "init") {
-          //   return true;
-          // }
         }
         return false;
-
       }) // we always send last run unless it's pending/init
       .map(run => ({
         ...run,
-        // agentRef: run.agentRef ?? : null,
         sessionItems: run.sessionItems.map((item, index) => ({
           ...item,
-          type: item.type ?? (index === 0 ? 'input' : 'step') // this condition is totally unimportant, just backward compat with nothing lol
+          type: item.type ?? (index === 0 ? 'input' : 'step')
         })),
       })),
     state: state ?? row.initialState ?? null,
