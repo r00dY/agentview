@@ -4,7 +4,7 @@ import { findAgentConfig, findAgentConfigBySession, findItemConfigById, findRunC
 import { enhanceSession, getActiveRuns, getAllSessionItems, getLastRun } from "agentview/sessionUtils";
 import { unwrapError } from "agentview";
 import type { AgentConfig, AgentInputComponent, InputUIMessage, ScoreConfig, UserMessageDisplayComponent } from "../types";
-import { AlertCircleIcon, Brain, ChevronDown, CircleGauge, Ellipsis, InfoIcon, Loader2, Lock, MessageCirclePlus, UsersIcon, Wrench } from "lucide-react";
+import { AlertCircleIcon, Brain, ChevronDown, CircleGauge, Ellipsis, InfoIcon, Loader2, Lock, MessageCirclePlus, RotateCcw, UsersIcon, Wrench } from "lucide-react";
 import { useEffect, useLayoutEffect, useOptimistic, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import type { LoaderFunctionArgs, RouteObject } from "react-router";
@@ -168,6 +168,8 @@ type WallItem = {
         failReason: any,
     }
 
+    messageId: string,
+
     // is last run item -> show run footer
     showRunFooter?: boolean
 };
@@ -190,7 +192,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 
     const [initialResume] = useState(initialSession.resume);
 
-    const { messages, sendMessage, status, error } = useChat({
+    const { messages, sendMessage, status, error, regenerate } = useChat({
         id: initialSession.id,
         generateId: () => crypto.randomUUID(),
         messages: initialSession.messages,
@@ -281,7 +283,8 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                     id: message.id,
                     element,
                     commentsAndScores,
-                    run
+                    run,
+                    messageId: message.id,
                 })
             }
             else {
@@ -301,7 +304,8 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                         id: channelMessage.id,
                         element,
                         commentsAndScores,
-                        run
+                        run,
+                        messageId: message.id,
                     })
                 }
             }
@@ -389,6 +393,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                     element,
                     commentsAndScores,
                     run,
+                    messageId: message.id,
                 })
             }
 
@@ -433,7 +438,8 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                     element,
                     commentsAndScores: runCommentsAndScores,
                     run,
-                    showRunFooter
+                    showRunFooter,
+                    messageId: message.id,
                 })
             }
             else {
@@ -447,7 +453,8 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                         element: <div>No output parts</div>,
                         commentsAndScores: runCommentsAndScores,
                         run,
-                        showRunFooter
+                        showRunFooter,
+                        messageId: message.id,
                     })
                 }
             }
@@ -704,6 +711,9 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                     listParams={listParams}
                                     isSelected={isSelected}
                                     isSmallSize={styles.isSmallSize}
+                                    regenerate={() => {
+                                        regenerate({ messageId: wallItem.messageId });
+                                    }}
                                 />}
 
                             </div>
@@ -940,7 +950,9 @@ type RunFooterProps = {
     isSmallSize: boolean,
 
     commentsAndScores?: CommentsThreadData,
-    run: WallItem['run']
+    run: WallItem['run'],
+
+    regenerate: () => void,
 }
 
 
@@ -998,6 +1010,7 @@ function RunFooter(props: RunFooterProps) {
             />);
         }
 
+        // toolbarBlocks.push(<Button variant="ghost" size="icon_sm" onClick={props.regenerate}><RotateCcw className="size-4" /></Button>);
     }
 
     toolbarBlocks.push(<Button variant="ghost" size="sm" asChild>

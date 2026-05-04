@@ -190,7 +190,10 @@ export class AgentViewClient extends AgentViewBase {
          * - `messages` can't be empty (aisdk throws)
          * - ai-sdk makes sure last message is user message. It's technically possible to make last message assistant but we can safely throw on this case (it's incorrect for us anyway).
          * 
-         * Essentially, if messages is already after truncation, so it's literally ui state, then we must keep it anyway. And we should assume last message is user message. The rest is follows.
+         * Essentially, if messages is already after truncation, so it's literally ui state, then we must keep it anyway. And we should assume last message is user message. It covers all cases:
+         * - new item
+         * - regeneration
+         * - edit message (sendMessage with proper messageId)
          */
 
         const lastMessage = messages[messages.length - 1];
