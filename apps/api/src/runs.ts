@@ -3,7 +3,7 @@ import type { Environment, ManualRunCreate, ManualRunUpdate, RunUpdate } from 'a
 import type { BaseAgentConfig, BaseRunConfig } from 'agentview/baseConfigTypes';
 import { findItemConfig, requireAgentConfigBySession, requireRunConfig, serializeRunConfig } from 'agentview/baseConfigUtils';
 import { getLastRun } from 'agentview/sessionUtils';
-import { and, eq, inArray, isNull, not, or } from 'drizzle-orm';
+import { and, eq, inArray, isNull, not, or, sql } from 'drizzle-orm';
 import { log } from './logger';
 import { getAdapter } from './adapters/adapters';
 import { resolveAgentRef } from './agentRefs';
@@ -1046,9 +1046,13 @@ export async function createAutoRun2(
 
       await activateSession(tx, sessionId);
 
+      /**
+       * Activate current lineage. All older runs will be deactivated.
+       */
+      const activeRunIds = standardSession.runs.map(r => r.id);
       await tx.update(runs).set({
-        active: true
-      }).where(eq(runs.id, runId));
+        active: sql`CASE WHEN ${inArray(runs.id, activeRunIds)} THEN true ELSE false END`
+      }).where(eq(runs.sessionId, sessionId));
     });
 
     return { response: responseCopy, runId, success: true }
