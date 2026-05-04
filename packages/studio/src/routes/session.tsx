@@ -274,7 +274,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 
                 const commentsAndScores: CommentsThreadData | undefined = run && {
                     target: { sessionId: session.id, runId: run.id, sessionItemIndex: 0 },
-                    comments: props.comments.filter((c) => c.sessionItemIndex === 0),
+                    comments: props.comments.filter((c) => c.sessionItemIndex === 0 && c.runId === run.id),
                 };
 
                 wallItems.push({
@@ -381,7 +381,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 
                 let commentsAndScores: CommentsThreadData | undefined = run && {
                     target: { sessionId: session.id, runId: run.id, sessionItemIndex: index + 1 },
-                    comments: props.comments.filter((c) => c.sessionItemIndex === index + 1),
+                    comments: props.comments.filter((c) => c.sessionItemIndex === index + 1 && c.runId === run.id),
                 };
 
                 wallItems.push({
