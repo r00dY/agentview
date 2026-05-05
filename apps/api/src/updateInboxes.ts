@@ -187,7 +187,7 @@ export async function updateInboxes(
             // If this event zeros inbox item, then we must revert the last notifiable event to last read event id (otherwise it will be counted as "unread")
             // We should not change lastReadEventId as it's information about time when user last time saw the inbox item. It's an event that "counts" as important system information (non derived).
             if (events.length === 0) {
-                newInboxItem.lastNotifiableEventId = inboxItem.lastReadEventId ?? inboxItem.lastNotifiableEventId
+                newInboxItem.lastNotifiableEventId = inboxItem.lastReadEventId ?? 0
             }
 
             newInboxItemValues.push(newInboxItem);
