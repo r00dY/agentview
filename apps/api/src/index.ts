@@ -385,7 +385,7 @@ app.openapi(sessionsGETStatsRoute, async (c) => {
           sql`${inboxItems.lastNotifiableEventId} > COALESCE(${inboxItems.lastReadEventId}, 0)`,
           // If inbox item has a runId, only count it if the run is active
           or(isNull(inboxItems.runId), eq(runs.active, true)),
-          getSessionListFilter(tx, params)
+          getSessionListFilter(tx, params) // it's just filter, no pagination -> so all sessions are counted
         )
       )
 
@@ -394,7 +394,7 @@ app.openapi(sessionsGETStatsRoute, async (c) => {
     }
 
     if (granular) {
-      const sessionsResult = await getSessions(tx, params);
+      const sessionsResult = await getSessions(tx, params); // only sessions from current list (takes pagination into account)
       const sessionIds = sessionsResult.sessions.map((row) => row.id);
 
       response.sessions = {}
