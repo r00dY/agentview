@@ -77,6 +77,8 @@ function Component() {
 
         {sessions && sessions.length === 0 && <div className="px-3 py-4 text-muted-foreground">No sessions available.</div>}
         {sessions && sessions.length > 0 && <SessionList sessions={sessions} listParams={listParams} allStats={allStats} /> }
+
+        { pagination && <PaginationControls pagination={pagination} listParams={listParams} /> }
       </div>
 
     </div>
