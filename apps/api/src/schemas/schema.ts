@@ -230,6 +230,8 @@ export const inboxItems = pgTable('inbox_items', {
   lastReadEventId: bigint('last_read_event_id', { mode: 'number' }).references(() => events.id),
   lastNotifiableEventId: bigint('last_notifiable_event_id', { mode: 'number' }).references(() => events.id),
 
+  hasImportant: boolean('has_important').notNull().default(false),
+
   render: jsonb('render').notNull(),
 
 }, (table) => [

@@ -197,6 +197,13 @@
       "when": 1777893406166,
       "tag": "0027_brave_joshua_kane",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1777977799064,
+      "tag": "0028_lonely_victor_mancha",
+      "breakpoints": true
     }
   ]
 }

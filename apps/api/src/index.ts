@@ -384,6 +384,7 @@ app.openapi(sessionsGETStatsRoute, async (c) => {
         and(
           eq(inboxItems.userId, memberPrincipal.session.user.id),
           sql`${inboxItems.lastNotifiableEventId} > COALESCE(${inboxItems.lastReadEventId}, 0)`,
+          eq(inboxItems.hasImportant, true),
           // If inbox item has a runId, only count it if the run is active
           or(isNull(inboxItems.runId), eq(runs.active, true)),
           getSessionListFilter(tx, params) // it's just filter, no pagination -> so all sessions are counted
@@ -919,6 +920,7 @@ app.openapi(seenRoute, async (c) => {
 
     await tx.update(inboxItems).set({
       lastReadEventId: sql`${inboxItems.lastNotifiableEventId}`,
+      hasImportant: false,
       updatedAt: new Date().toISOString(),
     }).where(and(
       eq(inboxItems.userId, userPrincipal.session.user.id),

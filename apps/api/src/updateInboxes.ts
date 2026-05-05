@@ -109,6 +109,7 @@ export async function updateInboxes(
                 userId: user.id,
                 sessionId: newEvent.payload.session_id,
                 lastNotifiableEventId: newEvent.id,
+                hasImportant: false, // session_created is never important
                 render: {
                     events: [newEvent]
                 }
@@ -116,25 +117,29 @@ export async function updateInboxes(
         }
         else if (newEvent.type === 'comment_created') {
             if (!inboxItem) {
+                const newEvents = [newEvent];
                 newInboxItemValues.push({
                     organizationId: newEvent.organizationId,
                     userId: user.id,
                     ...target.ids,
                     lastNotifiableEventId: newEvent.id,
+                    hasImportant: hasImportantEventForUser(newEvents, user.id),
                     render: {
-                        events: [newEvent]
+                        events: newEvents
                     }
                 });
             } else {
                 const isUnread = isInboxItemUnread(inboxItem);
                 const prevRender = inboxItem.render as { events: EventType[] };
+                const newEvents = isUnread ? [...prevRender.events, newEvent] : [newEvent];
 
                 newInboxItemValues.push({
                     ...inboxItem,
                     lastNotifiableEventId: newEvent.id,
+                    hasImportant: hasImportantEventForUser(newEvents, user.id),
                     render: {
                         ...prevRender,
-                        events: isUnread ? [...prevRender.events, newEvent] : [newEvent]
+                        events: newEvents
                     }
                 });
             }
@@ -157,6 +162,7 @@ export async function updateInboxes(
             newInboxItemValues.push({
                 ...inboxItem,
                 // We don't have to set lastNotifiableEventId. Edits are not notifiable events. They'll just silently update the state of the inbox item.
+                hasImportant: hasImportantEventForUser(events, user.id),
                 render: {
                     ...prevRender,
                     events
@@ -175,9 +181,10 @@ export async function updateInboxes(
                 continue; // if deleted comment_id doesn't exist in current inbox state, just do nothing. Non-notifiable event.
             }
 
-            const newInboxItem = {
+            const newInboxItem: any = {
                 ...inboxItem,
                 // do not set lastNotifiableEventId. Deletes are not notifiable events.
+                hasImportant: hasImportantEventForUser(events, user.id),
                 render: {
                     ...prevRender,
                     events
@@ -203,6 +210,7 @@ export async function updateInboxes(
             set: {
                 updatedAt: new Date().toISOString(),
                 lastNotifiableEventId: sql.raw(`excluded.${inboxItems.lastNotifiableEventId.name}`),
+                hasImportant: sql.raw(`excluded.${inboxItems.hasImportant.name}`),
                 render: sql.raw(`excluded.${inboxItems.render.name}`),
             }
         });
@@ -215,4 +223,13 @@ function isEventForUser(event: InferSelectModel<typeof events>, userId: string) 
     }
 
     return true;
+}
+
+function isUserMentionedInEvent(event: EventType, userId: string): boolean {
+    const mentions = event.payload?.user_mentions;
+    return Array.isArray(mentions) && mentions.includes(userId);
+}
+
+function hasImportantEventForUser(events: EventType[], userId: string): boolean {
+    return events.some(event => isUserMentionedInEvent(event, userId));
 }
