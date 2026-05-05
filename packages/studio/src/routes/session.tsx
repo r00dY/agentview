@@ -445,44 +445,43 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                 };
             }
         
-            /**
-             * BUG!!!
-             * 
-             * The output parts *should only be inferred* when status is COMPLETED. Otherwise it makes no sense.
-             */
+
             const showRunFooter = !isLast || !isRunning
 
-            if (outputParts.length > 0) {
-                const elements: React.ReactNode[] = [];
-                for (const [index, part] of outputParts.entries()) {
-                    const Component = getPartComponent(part);
-                    if (Component === null) {
-                        continue;
+            const status = message.metadata?._agentview?.status;
+            const failReason = message.metadata?._agentview?.failReason;
+
+            /**
+             * We only "squash" output parts if run is completed & there are output parts available.
+             * In case of error / cancel it's no sense to guess output since there's no output.
+             */
+            if (status === 'completed') {
+                if (outputParts.length > 0) {
+                    const elements: React.ReactNode[] = [];
+                    for (const [index, part] of outputParts.entries()) {
+                        const Component = getPartComponent(part);
+                        if (Component === null) {
+                            continue;
+                        }
+                        const element = <Component value={part} session={session} />
+                        elements.push(element);
                     }
-                    const element = <Component value={part} session={session} />
-                    elements.push(element);
-                }
-
-                const element = <div className="space-y-4">{elements}</div>
-
-                wallItems.push({
-                    id: message.id,
-                    element,
-                    commentsAndScores: runCommentsAndScores,
-                    run,
-                    showRunFooter,
-                    messageId: message.id,
-                })
-            }
-            else {
-                const status = message.metadata?._agentview?.status;
-                const failReason = message.metadata?._agentview?.failReason;
-
-                if (status === 'failed' || status === 'cancelled') {
-                    const element = <div className="text-blue-500">[[[{status}{failReason && `: ${failReason.message}`}]]]</div>;
+    
+                    const element = <div className="space-y-4">{elements}</div>
+    
                     wallItems.push({
                         id: message.id,
-                        element: <div>No output parts</div>,
+                        element,
+                        commentsAndScores: runCommentsAndScores,
+                        run,
+                        showRunFooter,
+                        messageId: message.id,
+                    })
+                }
+                else {
+                    wallItems.push({
+                        id: message.id,
+                        element: <div className="italic text-muted-foreground">No output parts</div>, // edge case -> completed run -> no output parts.
                         commentsAndScores: runCommentsAndScores,
                         run,
                         showRunFooter,
@@ -490,6 +489,34 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                     })
                 }
             }
+            else {
+                let element: React.ReactNode;
+                
+                if (status === "failed") {
+                    element = <div className="text-md text-red-500">
+                        <span className="">{failReason?.message ?? "Failed for unknown reason"}</span>
+                    </div>;
+                }
+                else if (status === "cancelled") {
+                    element = <div className="text-md text-muted-foreground italic">
+                        <span className="">Cancelled by user.</span>
+                    </div>;
+                }
+                else {
+                    return; // in_progress
+                }
+                
+                wallItems.push({
+                    id: message.id,
+                    element, // edge case -> completed run -> no output parts.
+                    commentsAndScores: runCommentsAndScores,
+                    run,
+                    showRunFooter,
+                    messageId: message.id,
+                })
+            }
+
+           
 
             // console.log('error', unwrapError(error))
 
@@ -1000,17 +1027,17 @@ function RunFooter(props: RunFooterProps) {
 
     let blocks: React.ReactNode[] = [];
 
-    // Error
-    if (run.status === "failed") {
-        blocks.push(<div className="text-md mt-6 mb-3 text-red-500">
-            <span className="">{run.failReason?.message ?? "Failed for unknown reason"}</span>
-        </div>);
-    }
-    else if (run.status === "cancelled") {
-        blocks.push(<div className="text-md mt-6 mb-3 text-muted-foreground italic">
-            <span className="">Cancelled by user.</span>
-        </div>);
-    }
+    // // Error
+    // if (run.status === "failed") {
+    //     blocks.push(<div className="text-md mt-6 mb-3 text-red-500">
+    //         <span className="">{run.failReason?.message ?? "Failed for unknown reason"}</span>
+    //     </div>);
+    // }
+    // else if (run.status === "cancelled") {
+    //     blocks.push(<div className="text-md mt-6 mb-3 text-muted-foreground italic">
+    //         <span className="">Cancelled by user.</span>
+    //     </div>);
+    // }
 
     // Toolbar
     const toolbarBlocks: React.ReactNode[] = [];

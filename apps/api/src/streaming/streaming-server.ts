@@ -10,7 +10,7 @@ import { GracefulRunTerminationError, type LiveConnection } from './types';
 import { saveDataAll } from './saveData';
 import { createParser, type EventSourceMessage } from 'eventsource-parser';
 import { ChunkParseError, parseUIMessageChunk, type ExtendedUIMessageChunk } from './parseUIMessageChunk';
-import { UIMessageStreamError } from 'ai';
+import { UIMessageStreamError, isToolUIPart } from 'ai';
 import { cleanupStreamingUIMessageState } from './processUIMessageStream';
 
 if (!process.env.HTTP_SERVER_PORT) {
@@ -167,7 +167,26 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
         if (data === DONE_MSG) {
           log.info({ runId }, `[streaming] ${DONE_MSG} received`);
-          streamFinishReason = { type: 'complete' };
+
+          /**
+           * In case of successful finish, we must check whether there are any "pending" tool calls. This is treated as error state.
+           */
+          const pendingToolCalls : number[] = [];
+
+          for (let i = 0; i < conn.state.message.parts.length; i++) {
+            const part = conn.state.message.parts[i];
+            if (isToolUIPart(part) && (part.state === 'input-streaming' || part.state === 'input-available' || part.state === 'approval-requested')) {
+              pendingToolCalls.push(i);
+            }
+          }
+
+          if (pendingToolCalls.length > 0) {
+            streamFinishReason = { type: 'error', code: "STREAM_INCOMPLETE_TOOL_CALLS", message: `Stream finished with incomplete tool calls. Part indexes of incomplete tools:  [${pendingToolCalls.join(', ')}]. Please keep in mind Agentview doesn't support client-side tool calls and tool approvals yet.` };
+          }
+          else {
+            streamFinishReason = { type: 'complete' };
+          }
+  
           upstreamRes.destroy(); // will trigger 'close' event without 'error' event
           return;
         }
@@ -291,6 +310,12 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
       const finishedAt = new Date().toISOString();
 
       if (streamFinishReason.type === 'complete') {
+
+        /**
+         * In case of successful finish, we must check whether there are any "pending" tool calls.
+         */
+
+
         sendInternalMetadata({
           ...run,
           status: 'completed',
