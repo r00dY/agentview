@@ -11,7 +11,7 @@ import {
   type LoaderFunctionArgs,
   type RouteObject
 } from "react-router";
-import { use, Suspense } from "react";
+import { use, Suspense, useEffect } from "react";
 
 import { ArrowLeft, Building2Icon, ChevronDown, ChevronUp, Database, LogOut, MessageCircle, PlusIcon, UserIcon, WrenchIcon } from "lucide-react";
 import { NotificationBadge } from "../components/internal/NotificationBadge";
@@ -119,6 +119,17 @@ function Component() {
   // const apiChannels = (config.channels ?? []).filter(
   //   (c): c is ApiChannelConfig => c.type === 'api'
   // );
+
+  useEffect(() => {
+    (window as any).agentview = (window as any).agentview ?? {};
+    (window as any).agentview.debug = () => {
+      console.log({
+        me,
+        organization,
+        locale
+      })
+    };
+  }, []);
 
   // Helper function to get unseen count for a specific session type and list name
   const getUnseenCount = (space: Space) => {

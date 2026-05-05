@@ -3,7 +3,7 @@ import type { Environment, Space, UserCreate } from 'agentview/apiTypes'
 import { randomBytes } from 'crypto'
 import { and, eq } from 'drizzle-orm'
 import { authorize } from './authMiddleware'
-import { requireEnvironment } from './environments'
+import { getEnvironment, requireEnvironment } from './environments'
 import { requireUUID } from './isUUID'
 import { endUsers } from './schemas/schema'
 import type { OrgTransaction, TenantTransaction } from './withOrg'
@@ -70,7 +70,21 @@ export async function requireUser(tx: OrgTransaction, arg: Parameters<typeof fin
 
 
 
-function getDefaultSpaceFromEnvironment(environment: Environment): { space: Space, ownerId: string | null } {
+async function getDefaultSpace(tx: TenantTransaction): Promise<{ space: Space, ownerId: string | null }> {
+  // For member principal, just use logged in user's playground space as default
+  if (tx.principal.type === 'member') {
+    return {
+      space: 'playground',
+      ownerId: tx.principal.session.user.id,
+    }
+  }
+
+  const environment = await getEnvironment(tx)
+
+  if (!environment) {
+    throw new AgentViewError("Can't establish default space for the user (no environment found).", 400)
+  }
+
   if (environment.handle === 'production') {
     return {
       space: 'production',
@@ -95,13 +109,11 @@ function getDefaultSpaceFromEnvironment(environment: Environment): { space: Spac
 export async function createUser(tx: TenantTransaction, body: UserCreate) {
   await tx.acquireLock({ type: "create_resource" });
 
-  const environment = await requireEnvironment(tx)
-
   if (body.space && body.space === 'playground' && body.ownerId !== null) {
     throw new AgentViewError('Users in playground space must have "ownerId" set.', 400)
   }
 
-  const { space, ownerId } = body.space ? { space: body.space, ownerId: body.ownerId ?? null } : getDefaultSpaceFromEnvironment(environment);
+  const { space, ownerId } = body.space ? { space: body.space, ownerId: body.ownerId ?? null } : await getDefaultSpace(tx);
 
   await authorize(tx.principal, { action: "end-user:create", space })
 
