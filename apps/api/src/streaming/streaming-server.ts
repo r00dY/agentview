@@ -169,7 +169,12 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
           log.info({ runId }, `[streaming] ${DONE_MSG} received`);
 
           /**
-           * In case of successful finish, we must check whether there are any "pending" tool calls. This is treated as error state.
+           * IMPORTANT
+           * 
+           * In case of successful finish, we must check whether there are any "pending" tool calls. THIS IS ERROR STATE FOR US.
+           * Rationale: it's much better to explicitly show error than to make error states invisible.
+           * 
+           * It's error state ONLY FOR 'completed' runs. In case of cancellation or error -> we expect that tools might be broken mid-way.
            */
           const pendingToolCalls : number[] = [];
 
