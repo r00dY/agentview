@@ -183,8 +183,38 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
     const { sessionStats, session: initialSession } = props;
 
     const getUnseenEvents = (target: InputTarget): any[] | undefined => {
+
+        // if (target.channelMessageId) {
+        //     return sessionStats?.inboxItems?.find(i => i.channelMessageId === target.channelMessageId)?.unseenEvents;
+        // }
+
+        // if (target.sessionItemIndex !== undefined) {
+        //     return sessionStats?.inboxItems?.find(i =>
+        //         i.sessionItemIndex === target.sessionItemIndex
+        //     )?.unseenEvents;
+        // }
+
+        // if (target.sessionItemId) {
+        //     return sessionStats?.inboxItems?.find(i =>
+        //         i.sessionItemId === target.sessionItemId
+        //     )?.unseenEvents;
+        // }
+
+        // if (target.runId) {
+        //     return sessionStats?.inboxItems?.find(i =>
+        //         i.runId === target.runId &&
+        //         i.sessionItemId === null &&
+        //         i.sessionItemIndex === null &&
+        //         i.channelMessageId === null
+        //     )?.unseenEvents;
+        // }
+
+        // throw new Error('Invalid target');
+
         return sessionStats?.inboxItems?.find(i =>
-            i.sessionItemId === (target.sessionItemId ?? null) &&
+            i.sessionId === target.sessionId &&
+            i.runId === (target.runId ?? null) &&
+            (i.sessionItemId === (target.sessionItemId ?? null) || i.sessionItemIndex === (target.sessionItemIndex ?? null)) &&
             i.runId === (target.runId ?? null) &&
             i.channelMessageId === (target.channelMessageId ?? null)
         )?.unseenEvents;

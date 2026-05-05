@@ -336,6 +336,7 @@ type InboxItemStatsResponse = {
   sessionId: string,
   runId: string | null,
   sessionItemId: string | null,
+  sessionItemIndex: number | null,
   channelMessageId: string | null,
   unseenEvents: any[],
 }
@@ -399,6 +400,7 @@ app.openapi(sessionsGETStatsRoute, async (c) => {
 
       response.sessions = {}
 
+      // Probably too heavy but fuck it for now
       const sessionRows = await tx.query.sessions.findMany({
         where: inArray(sessions.id, sessionIds),
         with: {
@@ -407,6 +409,14 @@ app.openapi(sessionsGETStatsRoute, async (c) => {
             where: eq(inboxItems.userId, memberPrincipal.session.user.id),
             with: {
               run: true,
+            },
+          },
+          runs: {
+            with: {
+              sessionItems: {
+                orderBy: (sessionItem, { asc }) => [asc(sessionItem.sortOrder)],
+                where: (sessionItem, { eq }) => eq(sessionItem.isState, false),
+              },
             },
           },
         },
@@ -424,6 +434,14 @@ app.openapi(sessionsGETStatsRoute, async (c) => {
       sessionRows.map((session) => {
         const items: InboxItemStatsResponse[] = [];
 
+        // Build sessionItemId -> index map from runs data
+        const indexMap = new Map<string, number>();
+        for (const run of session.runs) {
+          for (let i = 0; i < run.sessionItems.length; i++) {
+            indexMap.set(run.sessionItems[i].id, i);
+          }
+        }
+
         for (const inboxItem of session.inboxItems) {
           // Skip inbox items tied to inactive runs
           if (inboxItem.runId && !inboxItem.run?.active) continue;
@@ -435,6 +453,7 @@ app.openapi(sessionsGETStatsRoute, async (c) => {
             sessionId: session.id,
             runId: inboxItem.runId,
             sessionItemId: inboxItem.sessionItemId,
+            sessionItemIndex: inboxItem.sessionItemId ? indexMap.get(inboxItem.sessionItemId) ?? null : null,
             channelMessageId: inboxItem.channelMessageId,
             unseenEvents,
           });

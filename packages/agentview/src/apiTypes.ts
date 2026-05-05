@@ -381,6 +381,7 @@ export type InboxItemStats = {
   sessionId: string
   runId: string | null
   sessionItemId: string | null
+  sessionItemIndex: number | null
   channelMessageId: string | null
   unseenEvents: any[]
 }
