@@ -597,16 +597,16 @@ export async function activateSession(tx: OrgTransaction, sessionId: string, aut
     // handleSuffix: handleSuffix,
   }).where(eq(sessions.id, session.id));
 
-  // const [event] = await tx.insert(events).values({
-  //   organizationId: tx.organizationId,
-  //   type: 'session_created',
-  //   authorId: session.createdBy ?? null,
-  //   payload: {
-  //     session_id: session.id,
-  //   }
-  // }).returning();
+  const [event] = await tx.insert(events).values({
+    organizationId: tx.organizationId,
+    type: 'session_created',
+    authorId: authorId ?? null,
+    payload: {
+      session_id: session.id,
+    }
+  }).returning();
 
-  // await updateInboxes(tx, event);
+  await updateInboxes(tx, event);
 }
 
 export async function updateSession(tx: TenantTransaction, session_id: string, body: SessionUpdate) {

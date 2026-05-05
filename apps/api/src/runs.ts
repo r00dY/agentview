@@ -1064,7 +1064,8 @@ export async function createAutoRun2(
     await withTenant(principal, async (tx) => {
       await tx.acquireLock({ type: "edit_session", sessionId });
 
-      await activateSession(tx, sessionId);
+      console.log('!!!!!!!', principal.type === 'member' ? principal.session.user.id : undefined, principal);
+      await activateSession(tx, sessionId, principal.type === 'member' ? principal.session.user.id : undefined);
 
       /**
        * Activate current branch. All older runs will be deactivated.

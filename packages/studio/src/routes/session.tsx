@@ -197,7 +197,9 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         generateId: () => crypto.randomUUID(),
         messages: initialSession.messages,
         resume: initialResume,
-        transport: agentview().asUser({ id: initialSession.user.id }).createTransport(),
+        // transport: agentview().asUser({ id: initialSession.user.id }).createTransport(),
+        transport: agentview().createTransport(),
+
     });
 
     const isRunning = (status === 'streaming' || status === 'submitted');
@@ -1006,7 +1008,7 @@ function RunFooter(props: RunFooterProps) {
                 target={target}
                 open={scoreDialogOpen}
                 onOpenChange={setScoreDialogOpen}
-                scoreConfigs={remainingScores}
+            scoreConfigs={remainingScores}
             />);
         }
 

@@ -672,7 +672,7 @@ app.openapi(sessionsPOSTRoute, async (c) => {
       title: body.title,
     });
     await setAgentForSession(tx, newSession.id, { agent: body.agent, metadata: body.metadata, initialState: body.initialState });
-    await activateSession(tx, newSession.id);
+    await activateSession(tx, newSession.id, principal.type === 'member' ? principal.session.user.id : undefined);
     
     const fullSession = await requireSession(tx, newSession.id);
     return c.json(fullSession, 201);
@@ -720,7 +720,7 @@ app.openapi(sessionsAISDKPOSTRoute, async (c) => {
       await setAgentForSession(tx, newSession.id, { agent: body.agent, metadata: body.metadata, initialState: body.initialState });
 
       if (active) {
-        await activateSession(tx, newSession.id);
+        await activateSession(tx, newSession.id, principal.type === 'member' ? principal.session.user.id : undefined);
       }
 
       const fullSession = await requireSession(tx, newSession.id);
