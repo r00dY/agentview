@@ -723,7 +723,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         <SessionShell
             sessionBase={session}
             agentConfig={agentConfig}
-            headerExtra={session.user.ownerId === me.id && <SessionHeaderActions session={session} />}
+            headerExtra={<SessionHeaderActions session={session} isMine={session.user.ownerId === me.id} />}
             footer={session.user.ownerId === me.id && <InputForm session={session} agentConfig={agentConfig} styles={styles} sendMessage={sendMessage} cancelRun={cancelRun} isRunning={isRunning} />}
             outletContext={{ session }}
         >
@@ -863,9 +863,9 @@ function SessionDetails({ sessionBase, agentConfig }: { sessionBase: SessionBase
     );
 }
 
-function SessionHeaderActions({ session }: { session: Session }) {
+function SessionHeaderActions({ session, isMine }: { session: Session, isMine: boolean }) {
     return <div className="flex items-center gap-2">
-        <ShareForm session={session} />
+        {isMine && <ShareForm session={session} />}
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="icon_sm">
