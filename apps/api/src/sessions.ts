@@ -528,58 +528,6 @@ export async function setAgentForSession(tx: TenantTransaction, sessionId: strin
   return updatedSession;
 }
 
-
-// export async function createInactiveSession(tx: OrgTransaction, params: {
-//   environment: Environment;
-//   channelRef: ChannelRef;
-//   userId: string;
-//   metadata?: Record<string, any> | null;
-//   summary?: string | null;
-//   channelThreadId?: string | null;
-//   agentRefId?: string | null;
-//   initialState?: any;
-// }) {
-//   await tx.acquireLock({ type: "create_resource" });
-
-//   const config = getConfigFromEnvironment(params.environment);
-//   // const channelConfig = requireChannelConfig(config, params.channelRef);
-
-//   let metadata: Record<string, any> = {};
-
-//   if (params.channelRef.type === 'api') {
-//     const agentConfig = requireAgentConfigByName(config, params.channelRef.name);
-//     metadata = parseMetadata(agentConfig.metadata, agentConfig.allowUnknownMetadata ?? true, params.metadata ?? {}, {});
-//   }
-
-//   // const metadata: Record<string, any> = channelConfig.type === 'api' ?
-//   //   parseMetadata(channelConfig.metadata, channelConfig.allowUnknownMetadata ?? true, params.metadata ?? {}, {}) :
-//   //   {};
-
-//   const user = await tx.query.endUsers.findFirst({
-//     where: eq(endUsers.id, params.userId),
-//   });
-//   if (!user) {
-//     throw new Error("[Internal Error] User not found");
-//   }
-
-//   const [newSessionRow] = await tx.insert(sessions).values({
-//     organizationId: tx.organizationId,
-//     handleNumber: 0,
-//     handleSuffix: randomBytes(32).toString('hex'),
-//     metadata,
-//     channelType: params.channelRef.type,
-//     channelAddress: params.channelRef.type === 'api' ? params.channelRef.name : params.channelRef.address,
-//     userId: params.userId,
-//     title: params.title ?? null,
-//     channelThreadId: params.channelThreadId ?? null,
-//     agentRefId: params.agentRefId ?? null,
-//     initialState: params.initialState ?? null,
-//     active: false
-//   }).returning();
-
-//   return newSessionRow;
-// }
-
 export async function activateSession(tx: OrgTransaction, sessionId: string, authorId?: string) {
   await tx.acquireLock({ type: "edit_session", sessionId });
 

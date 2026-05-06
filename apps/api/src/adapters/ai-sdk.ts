@@ -58,8 +58,10 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
             continue;
         }
 
-        const assistantMessageId = run.metadata?.assistantMessage?.id;
-        const assistantMessageMetadata = run.metadata?.assistantMessage?.metadata;
+        const { assistantMessage, ...metadata } = run.metadata ?? {};
+
+        const assistantMessageId = assistantMessage?.id;
+        const assistantMessageMetadata = assistantMessage?.metadata;
 
         if (!assistantMessageId) {
             throw new Error("[sessionToUIMessages] Assistant message ID is required");
@@ -70,7 +72,7 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
             metadata: {
                 ...assistantMessageMetadata,
                 _agentview: {
-                    ...assistantMessageMetadata?._agentview,
+                    // ...assistantMessageMetadata?._agentview,
                     channelMessage: run.channelMessages.find(cm => cm.direction === 'outgoing'),
                     id: run.id,
                     status: run.status,
@@ -78,7 +80,7 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
                     createdAt: run.createdAt,
                     finishedAt: run.finishedAt,
                     agent: run.agent,
-                    metadata: run.metadata,
+                    metadata,
                 }
             },
             role: 'assistant',
