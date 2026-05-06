@@ -172,14 +172,13 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 
     const [initialResume] = useState(initialSession.resume);
 
-    const { messages, sendMessage, status, error, regenerate } = useChat({
+    const { messages, sendMessage: sendMessage_, status, error, regenerate, setMessages } = useChat({
         id: initialSession.id,
         generateId: () => crypto.randomUUID(),
         messages: initialSession.messages,
         resume: initialResume,
         // transport: agentview().asUser({ id: initialSession.user.id }).createTransport(),
         transport: agentview().createTransport(),
-
     });
 
     const isRunning = (status === 'streaming' || status === 'submitted');
@@ -199,8 +198,6 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         ...initialSession,
         messages,
     }
-
-
 
     /**
      * ERROR HANDLING
@@ -223,6 +220,13 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
      */
 
     const localError = error && (messages.length > 0 && messages[messages.length - 1]?.role === "user") && unwrapError(error); // local uncommited error from useChat
+
+    const sendMessage : typeof sendMessage_ = (input) => {
+        if (localError) {
+            setMessages(messages.slice(0, -1));
+        }
+        return sendMessage_(input);
+    }
 
     /**
      * Build the wall

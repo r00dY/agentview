@@ -994,12 +994,15 @@ export async function createAutoRun2(
 
   const session = standardToDefaultSession(standardSession);
 
+  /**
+   * Here we trim incomplete tool calls from the assistant message.
+   */
   const messages = session.messages.map(m => {
     if (m.role === 'assistant') {
       return {
         ...m,
         parts: m.parts.filter(p => {
-          if (isToolUIPart(p) && (p.state === 'input-streaming' || p.state === 'input-available')) {
+          if (isToolUIPart(p) && (p.state === 'input-streaming' || p.state === 'input-available' || p.state === 'approval-requested')) {
             return false;
           }
           return true;
