@@ -39,7 +39,7 @@ function compareVersions(v1: ParsedVersion, v2: ParsedVersion): number {
 
 export type InputAgentRef = {
   version: string;
-  agent: string;
+  name: string;
   adapter?: 'agentview' | 'ai-sdk';
 }
 
@@ -60,7 +60,7 @@ export async function resolveAgentRef(tx: OrgTransaction, opts: {
     throw new AgentViewError("Invalid version number format. Should be like '1.2.3' or '1.2.3-beta'", 422);
   }
 
-  const agent = opts.agentRef.agent;
+  const agent = opts.agentRef.name;
   const adapter = opts.agentRef.adapter ?? 'agentview';
 
   // validate against previous one (semver compat)
@@ -69,7 +69,7 @@ export async function resolveAgentRef(tx: OrgTransaction, opts: {
       throw new AgentViewError("Cannot continue a session with a different adapter.", 422);
     }
 
-    if (opts.previousAgentRef.agent !== agent) {
+    if (opts.previousAgentRef.name !== agent) {
       throw new AgentViewError("Cannot continue a session with a different agent.", 422);
     }
 

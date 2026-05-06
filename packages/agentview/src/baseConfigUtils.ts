@@ -31,11 +31,11 @@ export function requireAgentConfigByName<T extends BaseAgentViewConfig>(config: 
 }
 
 export function findAgentConfigBySession<T extends BaseAgentViewConfig>(config: T, session: SessionBase): NonNullable<T["agents"]>[number] | undefined {
-    if (!session.agentRef) {
+    if (!session.agent) {
         return;
     }
 
-    return findAgentConfig(config, session.agentRef.agent);
+    return findAgentConfig(config, session.agent.name);
 }
 
 export function requireAgentConfigBySession<T extends BaseAgentViewConfig>(config: T, session: SessionBase): NonNullable<T["agents"]>[number] {

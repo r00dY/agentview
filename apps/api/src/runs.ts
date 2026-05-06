@@ -345,8 +345,8 @@ async function prepareRunCreation(tx: OrgTransaction, environment: Environment, 
   const agentConfig = requireAgentConfigBySession(config, session);
 
   const agentRefWithId = await resolveAgentRef(tx, {
-    agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
-    previousAgentRef: previousRun?.agentRef ?? session.agentRef,
+    agentRef: { version: agentConfig.version, name: agentConfig.name, adapter: agentConfig.adapter },
+    previousAgentRef: previousRun?.agent ?? session.agent,
   });
 
   return { session, previousRun, config, agentConfig, agentRefId: agentRefWithId.id };

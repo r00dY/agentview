@@ -33,7 +33,7 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
     const messages: UIMessage[] = [];
 
     for (const run of session.runs) {
-        if (run.agentRef?.adapter !== "ai-sdk") {
+        if (run.agent?.adapter !== "ai-sdk") {
             throw new Error("[sessionToUIMessages] Run is not an AI SDK run");
         }
 
@@ -77,7 +77,7 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
                     failReason: run.failReason,
                     createdAt: run.createdAt,
                     finishedAt: run.finishedAt,
-                    agentRef: run.agentRef,
+                    agent: run.agent,
                     metadata: run.metadata,
                 }
             },

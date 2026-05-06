@@ -174,7 +174,7 @@ export type SessionItem = z.infer<typeof SessionItemSchema>
 
 
 export const AgentRefSchema = z.object({
-  agent: z.string(),
+  name: z.string(),
   version: z.string(),
   adapter: z.enum(['agentview', 'ai-sdk']),
 })
@@ -188,7 +188,7 @@ export const RunBaseSchema = z.object({
   finishedAt: z.iso.date().nullable(),
   status: z.string(),
   failReason: z.any().nullable(),
-  agentRef: AgentRefSchema.nullable(),
+  agent: AgentRefSchema.nullable(),
   metadata: z.record(z.string(), z.any()).nullable(),
   manual: z.boolean(),
   sessionId: z.string(), // potential bloat
@@ -253,8 +253,7 @@ export const SessionBaseSchema = z.object({
   userId: z.string(), // potential bloat
   space: SpaceSchema, // this is actually user.space, but allows to "think user-less"
   title: z.string().nullable(),
-  agentRef: AgentRefSchema.nullable(),
-  agentRefs: z.array(AgentRefSchema),
+  agent: AgentRefSchema.nullable(),
   active: z.boolean()
 })
 

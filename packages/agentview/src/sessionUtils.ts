@@ -17,16 +17,6 @@ export function getAllSessionItems<SessionT extends StandardSession>(session: Se
   return items
 }
 
-export function getVersions(session: StandardSession) {
-  const versions: string[] = [];
-  for (const run of session.runs) {
-    if (run.agentRef?.version && !versions.includes(run.agentRef.version)) {
-      versions.push(run.agentRef.version);
-    }
-  }
-  return versions;
-}
-
 function enhanceRun(run: StandardRun) {
   return {
     ...run,

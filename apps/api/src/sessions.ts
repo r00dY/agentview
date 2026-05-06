@@ -1,5 +1,5 @@
 import { AgentViewError } from "agentview";
-import type { ChannelRef, Environment, SessionBase, SessionsGetQueryParams, SessionsGetQueryParamsSchema, SessionStatus, SessionUpdate, StandardSession, StandardSessionCreate } from "agentview/apiTypes";
+import type { ChannelRef, Environment, SessionBase, SessionsGetQueryParams, SessionsGetQueryParamsSchema, SessionsPaginatedResponse, SessionStatus, SessionUpdate, StandardSession, StandardSessionCreate } from "agentview/apiTypes";
 import { randomBytes } from "crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
 import type z from "zod";
@@ -98,8 +98,11 @@ export async function fetchSessionBase(tx: Transaction, session_id: string): Pro
     userId: row.user.id,
     space: row.user.space,
     title: row.title,
-    agentRef: row.agentRef ?? null,
-    agentRefs: row.agentRefs ?? [],
+    agent: row.agentRef ? {
+      name: row.agentRef.agent,
+      version: row.agentRef.version,
+      adapter: row.agentRef.adapter,
+    } : null,
     active: row.active,
   } as SessionBase
 }
@@ -129,7 +132,7 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
           failReason: true,
           metadata: true,
           sessionId: true,
-          agentRefId: true,
+          // agentRefId: true,
           manual: true,
           active: true,
           previousRunId: true,
@@ -192,13 +195,16 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
     userId: row.user.id,
     space: row.user.space,
     title: row.title,
-    agentRef: row.agentRef ?? null,
-    agentRefs: row.agentRefs ?? [],
     active: row.active,
+    agent: row.agentRef ? {
+      name: row.agentRef.agent,
+      version: row.agentRef.version,
+      adapter: row.agentRef.adapter,
+    } : null,
     runs: activeRuns
       .filter((run, index) => {
         return true;
-        
+
         if (run.status === "completed") {
           return true;
         }
@@ -210,13 +216,17 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
         }
         return false;
       }) // we always send last run unless it's pending/init
-      .map(run => ({
-        ...run,
-        sessionItems: run.sessionItems.map((item, index) => ({
-          ...item,
-          type: item.type ?? (index === 0 ? 'input' : 'step')
-        })),
-      })),
+      .map(run => {
+        const {previousRunId, agentRef, ...rest} = run;
+        return {
+          ...rest,
+          agent: agentRef ? {
+            name: agentRef.agent,
+            version: agentRef.version,
+            adapter: agentRef.adapter,
+          } : null,
+        }
+      }),
     state: state ?? row.initialState ?? null,
   } as StandardSession;
 }
@@ -366,12 +376,18 @@ function mapSessionRow(row: { sessions: typeof sessions.$inferSelect; end_users:
     user: row.end_users!,
     space: row.end_users!.space,
     userId: row.end_users!.id,
-    agentRef: row.agent_refs ?? null,
-    agentRefs: row.sessions.agentRefs ?? []
+    agent: row.agent_refs ? {
+      name: row.agent_refs.agent,
+      version: row.agent_refs.version,
+      adapter: row.agent_refs.adapter,
+    } : null,
+    active: row.sessions.active,
+    // agentRef: row.agent_refs ?? null,
+    // agentRefs: row.sessions.agentRefs ?? []
   };
 }
 
-export async function getSessions(tx: TenantTransaction, params: SessionsGetQueryParams) {
+export async function getSessions(tx: TenantTransaction, params: SessionsGetQueryParams) : Promise<SessionsPaginatedResponse> {
   const limit = normalizeNumberParam(params.limit, DEFAULT_LIMIT);
   const page = normalizeNumberParam(params.page, DEFAULT_PAGE);
 
@@ -500,7 +516,7 @@ export async function setAgentForSession(tx: TenantTransaction, sessionId: strin
 
   // Resolve agent ref at session creation
   const agentRefWithId = await resolveAgentRef(tx, {
-    agentRef: { version: agentConfig.version, agent: agentConfig.name, adapter: agentConfig.adapter },
+    agentRef: { version: agentConfig.version, name: agentConfig.name, adapter: agentConfig.adapter },
   });
 
   const [updatedSession] = await tx.update(sessions).set({

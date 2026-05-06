@@ -1413,14 +1413,14 @@ describe('API', () => {
           await updateConfig({ version: "1.3.0" })
           const session = await createSession()
           const run = await av.createManualRun({ sessionId: session.id, items: [baseInput, baseOutput] })
-          expect(run.agentRef?.version).toBe("1.3.0")
+          expect(run.agent?.version).toBe("1.3.0")
         })
 
         test("suffixed version stored as-is", async () => {
           await updateConfig({ version: "1.3.0-xxx" })
           const session = await createSession()
           const run = await av.createManualRun({ sessionId: session.id, items: [baseInput, baseOutput] })
-          expect(run.agentRef?.version).toBe("1.3.0-xxx")
+          expect(run.agent?.version).toBe("1.3.0-xxx")
         })
       });
 

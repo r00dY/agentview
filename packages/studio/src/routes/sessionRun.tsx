@@ -87,7 +87,7 @@ function Component() {
                     <PropertyListItem>
                         <PropertyListTitle>Version</PropertyListTitle>
                         <PropertyListTextValue>
-                            {run.agentRef?.version ?? "-"}
+                            {run.agent?.name}@{run.agent?.version ?? "-"}
                         </PropertyListTextValue>
                     </PropertyListItem>
 

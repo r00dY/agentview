@@ -667,7 +667,6 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 
 function SessionDetails({ sessionBase, agentConfig }: { sessionBase: SessionBase, agentConfig: AgentConfig }) {
     const { organization: { members } } = useSessionContext();
-    const agentRefs = sessionBase.agentRefs;
     const owner = members.find((member) => member.userId === sessionBase.user.ownerId);
 
     return (
@@ -703,13 +702,11 @@ function SessionDetails({ sessionBase, agentConfig }: { sessionBase: SessionBase
                 </PropertyListItem>
                 <PropertyListItem>
                     <PropertyListTitle>
-                        {agentRefs.length > 1 ? "Versions" : "Version"}
+                        Version
                     </PropertyListTitle>
                     <PropertyListTextValue>
-                        {agentRefs.length === 0 && <span className="text-muted-foreground">-</span>}
-                        {agentRefs.length > 0 && <div className="flex flex-row gap-1">{agentRefs.map(ref => {
-                            return <Pill key={`${ref.agent}@${ref.version}`}>{ref.agent}@{ref.version}</Pill>
-                        })}</div>}
+                        {!sessionBase.agent &&<span className="text-muted-foreground">-</span>}
+                        {sessionBase.agent && <Pill>{sessionBase.agent.name}@{sessionBase.agent.version}</Pill>}
                     </PropertyListTextValue>
                 </PropertyListItem>
 

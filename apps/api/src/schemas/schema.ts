@@ -47,7 +47,6 @@ export const sessions = pgTable("sessions", {
   channelType: varchar("channel_type", { length: 64 }).notNull(),
   channelAddress: varchar("channel_address", { length: 255 }).notNull(),
   title: text("title"),
-  agentRefs: jsonb("agent_refs").$type<{ agent: string; version: string; adapter: "agentview" | "ai-sdk" }[]>().default([]),
   agentRefId: uuid("agent_ref_id").references(() => agentRefs.id),
   initialState: jsonb("initial_state"),
   channelThreadId: uuid("channel_thread_id").references(() => channelThreads.id, { onDelete: 'set null' }),
@@ -77,7 +76,7 @@ export const runs = pgTable("runs", {
   environmentId: uuid("environment_id").references(() => environments.id), // required for auto-fetch
 
   previousRunId: uuid("previous_run_id").references((): AnyPgColumn => runs.id, { onDelete: 'set null' }),
-  active: boolean("active").notNull(),
+  active: boolean("active").notNull(), // active runs are 'the main branch'
 }, (table) => [
   index('runs_expires_at_status_idx').on(table.expiresAt, table.status),
   index('runs_session_id_created_at_idx').on(table.sessionId, table.createdAt),
