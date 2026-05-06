@@ -702,7 +702,7 @@ function SessionDetails({ sessionBase, agentConfig }: { sessionBase: SessionBase
                 </PropertyListItem>
                 <PropertyListItem>
                     <PropertyListTitle>
-                        Version
+                        Agent
                     </PropertyListTitle>
                     <PropertyListTextValue>
                         {!sessionBase.agent &&<span className="text-muted-foreground">-</span>}
