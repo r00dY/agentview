@@ -31,8 +31,6 @@ describe('ai-sdk', () => {
 
     function buildConfig(options?: { agentUrl?: string }) {
       const inputSchema = z.looseObject({ role: z.literal("user"), parts: z.array(z.any()) });
-      const outputSchema = z.looseObject({ type: z.literal("text"), text: z.string() });
-      const stepSchema = z.looseObject({ type: z.literal("reasoning"), text: z.string() });
 
       return {
         agents: [{
@@ -42,7 +40,9 @@ describe('ai-sdk', () => {
           adapter: 'ai-sdk',
           runs: [{
             input: { schema: inputSchema },
-            output: [{ schema: stepSchema }, { schema: outputSchema }],
+            output: [],
+            validateOutput: false,
+            // output: [{ schema: stepSchema }, { schema: outputSchema }],
           }]
         }],
         channels: [{ type: 'api', name: "test-ai-sdk", agent: "test-ai-sdk" }],
@@ -931,6 +931,750 @@ describe('ai-sdk', () => {
         });
 
       }, TEST_TIMEOUT);
+
+      // ---------------------------------------------------------------
+      // Incomplete tool call tests
+      // ---------------------------------------------------------------
+      describe("incomplete tool calls", () => {
+
+      test("proper finish with tool in input-available state → STREAM_INCOMPLETE_TOOL_CALLS error", async () => {
+        const inputSchema = z.looseObject({ role: z.literal("user"), parts: z.array(z.any()) });
+        const outputSchema = z.looseObject({ type: z.literal("text"), text: z.string() });
+        const toolCallSchema = z.looseObject({ type: z.literal("tool-call"), toolCallId: z.string(), toolName: z.string(), state: z.string() });
+
+        await updateEnvironment(client, {
+          config: {
+            agents: [{
+              name: "test-ai-sdk",
+              version: "1.0.0",
+              url: AI_SDK_AGENT_URL,
+              adapter: 'ai-sdk',
+              runs: [{
+                input: { schema: inputSchema },
+                output: [{ schema: toolCallSchema }, { schema: outputSchema }],
+              }]
+            }],
+            channels: [{ type: 'api', name: "test-ai-sdk", agent: "test-ai-sdk" }],
+          },
+        });
+
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
+
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "tool-input-available", toolCallId: "call_1", toolName: "getWeather", input: { city: "NYC" } },
+            // No tool-output-available — tool stays in input-available state
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        const stream = await sendMessageViaTransport(
+          client.createTransport(),
+          session.id,
+          { id: "msg_1", role: "user", parts: [{ type: "text", text: "What's the weather?" }] }
+        );
+
+        const chunks = await consumeChunksFromTransportStream(stream);
+
+        const errorChunk = chunks.find(c => c.type === "error");
+        expect(errorChunk).toBeDefined();
+        expect(JSON.parse(errorChunk!.errorText)).toMatchObject({
+          source: "agentview",
+          code: "STREAM_INCOMPLETE_TOOL_CALLS",
+        });
+
+        const updatedSession = await client.sessions.get(session.id);
+        expect(updatedSession.status).toBe("failed");
+        expect(updatedSession.messages.length).toBe(2);
+        expect(updatedSession.messages[1].parts[0].type).toBe("tool-getWeather");
+        expect(updatedSession.messages[1].parts[0].state).toBe("input-available");
+      }, TEST_TIMEOUT);
+
+      test("proper finish with tool in input-streaming state → STREAM_INCOMPLETE_TOOL_CALLS error", async () => {
+        const inputSchema = z.looseObject({ role: z.literal("user"), parts: z.array(z.any()) });
+        const outputSchema = z.looseObject({ type: z.literal("text"), text: z.string() });
+        const toolCallSchema = z.looseObject({ type: z.literal("tool-call"), toolCallId: z.string(), toolName: z.string(), state: z.string() });
+
+        await updateEnvironment(client, {
+          config: {
+            agents: [{
+              name: "test-ai-sdk",
+              version: "1.0.0",
+              url: AI_SDK_AGENT_URL,
+              adapter: 'ai-sdk',
+              runs: [{
+                input: { schema: inputSchema },
+                output: [{ schema: toolCallSchema }, { schema: outputSchema }],
+              }]
+            }],
+            channels: [{ type: 'api', name: "test-ai-sdk", agent: "test-ai-sdk" }],
+          },
+        });
+
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
+
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "tool-input-start", toolCallId: "call_1", toolName: "getWeather" },
+            { type: "tool-input-delta", toolCallId: "call_1", inputTextDelta: '{"city":"NYC"' },
+            // Never completed — stays input-streaming
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        const stream = await sendMessageViaTransport(
+          client.createTransport(),
+          session.id,
+          { id: "msg_1", role: "user", parts: [{ type: "text", text: "What's the weather?" }] }
+        );
+
+        const chunks = await consumeChunksFromTransportStream(stream);
+
+        const errorChunk = chunks.find(c => c.type === "error");
+        expect(errorChunk).toBeDefined();
+        expect(JSON.parse(errorChunk!.errorText)).toMatchObject({
+          source: "agentview",
+          code: "STREAM_INCOMPLETE_TOOL_CALLS",
+        });
+
+        const updatedSession = await client.sessions.get(session.id);
+        expect(updatedSession.status).toBe("failed");
+        expect(updatedSession.messages.length).toBe(2);
+        expect(updatedSession.messages[1].parts[0].type).toBe("tool-getWeather");
+        expect(updatedSession.messages[1].parts[0].state).toBe("input-streaming");
+      }, TEST_TIMEOUT);
+
+      test("proper finish with tool in approval-requested state → STREAM_INCOMPLETE_TOOL_CALLS error", async () => {
+        const inputSchema = z.looseObject({ role: z.literal("user"), parts: z.array(z.any()) });
+        const outputSchema = z.looseObject({ type: z.literal("text"), text: z.string() });
+        const toolCallSchema = z.looseObject({ type: z.literal("tool-call"), toolCallId: z.string(), toolName: z.string(), state: z.string() });
+
+        await updateEnvironment(client, {
+          config: {
+            agents: [{
+              name: "test-ai-sdk",
+              version: "1.0.0",
+              url: AI_SDK_AGENT_URL,
+              adapter: 'ai-sdk',
+              runs: [{
+                input: { schema: inputSchema },
+                output: [{ schema: toolCallSchema }, { schema: outputSchema }],
+              }]
+            }],
+            channels: [{ type: 'api', name: "test-ai-sdk", agent: "test-ai-sdk" }],
+          },
+        });
+
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
+
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "tool-input-available", toolCallId: "call_1", toolName: "dangerousAction", input: { target: "prod" } },
+            { type: "tool-approval-request", approvalId: "apr_1", toolCallId: "call_1" },
+            // Tool awaiting approval, never resolved
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        const stream = await sendMessageViaTransport(
+          client.createTransport(),
+          session.id,
+          { id: "msg_1", role: "user", parts: [{ type: "text", text: "Delete everything" }] }
+        );
+
+        const chunks = await consumeChunksFromTransportStream(stream);
+
+        const errorChunk = chunks.find(c => c.type === "error");
+        expect(errorChunk).toBeDefined();
+        expect(JSON.parse(errorChunk!.errorText)).toMatchObject({
+          source: "agentview",
+          code: "STREAM_INCOMPLETE_TOOL_CALLS",
+        });
+
+        const updatedSession = await client.sessions.get(session.id);
+        expect(updatedSession.status).toBe("failed");
+        expect(updatedSession.messages.length).toBe(2);
+        expect(updatedSession.messages[1].parts[0].type).toBe("tool-dangerousAction");
+        expect(updatedSession.messages[1].parts[0].state).toBe("approval-requested");
+      }, TEST_TIMEOUT);
+
+      test("proper finish with completed tool + incomplete tool → error, completed tool preserved", async () => {
+        const inputSchema = z.looseObject({ role: z.literal("user"), parts: z.array(z.any()) });
+        const outputSchema = z.looseObject({ type: z.literal("text"), text: z.string() });
+        const toolCallSchema = z.looseObject({ type: z.literal("tool-call"), toolCallId: z.string(), toolName: z.string(), state: z.string() });
+
+        await updateEnvironment(client, {
+          config: {
+            agents: [{
+              name: "test-ai-sdk",
+              version: "1.0.0",
+              url: AI_SDK_AGENT_URL,
+              adapter: 'ai-sdk',
+              runs: [{
+                input: { schema: inputSchema },
+                output: [{ schema: toolCallSchema }, { schema: outputSchema }],
+              }]
+            }],
+            channels: [{ type: 'api', name: "test-ai-sdk", agent: "test-ai-sdk" }],
+          },
+        });
+
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
+
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            // First tool: completes successfully
+            { type: "tool-input-available", toolCallId: "call_1", toolName: "getTime", input: {} },
+            { type: "tool-output-available", toolCallId: "call_1", output: { time: "12:00" } },
+            // Second tool: stays in input-available (incomplete)
+            { type: "tool-input-available", toolCallId: "call_2", toolName: "getWeather", input: { city: "NYC" } },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "It's noon" },
+            { type: "text-end", id: "t1" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        const stream = await sendMessageViaTransport(
+          client.createTransport(),
+          session.id,
+          { id: "msg_1", role: "user", parts: [{ type: "text", text: "Time and weather?" }] }
+        );
+
+        const chunks = await consumeChunksFromTransportStream(stream);
+
+        const errorChunk = chunks.find(c => c.type === "error");
+        expect(errorChunk).toBeDefined();
+        expect(JSON.parse(errorChunk!.errorText)).toMatchObject({
+          source: "agentview",
+          code: "STREAM_INCOMPLETE_TOOL_CALLS",
+        });
+
+        const updatedSession = await client.sessions.get(session.id);
+        expect(updatedSession.status).toBe("failed");
+        expect(updatedSession.messages.length).toBe(2);
+        // Completed tool is preserved
+        expect(updatedSession.messages[1].parts[0]).toMatchObject({
+          type: "tool-getTime",
+          state: "output-available",
+          output: { time: "12:00" },
+        });
+        // Incomplete tool is also saved
+        expect(updatedSession.messages[1].parts[1]).toMatchObject({
+          type: "tool-getWeather",
+          state: "input-available",
+          input: { city: "NYC" },
+        });
+        // Text is preserved
+        expect(updatedSession.messages[1].parts[2]).toMatchObject({
+          type: "text",
+          text: "It's noon",
+        });
+      }, TEST_TIMEOUT);
+
+      test("cancelled with tool in input-available state → session cancelled, tool preserved", async () => {
+        const inputSchema = z.looseObject({ role: z.literal("user"), parts: z.array(z.any()) });
+        const outputSchema = z.looseObject({ type: z.literal("text"), text: z.string() });
+        const toolCallSchema = z.looseObject({ type: z.literal("tool-call"), toolCallId: z.string(), toolName: z.string(), state: z.string() });
+
+        await updateEnvironment(client, {
+          config: {
+            agents: [{
+              name: "test-ai-sdk",
+              version: "1.0.0",
+              url: AI_SDK_AGENT_URL,
+              adapter: 'ai-sdk',
+              runs: [{
+                input: { schema: inputSchema },
+                output: [{ schema: toolCallSchema }, { schema: outputSchema }],
+              }]
+            }],
+            channels: [{ type: 'api', name: "test-ai-sdk", agent: "test-ai-sdk" }],
+          },
+        });
+
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
+
+        let connectionEstablished: () => void;
+        const connectionEstablishedPromise = new Promise<void>(r => { connectionEstablished = r; });
+
+        mockAISDKServer!.setHandler((_body, res) => {
+          res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+          });
+
+          res.write(`data: ${JSON.stringify({ type: "start" })}\n\n`);
+          res.write(`data: ${JSON.stringify({ type: "tool-input-available", toolCallId: "call_1", toolName: "getWeather", input: { city: "NYC" } })}\n\n`);
+
+          connectionEstablished();
+
+          // Keep connection open — waiting for tool output that never comes
+          const interval = setInterval(() => {
+            if (!res.closed) {
+              // keep alive
+            }
+          }, 100);
+
+          res.on('close', () => {
+            clearInterval(interval);
+          });
+        });
+
+        const streamPromise = sendMessageViaTransport(
+          client.createTransport(),
+          session.id,
+          { id: "msg_1", role: "user", parts: [{ type: "text", text: "What's the weather?" }] }
+        );
+
+        await connectionEstablishedPromise;
+        await new Promise(r => setTimeout(r, 1000));
+
+        await client.sessions.cancelRun(session.id);
+
+        await streamPromise;
+
+        const updatedSession = await client.sessions.get(session.id);
+        expect(updatedSession.status).toBe("cancelled");
+        expect(updatedSession.messages.length).toBe(2);
+        expect(updatedSession.messages[1].parts[0]).toMatchObject({
+          type: "tool-getWeather",
+          state: "input-available",
+          input: { city: "NYC" },
+        });
+      }, TEST_TIMEOUT);
+
+      test("cancelled with tool in input-streaming state → session cancelled, partial tool preserved", async () => {
+        const inputSchema = z.looseObject({ role: z.literal("user"), parts: z.array(z.any()) });
+        const outputSchema = z.looseObject({ type: z.literal("text"), text: z.string() });
+        const toolCallSchema = z.looseObject({ type: z.literal("tool-call"), toolCallId: z.string(), toolName: z.string(), state: z.string() });
+
+        await updateEnvironment(client, {
+          config: {
+            agents: [{
+              name: "test-ai-sdk",
+              version: "1.0.0",
+              url: AI_SDK_AGENT_URL,
+              adapter: 'ai-sdk',
+              runs: [{
+                input: { schema: inputSchema },
+                output: [{ schema: toolCallSchema }, { schema: outputSchema }],
+              }]
+            }],
+            channels: [{ type: 'api', name: "test-ai-sdk", agent: "test-ai-sdk" }],
+          },
+        });
+
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
+
+        let connectionEstablished: () => void;
+        const connectionEstablishedPromise = new Promise<void>(r => { connectionEstablished = r; });
+
+        mockAISDKServer!.setHandler((_body, res) => {
+          res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+          });
+
+          res.write(`data: ${JSON.stringify({ type: "start" })}\n\n`);
+          res.write(`data: ${JSON.stringify({ type: "tool-input-start", toolCallId: "call_1", toolName: "getWeather" })}\n\n`);
+          res.write(`data: ${JSON.stringify({ type: "tool-input-delta", toolCallId: "call_1", inputTextDelta: '{"city":"NYC"' })}\n\n`);
+
+          connectionEstablished();
+
+          // Keep alive while streaming tool input
+          const interval = setInterval(() => {
+            if (!res.closed) {
+              res.write(`data: ${JSON.stringify({ type: "tool-input-delta", toolCallId: "call_1", inputTextDelta: '' })}\n\n`);
+            }
+          }, 100);
+
+          res.on('close', () => {
+            clearInterval(interval);
+          });
+        });
+
+        const streamPromise = sendMessageViaTransport(
+          client.createTransport(),
+          session.id,
+          { id: "msg_1", role: "user", parts: [{ type: "text", text: "What's the weather?" }] }
+        );
+
+        await connectionEstablishedPromise;
+        await new Promise(r => setTimeout(r, 1000));
+
+        await client.sessions.cancelRun(session.id);
+
+        await streamPromise;
+
+        const updatedSession = await client.sessions.get(session.id);
+        expect(updatedSession.status).toBe("cancelled");
+        expect(updatedSession.messages.length).toBe(2);
+        expect(updatedSession.messages[1].parts[0]).toMatchObject({
+          type: "tool-getWeather",
+          state: "input-streaming",
+        });
+        // Partial JSON should be parsed as best-effort
+        expect(updatedSession.messages[1].parts[0].input).toMatchObject({ city: "NYC" });
+      }, TEST_TIMEOUT);
+
+      // ---------------------------------------------------------------
+      // Next turn trims incomplete tools
+      // ---------------------------------------------------------------
+
+      test("next turn after failed run with incomplete tool → trims input-available tool from history sent to agent", async () => {
+        const inputSchema = z.looseObject({ role: z.literal("user"), parts: z.array(z.any()) });
+        const outputSchema = z.looseObject({ type: z.literal("text"), text: z.string() });
+        const toolCallSchema = z.looseObject({ type: z.literal("tool-call"), toolCallId: z.string(), toolName: z.string(), state: z.string() });
+
+        await updateEnvironment(client, {
+          config: {
+            agents: [{
+              name: "test-ai-sdk",
+              version: "1.0.0",
+              url: AI_SDK_AGENT_URL,
+              adapter: 'ai-sdk',
+              runs: [{
+                input: { schema: inputSchema },
+                output: [{ schema: toolCallSchema }, { schema: outputSchema }],
+              }]
+            }],
+            channels: [{ type: 'api', name: "test-ai-sdk", agent: "test-ai-sdk" }],
+          },
+        });
+
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
+
+        // Turn 1: tool stays in input-available → fails
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "Let me check" },
+            { type: "text-end", id: "t1" },
+            { type: "tool-input-available", toolCallId: "call_1", toolName: "getWeather", input: { city: "NYC" } },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        const stream1 = await sendMessageViaTransport(
+          client.createTransport(),
+          session.id,
+          { id: "msg_1", role: "user", parts: [{ type: "text", text: "What's the weather?" }] }
+        );
+        await consumeChunksFromTransportStream(stream1);
+
+        let sessionState = await client.sessions.get(session.id);
+        expect(sessionState.status).toBe("failed");
+        expect(sessionState.messages[1].parts.length).toBe(2); // text + incomplete tool
+
+        // Turn 2: normal response — check what the agent received
+        mockAISDKServer!.resetRequests();
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "It's sunny" },
+            { type: "text-end", id: "t1" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        const stream2 = await sendMessageViaTransport(
+          client.createTransport(),
+          session.id,
+          { id: "msg_2", role: "user", parts: [{ type: "text", text: "Try again" }] }
+        );
+        await consumeChunksFromTransportStream(stream2);
+
+        // Verify agent received trimmed history — no input-available tool
+        const reqBody = mockAISDKServer!.requests[0].body;
+        expect(reqBody.messages.length).toBe(3); // user, assistant (trimmed), user
+        const assistantMsg = reqBody.messages[1];
+        expect(assistantMsg.role).toBe("assistant");
+        // The incomplete tool should be trimmed, only text remains
+        const toolParts = assistantMsg.parts.filter((p: any) => p.type?.startsWith("tool-"));
+        expect(toolParts.length).toBe(0);
+        const textParts = assistantMsg.parts.filter((p: any) => p.type === "text");
+        expect(textParts.length).toBe(1);
+        expect(textParts[0].text).toBe("Let me check");
+      }, TEST_TIMEOUT);
+
+      test("next turn after failed run with input-streaming tool → trims from history sent to agent", async () => {
+        const inputSchema = z.looseObject({ role: z.literal("user"), parts: z.array(z.any()) });
+        const outputSchema = z.looseObject({ type: z.literal("text"), text: z.string() });
+        const toolCallSchema = z.looseObject({ type: z.literal("tool-call"), toolCallId: z.string(), toolName: z.string(), state: z.string() });
+
+        await updateEnvironment(client, {
+          config: {
+            agents: [{
+              name: "test-ai-sdk",
+              version: "1.0.0",
+              url: AI_SDK_AGENT_URL,
+              adapter: 'ai-sdk',
+              runs: [{
+                input: { schema: inputSchema },
+                output: [{ schema: toolCallSchema }, { schema: outputSchema }],
+              }]
+            }],
+            channels: [{ type: 'api', name: "test-ai-sdk", agent: "test-ai-sdk" }],
+          },
+        });
+
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
+
+        // Turn 1: tool stays in input-streaming → fails
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "tool-input-start", toolCallId: "call_1", toolName: "search" },
+            { type: "tool-input-delta", toolCallId: "call_1", inputTextDelta: '{"query":"test"' },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        const stream1 = await sendMessageViaTransport(
+          client.createTransport(),
+          session.id,
+          { id: "msg_1", role: "user", parts: [{ type: "text", text: "Search for something" }] }
+        );
+        await consumeChunksFromTransportStream(stream1);
+
+        let sessionState = await client.sessions.get(session.id);
+        expect(sessionState.status).toBe("failed");
+
+        // Turn 2: normal response
+        mockAISDKServer!.resetRequests();
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "Found it" },
+            { type: "text-end", id: "t1" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        const stream2 = await sendMessageViaTransport(
+          client.createTransport(),
+          session.id,
+          { id: "msg_2", role: "user", parts: [{ type: "text", text: "Try again" }] }
+        );
+        await consumeChunksFromTransportStream(stream2);
+
+        // Verify agent received trimmed history
+        const reqBody = mockAISDKServer!.requests[0].body;
+        expect(reqBody.messages.length).toBe(3);
+        const assistantMsg = reqBody.messages[1];
+        expect(assistantMsg.role).toBe("assistant");
+        // input-streaming tool should be trimmed
+        const toolParts = assistantMsg.parts.filter((p: any) => p.type?.startsWith("tool-"));
+        expect(toolParts.length).toBe(0);
+      }, TEST_TIMEOUT);
+
+      test("next turn after cancelled run with incomplete tools → trims from history sent to agent", async () => {
+        const inputSchema = z.looseObject({ role: z.literal("user"), parts: z.array(z.any()) });
+        const outputSchema = z.looseObject({ type: z.literal("text"), text: z.string() });
+        const toolCallSchema = z.looseObject({ type: z.literal("tool-call"), toolCallId: z.string(), toolName: z.string(), state: z.string() });
+
+        await updateEnvironment(client, {
+          config: {
+            agents: [{
+              name: "test-ai-sdk",
+              version: "1.0.0",
+              url: AI_SDK_AGENT_URL,
+              adapter: 'ai-sdk',
+              runs: [{
+                input: { schema: inputSchema },
+                output: [{ schema: toolCallSchema }, { schema: outputSchema }],
+              }]
+            }],
+            channels: [{ type: 'api', name: "test-ai-sdk", agent: "test-ai-sdk" }],
+          },
+        });
+
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
+
+        let connectionEstablished: () => void;
+        const connectionEstablishedPromise = new Promise<void>(r => { connectionEstablished = r; });
+
+        // Turn 1: tool in input-available, then cancel
+        mockAISDKServer!.setHandler((_body, res) => {
+          res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+          });
+
+          res.write(`data: ${JSON.stringify({ type: "start" })}\n\n`);
+          res.write(`data: ${JSON.stringify({ type: "text-start", id: "t1" })}\n\n`);
+          res.write(`data: ${JSON.stringify({ type: "text-delta", id: "t1", delta: "Checking..." })}\n\n`);
+          res.write(`data: ${JSON.stringify({ type: "text-end", id: "t1" })}\n\n`);
+          res.write(`data: ${JSON.stringify({ type: "tool-input-available", toolCallId: "call_1", toolName: "getWeather", input: { city: "NYC" } })}\n\n`);
+
+          connectionEstablished();
+
+          res.on('close', () => {});
+        });
+
+        const streamPromise = sendMessageViaTransport(
+          client.createTransport(),
+          session.id,
+          { id: "msg_1", role: "user", parts: [{ type: "text", text: "What's the weather?" }] }
+        );
+
+        await connectionEstablishedPromise;
+        await new Promise(r => setTimeout(r, 1000));
+
+        await client.sessions.cancelRun(session.id);
+        await streamPromise;
+
+        let sessionState = await client.sessions.get(session.id);
+        expect(sessionState.status).toBe("cancelled");
+        expect(sessionState.messages[1].parts.length).toBe(2); // text + incomplete tool
+
+        // Turn 2: normal response
+        mockAISDKServer!.resetRequests();
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "It's sunny" },
+            { type: "text-end", id: "t1" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        const stream2 = await sendMessageViaTransport(
+          client.createTransport(),
+          session.id,
+          { id: "msg_2", role: "user", parts: [{ type: "text", text: "Try again" }] }
+        );
+        await consumeChunksFromTransportStream(stream2);
+
+        // Verify agent received trimmed history
+        const reqBody = mockAISDKServer!.requests[0].body;
+        expect(reqBody.messages.length).toBe(3);
+        const assistantMsg = reqBody.messages[1];
+        // Incomplete tool should be trimmed, text preserved
+        const toolParts = assistantMsg.parts.filter((p: any) => p.type?.startsWith("tool-"));
+        expect(toolParts.length).toBe(0);
+        const textParts = assistantMsg.parts.filter((p: any) => p.type === "text");
+        expect(textParts.length).toBe(1);
+        expect(textParts[0].text).toBe("Checking...");
+      }, TEST_TIMEOUT);
+
+      test("next turn after failed run: completed tools are NOT trimmed, only incomplete ones", async () => {
+        const inputSchema = z.looseObject({ role: z.literal("user"), parts: z.array(z.any()) });
+        const outputSchema = z.looseObject({ type: z.literal("text"), text: z.string() });
+        const toolCallSchema = z.looseObject({ type: z.literal("tool-call"), toolCallId: z.string(), toolName: z.string(), state: z.string() });
+
+        await updateEnvironment(client, {
+          config: {
+            agents: [{
+              name: "test-ai-sdk",
+              version: "1.0.0",
+              url: AI_SDK_AGENT_URL,
+              adapter: 'ai-sdk',
+              runs: [{
+                input: { schema: inputSchema },
+                output: [{ schema: toolCallSchema }, { schema: outputSchema }],
+              }]
+            }],
+            channels: [{ type: 'api', name: "test-ai-sdk", agent: "test-ai-sdk" }],
+          },
+        });
+
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
+
+        // Turn 1: one completed tool + one incomplete tool → fails
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "tool-input-available", toolCallId: "call_1", toolName: "getTime", input: {} },
+            { type: "tool-output-available", toolCallId: "call_1", output: { time: "12:00" } },
+            { type: "tool-input-available", toolCallId: "call_2", toolName: "getWeather", input: { city: "NYC" } },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        const stream1 = await sendMessageViaTransport(
+          client.createTransport(),
+          session.id,
+          { id: "msg_1", role: "user", parts: [{ type: "text", text: "Time and weather?" }] }
+        );
+        await consumeChunksFromTransportStream(stream1);
+
+        let sessionState = await client.sessions.get(session.id);
+        expect(sessionState.status).toBe("failed");
+
+        // Turn 2: normal response
+        mockAISDKServer!.resetRequests();
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "Done" },
+            { type: "text-end", id: "t1" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        const stream2 = await sendMessageViaTransport(
+          client.createTransport(),
+          session.id,
+          { id: "msg_2", role: "user", parts: [{ type: "text", text: "Try again" }] }
+        );
+        await consumeChunksFromTransportStream(stream2);
+
+        // Verify: completed tool preserved, incomplete tool trimmed
+        const reqBody = mockAISDKServer!.requests[0].body;
+        expect(reqBody.messages.length).toBe(3);
+        const assistantMsg = reqBody.messages[1];
+        const toolParts = assistantMsg.parts.filter((p: any) => p.type?.startsWith("tool-"));
+        // Only the completed tool (getTime with output-available) should remain
+        expect(toolParts.length).toBe(1);
+        expect(toolParts[0].type).toBe("tool-getTime");
+        expect(toolParts[0].state).toBe("output-available");
+      }, TEST_TIMEOUT);
+
+      }); // end describe("incomplete tool calls")
 
       // ---------------------------------------------------------------
       // Regeneration tests

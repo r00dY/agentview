@@ -18,6 +18,7 @@ import { activateSession, fetchSessionBase, requireSession, requireSessionBase }
 import type { Transaction } from './types';
 import { withTenant, type OrgTransaction, type TenantTransaction } from './withOrg';
 import { standardToDefaultSession } from './standardToDefaultSession';
+import { isToolUIPart } from 'ai';
 
 export const DEFAULT_IDLE_TIME = 1000 * 60; // 60 seconds
 
@@ -992,7 +993,23 @@ export async function createAutoRun2(
   const runId = runBase.id;
 
   const session = standardToDefaultSession(standardSession);
-  const messages = session.messages;
+
+  const messages = session.messages.map(m => {
+    if (m.role === 'assistant') {
+      return {
+        ...m,
+        parts: m.parts.filter(p => {
+          if (isToolUIPart(p) && (p.state === 'input-streaming' || p.state === 'input-available')) {
+            return false;
+          }
+          return true;
+        })
+      };
+    }
+
+    return m;
+  });
+  session.messages = messages;
 
   // 2. Make live connection to the streaming server, wait for response to know if we should discard or accept the run.
   log.debug(`[${sessionId}] [createAutoRun2] establishing live connection...`);
@@ -1022,7 +1039,7 @@ export async function createAutoRun2(
           metadata: runBase.metadata,
         },
         headers: extraHeaders,
-        body: JSON.stringify({ messages, session }), // as string, no unnecessary parsing on the other end
+        body: JSON.stringify({ session, messages }), // as string, no unnecessary parsing on the other end
         metadata: JSON.stringify({
           sessionId,
           organizationId: principal.organizationId,
@@ -1064,7 +1081,6 @@ export async function createAutoRun2(
     await withTenant(principal, async (tx) => {
       await tx.acquireLock({ type: "edit_session", sessionId });
 
-      console.log('!!!!!!!', principal.type === 'member' ? principal.session.user.id : undefined, principal);
       await activateSession(tx, sessionId, principal.type === 'member' ? principal.session.user.id : undefined);
 
       /**

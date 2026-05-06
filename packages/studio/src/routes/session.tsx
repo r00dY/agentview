@@ -134,28 +134,6 @@ type CommentsThreadData = { target: InputTarget, comments: CommentMessage[], sco
 
 type SendMessageFunction = ReturnType<typeof useChat>['sendMessage'];
 
-
-// function useError(session: Session, useChatError: Error | undefined) {
-//     const [wasChatErrorEverSet] = useState(session.status === 'failed' && !useChatError);
-
-//     useEffect(() => {
-//         if (session.status === 'failed' && !useChatError) {
-//             setIsSessionErrorActive(true);
-//         }
-//         else {
-//             setIsSessionErrorActive(false);
-//         }
-//     }, [useChatError]);
-
-//     if (isSessionErrorActive) {
-//         return session.failReason;
-//     }
-//     else {
-//         return useChatError;
-//     }
-// }
-
-
 type WallItem = {
     id: string,
     element: React.ReactNode,
@@ -183,34 +161,6 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
     const { sessionStats, session: initialSession } = props;
 
     const getUnseenEvents = (target: InputTarget): any[] | undefined => {
-
-        // if (target.channelMessageId) {
-        //     return sessionStats?.inboxItems?.find(i => i.channelMessageId === target.channelMessageId)?.unseenEvents;
-        // }
-
-        // if (target.sessionItemIndex !== undefined) {
-        //     return sessionStats?.inboxItems?.find(i =>
-        //         i.sessionItemIndex === target.sessionItemIndex
-        //     )?.unseenEvents;
-        // }
-
-        // if (target.sessionItemId) {
-        //     return sessionStats?.inboxItems?.find(i =>
-        //         i.sessionItemId === target.sessionItemId
-        //     )?.unseenEvents;
-        // }
-
-        // if (target.runId) {
-        //     return sessionStats?.inboxItems?.find(i =>
-        //         i.runId === target.runId &&
-        //         i.sessionItemId === null &&
-        //         i.sessionItemIndex === null &&
-        //         i.channelMessageId === null
-        //     )?.unseenEvents;
-        // }
-
-        // throw new Error('Invalid target');
-
         return sessionStats?.inboxItems?.find(i =>
             i.sessionId === target.sessionId &&
             i.runId === (target.runId ?? null) &&
@@ -272,11 +222,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
      * But for now it's good enough.
      */
 
-    const userMessageError = (messages.length > 0 && messages[messages.length - 1]?.role === "user") ? unwrapError(error) : undefined;
-
-    // console.log('session', session);
-    // console.log('----');
-    // console.log('last message parts', messages[messages.length - 1]?.parts);
+    const localError = error && (messages.length > 0 && messages[messages.length - 1]?.role === "user") && unwrapError(error); // local uncommited error from useChat
 
     /**
      * Build the wall
@@ -665,8 +611,8 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                     <Loader />
                                 </div>}
 
-                                {isLastWallItem && userMessageError && <div className="text-muted-foreground mt-6">
-                                    <span className="text-red-500">{userMessageError.message}</span>
+                                {isLastWallItem && localError && <div className="text-muted-foreground mt-6">
+                                    <span className="text-red-500">{localError.message}</span>
                                 </div>}
 
                                 {showRunFooter && <RunFooter
