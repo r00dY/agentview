@@ -287,6 +287,11 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 
     messages.forEach((message, index) => {
 
+        /**
+         * Here we assume that there might be temporary moments when run is undefined:
+         * - when user message is in array but assistant is not yet there (obvious case)
+         * - when assistant message was just added (I think it's possible that assitant shows up with random id first, and only then 'message-start' with metadata comes).
+         */
         const runMetadata = message.role === "user" ? messages[index + 1]?.metadata?._agentview : message.metadata?._agentview;
         const run = runMetadata?.id ? {
             id: runMetadata.id,
@@ -345,6 +350,9 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         else if (message.role === "assistant") {
             const isLast = index === messages.length - 1;
 
+            const status = message.metadata?._agentview?.status;
+            const failReason = message.metadata?._agentview?.failReason;
+
             /**
              * OUTPUT PARTS HEURISTICS 
              *
@@ -356,29 +364,32 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
              * 
              * Algorithm: we essentially take all the "last consecutive blocks" that don't have any 'step-start', 'reasoning' or tool parts.
              * 
-             * Btw, this is 100% UI only.
+             * Btw, this is 100% UI only!
+             * 
+             * Also, output squashing only applies to 'completed' runs. For cancelled / eror runs we have no idea whether output is actually there (probably not, as run was interrupted), so we display error state as a wall item that represents the run.
              */
             const stepParts: UIMessage['parts'][number][] = [];
             const outputParts: UIMessage['parts'][number][] = [];
 
-            message.parts.forEach((part, index) => {
-                if (part.type === 'step-start' || part.type === 'reasoning' || part.type.startsWith('tool-')) { // reasoning or step-start "resets" and pushes all speculated output parts into step parts
-                    stepParts.push(...outputParts);
-                    outputParts.length = 0;
-                    stepParts.push(part);
-                }
-                else if (outputParts.length === 0 && part.type !== 'text') {
-                    stepParts.push(part);
-                }
-                else {
-                    outputParts.push(part);
-                }
-            });
-
-            // const partsWithType = [
-            //     ...stepParts.map((part) => ({ type: 'item', part })),
-            //     ...outputParts.map((part) => ({ type: 'output', part })),
-            // ]
+            // only for completed runs we try to select output parts
+            if (status === 'completed') {
+                message.parts.forEach((part, index) => {
+                    if (part.type === 'step-start' || part.type === 'reasoning' || part.type.startsWith('tool-')) { // reasoning or step-start "resets" and pushes all speculated output parts into step parts
+                        stepParts.push(...outputParts);
+                        outputParts.length = 0;
+                        stepParts.push(part);
+                    }
+                    // else if (outputParts.length === 0 && part.type !== 'text') {
+                    //     stepParts.push(part);
+                    // }
+                    else {
+                        outputParts.push(part);
+                    }
+                });
+            }
+            else {
+                stepParts.push(...message.parts);
+            }
 
             /**
              * Get display component for a part: config override first, then defaults.
@@ -445,11 +456,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                 };
             }
         
-
             const showRunFooter = !isLast || !isRunning
-
-            const status = message.metadata?._agentview?.status;
-            const failReason = message.metadata?._agentview?.failReason;
 
             /**
              * We only "squash" output parts if run is completed & there are output parts available.
@@ -515,116 +522,15 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                     messageId: message.id,
                 })
             }
-
-           
-
-            // console.log('error', unwrapError(error))
-
-            // /**
-            //  * Final item (run level)
-            //  */
-            // const status = message.metadata?._agentview?.status;
-            // const failReason = message.metadata?._agentview?.failReason;
-
-            // const showRunFooter = !isLast || !isRunning
-
-            // wallItems.push({
-            //     id: message.id,
-            //     element: <div className="text-blue-500">[[[{status}{failReason && `: ${failReason.message}`}]]]</div>,
-            //     run,
-            //     // status: message.metadata?._agentview?.status,
-            //     // failReason: message.metadata?._agentview?.failReason,
-            //     showRunFooter
-            // })
-
-
-
-
-            // const stepParts = message.parts.filter((part) => part._item.type === 'step');
-            // const outputParts = message.parts.filter((part) => part._item.type === 'output');
-
-            // // step parts (separate wall items)
-            // for (const _part of stepParts) {
-            //     const { _item, ...part } = _part;
-
-            //     const Component = /* load from agentConfig */ DefaultStepComponent;
-            //     const element = <Component item={part} session={session} />
-
-            //     const commentsAndScores: CommentsThreadData = {
-            //         target: { sessionId: session.id, runId: _run.id, sessionItemId: _item.id },
-            //         comments: props.comments.filter((c) => c.sessionItemId === _item.id),
-            //     };
-
-            //     wallItems.push({
-            //         id: _item.id,
-            //         element,
-            //         commentsAndScores,
-            //         run: _run,
-            //     })
-            // }
-
-            // // output parts - single wall item
-            // const runScoreConfigs = agentConfig?.assistantMessage?.scores ?? []
-            // const runComments: CommentMessage[] = props.comments.filter((c) => c.runId === _run.id && !c.channelMessageId && !c.sessionItemId);
-            // const runScores: Score[] = props.scores.filter((s) => s.runId === _run.id && !s.channelMessageId && !s.sessionItemId);
-            // const runTarget: InputTarget = { sessionId: session.id, runId: _run.id };
-            // const runCommentsAndScores: CommentsThreadData = {
-            //     target: runTarget,
-            //     comments: runComments,
-            //     scoreConfigs: runScoreConfigs,
-            //     scores: runScores,
-            // };
-
-            // const elements: React.ReactNode[] = [];
-
-            // /**
-            //  * TODO:
-            //  * - what if no output parts?
-            //  * - what if output CHANNEL MESSAGE IS THERE???
-            //  */
-
-            // for (const _part of outputParts) {
-            //     const { _item, ...part } = _part;
-
-            //     const Component = /* load from agentConfig */ DefaultStepComponent;
-            //     const element = <Component item={part} session={session} />
-            //     elements.push(element);
-            // }
-
-            // if (elements.length === 0) {
-            //     elements.push(<div>No output parts</div>); // fixme: temporary!
-            // }
-
-            // wallItems.push({
-            //     id: _run.id,
-            //     element: <div>
-            //         {elements}
-            //     </div>,
-            //     commentsAndScores: runCommentsAndScores,
-            //     isLastRunItem: true,
-            //     run: _run,
-            // })
         }
     })
-
-    // console.log('wall items', wallItems.length);
-
-    // const createRun = async (input: any) => {
-    //     alert('createRun');
-    // }
 
     const cancelRun = async () => {
         console.log('cancelling run');
         agentview().sessions.cancelRun(session.id)
     }
 
-    // const isRunning = props.session.status == 'in_progress';
-
     const listParams = loaderData.listParams;
-    // const activeItems = getAllSessionItems(session, { activeOnly: true })
-    // const lastRun = getLastRun(session)
-
-    // const agentConfig = requireAgentConfigBySession(config, session);
 
     const searchParams = new URLSearchParams(window.location.search);
     const selectedItemId = searchParams.get('itemId') ?? undefined;

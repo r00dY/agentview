@@ -197,6 +197,8 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
     active: row.active,
     runs: activeRuns
       .filter((run, index) => {
+        return true;
+        
         if (run.status === "completed") {
           return true;
         }

@@ -12,7 +12,7 @@ export async function POST() {
 
   const DELTA = 100;
 
-  const deltasFor20s = Array.from({ length: 20 * 1000 / DELTA }, (_, i) => ({ type: "text-delta", id: textId1, delta: `.${i} ` }));
+  const deltas = (seconds: number) => Array.from({ length: seconds * 1000 / DELTA }, (_, i) => ({ type: "text-delta", id: textId1, delta: `.${i} ` }));
 
   const parts = [
     // { type: "data-xxx", data: { whatever: "blablabla" } },
@@ -39,7 +39,7 @@ export async function POST() {
     { type: "text-delta", id: textId1, delta: "Here is the " },
     { type: "text-delta", id: textId1, delta: "first text part." },
 
-    // ...deltasFor20s,
+    ...deltas(10),
 
     { type: "text-end", id: textId1 },
     // { type: "error", errorText: "This is some error from the stream part"},
