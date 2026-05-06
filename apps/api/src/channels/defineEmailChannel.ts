@@ -20,6 +20,7 @@ export type EmailMessageData = {
   from: string;
   to: string;
   cc?: string;
+  textBody?: string;
   htmlBody?: string;
 };
 
@@ -225,6 +226,7 @@ export function defineEmailChannel(config: {
         to: params.email.to,
         cc: params.email.cc,
         htmlBody: params.email.htmlBody,
+        textBody: params.email.textBody,
       },
       ...(params.providerData ?? {}),
     };
