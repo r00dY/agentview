@@ -9,6 +9,7 @@ import {
   type ChannelApp,
   type SendMessageFn,
   type SendMessageResult,
+  resolveChannel,
 } from './defineChannel';
 import { withOrg } from 'src/withOrg';
 
@@ -178,11 +179,16 @@ export function defineEmailChannel(config: {
 
   const ingestEmail = async (address: string, params: IngestEmailParams) => {
     // Look up channel to get channelId for thread resolution
-    const channel = await provider.getChannel(address);
-    if (!channel) {
-      log.info({ address }, 'channel not found for address');
-      return { ingested: false, reason: 'Channel not found' };
+
+    let channel: Awaited<ReturnType<typeof resolveChannel>>;
+    try {
+      channel = await resolveChannel(config.type, address);
     }
+    catch (error) {
+      console.log('ERROR', error);
+      return { ingested: false, reason: (error as Error).message }
+    }
+    
 
     if (!params.email.messageId) {
       throw new Error('[defineEmailChannel] Email has no Message-ID — this should never happen');

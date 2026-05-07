@@ -1,6 +1,6 @@
 import type { Environment } from "agentview/apiTypes";
 import { BaseConfigSchemaToZod, type BaseAgentViewConfig } from "agentview/baseConfigTypes";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db__dangerous } from "./db";
 import { environments } from "./schemas/schema";
 import type { TenantTransaction } from "./withOrg";
@@ -38,6 +38,23 @@ import { AgentViewError } from "agentview";
 //   return environment ?? undefined;
 // }
 
+export async function getEnvironmentByHandleAndOrgId(orgId: string, envHandle: string) {
+  console.log('GETTING ENVIRONMENT BY HANDLE AND ORG ID', orgId, envHandle);
+  return await db__dangerous.query.environments.findFirst({
+    columns: {
+      id: true,
+      handle: true,
+      createdAt: true,
+      config: true,
+      tunnelUrl: true,
+      userId: true,
+    },
+    with: {
+      user: true,
+    },
+    where: and(eq(environments.handle, envHandle), eq(environments.organizationId, orgId)),
+  });
+}
 
 export async function getEnvironment(tx: TenantTransaction) { // envId is actually either null (production) or user id (user's dev environment). For now!
   const envHandle = tx.principal.env;

@@ -1008,6 +1008,37 @@ const runsAISDKPOSTRoute = createRoute({
   },
 })
 
+app.openapi(runsAISDKPOSTRoute, async (c) => {
+  const principal = await authnAllowUser(c.req.raw.headers)
+  const body = await c.req.valid('json')
+  const params = await c.req.param();
+
+  const sessionBase = await withTenant(principal, async (tx) => {
+    return await requireSessionBase(tx, params.session_id);
+  })
+
+  if (sessionBase.channel.type !== 'api') {
+    throw new AgentViewError("This endpoint is not allowed for sessions created from non-api channels (like email, etc.)", 400);
+  }
+
+  const { response, runId, success } = await createAutoRun2(principal, params.session_id, body.input, body.previousRunId, c.req.raw.signal);
+
+  if (!success) {
+    return response as any; // as any because we have no idea what the response is
+  }
+
+  // no stream -> just return session
+  if (!body.stream) {
+    return await withTenant(principal, async (tx) => {
+      const standardSession = await requireSession(tx, params.session_id);
+      return c.json(standardToDefaultSession(standardSession), 201);
+    })
+  }
+
+  return createStreamResponse(c, runId, response)
+})
+
+
 app.post('/internal/fast-patch', async (c) => {
   const body = await c.req.json()
 
@@ -1039,28 +1070,6 @@ app.post('/internal/fast-patch', async (c) => {
   }
 
   return c.json({}, 201)
-})
-
-app.openapi(runsAISDKPOSTRoute, async (c) => {
-  const principal = await authnAllowUser(c.req.raw.headers)
-  const body = await c.req.valid('json')
-  const params = await c.req.param();
-
-  const { response, runId, success } = await createAutoRun2(principal, params.session_id, body.input, body.previousRunId, c.req.raw.signal);
-
-  if (!success) {
-    return response as any; // as any because we have no idea what the response is
-  }
-
-  // no stream -> just return session
-  if (!body.stream) {
-    return await withTenant(principal, async (tx) => {
-      const standardSession = await requireSession(tx, params.session_id);
-      return c.json(standardToDefaultSession(standardSession), 201);
-    })
-  }
-
-  return createStreamResponse(c, runId, response)
 })
 
 /**

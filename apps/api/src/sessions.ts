@@ -1,5 +1,5 @@
 import { AgentViewError } from "agentview";
-import type { ChannelRef, Environment, SessionBase, SessionsGetQueryParams, SessionsGetQueryParamsSchema, SessionsPaginatedResponse, SessionStatus, SessionUpdate, StandardSession, StandardSessionCreate } from "agentview/apiTypes";
+import type { ChannelMessage, ChannelRef, Environment, SessionBase, SessionsGetQueryParams, SessionsGetQueryParamsSchema, SessionsPaginatedResponse, SessionStatus, SessionUpdate, StandardSession, StandardSessionCreate } from "agentview/apiTypes";
 import { randomBytes } from "crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
 import type z from "zod";
@@ -8,7 +8,7 @@ import { authorize } from "./authMiddleware";
 import { getConfigFromEnvironment, requireConfig, requireEnvironment } from "./environments";
 import { isUUID, requireUUID } from "./isUUID";
 import { parseMetadata } from "./parseMetadata";
-import { agentRefs, endUsers, events, runs, sessionItems, sessions } from "./schemas/schema";
+import { agentRefs, channelMessages, endUsers, events, runs, sessionItems, sessions } from "./schemas/schema";
 import type { Transaction } from "./types";
 import { updateInboxes } from "./updateInboxes";
 import { createUser, requireUser } from "./users";
@@ -157,6 +157,18 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
   }
 
   const state = await fetchSessionState(tx, row.id);
+
+  // unassigned channel messages
+  // let unassignedChannelMessages: ChannelMessage[] | undefined = undefined;
+  // if (row.channelType !== 'api') {
+
+  //   const channelMessageRows = tx.query.channelMessages.findMany({
+  //     where: eq(channelMessages.sessionId, row.id),
+  //     orderBy: (channelMessage, { asc }) => [asc(channelMessage.date)],
+  //   });
+
+  //   row.channelMessages = row.channelMessages.filter(cm => cm.direction === 'incoming');
+  // }
 
 
   /**

@@ -11,8 +11,10 @@ import type { Transaction } from '../types';
 import { ensureUserForEmail } from '../users';
 import { withOrg, withTenant } from '../withOrg';
 import type { WorkerHandle } from '../workers/utils';
-import { getConfigFromEnvironment, getEnvironment, requireEnvironment } from '../environments';
+import { getConfigFromEnvironment, getEnvironment, getEnvironmentByHandleAndOrgId, requireEnvironment } from '../environments';
 import type { ExternalChannelConfig } from 'agentview/baseConfigTypes';
+import { createChannel as createChannelFn, getChannel as getChannelFn } from './channels';
+import { organizations } from 'src/schemas/auth-schema';
 
 export type Channel = typeof channels.$inferSelect;
 type ChannelThread = typeof channelThreads.$inferSelect;
@@ -72,23 +74,70 @@ type IngestMessageResultError = {
 
 type IngestMessageResult = IngestMessageResultSuccess | IngestMessageResultError;
 
+
+function ignoreMessage(reason: string): IngestMessageResult {
+  log.info({ reason }, 'ignoring message');
+  return {
+    ingested: false,
+    reason,
+  }
+}
+
+export async function resolveChannel(type: string, address: string)  {
+  let channel = await getChannelFn(type, address);
+  if (!channel) {
+
+    if (type === 'resend') {
+      console.log('RESEND!!!!');
+      
+      const base = address.split('@')[0];
+      const split = base.split('.');
+      const orgSlug = split[0];
+
+      console.log('ORG SLUG', orgSlug);
+
+      const org = await db__dangerous.query.organizations.findFirst({
+        where: eq(organizations.slug, orgSlug),
+      });
+
+      if (!org) {
+        console.log('ORG NOT FOUND', orgSlug);
+        throw new Error(`Organization not found: org.slug=${orgSlug}`);
+      }
+
+      const environment = await getEnvironmentByHandleAndOrgId(org.id, 'local:admin@acme.com');
+      if (!environment) {
+        console.log('ENVIRONMENT NOT FOUND');
+        throw new Error(`Environment not found: org.id=${org.id} envHandle=local:admin@acme.com`);
+      }
+
+      await createChannelFn(org.id, type, address, {}, environment.id);
+      channel = await getChannelFn(type, address);
+
+      console.log('CHANNEL CREATED', channel);
+
+      if (!channel) {
+        console.log('CHANNEL NOT CREATED');
+        throw new Error(`Channel not created for address: ${address}`);
+      }
+    }
+    else {
+      throw new Error(`Channel not found for address: ${address}`);
+    }
+  }
+
+  console.log('CHANNEL', channel);
+
+  return channel;
+}
+
+
 export function channelProvider(type: string) {
   /**
    * Strict create — fails on conflict (unique constraint on type+address).
    */
   async function createChannel(orgId: string, address: string, config: any): Promise<Channel> {
-    return withOrg(orgId, async (tx) => {
-      const [channel] = await tx
-        .insert(channels)
-        .values({
-          organizationId: orgId,
-          type,
-          address,
-          config,
-        })
-        .returning();
-      return channel;
-    });
+    return await createChannelFn(orgId, type, address, config);
   }
 
   /**
@@ -157,14 +206,6 @@ export function channelProvider(type: string) {
   }
 
 
-  function ignoreMessage(reason: string): IngestMessageResult {
-    log.info({ reason }, 'ignoring message');
-    return {
-      ingested: false,
-      reason,
-    }
-  }
-
   /**
    * Find channel by address, then ingest message within the channel's org.
    * 
@@ -180,11 +221,18 @@ export function channelProvider(type: string) {
    * 
    */
   async function ingestMessage(address: string, params: IngestMessageParams): Promise<IngestMessageResult> {
-    log.info({ address, contactKind: params.contactKind, contact: params.contact, sourceId: params.sourceId }, 'ingesting message');
+    log.info({ address, contactKind: params.contactKind, contact: params.contact, sourceId: params.sourceId, type }, 'ingesting message');
 
-    const channel = await getChannel(address);
-    if (!channel) {
-      return ignoreMessage('Channel not found');
+    /**
+     * Resend has special treatment. Automatically creates a channel if it doesn't exist.
+     */
+    let channel: Awaited<ReturnType<typeof resolveChannel>>;
+    try {
+      channel = await resolveChannel(type, address);
+    }
+    catch (error) {
+      console.log('ERROR', error);
+      return ignoreMessage((error as Error).message);
     }
 
     /**
@@ -196,12 +244,7 @@ export function channelProvider(type: string) {
      */
     let envHandle = channel.environment?.handle;
     if (!envHandle) {
-      if (channel.type === 'resend') {
-        envHandle = 'local:admin@acme.com'; // TODO: fix this!!!
-      }
-      else {
-        return ignoreMessage('Channel is not routed to any environment');
-      }
+      return ignoreMessage(`Channel is not routed to any environment: type=${channel.type} address=${channel.address}`);
     }
     
     const principal : ServicePrincipal = {

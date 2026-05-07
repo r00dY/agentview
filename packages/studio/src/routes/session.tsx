@@ -94,7 +94,7 @@ function SessionShell({
     outletContext
 }: {
     sessionBase: SessionBase,
-    agentConfig: AgentConfig,
+    agentConfig?: AgentConfig,
     headerExtra?: React.ReactNode,
     children: React.ReactNode,
     footer?: React.ReactNode,
@@ -119,7 +119,7 @@ function SessionShell({
 }
 
 function SessionPageSkeleton({ sessionBase }: { sessionBase: SessionBase }) {
-    const agentConfig = requireAgentConfigBySession(config, sessionBase);
+    const agentConfig = findAgentConfigBySession(config, sessionBase);
 
     return (
         <SessionShell sessionBase={sessionBase} agentConfig={agentConfig}>
@@ -231,7 +231,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
     /**
      * Build the wall
      */
-    const agentConfig = requireAgentConfigBySession(config, session);
+    const agentConfig = findAgentConfigBySession(config, session);
 
     const wallItems: WallItem[] = [];
 
@@ -275,7 +275,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                 })
             }
             else {
-                const channelMessages = message.metadata?._agentview?.channelMessages;
+                const channelMessages = message.metadata?._agentview?.channelMessages ?? [];
 
                 for (const channelMessage of channelMessages) {
                     const element = <div className="pl-[10%] relative">
@@ -345,7 +345,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
              * Get display component for a part: config override first, then defaults.
              */
             const getPartComponent = (part: UIMessage['parts'][number]): React.ComponentType<PartDisplayProps> | null => {
-                const partConfig = agentConfig.run?.assistantMessage?.parts?.find(p => p.type === part.type);
+                const partConfig = agentConfig?.run?.assistantMessage?.parts?.find(p => p.type === part.type);
                 if (partConfig?.displayComponent !== undefined) {
                     return partConfig.displayComponent as React.ComponentType<PartDisplayProps> | null;
                 }
@@ -665,7 +665,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 }
 
 
-function SessionDetails({ sessionBase, agentConfig }: { sessionBase: SessionBase, agentConfig: AgentConfig }) {
+function SessionDetails({ sessionBase, agentConfig }: { sessionBase: SessionBase, agentConfig?: AgentConfig }) {
     const { organization: { members } } = useSessionContext();
     const owner = members.find((member) => member.userId === sessionBase.user.ownerId);
 
@@ -710,7 +710,7 @@ function SessionDetails({ sessionBase, agentConfig }: { sessionBase: SessionBase
                     </PropertyListTextValue>
                 </PropertyListItem>
 
-                {agentConfig.displayProperties && <DisplayProperties displayProperties={agentConfig.displayProperties} inputArgs={{ session: sessionBase }} />}
+                {agentConfig?.displayProperties && <DisplayProperties displayProperties={agentConfig.displayProperties} inputArgs={{ session: sessionBase }} />}
             </PropertyList>
         </div>
     );
@@ -796,7 +796,7 @@ const DefaultUserInputComponent: AgentInputComponent = ({ session, isRunning, ca
     return <UserMessageInput isRunning={isRunning} onCancel={cancel} onSubmit={submit} />
 }
 
-function InputForm({ session, agentConfig, styles, sendMessage, cancelRun, isRunning }: { session: Session, agentConfig: AgentConfig, styles: Record<string, number>, sendMessage: SendMessageFunction, cancelRun: () => Promise<void>, isRunning: boolean }) {
+function InputForm({ session, agentConfig, styles, sendMessage, cancelRun, isRunning }: { session: Session, agentConfig?: AgentConfig, styles: Record<string, number>, sendMessage: SendMessageFunction, cancelRun: () => Promise<void>, isRunning: boolean }) {
     const submit = async (input: InputUIMessage) => {
         if (typeof input === 'string') {
             input = {
@@ -815,7 +815,7 @@ function InputForm({ session, agentConfig, styles, sendMessage, cancelRun, isRun
         }
     }
 
-    const InputComponent = agentConfig.inputComponent ?? DefaultUserInputComponent;
+    const InputComponent = agentConfig?.inputComponent ?? DefaultUserInputComponent;
 
     return <div className="border-t">
         <div className={`p-6 pr-0`} style={{ maxWidth: `${styles.textWidth + styles.padding}px` }}>

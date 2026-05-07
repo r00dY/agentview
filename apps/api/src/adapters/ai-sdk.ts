@@ -23,12 +23,6 @@ export const aiSDKAdapter = {
     }
 } satisfies Adapter;
 
-
-function getItemBase(item: SessionItem) {
-    const { content, ...itemBase } = item;
-    return itemBase;
-}
-
 function sessionToUIMessages(session: StandardSession): UIMessage[] {
     const messages: UIMessage[] = [];
 
@@ -37,7 +31,7 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
             throw new Error("[sessionToUIMessages] Run is not an AI SDK run");
         }
 
-        const { sessionItems, ...runBase } = run;
+        const { sessionItems } = run;
 
         const [inputItem, ...outputParts] = sessionItems;
 
