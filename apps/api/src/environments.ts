@@ -18,11 +18,27 @@ import { AgentViewError } from "agentview";
 // export type Env = ProdEnv | DevEnv;
 
 
-/**
- * Get config row for a user.
- * - userId = null: production config (shared across org)
- * - userId = string: user's development config
- */
+
+// export async function getEnvironmentByHandle(tx: TenantTransaction, envHandle: string) {
+//   const environment = await tx.query.environments.findFirst({
+//     columns: {
+//       id: true,
+//       handle: true,
+//       createdAt: true,
+//       config: true,
+//       tunnelUrl: true,
+//       userId: true,
+//     },
+//     with: {
+//       user: true,
+//     },
+//     where: eq(environments.handle, envHandle),
+//   });
+
+//   return environment ?? undefined;
+// }
+
+
 export async function getEnvironment(tx: TenantTransaction) { // envId is actually either null (production) or user id (user's dev environment). For now!
   const envHandle = tx.principal.env;
 

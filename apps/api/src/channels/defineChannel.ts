@@ -11,7 +11,7 @@ import type { Transaction } from '../types';
 import { ensureUserForEmail } from '../users';
 import { withOrg, withTenant } from '../withOrg';
 import type { WorkerHandle } from '../workers/utils';
-import { getConfigFromEnvironment } from '../environments';
+import { getConfigFromEnvironment, getEnvironment, requireEnvironment } from '../environments';
 import type { ExternalChannelConfig } from 'agentview/baseConfigTypes';
 
 export type Channel = typeof channels.$inferSelect;
@@ -189,24 +189,35 @@ export function channelProvider(type: string) {
 
     /**
      * Find environment. If no environment connected, ignore.
+     * 
+     * TODO:
+     * 
+     * If it's RESEND -> we can INFER environment and organization from the EMAIL ADDRESS.
      */
-    const environment = channel.environment;
-    if (!environment) {
-      return ignoreMessage('Channel is not routed to any environment');
+    let envHandle = channel.environment?.handle;
+    if (!envHandle) {
+      if (channel.type === 'resend') {
+        envHandle = 'local:admin@acme.com'; // TODO: fix this!!!
+      }
+      else {
+        return ignoreMessage('Channel is not routed to any environment');
+      }
     }
-
-    const channelRef : ChannelRef = { type: channel.type as 'gmail' | 'mock', address: channel.address }
-
-    log.info({ sourceId: params.sourceId, env: environment.user?.email ?? 'production' }, 'environment resolved');
-
+    
     const principal : ServicePrincipal = {
       type: 'service',
       organizationId: channel.organizationId,
-      env: environment.handle,
+      env: envHandle,
     };
+
+    const channelRef : ChannelRef = { type: channel.type as 'gmail' | 'mock', address: channel.address }
 
     const result: IngestMessageResult = await withTenant(principal, async (tx) => {
       await tx.acquireLock({ type: "create_resource" });
+      
+      const environment = await requireEnvironment(tx);
+
+      log.info({ sourceId: params.sourceId, env: environment.user?.email ?? 'production' }, 'environment resolved');
 
       /**
        * Create or get channel thread and channel message
@@ -322,6 +333,7 @@ export function channelProvider(type: string) {
       try {
         // Set up session agent, metadata, initialState
         await withTenant(principal, async (tx) => {
+          const environment = await requireEnvironment(tx);
           const config = getConfigFromEnvironment(environment);
     
           let channelConfig: ExternalChannelConfig | undefined = undefined;
