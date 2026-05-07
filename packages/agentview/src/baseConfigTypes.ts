@@ -25,7 +25,7 @@ export interface BaseRunConfig<TSessionItemConfig extends BaseSessionItemConfig 
 }
 
 export interface ExternalChannelConfig {
-    type: 'gmail' | 'mock';
+    type: 'gmail' | 'mock' | 'resend';
     address: string;
     metadata?: Record<string, any>;
     initialState?: any;

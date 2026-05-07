@@ -1658,7 +1658,11 @@ app.openapi(environmentPATCHRoute, async (c) => {
 
   // validate & parse body.config (only if provided)
   if (body.config !== undefined) {
+
+    console.log('body.config', body.config.agents[0])
+
     const { data, success, error } = BaseConfigSchema.safeParse(body.config)
+    console.log('success', success, 'error', error)
     if (!success) {
       log.error({ issues: error.issues }, 'invalid config')
       return c.json({ message: "Invalid config", code: 'parse.schema', details: error.issues }, 422);

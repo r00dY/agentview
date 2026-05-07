@@ -98,19 +98,19 @@ export default defineConfig({
           }
         ]
       },
-
-
       channels: [
-        {
-          type: "resend",
-          address: "acme.dupa@kirievelu.resend.app",
-          metadata: {
-            userLocation: "Warsaw"
-          }
-        },
+        // {
+        //   type: "resend",
+        //   address: "acme.dupa@kirievelu.resend.app",
+        //   metadata: {
+        //     userLocation: "Warsaw"
+        //   }
+        // },
+        
         {
           type: "gmail",
-          address: "agentviewtest@gmail.com",
+          address: "agentviewtest@gmail.com2",
+
         }
       ]
     }

@@ -379,22 +379,39 @@ export function channelProvider(type: string) {
           const environment = await requireEnvironment(tx);
           const config = getConfigFromEnvironment(environment);
     
-          let channelConfig: ExternalChannelConfig | undefined = undefined;
-          let agentName: string | undefined = undefined;
+          // let channelConfig: ExternalChannelConfig | undefined = undefined;
+          // let agentName: string | undefined = undefined;
+
+          console.log('--------------------------------');
+          console.log('type', type, 'address', address, 'channel.type', channel.type, 'channel.address', channel.address);
+
+          const matches : { agent: string, channelConfig: ExternalChannelConfig }[] = [];
     
           config.agents?.forEach((agent) => {
-            channelConfig = agent.channels?.find((channel) => channel.type === channel.type && channel.address === channel.address)
-            if (channelConfig) {
-              agentName = agent.name;
+            console.log('##########', agent.name, agent.channels);
+            if (!agent.channels) {
               return;
             }
+
+            const channelConfigs = agent.channels?.filter((c) => c.type === channel.type && c.address === channel.address)
+            console.log('channelConfigs', channelConfigs);
+            channelConfigs.forEach((channelConfig) => {
+              matches.push({ agent: agent.name, channelConfig })
+            })
           });
-    
-          if (!agentName) {
+
+          if (matches.length === 0) {
             throw new Error(`No agent found for this channel: ${channel.type} ${channel.address}`);
           }
+          if (matches.length > 1) {
+            throw new Error(`Multiple agents found for this channel: ${channel.type} ${channel.address}`);
+          }
     
-          await setAgentForSession(tx, result.sessionId, { agent: agentName, metadata: channelConfig!.metadata, initialState: channelConfig!.initialState });
+          const { agent, channelConfig } = matches[0];
+
+          console.log('setAgentForSession body', { agent, metadata: channelConfig!.metadata, initialState: channelConfig!.initialState })
+    
+          await setAgentForSession(tx, result.sessionId, { agent, metadata: channelConfig!.metadata, initialState: channelConfig!.initialState });
         })
 
         // Start run

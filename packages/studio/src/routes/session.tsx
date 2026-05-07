@@ -146,7 +146,7 @@ type WallItem = {
         failReason: any,
     }
 
-    messageId: string,
+    messageId?: string,
 
     // is last run item -> show run footer
     showRunFooter?: boolean
@@ -186,7 +186,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
     // Revalidate when we start streaming (initialSession could have become active) 
     useEffect(() => {
         if (!initialSession.active && status === 'streaming') {
-            
+
             /**
              * TODO: clear cache here. Lists gets updated.
              */
@@ -221,7 +221,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 
     const localError = error && (messages.length > 0 && messages[messages.length - 1]?.role === "user") && unwrapError(error); // local uncommited error from useChat
 
-    const sendMessage : typeof sendMessage_ = (input) => {
+    const sendMessage: typeof sendMessage_ = (input) => {
         if (localError) {
             setMessages(messages.slice(0, -1));
         }
@@ -255,7 +255,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                 if (agentConfig?.run?.userMessage?.displayComponent === null) {
                     return;
                 }
-                
+
                 const Component = agentConfig?.run?.userMessage?.displayComponent ?? DefaultUserMessageDisplayComponent;
                 const element = <div className="pl-[10%] relative">
                     <Component value={message} session={session} />
@@ -405,7 +405,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                     scores: runScores,
                 };
             }
-        
+
             const showRunFooter = !isLast || !isRunning
 
             /**
@@ -423,9 +423,9 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                         const element = <Component value={part} session={session} />
                         elements.push(element);
                     }
-    
+
                     const element = <div className="space-y-4">{elements}</div>
-    
+
                     wallItems.push({
                         id: message.id,
                         element,
@@ -448,7 +448,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
             }
             else {
                 let element: React.ReactNode;
-                
+
                 if (status === "failed") {
                     element = <div className="text-md text-red-500">
                         <span className="">{failReason?.message ?? "Failed for unknown reason"}</span>
@@ -462,7 +462,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                 else {
                     return; // in_progress
                 }
-                
+
                 wallItems.push({
                     id: message.id,
                     element, // edge case -> completed run -> no output parts.
@@ -474,6 +474,30 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
             }
         }
     })
+
+    const unassignedChannelMessages = session.unassignedChannelMessages ?? [];
+    unassignedChannelMessages.forEach((channelMessage) => {
+
+        const element = <div className="pl-[10%] relative">
+            <UserMessage>{channelMessage.text}</UserMessage>
+        </div>
+
+        let commentsAndScores: CommentsThreadData | undefined = {
+            target: { sessionId: session.id, channelMessageId: channelMessage.id },
+            comments: props.comments.filter((c) => c.channelMessageId === channelMessage.id),
+        };
+
+        wallItems.push({
+            id: channelMessage.id,
+            element, // edge case -> completed run -> no output parts.
+            commentsAndScores,
+            // run,
+            // showRunFooter,
+            // messageId: message.id,
+        })
+
+
+    });
 
     const cancelRun = async () => {
         console.log('cancelling run');
@@ -580,7 +604,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
             sessionBase={session}
             agentConfig={agentConfig}
             headerExtra={<SessionHeaderActions session={session} isMine={session.user.ownerId === me.id} />}
-            footer={session.user.ownerId === me.id && <InputForm session={session} agentConfig={agentConfig} styles={styles} sendMessage={sendMessage} cancelRun={cancelRun} isRunning={isRunning} />}
+            footer={session.user.ownerId === me.id && session.channel.type === 'api' ? <InputForm session={session} agentConfig={agentConfig} styles={styles} sendMessage={sendMessage} cancelRun={cancelRun} isRunning={isRunning} /> : undefined}
             outletContext={{ session }}
         >
             <div ref={bodyRef}>
@@ -627,7 +651,9 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                                     isSelected={isSelected}
                                     isSmallSize={styles.isSmallSize}
                                     regenerate={() => {
-                                        regenerate({ messageId: wallItem.messageId });
+                                        if (wallItem.messageId) {
+                                            regenerate({ messageId: wallItem.messageId });
+                                        }
                                     }}
                                 />}
 
@@ -705,7 +731,7 @@ function SessionDetails({ sessionBase, agentConfig }: { sessionBase: SessionBase
                         Agent
                     </PropertyListTitle>
                     <PropertyListTextValue>
-                        {!sessionBase.agent &&<span className="text-muted-foreground">-</span>}
+                        {!sessionBase.agent && <span className="text-muted-foreground">-</span>}
                         {sessionBase.agent && <Pill>{sessionBase.agent.name}@{sessionBase.agent.version}</Pill>}
                     </PropertyListTextValue>
                 </PropertyListItem>
@@ -918,7 +944,7 @@ function RunFooter(props: RunFooterProps) {
                 target={target}
                 open={scoreDialogOpen}
                 onOpenChange={setScoreDialogOpen}
-            scoreConfigs={remainingScores}
+                scoreConfigs={remainingScores}
             />);
         }
 

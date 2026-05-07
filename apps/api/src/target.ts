@@ -164,9 +164,9 @@ export async function resolveTarget(tx: Transaction, target: InputTarget): Promi
             throw new AgentViewError("Channel message not found", 404);
         }
 
-        if (!channelMessage.run) {
-            throw new AgentViewError("Channel message has no run id", 400);
-        }
+        // if (!channelMessage.run) {
+        //     throw new AgentViewError("Channel message has no run id", 400);
+        // }
 
         if (target.sessionId && channelMessage.run.sessionId !== target.sessionId) {
             throw new AgentViewError("Session item does not belong to the session", 400);

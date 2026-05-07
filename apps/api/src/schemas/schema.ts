@@ -530,7 +530,7 @@ export const channelMessages = pgTable('channel_messages', {
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: text('organization_id').notNull().references(() => organizations.id),
   channelThreadId: uuid('channel_thread_id').notNull().references(() => channelThreads.id, { onDelete: 'cascade' }),
-  direction: varchar('direction', { length: 16 }).notNull(), // 'incoming' | 'outgoing'
+  direction: varchar('direction', { length: 16 }).notNull().$type<'incoming' | 'outgoing'>(), // 'incoming' | 'outgoing'
   sourceId: varchar('source_id', { length: 255 }),
   text: text('text'),
   attachments: jsonb('attachments'),
