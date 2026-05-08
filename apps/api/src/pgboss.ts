@@ -3,6 +3,7 @@ import { getDatabaseURL } from './getDatabaseURL';
 import { log } from './logger';
 import { WEBHOOK_QUEUE } from './workers/webhooks';
 import { OUTGOING_CHANNEL_MESSAGE_QUEUE } from './workers/outgoingChannelMessages';
+import { SESSION_GENERATE_TITLE_QUEUE } from './workers/generateTitle';
 
 let boss: PgBoss | null = null;
 
@@ -32,6 +33,12 @@ export async function startBoss(): Promise<PgBoss> {
 
   await boss.createQueue(OUTGOING_CHANNEL_MESSAGE_QUEUE, {
     retryLimit: 3,
+    retryDelay: 10,
+    retryBackoff: true,
+  });
+
+  await boss.createQueue(SESSION_GENERATE_TITLE_QUEUE, {
+    retryLimit: 2,
     retryDelay: 10,
     retryBackoff: true,
   });

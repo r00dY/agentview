@@ -21,6 +21,7 @@ import { getBoss } from './pgboss';
 import { fromDrizzle } from 'pg-boss';
 import { WEBHOOK_QUEUE, type WebhookJobData } from './workers/webhooks';
 import { OUTGOING_CHANNEL_MESSAGE_QUEUE } from './workers/outgoingChannelMessages';
+import { SESSION_GENERATE_TITLE_QUEUE } from './workers/generateTitle';
 import { standardToDefaultSession } from './standardToDefaultSession';
 import { isToolUIPart } from 'ai';
 
@@ -305,13 +306,10 @@ async function createRunCore(
     }
 
     if (!config.__internal?.disableSummaries) {
-      await getBoss().send(WEBHOOK_QUEUE, {
-        organizationId: tx.organizationId,
-        environmentId: environment.id,
-        eventType: 'session.generate_summary',
-        payload: { session_id: sessionId },
+      await getBoss().send(SESSION_GENERATE_TITLE_QUEUE, {
         sessionId,
-      } satisfies WebhookJobData, { db });
+        organizationId: tx.organizationId,
+      }, { db });
     }
   }
 

@@ -2,7 +2,6 @@ import type { PgBoss } from 'pg-boss';
 import { withOrg } from '../withOrg';
 import { environments } from '../schemas/schema';
 import { eq } from 'drizzle-orm';
-import { generateSessionSummary } from '../summaries';
 import { log, setContext } from '../logger';
 
 export const WEBHOOK_QUEUE = 'webhook';
@@ -37,32 +36,25 @@ export function registerWebhookWorker(boss: PgBoss) {
         const config = environment.config as any;
         const webhookUrl = config?.webhookUrl;
 
-        if (eventType === 'session.generate_summary') {
-          if (config?.__internal?.disableSummaries) {
-            throw new Error('Summary generation is disabled');
-          }
-          await generateSessionSummary((payload as { session_id: string }).session_id, organizationId);
-        } else {
-          if (!webhookUrl) {
-            throw new Error('Webhook URL is not configured');
-          }
-
-          const response = await fetch(webhookUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              event: eventType,
-              payload,
-              job_id: job.id,
-            }),
-          });
-
-          if (!response.ok) {
-            throw new Error(`Webhook returned ${response.status}: ${await response.text()}`);
-          }
-
-          log.info('webhook job completed successfully');
+        if (!webhookUrl) {
+          throw new Error('Webhook URL is not configured');
         }
+
+        const response = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event: eventType,
+            payload,
+            job_id: job.id,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Webhook returned ${response.status}: ${await response.text()}`);
+        }
+
+        log.info('webhook job completed successfully');
       }
     }
   );

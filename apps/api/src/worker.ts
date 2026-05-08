@@ -2,6 +2,7 @@ import { initDb } from './initDb';
 import { startBoss } from './pgboss';
 import { registerWebhookWorker } from './workers/webhooks';
 import { registerOutgoingChannelMessageWorker } from './workers/outgoingChannelMessages';
+import { registerGenerateTitleWorker } from './workers/generateTitle';
 import { expiredRunsWorker } from './workers/expiredRuns';
 import { channelApps } from './channels/registry';
 
@@ -13,6 +14,7 @@ const boss = await startBoss();
  */
 registerWebhookWorker(boss);
 registerOutgoingChannelMessageWorker(boss);
+registerGenerateTitleWorker(boss);
 
 /**
  * Periodic scan — not a queue pattern (expiresAt changes on every event).
