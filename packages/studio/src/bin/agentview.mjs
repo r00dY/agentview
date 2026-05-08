@@ -1,3 +1,4 @@
 #!/usr/bin/env node
-import { tsImport } from 'tsx/esm/api';
-await tsImport('./agentview.ts', import.meta.url);
+import { register } from 'tsx/esm/api';
+register();
+await import('./agentview.ts');

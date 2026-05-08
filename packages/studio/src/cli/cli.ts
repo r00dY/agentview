@@ -124,18 +124,10 @@ async function loadConfig(): Promise<AgentViewConfig> {
   const absolutePath = path.resolve(configPath);
   const fileUrl = pathToFileURL(absolutePath).href;
 
-  let moduleExports: any;
-  try {
-    const { tsImport } = await import("tsx/esm/api");
-    moduleExports = await tsImport(fileUrl, { parentURL: import.meta.url });
-  } catch (error: any) {
-    if (error?.code === "ERR_MODULE_NOT_FOUND") {
-      throw new Error(
-        `Cannot load ${configPath}. Ensure "tsx" is installed.`,
-      );
-    }
-    throw error;
-  }
+  // Append ?t=<timestamp> to bust Node's ESM module cache on re-imports.
+  // This works because tsx's global loaders (registered in agentview.mjs)
+  // match .tsx?... via regex, so the file is still transformed correctly.
+  const moduleExports: any = await import(fileUrl + '?t=' + Date.now());
 
   const config =
     moduleExports?.default ??

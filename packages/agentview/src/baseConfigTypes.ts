@@ -114,7 +114,7 @@ function baseRunSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
 
 function baseConfigSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
     const externalChannelSchema = z.object({
-        type: z.union([z.literal('gmail'), z.literal('mock')]),
+        type: z.union([z.literal('gmail'), z.literal('mock'), z.literal('resend')]),
         address: z.string(),
         metadata: z.record(z.string(), z.any()).optional(),
         initialState: z.any().optional(),
