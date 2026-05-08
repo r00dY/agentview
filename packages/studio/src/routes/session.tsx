@@ -153,6 +153,43 @@ type WallItem = {
 };
 
 
+/**
+ * Get incoming channel messages for a specific run or unassigned ones.
+ * With runId: returns incoming messages within that run's [first, last] createdAt range.
+ * Without runId: returns incoming messages not consumed by any run.
+ */
+function getIncomingChannelMessages(session: Session, runId?: string): ChannelMessage[] {
+    const channelMessages = session.channelMessages ?? [];
+    const incoming = channelMessages.filter(m => m.direction === 'incoming');
+
+    // Collect all run ranges from message metadata
+    const runRanges = session.messages
+        .map(m => m.metadata?._agentview)
+        .filter((meta): meta is { id: string, firstIncomingChannelMessageId?: string, lastIncomingChannelMessageId?: string } =>
+            meta?.id && meta?.firstIncomingChannelMessageId && meta?.lastIncomingChannelMessageId
+        );
+
+    // Resolve a range to a set of consumed message IDs
+    function getConsumedIds(range: { firstIncomingChannelMessageId?: string, lastIncomingChannelMessageId?: string }): Set<string> {
+        const first = channelMessages.find(m => m.id === range.firstIncomingChannelMessageId);
+        const last = channelMessages.find(m => m.id === range.lastIncomingChannelMessageId);
+        if (!first || !last) return new Set();
+        return new Set(
+            incoming.filter(m => m.createdAt >= first.createdAt && m.createdAt <= last.createdAt).map(m => m.id)
+        );
+    }
+
+    if (runId) {
+        const range = runRanges.find(r => r.id === runId);
+        if (!range) return [];
+        return incoming.filter(m => getConsumedIds(range).has(m.id));
+    }
+
+    // Unassigned: all incoming messages not consumed by any run
+    const allConsumed = new Set(runRanges.flatMap(r => [...getConsumedIds(r)]));
+    return incoming.filter(m => !allConsumed.has(m.id));
+}
+
 function SessionPage(props: { session: Session, comments: CommentMessage[], scores: Score[], sessionStats?: SessionStats }) {
     const loaderData = useLoaderData<typeof loader>();
     const revalidator = useRevalidator();
@@ -275,15 +312,17 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                 })
             }
             else {
-                const channelMessages = message.metadata?._agentview?.channelMessages ?? [];
+                const incomingMessages = run
+                    ? getIncomingChannelMessages(session, run.id)
+                    : [];
 
-                for (const channelMessage of channelMessages) {
+                for (const channelMessage of incomingMessages) {
                     const element = <div className="pl-[10%] relative">
                         <UserMessage>{channelMessage.text}</UserMessage>
                     </div>
 
-                    const commentsAndScores: CommentsThreadData | undefined = run && {
-                        target: { sessionId: session.id, runId: run.id, channelMessageId: channelMessage.id },
+                    const commentsAndScores: CommentsThreadData | undefined = {
+                        target: { sessionId: session.id, channelMessageId: channelMessage.id },
                         comments: props.comments.filter((c) => c.channelMessageId === channelMessage.id),
                     }
 
@@ -476,41 +515,25 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
     })
 
 
-    /**
-     * TODO: UNASSIGNED CHANNEL MESSAGES
-     */
+    // Pending channel messages: incoming messages not yet consumed by any run
+    if (session.channel.type !== 'api') {
+        const pendingMessages = getIncomingChannelMessages(session);
 
-    // // Find incoming channel messages not yet consumed by any run
-    // const allCm = session.channelMessages ?? [];
+        pendingMessages.forEach((channelMessage) => {
+            const element = <div className="pl-[10%] relative">
+                <UserMessage>{channelMessage.text}</UserMessage>
+            </div>
 
-
-    // console.log('session', session);
-    // return <div>dupa</div>
-
-    
-    // const lastRefId = [...session.runs].reverse().find(r => r.lastIncomingChannelMessageId)?.lastIncomingChannelMessageId;
-    // const lastRefIdx = lastRefId ? allCm.findIndex(m => m.id === lastRefId) : -1;
-    // const pendingChannelMessages = allCm.slice(lastRefIdx + 1).filter(cm => cm.direction === 'incoming');
-    // pendingChannelMessages.forEach((channelMessage) => {
-
-    //     const element = <div className="pl-[10%] relative">
-    //         <UserMessage>{channelMessage.text}</UserMessage>
-    //     </div>
-
-    //     let commentsAndScores: CommentsThreadData | undefined = {
-    //         target: { sessionId: session.id, channelMessageId: channelMessage.id },
-    //         comments: props.comments.filter((c) => c.channelMessageId === channelMessage.id),
-    //     };
-
-    //     wallItems.push({
-    //         id: channelMessage.id,
-    //         element, // edge case -> completed run -> no output parts.
-    //         commentsAndScores,
-    //         // run,
-    //         // showRunFooter,
-    //         // messageId: message.id,
-    //     })
-    // });
+            wallItems.push({
+                id: channelMessage.id,
+                element,
+                commentsAndScores: {
+                    target: { sessionId: session.id, channelMessageId: channelMessage.id },
+                    comments: props.comments.filter((c) => c.channelMessageId === channelMessage.id),
+                },
+            })
+        });
+    }
 
     const cancelRun = async () => {
         console.log('cancelling run');
