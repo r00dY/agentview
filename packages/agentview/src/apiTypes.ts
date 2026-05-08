@@ -198,7 +198,9 @@ export type RunBase = z.infer<typeof RunBaseSchema>
 
 export const StandardRunSchema = RunBaseSchema.extend({
   sessionItems: z.array(SessionItemSchema),
-  channelMessages: z.array(ChannelMessageSchema),
+  firstIncomingChannelMessageId: z.string().nullable(),
+  lastIncomingChannelMessageId: z.string().nullable(),
+  outgoingChannelMessageId: z.string().nullable(),
 });
 
 // Auto-fetch run creation: just send the input
@@ -262,6 +264,7 @@ export type SessionBase = z.infer<typeof SessionBaseSchema>
 export const StandardSessionSchema = SessionBaseSchema.extend({
   runs: z.array(StandardRunSchema),
   state: z.any().nullable().optional(),
+  channelMessages: z.array(ChannelMessageSchema).optional(),
 })
 
 export type StandardSession = z.infer<typeof StandardSessionSchema>

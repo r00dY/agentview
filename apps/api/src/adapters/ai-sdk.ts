@@ -1,4 +1,4 @@
-import type { SessionItem, StandardSession, UIMessage } from 'agentview/apiTypes';
+import type { ChannelMessage, SessionItem, StandardRun, StandardSession, UIMessage } from 'agentview/apiTypes';
 import { isRunFinished } from '../runs';
 import { getSessionStatusFields } from '../sessions';
 import { type Adapter } from './adapters';
@@ -23,8 +23,22 @@ export const aiSDKAdapter = {
     }
 } satisfies Adapter;
 
+function getRunIncomingMessages(allMessages: ChannelMessage[], run: StandardRun): ChannelMessage[] {
+    if (!run.firstIncomingChannelMessageId || !run.lastIncomingChannelMessageId) return [];
+    const first = allMessages.find(m => m.id === run.firstIncomingChannelMessageId);
+    const last = allMessages.find(m => m.id === run.lastIncomingChannelMessageId);
+    if (!first || !last) return [];
+    // Filter by createdAt range (handles out-of-order dates)
+    return allMessages.filter(m =>
+        m.direction === 'incoming' &&
+        m.createdAt >= first.createdAt &&
+        m.createdAt <= last.createdAt
+    );
+}
+
 function sessionToUIMessages(session: StandardSession): UIMessage[] {
     const messages: UIMessage[] = [];
+    const allChannelMessages = session.channelMessages ?? [];
 
     for (const run of session.runs) {
         if (run.agent?.adapter !== "ai-sdk") {
@@ -35,17 +49,18 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
 
         const [inputItem, ...outputParts] = sessionItems;
 
+        const incomingMessages = session.channel.type === 'api'
+            ? undefined
+            : getRunIncomingMessages(allChannelMessages, run);
+
         messages.push({
             ...inputItem.content,
             metadata: {
                 ...inputItem.content.metadata,
                 _agentview: {
-                    channelMessages: session.channel.type === 'api' ? undefined : run.channelMessages.filter(cm => cm.direction === 'incoming'),
+                    channelMessages: incomingMessages,
                 }
             }
-            // _run: runBase,
-            // _item: getItemBase(inputItem),
-            // _channelMessages: run.channelMessages.filter(cm => cm.direction === 'incoming'),
         });
 
         if (!isRunFinished(run)) {
@@ -61,13 +76,16 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
             throw new Error("[sessionToUIMessages] Assistant message ID is required");
         }
 
+        const outgoingMessage = run.outgoingChannelMessageId
+            ? allChannelMessages.find(m => m.id === run.outgoingChannelMessageId)
+            : undefined;
+
         messages.push({
             id: assistantMessageId,
             metadata: {
                 ...assistantMessageMetadata,
                 _agentview: {
-                    // ...assistantMessageMetadata?._agentview,
-                    channelMessage: run.channelMessages.find(cm => cm.direction === 'outgoing'),
+                    channelMessage: outgoingMessage,
                     id: run.id,
                     status: run.status,
                     failReason: run.failReason,
@@ -80,11 +98,7 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
             role: 'assistant',
             parts: outputParts.map(part => ({
                 ...part.content,
-                // _item: getItemBase(part),
             })),
-            // // @ts-ignore
-            // _run: runBase,
-            // _channelMessage: run.channelMessages.find(cm => cm.direction === 'outgoing'),
         })
     }
 

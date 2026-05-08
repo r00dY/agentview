@@ -475,29 +475,42 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         }
     })
 
-    const unassignedChannelMessages = session.unassignedChannelMessages ?? [];
-    unassignedChannelMessages.forEach((channelMessage) => {
 
-        const element = <div className="pl-[10%] relative">
-            <UserMessage>{channelMessage.text}</UserMessage>
-        </div>
+    /**
+     * TODO: UNASSIGNED CHANNEL MESSAGES
+     */
 
-        let commentsAndScores: CommentsThreadData | undefined = {
-            target: { sessionId: session.id, channelMessageId: channelMessage.id },
-            comments: props.comments.filter((c) => c.channelMessageId === channelMessage.id),
-        };
-
-        wallItems.push({
-            id: channelMessage.id,
-            element, // edge case -> completed run -> no output parts.
-            commentsAndScores,
-            // run,
-            // showRunFooter,
-            // messageId: message.id,
-        })
+    // // Find incoming channel messages not yet consumed by any run
+    // const allCm = session.channelMessages ?? [];
 
 
-    });
+    // console.log('session', session);
+    // return <div>dupa</div>
+
+    
+    // const lastRefId = [...session.runs].reverse().find(r => r.lastIncomingChannelMessageId)?.lastIncomingChannelMessageId;
+    // const lastRefIdx = lastRefId ? allCm.findIndex(m => m.id === lastRefId) : -1;
+    // const pendingChannelMessages = allCm.slice(lastRefIdx + 1).filter(cm => cm.direction === 'incoming');
+    // pendingChannelMessages.forEach((channelMessage) => {
+
+    //     const element = <div className="pl-[10%] relative">
+    //         <UserMessage>{channelMessage.text}</UserMessage>
+    //     </div>
+
+    //     let commentsAndScores: CommentsThreadData | undefined = {
+    //         target: { sessionId: session.id, channelMessageId: channelMessage.id },
+    //         comments: props.comments.filter((c) => c.channelMessageId === channelMessage.id),
+    //     };
+
+    //     wallItems.push({
+    //         id: channelMessage.id,
+    //         element, // edge case -> completed run -> no output parts.
+    //         commentsAndScores,
+    //         // run,
+    //         // showRunFooter,
+    //         // messageId: message.id,
+    //     })
+    // });
 
     const cancelRun = async () => {
         console.log('cancelling run');

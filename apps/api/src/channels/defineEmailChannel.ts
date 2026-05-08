@@ -1,4 +1,4 @@
-import { and, eq, inArray, not } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db__dangerous } from '../db';
 import { log } from '../logger';
 import { channelMessages, channelThreads } from '../schemas/schema';
@@ -106,11 +106,11 @@ function buildSendMessageWrapper(
   emailSendFn: EmailSendFn,
 ): SendMessageFn {
   return async ({ channelThread, channel, message }) => {
-    // Find the last message in the same run, excluding the outgoing message itself
+    // Find the last incoming message in the same channel thread
     const lastMessage = await db__dangerous.query.channelMessages.findFirst({
       where: and(
-        eq(channelMessages.runId, message.runId!),
-        not(eq(channelMessages.id, message.id)),
+        eq(channelMessages.channelThreadId, message.channelThreadId),
+        eq(channelMessages.direction, 'incoming'),
       ),
       orderBy: (cm, { desc }) => [desc(cm.date)],
     });

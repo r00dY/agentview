@@ -22,19 +22,6 @@ The API exposed by backend is called AgentView API.
 
 You can clear entire system state with `pnpm run db:clear`. If you need to do it -> no worries, just do it.
 
-### Seeding users after clearing db, setting up API Key
-
-You can run `pnpm run seed-users` to generate example users (it's done directly via AgentView API). This script creates 3 users:
-- admin@acme.com (admin)
-- bob@acme.com (user)
-- alice@acme.com (user)
-
-It also generates api key for admin@acme.com user. The script saves api key to `.env` file. Later the tests in `api/tests` run using this API Key.
-
-If you need different setup of users, you can look at `seed-users` script, build your own and run it.
-
-Seeding is *not* indempotent! Always clear db before running it.
-
 ### Migrations
 
 AgentView uses Drizzle. To build a new migration just run `npx drizzle-kit generate` in `apps/api`.
@@ -44,9 +31,13 @@ Important: migrations are applied automatically when you run HTTP server, so in 
 
 You can use API directly, but it's much easier to use SDKs. API has 2 parts:
 - built by us: the SDK for our endpoints is in `packages/agentview`. It's heavily used in `apps/tests` and in example projects.
-- authentication from "better-auth" library. In this case you can use "better-auth" SDK. For example it's used in `apps/tests` in `seed-users` script.
+- authentication from "better-auth" library. In this case you can use "better-auth" SDK.
 
 When you build new backend features try to write tests in `apps/tests` that have nice scenarios and run them to confirm whether everything works. Use SDK if possible (we want to prioritize dogfooding our own SDK).
+
+### Running tests
+
+Each test run in `apps/tests` creates new org, seeds users etc... so you don't have to do it. You can just run tests after clearing db and it's all gonna be fine.
 
 ## TypeScript SDK: `packages/agentview`
 

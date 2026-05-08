@@ -1,7 +1,7 @@
 import { AgentViewError } from "agentview";
 import type { ChannelMessage, ChannelRef, Environment, SessionBase, SessionsGetQueryParams, SessionsGetQueryParamsSchema, SessionsPaginatedResponse, SessionStatus, SessionUpdate, StandardSession, StandardSessionCreate } from "agentview/apiTypes";
 import { randomBytes } from "crypto";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type z from "zod";
 import { resolveAgentRef } from "./agentRefs";
 import { authorize } from "./authMiddleware";
@@ -136,6 +136,9 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
           manual: true,
           active: true,
           previousRunId: true,
+          firstIncomingChannelMessageId: true,
+          lastIncomingChannelMessageId: true,
+          outgoingChannelMessageId: true,
         },
         orderBy: (run, { asc }) => [asc(run.createdAt)],
         with: {
@@ -143,9 +146,6 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
           sessionItems: {
             orderBy: (sessionItem, { asc }) => [asc(sessionItem.sortOrder)],
             where: (sessionItem, { eq }) => eq(sessionItem.isState, false),
-          },
-          channelMessages: {
-            orderBy: (channelMessage, { asc }) => [asc(channelMessage.date)],
           },
         }
       }
@@ -158,20 +158,13 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
 
   const state = await fetchSessionState(tx, row.id);
 
-  // unassigned channel messages
-  let unassignedChannelMessages: ChannelMessage[] | undefined = undefined;
-  if (row.channelType !== 'api') {
-
-    unassignedChannelMessages = await tx.query.channelMessages.findMany({
-      where: and(
-        eq(channelMessages.channelThreadId, row.channelThreadId ?? ''),
-        eq(channelMessages.direction, 'incoming'),
-        isNull(channelMessages.runId),
-      ),
+  // channel messages at session level (all messages in the thread)
+  let sessionChannelMessages: ChannelMessage[] | undefined = undefined;
+  if (row.channelType !== 'api' && row.channelThreadId) {
+    sessionChannelMessages = await tx.query.channelMessages.findMany({
+      where: eq(channelMessages.channelThreadId, row.channelThreadId),
       orderBy: (channelMessage, { asc }) => [asc(channelMessage.date)],
     });
-
-    // row.channelMessages = row.channelMessages.filter(cm => cm.direction === 'incoming');
   }
 
 
@@ -244,7 +237,7 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
         }
       }),
     state: state ?? row.initialState ?? null,
-    unassignedChannelMessages
+    channelMessages: sessionChannelMessages,
   } as StandardSession;
 }
 

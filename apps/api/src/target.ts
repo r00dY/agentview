@@ -1,5 +1,5 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { channelMessages, runs, sessionItems } from "./schemas/schema";
+import { channelMessages, runs, sessions, sessionItems } from "./schemas/schema";
 import type { Transaction } from "./types";
 import { AgentViewError } from "agentview";
 import { type ChannelMessage, type SessionItem, type StandardRun, type StandardSession, type InputTarget } from "agentview/apiTypes";
@@ -24,7 +24,6 @@ export type ChannelMessageTarget = {
     type: 'channelMessage',
     ids: {
         sessionId: string;
-        runId: string;
         channelMessageId: string;
     }
 }
@@ -70,7 +69,7 @@ export function targetFilter(
         case 'channelMessage':
             return and(
                 eq(table.sessionId, target.ids.sessionId),
-                eq(table.runId, target.ids.runId),
+                isNull(table.runId),
                 isNull(table.sessionItemId),
                 eq(table.channelMessageId, target.ids.channelMessageId),
             );
@@ -155,34 +154,29 @@ export async function resolveTarget(tx: Transaction, target: InputTarget): Promi
     else if (typeof target.channelMessageId === 'string') {
         const channelMessage = await tx.query.channelMessages.findFirst({
             where: eq(channelMessages.id, target.channelMessageId),
-            with: {
-                run: true,
-            },
         });
 
         if (!channelMessage) {
             throw new AgentViewError("Channel message not found", 404);
         }
 
-        // if (!channelMessage.run) {
-        //     throw new AgentViewError("Channel message has no run id", 400);
-        // }
+        // Find session via channelThread
+        const session = await tx.query.sessions.findFirst({
+            where: eq(sessions.channelThreadId, channelMessage.channelThreadId),
+        });
 
-        if (target.sessionId && channelMessage.run.sessionId !== target.sessionId) {
-            throw new AgentViewError("Session item does not belong to the session", 400);
+        if (!session) {
+            throw new AgentViewError("Session not found for channel message", 404);
         }
 
-        if (target.runId && channelMessage.run.id !== target.runId) {
-            throw new AgentViewError("Session item does not belong to the run", 400);
+        if (target.sessionId && session.id !== target.sessionId) {
+            throw new AgentViewError("Channel message does not belong to the session", 400);
         }
-
-        const { ids: { sessionId } } = await resolveTarget(tx, { runId: channelMessage.runId ?? undefined });
 
         return {
             type: 'channelMessage',
             ids: {
-                sessionId,
-                runId: channelMessage.run.id,
+                sessionId: session.id,
                 channelMessageId: channelMessage.id,
             }
         };
@@ -220,7 +214,7 @@ export async function resolveTarget(tx: Transaction, target: InputTarget): Promi
     }
 }
 
-// ids 
+// ids
 
 export type SessionTargetWithObjects = SessionTarget & {
     session: StandardSession;
@@ -233,7 +227,6 @@ export type RunTargetWithObjects = RunTarget & {
 
 export type ChannelMessageTargetWithObjects = ChannelMessageTarget & {
     session: StandardSession;
-    run: StandardRun;
     channelMessage: ChannelMessage;
 }
 
@@ -246,7 +239,7 @@ export type SessionItemTargetWithObjects = SessionItemTarget & {
 export type TargetWithObjects = SessionTargetWithObjects | RunTargetWithObjects | ChannelMessageTargetWithObjects | SessionItemTargetWithObjects;
 
 export async function resolveTargetWithObjects(tx: Transaction, inputTarget: InputTarget): Promise<TargetWithObjects> {
-    const target = await resolveTarget(tx, inputTarget); 
+    const target = await resolveTarget(tx, inputTarget);
     const session = await fetchSession(tx, target.ids.sessionId);
 
     if (!session) {
@@ -260,30 +253,28 @@ export async function resolveTargetWithObjects(tx: Transaction, inputTarget: Inp
         };
     }
 
-    const run = session.runs.find(r => r.id === target.ids.runId);
-    if (!run) {
-        throw new AgentViewError("Run not found", 404);
-    }
-
-
-    if (target.type === 'run') {
-        return {
-            ...target,
-            session,
-            run,
-        };
-    }
-
     if (target.type === 'channelMessage') {
-        const channelMessage = run.channelMessages.find(c => c.id === target.ids.channelMessageId);
+        const channelMessage = session.channelMessages?.find(c => c.id === target.ids.channelMessageId);
         if (!channelMessage) {
             throw new AgentViewError("Channel message not found", 404);
         }
         return {
             ...target,
             session,
-            run,
             channelMessage,
+        };
+    }
+
+    const run = session.runs.find(r => r.id === (target as RunTarget | SessionItemTarget).ids.runId);
+    if (!run) {
+        throw new AgentViewError("Run not found", 404);
+    }
+
+    if (target.type === 'run') {
+        return {
+            ...target,
+            session,
+            run,
         };
     }
 

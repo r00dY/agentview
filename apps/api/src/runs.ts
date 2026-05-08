@@ -3,7 +3,7 @@ import type { Environment, ManualRunCreate, ManualRunUpdate, RunUpdate } from 'a
 import type { BaseAgentConfig, BaseRunConfig } from 'agentview/baseConfigTypes';
 import { findItemConfig, requireAgentConfigBySession, requireRunConfig, serializeRunConfig } from 'agentview/baseConfigUtils';
 import { getLastRun } from 'agentview/sessionUtils';
-import { and, eq, inArray, isNull, not, or, sql } from 'drizzle-orm';
+import { and, eq, gt, inArray, not, sql } from 'drizzle-orm';
 import { log } from './logger';
 import { getAdapter } from './adapters/adapters';
 import { resolveAgentRef } from './agentRefs';
@@ -83,15 +83,18 @@ async function handleChannelReply(
       throw new AgentViewError("No channel reply for a session that has a channel thread.", 400);
     }
 
-    await tx.insert(channelMessages).values({
+    const [insertedMsg] = await tx.insert(channelMessages).values({
       organizationId,
       channelThreadId: sessionRow.channelThreadId,
       direction: 'outgoing',
       status: 'pending',
       date: new Date().toISOString(),
       text: channelReply.text,
-      runId,
-    });
+    }).returning();
+
+    await tx.update(runs).set({
+      outgoingChannelMessageId: insertedMsg.id,
+    }).where(eq(runs.id, runId));
   }
   // else if (!sessionRow.channelThreadId && channelReply) {
   //   throw new AgentViewError("You can't set channel reply for a session that doesn't have a channel thread.", 400);
@@ -828,13 +831,6 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
       expiresAt: null,
     }).where(eq(runs.id, runId));
 
-    // Channel messages must be disconnected from the run.
-    if (reason.status === "discarded") {
-      await tx.update(channelMessages).set({
-        runId: null
-      }).where(eq(channelMessages.runId, runId));
-    }
-
     // this is important, we must send the last run patch event to the stream
     tx.afterCommit(async () => {
       sendRunTerminationSignal(runId, reason, { graceful: false }) // super important
@@ -895,10 +891,10 @@ export async function createAutoRun2(
      * PROCESS INPUT
      * - differently for API and non-API channels
      */
-    const { input, consumedChannelMessageIds } = await (async () => {
+    const { input, consumedMessages } = await (async () => {
       // normal input from API
       if (input_ && session.channel.type === 'api') {
-        return { input: input_, consumedChannelMessageIds: [] as string[] }
+        return { input: input_, consumedMessages: [] as { id: string, createdAt: string }[] }
       }
       // input from non-api channel -> based on channel messags
       else if (!input_ && session.channel.type !== 'api') {
@@ -914,14 +910,28 @@ export async function createAutoRun2(
           throw new AgentViewError("Session has no channel thread.", 422);
         }
 
-        // we take either incoming messages without run_id or messages from the last run that was failed/cancelled/discarded (not completed)
+        // Find incoming messages after the last completed run's last incoming message.
+        // We use createdAt (insertion time) for the cutoff, not date, because messages
+        // can arrive out of order (earlier date arriving after a later-dated message).
+        const lastCompletedRun = await tx.query.runs.findFirst({
+          where: and(eq(runs.sessionId, sessionId), eq(runs.status, 'completed')),
+          orderBy: (r, { desc }) => [desc(r.createdAt)],
+        });
+
+        let afterCreatedAt: string | undefined;
+        if (lastCompletedRun?.lastIncomingChannelMessageId) {
+          const cutoffMsg = await tx.query.channelMessages.findFirst({
+            where: eq(channelMessages.id, lastCompletedRun.lastIncomingChannelMessageId),
+            columns: { createdAt: true },
+          });
+          afterCreatedAt = cutoffMsg?.createdAt;
+        }
+
         const incomingMessages = await tx.query.channelMessages.findMany({
           where: and(
             eq(channelMessages.channelThreadId, channelThreadId),
-            or(
-              isNull(channelMessages.runId),
-              (previousRun && previousRun.status !== 'completed') ? eq(channelMessages.runId, previousRun.id) : undefined,
-            )
+            eq(channelMessages.direction, 'incoming'),
+            afterCreatedAt ? gt(channelMessages.createdAt, afterCreatedAt) : undefined,
           ),
           orderBy: (cm, { asc }) => [asc(cm.date)],
         });
@@ -938,7 +948,7 @@ export async function createAutoRun2(
         const adapter = getAdapter(agentConfig.adapter);
         return {
           input: adapter.createDefaultInputForChannelMessages(incomingMessages, newRunId),
-          consumedChannelMessageIds: incomingMessages.map(m => m.id),
+          consumedMessages: incomingMessages.map(m => ({ id: m.id, createdAt: m.createdAt })),
         }
       }
       else {
@@ -965,11 +975,13 @@ export async function createAutoRun2(
       active: false // We treat new run freshly created as NEW BRANCH that is not activated YET. It will activate itself once first response is received.
     });
 
-    if (consumedChannelMessageIds.length > 0) {
-      await tx.update(channelMessages).set({
-        runId: newRunId,
-        updatedAt: new Date().toISOString(),
-      }).where(inArray(channelMessages.id, consumedChannelMessageIds));
+    if (consumedMessages.length > 0) {
+      // Sort by createdAt to get first/last by insertion order (handles out-of-order dates)
+      const byCreatedAt = [...consumedMessages].sort((a, b) => a.createdAt < b.createdAt ? -1 : 1);
+      await tx.update(runs).set({
+        firstIncomingChannelMessageId: byCreatedAt[0].id,
+        lastIncomingChannelMessageId: byCreatedAt[byCreatedAt.length - 1].id,
+      }).where(eq(runs.id, newRunId));
     }
 
     const agentUrl = agentConfig.url;

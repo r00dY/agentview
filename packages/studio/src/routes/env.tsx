@@ -33,6 +33,13 @@ function Component() {
               {environment.user !== null && `dev (${environment.user.email})`}
             </PropertyListTextValue>
           </PropertyListItem>
+          <PropertyListItem>  
+
+          <PropertyListTitle>Tunnel URL</PropertyListTitle>
+            <PropertyListTextValue>
+              {environment.tunnelUrl}
+            </PropertyListTextValue>
+          </PropertyListItem>
 
         </PropertyList>
         

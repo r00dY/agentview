@@ -77,6 +77,10 @@ export const runs = pgTable("runs", {
 
   previousRunId: uuid("previous_run_id").references((): AnyPgColumn => runs.id, { onDelete: 'set null' }),
   active: boolean("active").notNull(), // active runs are 'the main branch'
+
+  firstIncomingChannelMessageId: uuid("first_incoming_channel_message_id").references((): AnyPgColumn => channelMessages.id, { onDelete: 'set null' }),
+  lastIncomingChannelMessageId: uuid("last_incoming_channel_message_id").references((): AnyPgColumn => channelMessages.id, { onDelete: 'set null' }),
+  outgoingChannelMessageId: uuid("outgoing_channel_message_id").references((): AnyPgColumn => channelMessages.id, { onDelete: 'set null' }),
 }, (table) => [
   index('runs_expires_at_status_idx').on(table.expiresAt, table.status),
   index('runs_session_id_created_at_idx').on(table.sessionId, table.createdAt),
@@ -138,7 +142,7 @@ export const commentMessages = pgTable('comment_messages', {
     (session_id IS NOT NULL AND run_id IS NULL AND session_item_id IS NULL AND channel_message_id IS NULL) OR
     (session_id IS NOT NULL AND run_id IS NOT NULL AND session_item_id IS NULL AND channel_message_id IS NULL) OR
     (session_id IS NOT NULL AND run_id IS NOT NULL AND session_item_id IS NOT NULL AND channel_message_id IS NULL) OR
-    (session_id IS NOT NULL AND run_id IS NOT NULL AND session_item_id IS NULL AND channel_message_id IS NOT NULL)
+    (session_id IS NOT NULL AND run_id IS NULL AND session_item_id IS NULL AND channel_message_id IS NOT NULL)
   )`),
   createTenantPolicy('comment_messages'),
 ]);
@@ -187,7 +191,7 @@ export const scores = pgTable('scores', {
     (session_id IS NOT NULL AND run_id IS NULL AND session_item_id IS NULL AND channel_message_id IS NULL) OR
     (session_id IS NOT NULL AND run_id IS NOT NULL AND session_item_id IS NULL AND channel_message_id IS NULL) OR
     (session_id IS NOT NULL AND run_id IS NOT NULL AND session_item_id IS NOT NULL AND channel_message_id IS NULL) OR
-    (session_id IS NOT NULL AND run_id IS NOT NULL AND session_item_id IS NULL AND channel_message_id IS NOT NULL)
+    (session_id IS NOT NULL AND run_id IS NULL AND session_item_id IS NULL AND channel_message_id IS NOT NULL)
   )`),
 
   unique().on(table.createdBy, table.sessionId, table.runId, table.sessionItemId, table.channelMessageId, table.name).nullsNotDistinct(),
@@ -239,7 +243,7 @@ export const inboxItems = pgTable('inbox_items', {
     (session_id IS NOT NULL AND run_id IS NULL AND session_item_id IS NULL AND channel_message_id IS NULL) OR
     (session_id IS NOT NULL AND run_id IS NOT NULL AND session_item_id IS NULL AND channel_message_id IS NULL) OR
     (session_id IS NOT NULL AND run_id IS NOT NULL AND session_item_id IS NOT NULL AND channel_message_id IS NULL) OR
-    (session_id IS NOT NULL AND run_id IS NOT NULL AND session_item_id IS NULL AND channel_message_id IS NOT NULL)
+    (session_id IS NOT NULL AND run_id IS NULL AND session_item_id IS NULL AND channel_message_id IS NOT NULL)
   )`),
   createTenantPolicy('inbox_items'),
 ]);
@@ -348,9 +352,23 @@ export const runRelations = relations(runs, ({ one, many }) => ({
     references: [agentRefs.id],
   }),
   sessionItems: many(sessionItems),
-  channelMessages: many(channelMessages),
   commentMessages: many(commentMessages),
   scores: many(scores),
+  firstIncomingChannelMessage: one(channelMessages, {
+    fields: [runs.firstIncomingChannelMessageId],
+    references: [channelMessages.id],
+    relationName: 'firstIncomingChannelMessage',
+  }),
+  lastIncomingChannelMessage: one(channelMessages, {
+    fields: [runs.lastIncomingChannelMessageId],
+    references: [channelMessages.id],
+    relationName: 'lastIncomingChannelMessage',
+  }),
+  outgoingChannelMessage: one(channelMessages, {
+    fields: [runs.outgoingChannelMessageId],
+    references: [channelMessages.id],
+    relationName: 'outgoingChannelMessage',
+  }),
 }));
 
 export const sessionItemsRelations = relations(sessionItems, ({ one, many }) => ({
@@ -535,7 +553,6 @@ export const channelMessages = pgTable('channel_messages', {
   text: text('text'),
   attachments: jsonb('attachments'),
   providerData: jsonb('provider_data'),
-  runId: uuid('run_id').references(() => runs.id, { onDelete: 'set null' }),
   date: timestamp('date', { withTimezone: true, mode: 'string' }).notNull(),
   status: varchar('status', { length: 32 }).notNull().default('received'),
   failReason: jsonb('fail_reason'),
@@ -544,7 +561,6 @@ export const channelMessages = pgTable('channel_messages', {
 }, (table) => [
   uniqueIndex('channel_messages_thread_source_unique').on(table.channelThreadId, table.sourceId),
   index('channel_messages_thread_id_idx').on(table.channelThreadId),
-  index('channel_messages_run_id_idx').on(table.runId),
   index('channel_messages_status_direction_idx').on(table.status, table.direction),
   index('channel_messages_date_idx').on(table.date),
   createTenantPolicy('channel_messages'),
@@ -571,10 +587,6 @@ export const channelMessagesRelations = relations(channelMessages, ({ one, many 
   channelThread: one(channelThreads, {
     fields: [channelMessages.channelThreadId],
     references: [channelThreads.id],
-  }),
-  run: one(runs, {
-    fields: [channelMessages.runId],
-    references: [runs.id],
   }),
   commentMessages: many(commentMessages),
 }));
