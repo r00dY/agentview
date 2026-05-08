@@ -1,133 +1,69 @@
-import { db__dangerous } from '../db';
+import type { PgBoss } from 'pg-boss';
 import { withOrg } from '../withOrg';
-import { webhookJobs, environments } from '../schemas/schema';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { environments } from '../schemas/schema';
+import { eq } from 'drizzle-orm';
 import { generateSessionSummary } from '../summaries';
 import { log, setContext } from '../logger';
-import { createWorker } from './utils';
 
-// Webhook job retry delays: 5s, 30s, 2min
-const RETRY_DELAYS = [5_000, 30_000, 120_000];
+export const WEBHOOK_QUEUE = 'webhook';
 
-type WebhookJob = typeof webhookJobs.$inferSelect;
+export type WebhookJobData = {
+  organizationId: string;
+  environmentId: string;
+  eventType: string;
+  payload: any;
+  sessionId?: string;
+};
 
-export const webhookWorker = createWorker<WebhookJob>({
-  name: 'webhooks',
-  pollIntervalMs: 3000,
-  maxConcurrency: 10,
-  async claim(limit) {
-    const now = new Date().toISOString();
-    return db__dangerous
-      .update(webhookJobs)
-      .set({ status: 'processing', updatedAt: now })
-      .where(
-        inArray(
-          webhookJobs.id,
-          sql`(SELECT ${webhookJobs.id} FROM ${webhookJobs} WHERE ${webhookJobs.status} = 'pending' AND (${webhookJobs.nextAttemptAt} IS NULL OR ${webhookJobs.nextAttemptAt} < ${now}) LIMIT ${sql.raw(String(limit))} FOR UPDATE SKIP LOCKED)`
-        )
-      )
-      .returning();
-  },
-  async process(job) {
-    await processWebhookJob(job);
-  },
-});
+export function registerWebhookWorker(boss: PgBoss) {
+  boss.work<WebhookJobData>(
+    WEBHOOK_QUEUE,
+    { localConcurrency: 10 },
+    async (jobs) => {
+      for (const job of jobs) {
+        const { organizationId, environmentId, eventType, payload } = job.data;
+        setContext({ pgBossJobId: job.id, organizationId });
 
-async function processWebhookJob(job: WebhookJob) {
-  setContext({ webhookJobId: job.id, organizationId: job.organizationId });
-  const now = new Date();
+        const environment = await withOrg(organizationId, async (tx) => {
+          return tx.query.environments.findFirst({
+            where: eq(environments.id, environmentId),
+          });
+        });
 
-  try {
-    const environment = await withOrg(job.organizationId, async (tx) => {
-      return tx.query.environments.findFirst({
-        where: eq(environments.id, job.environmentId),
-      });
-    });
+        if (!environment) {
+          throw new Error(`Environment ${environmentId} not found`);
+        }
 
-    if (!environment) {
-      throw new Error(`Environment ${job.environmentId} not found`);
-    }
+        const config = environment.config as any;
+        const webhookUrl = config?.webhookUrl;
 
-    const config = environment.config as any;
-    const webhookUrl = config?.webhookUrl;
+        if (eventType === 'session.generate_summary') {
+          if (config?.__internal?.disableSummaries) {
+            throw new Error('Summary generation is disabled');
+          }
+          await generateSessionSummary((payload as { session_id: string }).session_id, organizationId);
+        } else {
+          if (!webhookUrl) {
+            throw new Error('Webhook URL is not configured');
+          }
 
-    // summary generation
-    if (job.eventType === 'session.generate_summary') {
-      const payload = job.payload as { session_id: string };
-      const disableSummaries = config?.__internal?.disableSummaries;
+          const response = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              event: eventType,
+              payload,
+              job_id: job.id,
+            }),
+          });
 
-      if (disableSummaries) {
-        throw new Error(`Summary generation is disabled`);
+          if (!response.ok) {
+            throw new Error(`Webhook returned ${response.status}: ${await response.text()}`);
+          }
+
+          log.info('webhook job completed successfully');
+        }
       }
-
-      await generateSessionSummary(payload.session_id, job.organizationId);
     }
-    // webhook
-    else {
-      if (!webhookUrl) {
-        throw new Error(`Webhook URL is not configured`);
-      }
-
-      const response = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          event: job.eventType,
-          payload: job.payload,
-          job_id: job.id,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Webhook returned ${response.status}: ${await response.text()}`);
-      }
-
-      log.info('webhook job completed successfully');
-    }
-
-    // Success - mark as completed
-    await withOrg(job.organizationId, async (tx) => {
-      await tx.update(webhookJobs)
-        .set({ status: 'completed', updatedAt: new Date().toISOString() })
-        .where(eq(webhookJobs.id, job.id));
-    });
-
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const newAttempts = job.attempts + 1;
-
-    if (newAttempts >= job.maxAttempts) {
-      // Failed permanently
-      await withOrg(job.organizationId, async (tx) => {
-        await tx.update(webhookJobs)
-          .set({
-            status: 'failed',
-            attempts: newAttempts,
-            lastError: errorMessage,
-            updatedAt: new Date().toISOString()
-          })
-          .where(eq(webhookJobs.id, job.id));
-      });
-
-      log.error({ attempts: newAttempts }, `webhook job failed permanently: ${errorMessage}`);
-    } else {
-      // Schedule retry with backoff
-      const delay = RETRY_DELAYS[Math.min(newAttempts - 1, RETRY_DELAYS.length - 1)];
-      const nextAttemptAt = new Date(now.getTime() + delay).toISOString();
-
-      await withOrg(job.organizationId, async (tx) => {
-        await tx.update(webhookJobs)
-          .set({
-            status: 'pending',
-            attempts: newAttempts,
-            nextAttemptAt,
-            lastError: errorMessage,
-            updatedAt: now.toISOString()
-          })
-          .where(eq(webhookJobs.id, job.id));
-      });
-
-      log.warn({ attempts: newAttempts, maxAttempts: job.maxAttempts, nextAttemptAt }, `webhook job failed, scheduling retry`);
-    }
-  }
+  );
 }

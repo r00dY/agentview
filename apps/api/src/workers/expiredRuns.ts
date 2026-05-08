@@ -8,8 +8,14 @@ import { withOrg } from '../withOrg';
 type Run = typeof runs.$inferSelect;
 
 const TERMINATION_DELAY_MS = 5000;
-const TERMINATION_REASON : RunTerminationReason = { status: 'failed', failReason: { message: 'Timeout' } };
+const TERMINATION_REASON: RunTerminationReason = { status: 'failed', failReason: { message: 'Timeout' } };
 
+/**
+ * Expired runs are a periodic scan, not a job queue.
+ * Each run has an `expiresAt` that gets extended on every event,
+ * so scheduling delayed jobs would create excessive noise.
+ * A simple poll is the right tool here.
+ */
 export const expiredRunsWorker = createWorker<Run>({
   name: 'expired-runs',
   pollIntervalMs: 1000,
@@ -39,4 +45,3 @@ export const expiredRunsWorker = createWorker<Run>({
     });
   },
 });
-

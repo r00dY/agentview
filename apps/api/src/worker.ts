@@ -1,23 +1,27 @@
 import { initDb } from './initDb';
+import { startBoss } from './pgboss';
+import { registerWebhookWorker } from './workers/webhooks';
+import { registerOutgoingChannelMessageWorker } from './workers/outgoingChannelMessages';
 import { expiredRunsWorker } from './workers/expiredRuns';
-import { webhookWorker } from './workers/webhooks';
-import { outgoingChannelMessageWorker } from './workers/outgoingChannelMessages';
 import { channelApps } from './channels/registry';
 
 await initDb();
+const boss = await startBoss();
 
 /**
- * Worker processes run without user context and need to access data across all organizations.
- *
- * Pattern:
- * - Initial queries to find work (expired runs, pending jobs) use db__dangerous for cross-org scans
- * - Once a specific record is found, use withOrg(record.organizationId) for all subsequent operations
- *   to enforce RLS as defense-in-depth
+ * pg-boss queues
  */
+registerWebhookWorker(boss);
+registerOutgoingChannelMessageWorker(boss);
 
+/**
+ * Periodic scan — not a queue pattern (expiresAt changes on every event).
+ */
 expiredRunsWorker.start();
-webhookWorker.start();
-outgoingChannelMessageWorker.start();
+
+/**
+ * Channel-specific workers (periodic maintenance tasks like Gmail watch renewal).
+ */
 for (const channel of channelApps) {
   for (const worker of channel.workers) {
     worker.start();

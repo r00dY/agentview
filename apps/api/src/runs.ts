@@ -13,10 +13,14 @@ import { requireUUID } from './isUUID';
 import { parseMetadata } from './parseMetadata';
 import { publishEvent } from './redisPubSub';
 import { publishRunStreamEvent } from './runStream';
-import { agentRefs, channelMessages, runs, sessionItems, sessions, webhookJobs } from './schemas/schema';
+import { agentRefs, channelMessages, runs, sessionItems, sessions } from './schemas/schema';
 import { activateSession, fetchSessionBase, requireSession, requireSessionBase } from './sessions';
 import type { Transaction } from './types';
 import { withTenant, type OrgTransaction, type TenantTransaction } from './withOrg';
+import { getBoss } from './pgboss';
+import { fromDrizzle } from 'pg-boss';
+import { WEBHOOK_QUEUE, type WebhookJobData } from './workers/webhooks';
+import { OUTGOING_CHANNEL_MESSAGE_QUEUE } from './workers/outgoingChannelMessages';
 import { standardToDefaultSession } from './standardToDefaultSession';
 import { isToolUIPart } from 'ai';
 
@@ -63,7 +67,7 @@ export function validateItems(runConfig: BaseRunConfig, previousRunItems: any[],
 }
 
 async function handleChannelReply(
-  tx: Transaction,
+  tx: OrgTransaction,
   runId: string,
   sessionId: string,
   organizationId: string,
@@ -95,6 +99,12 @@ async function handleChannelReply(
     await tx.update(runs).set({
       outgoingChannelMessageId: insertedMsg.id,
     }).where(eq(runs.id, runId));
+
+    await getBoss().send(
+      OUTGOING_CHANNEL_MESSAGE_QUEUE,
+      { messageId: insertedMsg.id, organizationId },
+      { db: fromDrizzle(tx, sql) },
+    );
   }
   // else if (!sessionRow.channelThreadId && channelReply) {
   //   throw new AgentViewError("You can't set channel reply for a session that doesn't have a channel thread.", 400);
@@ -282,28 +292,26 @@ async function createRunCore(
   const config = getConfigFromEnvironment(environment);
   const isFirstRun = previousRun === undefined;
   if (isFirstRun) {
+    const db = fromDrizzle(tx, sql);
+
     if (config.webhookUrl) {
-      await tx.insert(webhookJobs).values({
+      await getBoss().send(WEBHOOK_QUEUE, {
         organizationId: tx.organizationId,
+        environmentId: environment.id,
         eventType: 'session.on_first_run_created',
         payload: { session_id: sessionId },
         sessionId,
-        status: 'pending',
-        nextAttemptAt: new Date().toISOString(),
-        environmentId: environment.id,
-      });
+      } satisfies WebhookJobData, { db });
     }
 
     if (!config.__internal?.disableSummaries) {
-      await tx.insert(webhookJobs).values({
+      await getBoss().send(WEBHOOK_QUEUE, {
         organizationId: tx.organizationId,
+        environmentId: environment.id,
         eventType: 'session.generate_summary',
         payload: { session_id: sessionId },
         sessionId,
-        status: 'pending',
-        nextAttemptAt: new Date().toISOString(),
-        environmentId: environment.id,
-      });
+      } satisfies WebhookJobData, { db });
     }
   }
 

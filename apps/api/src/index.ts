@@ -52,6 +52,7 @@ import { getAllowedOrigin } from './getAllowedOrigin';
 import { body, response_data, response_error, response_no_content } from './hono_utils';
 import { isInboxItemUnread } from './inboxItems';
 import { initDb } from './initDb';
+import { startBoss } from './pgboss';
 import { requireValidInvitation } from './invitations';
 import { requireUUID } from './isUUID';
 import { applyRunPatch, createAutoRun2, createManualRun, DEFAULT_IDLE_TIME, fastApplyRunPatch, getRunInput, getRunInputContent, isRunFinished, requireRunBase, RunTerminationError, sendRunTerminationSignal, terminateRun, updateRun } from './runs';
@@ -71,6 +72,7 @@ import { standardToDefaultSession } from './standardToDefaultSession';
 
 
 await initDb();
+await startBoss();
 
 export const app = new OpenAPIHono({
   // custom error handler for zod validation errors

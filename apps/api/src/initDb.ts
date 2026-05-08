@@ -46,6 +46,11 @@ export async function initDb() {
         await db__dangerous.execute(sql`GRANT USAGE ON SCHEMA public TO ${sql.raw(`"${appUserRole}"`)}`);
         await db__dangerous.execute(sql`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${sql.raw(`"${appUserRole}"`)}`);
         await db__dangerous.execute(sql`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${sql.raw(`"${appUserRole}"`)}`);
+
+        // pg-boss schema — app_user needs to enqueue jobs within RLS transactions
+        await db__dangerous.execute(sql.raw(`GRANT USAGE ON SCHEMA pgboss TO "${appUserRole}"`));
+        await db__dangerous.execute(sql.raw(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA pgboss TO "${appUserRole}"`));
+
         log.info({ appUserRole }, 'created and granted privileges to app user');
       }
     } finally {
