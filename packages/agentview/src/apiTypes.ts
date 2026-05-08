@@ -256,7 +256,8 @@ export const SessionBaseSchema = z.object({
   space: SpaceSchema, // this is actually user.space, but allows to "think user-less"
   title: z.string().nullable(),
   agent: AgentRefSchema.nullable(),
-  active: z.boolean()
+  active: z.boolean(),
+  channelThreadId: z.string().nullable(),
 })
 
 export type SessionBase = z.infer<typeof SessionBaseSchema>

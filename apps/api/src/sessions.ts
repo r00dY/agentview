@@ -104,6 +104,7 @@ export async function fetchSessionBase(tx: Transaction, session_id: string): Pro
       adapter: row.agentRef.adapter,
     } : null,
     active: row.active,
+    channelThreadId: row.channelThreadId,
   } as SessionBase
 }
 
@@ -238,6 +239,7 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
       }),
     state: state ?? row.initialState ?? null,
     channelMessages: sessionChannelMessages,
+    channelThreadId: row.channelThreadId,
   } as StandardSession;
 }
 
@@ -392,6 +394,7 @@ function mapSessionRow(row: { sessions: typeof sessions.$inferSelect; end_users:
       adapter: row.agent_refs.adapter,
     } : null,
     active: row.sessions.active,
+    channelThreadId: row.sessions.channelThreadId,
     // agentRef: row.agent_refs ?? null,
     // agentRefs: row.sessions.agentRefs ?? []
   };

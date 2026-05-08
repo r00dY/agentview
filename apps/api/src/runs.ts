@@ -1100,10 +1100,7 @@ export async function createAutoRun2ForChannel(
     const agentConfig = requireAgentConfigBySession(config, session);
 
     // Find channel thread
-    const channelThreadId = (await tx.query.sessions.findFirst({
-      where: eq(sessions.id, sessionId),
-      columns: { channelThreadId: true },
-    }))?.channelThreadId;
+    const channelThreadId = session.channelThreadId;
 
     if (typeof channelThreadId !== 'string') {
       throw new AgentViewError("Session has no channel thread.", 422);
