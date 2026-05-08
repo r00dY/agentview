@@ -4,7 +4,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import type { ServicePrincipal } from 'src/authMiddleware';
 import { log } from '../logger';
 import { db__dangerous } from '../db';
-import { createAutoRun2, terminateRun } from '../runs';
+import { createAutoRun2ForChannel, terminateRun } from '../runs';
 import { channelMessages, channels, channelThreads, runs, sessions } from '../schemas/schema';
 import { activateSession, createSession, setAgentForSession } from '../sessions';
 import type { Transaction } from '../types';
@@ -415,7 +415,7 @@ export function channelProvider(type: string) {
         })
 
         // Start run
-        await createAutoRun2(principal, result.sessionId);
+        await createAutoRun2ForChannel(principal, result.sessionId);
       }
       catch (error) {
         log.warn({ sourceId: params.sourceId, err: error }, 'failed to create run from channel messages');

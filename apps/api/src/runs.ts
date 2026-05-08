@@ -852,156 +852,91 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
 
 
 
-export async function createAutoRun2(
-  principal: Principal,
+/**
+ * Creates an auto-run in the database within an existing transaction.
+ * Caller must hold the session lock.
+ */
+async function createAutoRunInTx(
+  tx: TenantTransaction,
   sessionId: string,
-  input_?: Record<string, any>,
-  previousRunId?: string | null,
-  signal?: AbortSignal
-): Promise<{ runId: string, response: Response, success: boolean }> {
+  input: Record<string, any>,
+  options: {
+    id?: string,
+    previousRunId?: string | null,
+    firstIncomingChannelMessageId?: string,
+    lastIncomingChannelMessageId?: string,
+  }
+) {
+  const session = await requireSessionBase(tx, sessionId);
+  authorize(tx.principal, { action: "end-user:update", user: session.user });
 
-  log.debug(`[${sessionId}] [createAutoRun2] start`);
+  const environment = await requireEnvironment(tx);
 
-  // 1. Prepare run creation (authorization, validation, etc)
-  const { runBase, standardSession, runConfig, agentUrl, tunnelUrl, isLocalEnv } = await withTenant(principal, async (tx) => {
-    await tx.acquireLock({ type: "edit_session", sessionId });
+  const isLocalEnv = environment.userId != null;
+  if (isLocalEnv && !environment.tunnelUrl) {
+    throw new AgentViewError(
+      "This call requires local dev server to be running. Run `npx agentview dev` to start it.",
+      400
+    );
+  }
 
-    const session = await requireSessionBase(tx, sessionId);
-    authorize(tx.principal, { action: "end-user:update", user: session.user });
+  const { previousRun, agentConfig, agentRefId } = await prepareRunCreation(tx, environment, sessionId, options.previousRunId);
 
-    const environment = await requireEnvironment(tx);
+  const newRunId = options.id ?? crypto.randomUUID();
+  const { runConfig, parsedInput, idleTimeout } = await processInput(agentConfig, input);
 
-    const isLocalEnv = environment.userId != null;
-    if (isLocalEnv && !environment.tunnelUrl) {
-      throw new AgentViewError(
-        "This call requires local dev server to be running. Run `npx agentview dev` to start it.",
-        400
-      );
-    }
-
-    if (session.channel.type !== 'api' && previousRunId !== undefined) {
-      throw new AgentViewError("You can provide 'previousRunId' only for api channels.", 500);
-    }
-
-    const { previousRun, agentConfig, agentRefId } = await prepareRunCreation(tx, environment, sessionId, previousRunId);
-    
-    const newRunId = crypto.randomUUID();
-
-    /**
-     * PROCESS INPUT
-     * - differently for API and non-API channels
-     */
-    const { input, consumedMessages } = await (async () => {
-      // normal input from API
-      if (input_ && session.channel.type === 'api') {
-        return { input: input_, consumedMessages: [] as { id: string, createdAt: string }[] }
-      }
-      // input from non-api channel -> based on channel messags
-      else if (!input_ && session.channel.type !== 'api') {
-
-        const channelThreadId = (await tx.query.sessions.findFirst({
-          where: eq(sessions.id, sessionId),
-          columns: {
-            channelThreadId: true,
-          },
-        }))?.channelThreadId;
-
-        if (typeof channelThreadId !== 'string') {
-          throw new AgentViewError("Session has no channel thread.", 422);
-        }
-
-        // Find incoming messages after the last completed run's last incoming message.
-        // We use createdAt (insertion time) for the cutoff, not date, because messages
-        // can arrive out of order (earlier date arriving after a later-dated message).
-        const lastCompletedRun = await tx.query.runs.findFirst({
-          where: and(eq(runs.sessionId, sessionId), eq(runs.status, 'completed')),
-          orderBy: (r, { desc }) => [desc(r.createdAt)],
-        });
-
-        let afterCreatedAt: string | undefined;
-        if (lastCompletedRun?.lastIncomingChannelMessageId) {
-          const cutoffMsg = await tx.query.channelMessages.findFirst({
-            where: eq(channelMessages.id, lastCompletedRun.lastIncomingChannelMessageId),
-            columns: { createdAt: true },
-          });
-          afterCreatedAt = cutoffMsg?.createdAt;
-        }
-
-        const incomingMessages = await tx.query.channelMessages.findMany({
-          where: and(
-            eq(channelMessages.channelThreadId, channelThreadId),
-            eq(channelMessages.direction, 'incoming'),
-            afterCreatedAt ? gt(channelMessages.createdAt, afterCreatedAt) : undefined,
-          ),
-          orderBy: (cm, { asc }) => [asc(cm.date)],
-        });
-
-        if (incomingMessages.length === 0) {
-          throw new AgentViewError("No incoming messages to create a run from.", 422);
-        }
-
-        log.info({ sessionId, count: incomingMessages.length }, 'incoming messages found');
-
-        /**
-         * Let's create a new run
-         */
-        const adapter = getAdapter(agentConfig.adapter);
-        return {
-          input: adapter.createDefaultInputForChannelMessages(incomingMessages, newRunId),
-          consumedMessages: incomingMessages.map(m => ({ id: m.id, createdAt: m.createdAt })),
-        }
-      }
-      else {
-        throw new AgentViewError("createAutoRun can be called only with input for api channels, or without input for non-api channels.", 500);
-      }
-    })();
-
-    const { runConfig, parsedInput, idleTimeout } = await processInput(agentConfig, input);
-  
-    const run = await createRunCore(tx, environment, sessionId, {
-      id: newRunId,
-      parsedInput,
-      parsedNonInputItems: [],
-      status: 'in_progress', // in_progress is okay, if we're using only ai-sdk. Bascially it's invisible in other source than /stream until response is finished. But it's visible internally as a proper run.
-      failReason: null,
-      expiresAt: new Date(Date.now() + idleTimeout).toISOString(),
-      finishedAt: null,
-      metadata: undefined,
-      agentRefId,
-      manual: false,
-      state: undefined,
-      runConfig,
-      previousRun,
-      active: false // We treat new run freshly created as NEW BRANCH that is not activated YET. It will activate itself once first response is received.
-    });
-
-    if (consumedMessages.length > 0) {
-      // Sort by createdAt to get first/last by insertion order (handles out-of-order dates)
-      const byCreatedAt = [...consumedMessages].sort((a, b) => a.createdAt < b.createdAt ? -1 : 1);
-      await tx.update(runs).set({
-        firstIncomingChannelMessageId: byCreatedAt[0].id,
-        lastIncomingChannelMessageId: byCreatedAt[byCreatedAt.length - 1].id,
-      }).where(eq(runs.id, newRunId));
-    }
-
-    const agentUrl = agentConfig.url;
-    if (!agentUrl) {
-      throw new AgentViewError("Agent URL not provided", 400);
-    }
-
-    const standardSession = await requireSession(tx, sessionId, { branchRunId: run.id });
-    const runBase = await requireRunBase(tx, run.id);
-
-    return {
-      runBase,
-      standardSession,
-      runConfig,
-      agentUrl,
-      tunnelUrl: environment.tunnelUrl ?? null,
-      isLocalEnv,
-    }
+  const run = await createRunCore(tx, environment, sessionId, {
+    id: newRunId,
+    parsedInput,
+    parsedNonInputItems: [],
+    status: 'in_progress',
+    failReason: null,
+    expiresAt: new Date(Date.now() + idleTimeout).toISOString(),
+    finishedAt: null,
+    metadata: undefined,
+    agentRefId,
+    manual: false,
+    state: undefined,
+    runConfig,
+    previousRun,
+    active: false,
   });
 
+  if (options.firstIncomingChannelMessageId && options.lastIncomingChannelMessageId) {
+    await tx.update(runs).set({
+      firstIncomingChannelMessageId: options.firstIncomingChannelMessageId,
+      lastIncomingChannelMessageId: options.lastIncomingChannelMessageId,
+    }).where(eq(runs.id, newRunId));
+  }
+
+  const agentUrl = agentConfig.url;
+  if (!agentUrl) {
+    throw new AgentViewError("Agent URL not provided", 400);
+  }
+
+  const standardSession = await requireSession(tx, sessionId, { branchRunId: run.id });
+  const runBase = await requireRunBase(tx, run.id);
+
+  return {
+    runBase,
+    standardSession,
+    runConfig,
+    agentUrl,
+    tunnelUrl: environment.tunnelUrl ?? null,
+    isLocalEnv,
+  };
+}
+
+/**
+ * Post-transaction: converts session, establishes streaming connection, handles errors.
+ */
+async function executeAutoRun(
+  principal: Principal,
+  sessionId: string,
+  txResult: Awaited<ReturnType<typeof createAutoRunInTx>>,
+  signal?: AbortSignal,
+): Promise<{ runId: string, response: Response, success: boolean }> {
+  const { runBase, standardSession, runConfig, agentUrl, tunnelUrl, isLocalEnv } = txResult;
   const runId = runBase.id;
 
   const session = standardToDefaultSession(standardSession);
@@ -1026,8 +961,7 @@ export async function createAutoRun2(
   });
   session.messages = messages;
 
-  // 2. Make live connection to the streaming server, wait for response to know if we should discard or accept the run.
-  log.debug(`[${sessionId}] [createAutoRun2] establishing live connection...`);
+  log.debug(`[${sessionId}] establishing live connection...`);
 
   // Route through tunnel for local dev environments
   const targetUrl = isLocalEnv && tunnelUrl ? tunnelUrl : agentUrl;
@@ -1070,11 +1004,9 @@ export async function createAutoRun2(
       headers: Object.fromEntries(response.headers.entries()),
     });
 
-    // Response came but it's error.
     if (!response.ok) {
-      log.debug(`[${sessionId}] [createAutoRun2] error response from AI Endpoint`);
+      log.debug(`[${sessionId}] error response from AI Endpoint`);
 
-      // Discard run and return
       await withTenant(principal, async (tx) => {
         await terminateRun(tx, sessionId, runId, {
           status: 'discarded',
@@ -1090,8 +1022,7 @@ export async function createAutoRun2(
       return { response: responseCopy, runId, success: false };
     }
 
-    // Stream established.
-    log.debug(`[${sessionId}] [createAutoRun2] stream established`);
+    log.debug(`[${sessionId}] stream established`);
 
     await withTenant(principal, async (tx) => {
       await tx.acquireLock({ type: "edit_session", sessionId });
@@ -1110,8 +1041,8 @@ export async function createAutoRun2(
     return { response: responseCopy, runId, success: true }
 
   } catch (err) {
-    log.debug({ err }, `[${sessionId}] [createAutoRun2] error`);
-    
+    log.debug({ err }, `[${sessionId}] error`);
+
     const message = 'Failed to establish connection to the streaming server'
 
     // best effort termination
@@ -1126,7 +1057,106 @@ export async function createAutoRun2(
 
     throw new AgentViewError(message, 500);
   }
+}
 
+
+export async function createAutoRun2(
+  principal: Principal,
+  sessionId: string,
+  input: Record<string, any>,
+  previousRunId?: string | null,
+  signal?: AbortSignal
+): Promise<{ runId: string, response: Response, success: boolean }> {
+
+  log.debug(`[${sessionId}] [createAutoRun2] start`);
+
+  const txResult = await withTenant(principal, async (tx) => {
+    await tx.acquireLock({ type: "edit_session", sessionId });
+    return createAutoRunInTx(tx, sessionId, input, {
+      previousRunId,
+    });
+  });
+
+  return executeAutoRun(principal, sessionId, txResult, signal);
+}
+
+
+export async function createAutoRun2ForChannel(
+  principal: Principal,
+  sessionId: string,
+  signal?: AbortSignal
+): Promise<{ runId: string, response: Response, success: boolean }> {
+
+  log.debug(`[${sessionId}] [createAutoRun2ForChannel] start`);
+
+  const txResult = await withTenant(principal, async (tx) => {
+    await tx.acquireLock({ type: "edit_session", sessionId });
+
+    const session = await requireSessionBase(tx, sessionId);
+    authorize(tx.principal, { action: "end-user:update", user: session.user });
+
+    const environment = await requireEnvironment(tx);
+    const config = getConfigFromEnvironment(environment);
+    const agentConfig = requireAgentConfigBySession(config, session);
+
+    // Find channel thread
+    const channelThreadId = (await tx.query.sessions.findFirst({
+      where: eq(sessions.id, sessionId),
+      columns: { channelThreadId: true },
+    }))?.channelThreadId;
+
+    if (typeof channelThreadId !== 'string') {
+      throw new AgentViewError("Session has no channel thread.", 422);
+    }
+
+    // Find incoming messages after the last completed run's last incoming message.
+    // We use createdAt (insertion time) for the cutoff, not date, because messages
+    // can arrive out of order (earlier date arriving after a later-dated message).
+    const lastCompletedRun = await tx.query.runs.findFirst({
+      where: and(eq(runs.sessionId, sessionId), eq(runs.status, 'completed')),
+      orderBy: (r, { desc }) => [desc(r.createdAt)],
+    });
+
+    let afterCreatedAt: string | undefined;
+    if (lastCompletedRun?.lastIncomingChannelMessageId) {
+      const cutoffMsg = await tx.query.channelMessages.findFirst({
+        where: eq(channelMessages.id, lastCompletedRun.lastIncomingChannelMessageId),
+        columns: { createdAt: true },
+      });
+      afterCreatedAt = cutoffMsg?.createdAt;
+    }
+
+    const incomingMessages = await tx.query.channelMessages.findMany({
+      where: and(
+        eq(channelMessages.channelThreadId, channelThreadId),
+        eq(channelMessages.direction, 'incoming'),
+        afterCreatedAt ? gt(channelMessages.createdAt, afterCreatedAt) : undefined,
+      ),
+      orderBy: (cm, { asc }) => [asc(cm.date)],
+    });
+
+    if (incomingMessages.length === 0) {
+      throw new AgentViewError("No incoming messages to create a run from.", 422);
+    }
+
+    log.info({ sessionId, count: incomingMessages.length }, 'incoming messages found');
+
+    // Build input from channel messages
+    const newRunId = crypto.randomUUID();
+    const adapter = getAdapter(agentConfig.adapter);
+    const input = adapter.createDefaultInputForChannelMessages(incomingMessages, newRunId);
+
+    // Sort by createdAt to get first/last by insertion order (handles out-of-order dates)
+    const byCreatedAt = [...incomingMessages].sort((a, b) => a.createdAt < b.createdAt ? -1 : 1);
+
+    return createAutoRunInTx(tx, sessionId, input, {
+      id: newRunId,
+      firstIncomingChannelMessageId: byCreatedAt[0].id,
+      lastIncomingChannelMessageId: byCreatedAt[byCreatedAt.length - 1].id,
+    });
+  });
+
+  return executeAutoRun(principal, sessionId, txResult, signal);
 }
 
 
