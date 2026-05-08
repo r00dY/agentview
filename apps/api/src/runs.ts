@@ -1106,31 +1106,56 @@ export async function createAutoRun2ForChannel(
       throw new AgentViewError("Session has no channel thread.", 422);
     }
 
-    // Find incoming messages after the last completed run's last incoming message.
-    // We use createdAt (insertion time) for the cutoff, not date, because messages
-    // can arrive out of order (earlier date arriving after a later-dated message).
-    const lastCompletedRun = await tx.query.runs.findFirst({
-      where: and(eq(runs.sessionId, sessionId), eq(runs.status, 'completed')),
-      orderBy: (r, { desc }) => [desc(r.createdAt)],
-    });
-
-    let afterCreatedAt: string | undefined;
-    if (lastCompletedRun?.lastIncomingChannelMessageId) {
-      const cutoffMsg = await tx.query.channelMessages.findFirst({
-        where: eq(channelMessages.id, lastCompletedRun.lastIncomingChannelMessageId),
-        columns: { createdAt: true },
-      });
-      afterCreatedAt = cutoffMsg?.createdAt;
-    }
-
-    const incomingMessages = await tx.query.channelMessages.findMany({
-      where: and(
-        eq(channelMessages.channelThreadId, channelThreadId),
-        eq(channelMessages.direction, 'incoming'),
-        afterCreatedAt ? gt(channelMessages.createdAt, afterCreatedAt) : undefined,
-      ),
+    // Get all channel messages for this thread, ordered by date (conversation timeline)
+    const allMessages = await tx.query.channelMessages.findMany({
+      where: eq(channelMessages.channelThreadId, channelThreadId),
       orderBy: (cm, { asc }) => [asc(cm.date)],
     });
+
+    // If any outgoing message is still 'pending' or 'sending', we can't determine the
+    // conversation state yet. The caller should retry once delivery resolves to 'sent' or 'failed'.
+    // This avoids creating a run against an ambiguous state where we don't know if the user
+    // has seen the previous reply or not.
+    const unresolvedOutgoing = allMessages.find(m =>
+      m.direction === 'outgoing' && (m.status === 'pending' || m.status === 'sending')
+    );
+    if (unresolvedOutgoing) {
+      throw new AgentViewError(
+        "Cannot create run while an outgoing message is still being delivered. Retry after delivery completes.",
+        409
+      );
+    }
+
+    // Find the last successfully sent outgoing message — this marks the conversation boundary.
+    // Failed outgoing messages are ignored (treated as if they don't exist).
+    const lastSentOutgoingIdx = allMessages.findLastIndex(m =>
+      m.direction === 'outgoing' && m.status === 'sent'
+    );
+
+    let previousRunId: string | undefined;
+    let incomingMessages: typeof allMessages;
+
+    if (lastSentOutgoingIdx >= 0) {
+      const lastSentOutgoing = allMessages[lastSentOutgoingIdx];
+
+      // The run that produced this outgoing reply is our branch point.
+      // New run branches from it, so old dead branches are ignored.
+      const ownerRun = await tx.query.runs.findFirst({
+        where: eq(runs.outgoingChannelMessageId, lastSentOutgoing.id),
+        columns: { id: true },
+      });
+      previousRunId = ownerRun?.id;
+
+      // Incoming messages that arrived after the last sent outgoing was created.
+      // We use createdAt (insertion time) rather than date, because messages can
+      // arrive out of order (earlier date arriving after a later-dated message).
+      incomingMessages = allMessages.filter(m =>
+        m.direction === 'incoming' && m.createdAt > lastSentOutgoing.createdAt
+      );
+    } else {
+      // No sent outgoing → first run, consume all incoming messages
+      incomingMessages = allMessages.filter(m => m.direction === 'incoming');
+    }
 
     if (incomingMessages.length === 0) {
       throw new AgentViewError("No incoming messages to create a run from.", 422);
@@ -1148,6 +1173,7 @@ export async function createAutoRun2ForChannel(
 
     return createAutoRunInTx(tx, sessionId, input, {
       id: newRunId,
+      previousRunId,
       firstIncomingChannelMessageId: byCreatedAt[0].id,
       lastIncomingChannelMessageId: byCreatedAt[byCreatedAt.length - 1].id,
     });
