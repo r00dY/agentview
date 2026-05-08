@@ -1132,7 +1132,7 @@ export async function createAutoRun2ForChannel(
       m.direction === 'outgoing' && m.status === 'sent'
     );
 
-    let previousRunId: string | undefined;
+    let previousRunId: string | null = null; // must be `null`!!! null means -> from ROOT, undefined is "append at the end"
     let incomingMessages: typeof allMessages;
 
     if (lastSentOutgoingIdx >= 0) {
@@ -1144,7 +1144,7 @@ export async function createAutoRun2ForChannel(
         where: eq(runs.outgoingChannelMessageId, lastSentOutgoing.id),
         columns: { id: true },
       });
-      previousRunId = ownerRun?.id;
+      previousRunId = ownerRun?.id ?? null;
 
       // Incoming messages that arrived after the last sent outgoing was created.
       // We use createdAt (insertion time) rather than date, because messages can
