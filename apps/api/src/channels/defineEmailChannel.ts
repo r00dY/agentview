@@ -11,6 +11,7 @@ import {
   type SendMessageResult,
   resolveChannel,
 } from './defineChannel';
+import { marked } from 'marked';
 import { withOrg } from 'src/withOrg';
 import { emailToMarkdown } from './emailToMarkdown';
 
@@ -41,6 +42,7 @@ export type EmailSendParams = {
   from: string;
   subject: string;
   textBody: string;
+  htmlBody?: string;
   inReplyTo?: string;
   references?: string[];
   providerData?: any;
@@ -162,12 +164,28 @@ function buildSendMessageWrapper(
       textBody = `${textBody}\n\n${attribution}\n${quoted}`;
     }
 
+    // Build HTML version: convert the reply markdown to HTML,
+    // then append the quoted original as a standard blockquote.
+    const replyHtml = await marked.parse(message.text ?? '');
+    let htmlBody = replyHtml;
+    const quotedHtml = lastEmailData?.htmlBody || lastEmailData?.textBody;
+    if (quotedHtml && quotedFrom) {
+      const date = lastMessage?.date
+        ? new Date(lastMessage.date).toUTCString()
+        : undefined;
+      const attr = date
+        ? `On ${date}, ${quotedFrom} wrote:`
+        : `${quotedFrom} wrote:`;
+      htmlBody += `<div class="gmail_quote"><p>${attr}</p><blockquote style="margin:0 0 0 0.8ex;border-left:1px solid #ccc;padding-left:1ex">${quotedHtml}</blockquote></div>`;
+    }
+
     const result = await emailSendFn({
       channel,
       to: channelThread.contact,
       from: channel.address,
       subject,
       textBody,
+      htmlBody,
       inReplyTo,
       references,
       providerData: threadProviderData,

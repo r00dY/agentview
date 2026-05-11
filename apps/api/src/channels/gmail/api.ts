@@ -136,6 +136,7 @@ export async function sendEmail(
     to: string;
     subject: string;
     textBody: string;
+    htmlBody?: string;
     threadId?: string;
     inReplyTo?: string;
     references?: string[];
@@ -144,23 +145,41 @@ export async function sendEmail(
 ): Promise<{ gmailId: string; threadId: string; messageId: string }> {
   const gmail = createAuthenticatedClient(accessToken, refreshToken, onTokenRefresh);
 
-  const lines = [
+  const headers = [
     `From: ${params.from}`,
     `To: ${params.to}`,
     `Subject: ${params.subject}`,
+    'MIME-Version: 1.0',
   ];
 
   if (params.inReplyTo) {
-    lines.push(`In-Reply-To: ${params.inReplyTo}`);
+    headers.push(`In-Reply-To: ${params.inReplyTo}`);
   }
   if (params.references && params.references.length > 0) {
-    lines.push(`References: ${params.references.join(' ')}`);
+    headers.push(`References: ${params.references.join(' ')}`);
   }
 
-  lines.push(`Content-Type: text/plain; charset="UTF-8"`);
-  lines.push('');
-  lines.push(params.textBody);
+  let body: string;
+  if (params.htmlBody) {
+    const boundary = `boundary_${Date.now()}`;
+    headers.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
+    body = [
+      `--${boundary}`,
+      'Content-Type: text/plain; charset="UTF-8"',
+      '',
+      params.textBody,
+      `--${boundary}`,
+      'Content-Type: text/html; charset="UTF-8"',
+      '',
+      params.htmlBody,
+      `--${boundary}--`,
+    ].join('\r\n');
+  } else {
+    headers.push('Content-Type: text/plain; charset="UTF-8"');
+    body = params.textBody;
+  }
 
+  const lines = [...headers, '', body];
   const raw = encodeBase64Url(lines.join('\r\n'));
 
   log.info({ to: params.to, subject: params.subject }, 'sending gmail email');

@@ -8,7 +8,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 export const resendChannel = defineEmailChannel({
   type: 'resend',
   routes: (provider) => createResendRoutes(provider),
-  sendEmail: () => async ({ channel, to, from, subject, textBody, inReplyTo, references }) => {
+  sendEmail: () => async ({ channel, to, from, subject, textBody, htmlBody, inReplyTo, references }) => {
     const headers: Record<string, string> = {};
     if (inReplyTo) {
       headers['In-Reply-To'] = inReplyTo;
@@ -24,6 +24,7 @@ export const resendChannel = defineEmailChannel({
       to,
       subject,
       text: textBody,
+      html: htmlBody,
       headers: Object.keys(headers).length > 0 ? headers : undefined,
     });
 

@@ -8,7 +8,7 @@ export const gmailChannel = defineEmailChannel({
   type: 'gmail',
   routes: (provider) => createGmailRoutes(provider),
   workers: (provider) => createGmailWorkers(provider),
-  sendEmail: (gmail) => async ({ channel, to, from, subject, textBody, inReplyTo, references, providerData }) => {
+  sendEmail: (gmail) => async ({ channel, to, from, subject, textBody, htmlBody, inReplyTo, references, providerData }) => {
     const config = channel.config as GmailChannelConfig;
 
     const result = await sendEmail(
@@ -19,6 +19,7 @@ export const gmailChannel = defineEmailChannel({
         to,
         subject,
         textBody,
+        htmlBody,
         threadId: providerData?.gmailThreadId ?? undefined,
         inReplyTo,
         references,

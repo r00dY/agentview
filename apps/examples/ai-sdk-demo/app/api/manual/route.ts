@@ -49,8 +49,10 @@ export async function POST() {
     
     // Second text part
     { type: "text-start", id: textId2 },
-    { type: "text-delta", id: textId2, delta: "And here is " },
-    { type: "text-delta", id: textId2, delta: "the second text part. " },
+    { type: "text-delta", id: textId2, delta: "## Good morning\n\n" },
+    { type: "text-delta", id: textId2, delta: "And here is the list:\n\n" },
+    { type: "text-delta", id: textId2, delta: "1. one\n2. two\n3. three\n\n"},
+    { type: "text-delta", id: textId2, delta: "Some **bold** text. " },
     { type: "text-delta", id: textId2, delta: "Random number: " + crypto.randomUUID() + "." },
 
     { type: "text-end", id: textId2 },
