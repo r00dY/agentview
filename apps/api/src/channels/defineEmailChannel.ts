@@ -12,6 +12,7 @@ import {
   resolveChannel,
 } from './defineChannel';
 import { withOrg } from 'src/withOrg';
+import { emailToMarkdown } from './emailToMarkdown';
 
 export type EmailMessageData = {
   messageId: string;
@@ -256,13 +257,18 @@ export function defineEmailChannel(config: {
       ...(params.providerData ?? {}),
     };
 
+    const strippedText = emailToMarkdown({
+      html: params.email.htmlBody,
+      text: params.email.textBody,
+    }) || params.text;
+
     return provider.ingestMessage(address, {
       sourceId: params.email.messageId,
       sourceThreadId,
       date: params.date,
       contact: params.contact,
       contactKind: params.contactKind,
-      text: params.text,
+      text: strippedText,
       providerData,
     });
   };
