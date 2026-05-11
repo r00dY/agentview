@@ -142,12 +142,31 @@ function buildSendMessageWrapper(
       delete threadProviderData.email;
     }
 
+    // Include quoted previous message with attribution line.
+    // The attribution ("On <date>, <from> wrote:") is what email clients like
+    // Gmail use to detect and collapse quoted text behind "..." in threaded view.
+    let textBody = message.text ?? '';
+    const quotedText = lastMessage?.text || lastEmailData?.textBody;
+    // lastEmailData.from has the full "Name <email>" format when available,
+    // fall back to bare contact email from the thread
+    const quotedFrom = lastEmailData?.from || channelThread.contact;
+    if (quotedText && quotedFrom) {
+      const date = lastMessage?.date
+        ? new Date(lastMessage.date).toUTCString()
+        : undefined;
+      const attribution = date
+        ? `On ${date}, ${quotedFrom} wrote:`
+        : `${quotedFrom} wrote:`;
+      const quoted = quotedText.split('\n').map((line) => `> ${line}`).join('\n');
+      textBody = `${textBody}\n\n${attribution}\n${quoted}`;
+    }
+
     const result = await emailSendFn({
       channel,
       to: channelThread.contact,
       from: channel.address,
       subject,
-      textBody: message.text ?? '',
+      textBody,
       inReplyTo,
       references,
       providerData: threadProviderData,

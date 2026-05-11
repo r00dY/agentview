@@ -34,12 +34,32 @@ export const resendChannel = defineEmailChannel({
 
     log.info({ resendId: data.id, to, from }, 'resend: email sent');
 
-    // Resend's send API doesn't return the RFC Message-ID header.
-    // Use a deterministic Message-ID derived from the Resend email ID.
-    const messageId = `<${data.id}@resend.dev>`;
+    // RESEND LIMITATION: This sourceId is NOT the real RFC Message-ID.
+    //
+    // Resend uses Amazon SES under the hood. SES assigns its own Message-ID
+    // (e.g. <01020...@eu-west-1.amazonses.com>) and Resend's API never exposes it:
+    //   - emails.send() returns only { id } (the Resend UUID)
+    //   - emails.get() does not include message_id or headers
+    //   - Custom Message-ID headers are silently overridden by SES
+    //
+    // This means when a recipient replies, their In-Reply-To will contain the
+    // real SES Message-ID which does NOT match this sourceId. Thread resolution
+    // for replies relies entirely on the References header chain, which carries
+    // the original incoming email's Message-ID (that one IS real and stored
+    // correctly). See resolveThreadId in defineEmailChannel.ts.
+    //
+    // This works for all modern email clients (Gmail, Outlook, Apple Mail,
+    // Thunderbird) which always include References. A client that sends ONLY
+    // In-Reply-To without References would break threading — but that's
+    // non-standard and rare enough to accept as a known limitation.
+    //
+    // If Resend ever exposes message_id on their GET /emails/{id} endpoint,
+    // we should fetch it after send (like the Gmail channel does) and use
+    // the real value here.
+    const sourceId = `<${data.id}@resend.dev>`;
 
     return {
-      sourceId: messageId,
+      sourceId,
       providerData: {
         resendId: data.id,
       },

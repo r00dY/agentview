@@ -34,21 +34,25 @@ export async function POST() {
     // Data parts
     { type: "data-weather", data: { location: "San Francisco", temperature: 18 } },
 
-    // First text part
-    { type: "text-start", id: textId1 },
-    { type: "text-delta", id: textId1, delta: "Here is the " },
-    { type: "text-delta", id: textId1, delta: "first text part." },
+    // // First text part
+    // { type: "text-start", id: textId1 },
+    // { type: "text-delta", id: textId1, delta: "Here is the " },
+    // { type: "text-delta", id: textId1, delta: "first text part." },
 
-    ...deltas(10),
+    // ...deltas(10),
 
-    { type: "text-end", id: textId1 },
+    // { type: "text-end", id: textId1 },
+
+
     // { type: "error", errorText: "This is some error from the stream part"},
     // { type: "dupa" }, // incorrect chunk
     
     // Second text part
     { type: "text-start", id: textId2 },
     { type: "text-delta", id: textId2, delta: "And here is " },
-    { type: "text-delta", id: textId2, delta: "the second text part." },
+    { type: "text-delta", id: textId2, delta: "the second text part. " },
+    { type: "text-delta", id: textId2, delta: "Random number: " + crypto.randomUUID() + "." },
+
     { type: "text-end", id: textId2 },
 
     // { type: "tool-input-start", toolCallId: "tool_call_1", toolName: "getWeatherInformation" },

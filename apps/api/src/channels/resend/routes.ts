@@ -43,10 +43,31 @@ export function createResendRoutes(provider: EmailChannelProvider): OpenAPIHono 
 
     // In-Reply-To and References come from email headers
     const inReplyTo = headers['in-reply-to'] || undefined;
+
+    // RESEND BUG/QUIRK: Resend's receiving API returns the References header as a
+    // stringified JSON array (e.g. '["<id1@x.com>","<id2@x.com>"]') instead of the
+    // standard RFC 2822 space-separated format ("<id1@x.com> <id2@x.com>").
+    // The SDK types say `headers: Record<string, string>` but the value for
+    // "references" is actually a JSON-encoded array.
+    //
+    // This is critical for threading: resolveThreadId uses References to match
+    // incoming replies against existing messages. If we naively split on whitespace
+    // (like you'd do with RFC format), we get a single garbled string that never
+    // matches any sourceId, and every reply creates a new thread.
+    //
+    // We parse as JSON first, fall back to RFC space-split for safety.
     const rawReferences = headers['references'];
-    const references = rawReferences
-      ? rawReferences.split(/\s+/).filter(Boolean)
-      : undefined;
+    let references: string[] | undefined;
+    if (rawReferences) {
+      try {
+        const parsed = JSON.parse(rawReferences);
+        if (Array.isArray(parsed)) {
+          references = parsed;
+        }
+      } catch {
+        references = rawReferences.split(/\s+/).filter(Boolean);
+      }
+    }
 
     // Ingest for each recipient address (each may map to a different channel)
     for (const toAddress of toAddresses) {
