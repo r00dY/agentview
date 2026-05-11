@@ -101,7 +101,7 @@ export default defineConfig({
       channels: [
         {
           type: "resend",
-          address: "acme.dupa@kirievelu.resend.app",
+          address: "acme.dupa@agent.agentview.app",
           metadata: {
             userLocation: "Warsaw"
           }

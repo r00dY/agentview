@@ -291,7 +291,7 @@ async function createRunCore(
 
   // Queue webhook job on first run
   const config = getConfigFromEnvironment(environment);
-  const isFirstRun = previousRun === undefined;
+  const isFirstRun = previousRun === undefined || previousRun === null;
   if (isFirstRun) {
     const db = fromDrizzle(tx, sql);
 
