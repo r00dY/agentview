@@ -32,7 +32,7 @@ export type IngestEmailParams = {
   date: string;
   contact: string;
   contactKind: 'email';
-  text?: string;
+  // text?: string;
   providerData?: any;
 };
 
@@ -275,10 +275,10 @@ export function defineEmailChannel(config: {
       ...(params.providerData ?? {}),
     };
 
-    const strippedText = emailToMarkdown({
+    const parsed = await emailToMarkdown({
       html: params.email.htmlBody,
       text: params.email.textBody,
-    }) || params.text;
+    });
 
     return provider.ingestMessage(address, {
       sourceId: params.email.messageId,
@@ -286,8 +286,11 @@ export function defineEmailChannel(config: {
       date: params.date,
       contact: params.contact,
       contactKind: params.contactKind,
-      text: strippedText,
-      providerData,
+      text: parsed.content,
+      providerData: {
+        ...providerData,
+        ...(parsed.signature ? { signature: parsed.signature } : {}),
+      },
     });
   };
 

@@ -382,19 +382,14 @@ export function channelProvider(type: string) {
           // let channelConfig: ExternalChannelConfig | undefined = undefined;
           // let agentName: string | undefined = undefined;
 
-          console.log('--------------------------------');
-          console.log('type', type, 'address', address, 'channel.type', channel.type, 'channel.address', channel.address);
-
           const matches : { agent: string, channelConfig: ExternalChannelConfig }[] = [];
     
           config.agents?.forEach((agent) => {
-            console.log('##########', agent.name, agent.channels);
             if (!agent.channels) {
               return;
             }
 
             const channelConfigs = agent.channels?.filter((c) => c.type === channel.type && c.address === channel.address)
-            console.log('channelConfigs', channelConfigs);
             channelConfigs.forEach((channelConfig) => {
               matches.push({ agent: agent.name, channelConfig })
             })
@@ -408,8 +403,6 @@ export function channelProvider(type: string) {
           }
     
           const { agent, channelConfig } = matches[0];
-
-          console.log('setAgentForSession body', { agent, metadata: channelConfig!.metadata, initialState: channelConfig!.initialState })
     
           await setAgentForSession(tx, result.sessionId, { agent, metadata: channelConfig!.metadata, initialState: channelConfig!.initialState });
         })

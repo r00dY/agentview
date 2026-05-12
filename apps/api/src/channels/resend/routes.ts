@@ -77,7 +77,6 @@ export function createResendRoutes(provider: EmailChannelProvider): OpenAPIHono 
         contact: fromEmail,
         contactKind: 'email',
         date: email.created_at,
-        text: email.text ?? undefined,
         email: {
           messageId: email.message_id,
           inReplyTo,
