@@ -15,10 +15,7 @@ import { getProfile, setupWatch, fetchNewEmails, createTokenRefreshHandler } fro
 import type { GmailChannelConfig } from './types';
 
 /** Extract bare email from "Name <email>" or just "email" */
-function extractEmailAddress(from: string): string {
-  const match = from.match(/<([^>]+)>/);
-  return (match ? match[1] : from).trim().toLowerCase();
-}
+
 
 export function createGmailRoutes(gmail: EmailChannelProvider): OpenAPIHono {
   const app = new OpenAPIHono();
@@ -182,13 +179,8 @@ export function createGmailRoutes(gmail: EmailChannelProvider): OpenAPIHono {
 
       // Insert channel messages via threads
       for (const email of result.emails) {
-        const fromEmail = extractEmailAddress(email.from);
-
         await gmail.ingestEmail(emailAddress, {
-          contact: fromEmail,
-          contactKind: 'email',
           date: email.date,
-          text: email.textBody ?? undefined,
           email: {
             messageId: email.messageId,
             inReplyTo: email.inReplyTo,

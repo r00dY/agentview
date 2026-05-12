@@ -38,7 +38,6 @@ export function createResendRoutes(provider: EmailChannelProvider): OpenAPIHono 
     log.info({ emailId, from: email.from, to: email.to, subject: email.subject }, 'resend webhook: processing received email');
 
     const toAddresses = email.to ?? [];
-    const fromEmail = extractEmailAddress(email.from);
     const headers = email.headers ?? {};
 
     // In-Reply-To and References come from email headers
@@ -74,8 +73,6 @@ export function createResendRoutes(provider: EmailChannelProvider): OpenAPIHono 
       const address = extractEmailAddress(toAddress);
 
       await provider.ingestEmail(address, {
-        contact: fromEmail,
-        contactKind: 'email',
         date: email.created_at,
         email: {
           messageId: email.message_id,

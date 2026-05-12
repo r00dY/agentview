@@ -5,8 +5,6 @@ import { createMockRoutes } from './routes';
 export type MockOutboxEntry = {
   id: string; // source_id
   address: string;
-  contact: string;
-  contactKind: string;
   text: string | null;
   timestamp: number;
 };
@@ -20,15 +18,13 @@ export const mockChannel = defineChannel({
   type: 'mock',
   routes: (provider) => createMockRoutes(provider),
   sendMessage: (_provider) => async ({ channelThread, channel, message }) => {
-    log.info({ contact: channelThread.contact, address: channel.address }, 'mock: sending outgoing message');
+    log.info({ address: channel.address }, 'mock: sending outgoing message');
 
     const sourceId = `mock-${message.id}`
 
     const entry: MockOutboxEntry = {
       id: sourceId,
       address: channel.address,
-      contact: channelThread.contact,
-      contactKind: channelThread.contactKind,
       text: message.text,
       timestamp: Date.now(),
     };

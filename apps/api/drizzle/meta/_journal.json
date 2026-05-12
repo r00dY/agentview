@@ -218,6 +218,20 @@
       "when": 1778584559775,
       "tag": "0030_melted_drax",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1778589349509,
+      "tag": "0031_unknown_thaddeus_ross",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1778589961988,
+      "tag": "0032_black_king_bedlam",
+      "breakpoints": true
     }
   ]
 }

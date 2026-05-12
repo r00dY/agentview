@@ -8,7 +8,7 @@ import { createAutoRun2ForChannel, terminateRun } from '../runs';
 import { channelMessages, channels, channelThreads, runs, sessions } from '../schemas/schema';
 import { activateSession, createSession, setAgentForSession } from '../sessions';
 import type { Transaction } from '../types';
-import { createUser, ensureUserForEmail, findUser } from '../users';
+import { createUser, findUser } from '../users';
 import { withOrg, withTenant } from '../withOrg';
 import type { WorkerHandle } from '../workers/utils';
 import { getConfigFromEnvironment, getEnvironment, getEnvironmentByHandleAndOrgId, requireEnvironment } from '../environments';
@@ -50,11 +50,8 @@ export function defineChannel(config: {
 
 type IngestMessageParams = {
   sourceId: string;
-  sourceThreadId?: string;
+  sourceThreadId: string;
   date: string;
-
-  contact: string;
-  contactKind: string;
 
   text?: string;
   providerData?: any;
@@ -228,7 +225,7 @@ export function channelProvider(type: string) {
    * 
    */
   async function ingestMessage(address: string, params: IngestMessageParams): Promise<IngestMessageResult> {
-    log.info({ address, contactKind: params.contactKind, contact: params.contact, sourceId: params.sourceId, type }, 'ingesting message');
+    log.info({ address, sourceId: params.sourceId, type, authorEmail: params.author.email }, 'ingesting message');
 
     /**
      * Resend has special treatment. Automatically creates a channel if it doesn't exist.
@@ -323,23 +320,17 @@ export function channelProvider(type: string) {
         userId = session.userId;
       }
       else {
-        if (thread.contactKind === 'email') {
-
-          // contact must be identical to user.email
-          if (thread.contact !== params.author.email) {
-            throw new Error(`Contact kind mismatch: ${thread.contactKind} !== ${params.author.email}`);
-          }
-
-          userId = (await findUser(tx, { email: params.author.email }))?.id;
-
-          if (!userId) {
-            userId = (await createUser(tx, params.author)).user.id;
-          }
-
-          log.info({ sourceId: params.sourceId, contact: thread.contact, userId }, 'user resolved from email');
-        } else {
-          throw new Error(`Unsupported contact kind: ${thread.contactKind}`);
+        if (!params.author.email) {
+          throw new Error(`Author email is required to create a session`);
         }
+
+        userId = (await findUser(tx, { email: params.author.email }))?.id;
+
+        if (!userId) {
+          userId = (await createUser(tx, params.author)).user.id;
+        }
+
+        log.info({ sourceId: params.sourceId, authorEmail: params.author.email, userId }, 'user resolved from email');
       }
 
       if (!userId) {
@@ -451,14 +442,10 @@ async function getOrCreateThread(tx: Transaction, channel: Channel, params: Inge
     ? and(
       eq(channelThreads.channelId, channel.id),
       eq(channelThreads.sourceThreadId, params.sourceThreadId),
-      eq(channelThreads.contact, params.contact),
-      eq(channelThreads.contactKind, params.contactKind),
     )
     : and(
       eq(channelThreads.channelId, channel.id),
       isNull(channelThreads.sourceThreadId),
-      eq(channelThreads.contact, params.contact),
-      eq(channelThreads.contactKind, params.contactKind),
     );
 
   let thread = await tx.query.channelThreads.findFirst({
@@ -472,8 +459,6 @@ async function getOrCreateThread(tx: Transaction, channel: Channel, params: Inge
         organizationId: channel.organizationId,
         channelId: channel.id,
         sourceThreadId: params.sourceThreadId ?? null,
-        contact: params.contact,
-        contactKind: params.contactKind,
       })
       .returning();
     thread = newThread;
@@ -493,6 +478,10 @@ async function getOrCreateMessage(tx: Transaction, channel: Channel, thread: Cha
       sourceId: params.sourceId ?? null,
       date: params.date,
       text: params.text ?? null,
+      authorEmail: params.author.email ?? null,
+      authorName: params.author.name ?? null,
+      authorHeadline: params.author.headline ?? null,
+      authorDetails: params.author.details ?? null,
       providerData: params.providerData ?? null,
     })
     .onConflictDoNothing({

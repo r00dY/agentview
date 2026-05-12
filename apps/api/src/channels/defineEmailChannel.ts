@@ -17,6 +17,11 @@ import { emailToMarkdown } from './emailToMarkdown';
 
 const presence = (s?: string) => s?.trim() || undefined;
 
+function extractEmailAddress(from: string): string {
+  const match = from.match(/<([^>]+)>/);
+  return (match ? match[1] : from).trim().toLowerCase();
+}
+
 export type EmailMessageData = {
   messageId: string;
   inReplyTo?: string;
@@ -32,9 +37,6 @@ export type EmailMessageData = {
 export type IngestEmailParams = {
   email: EmailMessageData;
   date: string;
-  contact: string;
-  contactKind: 'email';
-  // text?: string;
   providerData?: any;
 };
 
@@ -153,8 +155,8 @@ function buildSendMessageWrapper(
     let textBody = message.text ?? '';
     const quotedText = lastMessage?.text || lastEmailData?.textBody;
     // lastEmailData.from has the full "Name <email>" format when available,
-    // fall back to bare contact email from the thread
-    const quotedFrom = lastEmailData?.from || channelThread.contact;
+    // fall back to bare author email from the last message
+    const quotedFrom = lastEmailData?.from || lastMessage?.authorEmail;
     if (quotedText && quotedFrom) {
       const date = lastMessage?.date
         ? new Date(lastMessage.date).toUTCString()
@@ -181,9 +183,12 @@ function buildSendMessageWrapper(
       htmlBody += `<div class="gmail_quote"><p>${attr}</p><blockquote style="margin:0 0 0 0.8ex;border-left:1px solid #ccc;padding-left:1ex">${quotedHtml}</blockquote></div>`;
     }
 
+    // Derive recipient from the last incoming message's email headers or author
+    const replyTo = lastEmailData?.from || lastMessage?.authorEmail || '';
+
     const result = await emailSendFn({
       channel,
-      to: channelThread.contact,
+      to: replyTo,
       from: channel.address,
       subject,
       textBody,
@@ -201,7 +206,7 @@ function buildSendMessageWrapper(
           references: references ? [...references] : undefined,
           subject,
           from: channel.address,
-          to: channelThread.contact,
+          to: replyTo,
         },
         ...(result.providerData ?? {}),
       },
@@ -282,16 +287,16 @@ export function defineEmailChannel(config: {
       text: params.email.textBody,
     });
 
+    const fromEmail = extractEmailAddress(params.email.from);
+
     return provider.ingestMessage(address, {
       sourceId: params.email.messageId,
       sourceThreadId,
       date: params.date,
-      contact: params.contact,
-      contactKind: params.contactKind,
       text: parsed.content,
       providerData,
       author: {
-        email: params.contact,
+        email: fromEmail,
         name: presence(parsed.user?.name),
         headline: presence(parsed.user?.headline),
         details: presence(parsed.user?.details),

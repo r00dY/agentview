@@ -37,7 +37,7 @@ export const UserCreateSchema = UserSchema.pick({
   name: true,
   headline: true,
   details: true,
-  
+
   space: true, // default based on env
   ownerId: true,
 }).partial();
@@ -161,6 +161,10 @@ export const ChannelMessageSchema = z.object({
   status: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  authorEmail: z.string().nullable(),
+  authorName: z.string().nullable(),
+  authorHeadline: z.string().nullable(),
+  authorDetails: z.string().nullable(),
 })
 
 export type ChannelMessage = z.infer<typeof ChannelMessageSchema>

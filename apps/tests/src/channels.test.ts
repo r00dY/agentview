@@ -57,11 +57,6 @@ describe('Channels', () => {
       address: ADDRESS,
     })
 
-    // // assign environment to channel
-    // channel = await av.updateChannel(channel.id, {
-    //   environmentId: env.id
-    // })
-
   }, 15000)
 
   afterAll(async () => {
@@ -89,8 +84,6 @@ describe('Channels', () => {
       address: ADDRESS,
       sourceId: 'msg-404',
       date: new Date().toISOString(),
-      contactKind: 'email',
-      contact: 'someone@test.com',
       text: 'hello',
       author: {
         email: 'someone@test.com',
@@ -106,8 +99,6 @@ describe('Channels', () => {
         address: 'nonexistent@example.com',
         sourceId: 'msg-404',
         date: new Date().toISOString(),
-        contactKind: 'email',
-        contact: 'someone@test.com',
         text: 'hello',
         author: {
           email: 'someone@test.com',
@@ -138,9 +129,8 @@ describe('Channels', () => {
         address: ADDRESS,
         sourceId: 'msg-1',
         date: new Date().toISOString(),
-        contactKind: 'email',
-        contact: 'customer@example.com',
         text: 'I need help with my order',
+        sourceThreadId: 'success-thread',
         author: {
           email: 'customer@example.com',
         },
@@ -150,10 +140,9 @@ describe('Channels', () => {
       expect(result.message.direction).toBe('incoming')
       expect(result.message.status).toBe('received')
       expect(result.message.text).toBe('I need help with my order')
+      expect(result.message.authorEmail).toBe('customer@example.com')
 
       expect(result.thread).toBeDefined()
-      expect(result.thread.contact).toBe('customer@example.com')
-      expect(result.thread.contactKind).toBe('email')
     })
 
     test('dedupe - do not ingest duplicate messages', async () => {
@@ -161,9 +150,8 @@ describe('Channels', () => {
         address: ADDRESS,
         sourceId: 'dedupe-1',
         date: new Date().toISOString(),
-        contactKind: 'email',
-        contact: 'customer@example.com',
         text: 'I need help with my order',
+        sourceThreadId: 'dedupe-thread',
         author: {
           email: 'customer@example.com',
         },
@@ -176,9 +164,8 @@ describe('Channels', () => {
         address: ADDRESS,
         sourceId: 'dedupe-1',
         date: new Date().toISOString(),
-        contactKind: 'email',
-        contact: 'customer@example.com',
         text: 'I need help with my order',
+        sourceThreadId: 'dedupe-thread',
         author: {
           email: 'customer@example.com',
         },
@@ -190,14 +177,13 @@ describe('Channels', () => {
 
     describe("Session and User assignment", () => {
 
-      test('same contact+contactKind → same user', async () => {
+      test('same author email → same user (across different threads)', async () => {
         const r1 = await av.__internal.mock.sendMessage({
           address: ADDRESS,
           sourceId: 'user-test-1',
           date: new Date().toISOString(),
-          contactKind: 'email',
-          contact: 'alice@example.com',
           text: 'first message from alice',
+          sourceThreadId: 'alice-thread-1',
           author: {
             email: 'alice@example.com',
           },
@@ -207,9 +193,8 @@ describe('Channels', () => {
           address: ADDRESS,
           sourceId: 'user-test-2',
           date: new Date().toISOString(),
-          contactKind: 'email',
-          contact: 'alice@example.com',
           text: 'second message from alice',
+          sourceThreadId: 'alice-thread-2',
           author: {
             email: 'alice@example.com',
           },
@@ -222,14 +207,13 @@ describe('Channels', () => {
         expect(s1.user.email).toBe('alice@example.com')
       })
 
-      test('different contact → different user', async () => {
+      test('different author email → different user', async () => {
         const r1 = await av.__internal.mock.sendMessage({
           address: ADDRESS,
           sourceId: 'diff-user-1',
           date: new Date().toISOString(),
-          contactKind: 'email',
-          contact: 'bob@example.com',
           text: 'hello from bob',
+          sourceThreadId: 'bob-thread',
           author: {
             email: 'bob@example.com',
           },
@@ -239,9 +223,8 @@ describe('Channels', () => {
           address: ADDRESS,
           sourceId: 'diff-user-2',
           date: new Date().toISOString(),
-          contactKind: 'email',
-          contact: 'carol@example.com',
           text: 'hello from carol',
+          sourceThreadId: 'carol-thread',
           author: {
             email: 'carol@example.com',
           },
@@ -253,13 +236,11 @@ describe('Channels', () => {
         expect(s1.userId).not.toBe(s2.userId)
       })
 
-      test('same contact without sourceThreadId → same session', async () => {
+      test('without sourceThreadId → same session (same default thread)', async () => {
         const r1 = await av.__internal.mock.sendMessage({
           address: ADDRESS,
           sourceId: 'same-session-1',
           date: new Date().toISOString(),
-          contactKind: 'email',
-          contact: 'dave@example.com',
           text: 'message one',
           author: {
             email: 'dave@example.com',
@@ -270,8 +251,6 @@ describe('Channels', () => {
           address: ADDRESS,
           sourceId: 'same-session-2',
           date: new Date().toISOString(),
-          contactKind: 'email',
-          contact: 'dave@example.com',
           text: 'message two',
           author: {
             email: 'dave@example.com',
@@ -286,8 +265,6 @@ describe('Channels', () => {
           address: ADDRESS,
           sourceId: 'thread-a-1',
           date: new Date().toISOString(),
-          contactKind: 'email',
-          contact: 'eve@example.com',
           text: 'thread A message',
           sourceThreadId: 'thread-A',
           author: {
@@ -299,8 +276,6 @@ describe('Channels', () => {
           address: ADDRESS,
           sourceId: 'thread-b-1',
           date: new Date().toISOString(),
-          contactKind: 'email',
-          contact: 'eve@example.com',
           text: 'thread B message',
           sourceThreadId: 'thread-B',
           author: {
@@ -311,20 +286,18 @@ describe('Channels', () => {
         // Different threads → different sessions
         expect(r1.sessionId).not.toBe(r2.sessionId)
 
-        // But same contact → same user
+        // But same author → same user
         const s1 = await av.getSession({ id: r1.sessionId })
         const s2 = await av.getSession({ id: r2.sessionId })
         expect(s1.userId).toBe(s2.userId)
         expect(s1.user.email).toBe('eve@example.com')
       })
 
-      test('same contact+contactKind+sourceThreadId → same session', async () => {
+      test('same sourceThreadId → same session', async () => {
         const r1 = await av.__internal.mock.sendMessage({
           address: ADDRESS,
           sourceId: 'sticky-1',
           date: new Date().toISOString(),
-          contactKind: 'email',
-          contact: 'frank@example.com',
           text: 'first in thread X',
           sourceThreadId: 'thread-X',
           author: {
@@ -336,8 +309,6 @@ describe('Channels', () => {
           address: ADDRESS,
           sourceId: 'sticky-2',
           date: new Date().toISOString(),
-          contactKind: 'email',
-          contact: 'frank@example.com',
           text: 'second in thread X',
           sourceThreadId: 'thread-X',
           author: {
@@ -370,7 +341,7 @@ describe('Channels', () => {
           // we send headers quickly
           writeAISDKSuccessHeaders(res);
 
-          const respond = () => { 
+          const respond = () => {
             writeAISDKChunks(res, [
               { type: 'start', messageId: 'msg_1' },
               { type: 'text-start', id: 't1' },
@@ -397,54 +368,65 @@ describe('Channels', () => {
         })
       }
 
-      async function send(sourceId: string, contact: string, text: string, date?: string) {
+      // Wait for any async outgoing messages from previous tests to settle
+      beforeAll(async () => {
+        await new Promise(r => setTimeout(r, 3000))
+      }, 10000)
+
+      // Each outgoing test uses its own sourceThreadId for isolation
+      async function send(sourceId: string, text: string, sourceThreadId: string, date?: string) {
         return av.__internal.mock.sendMessage({
           address: ADDRESS,
           sourceId,
           date: date ?? new Date().toISOString(),
-          contactKind: 'email',
-          contact,
           text,
+          sourceThreadId,
           author: {
-            email: contact,
+            email: 'outgoing-test@test.com',
           },
         })
       }
 
-      async function getOutboxFor(contact: string) {
+      let outboxBaseline = 0
+
+      async function getNewOutboxEntries() {
         const outbox = await av.__internal.mock.getOutbox(ADDRESS)
-        return outbox.filter(e => e.contact === contact)
+        return outbox.slice(outboxBaseline)
       }
 
-      async function waitForOutbox(contact: string, count: number, timeoutMs = 15000) {
+      async function waitForNewOutbox(count: number, timeoutMs = 15000) {
         const start = Date.now()
         while (Date.now() - start < timeoutMs) {
-          const entries = await getOutboxFor(contact)
+          const entries = await getNewOutboxEntries()
           if (entries.length >= count) return entries
           await new Promise(r => setTimeout(r, 1000))
         }
-        const entries = await getOutboxFor(contact)
+        const entries = await getNewOutboxEntries()
         expect(entries).toHaveLength(count)
         return entries
       }
 
       test('single message → single outgoing reply', async () => {
         setParrotHandler()
+        const outbox = await av.__internal.mock.getOutbox(ADDRESS)
+        outboxBaseline = outbox.length
 
-        await send('out-1', 'single@test.com', 'hello')
+        await send('out-1', 'hello', 'single-thread')
 
-        const entries = await waitForOutbox('single@test.com', 1)
+        const entries = await waitForNewOutbox(1)
         expect(entries[0].text).toBe('hello')
       }, 15000)
 
       test('two sequential messages → two outgoing replies with session history', async () => {
         setParrotHandler()
+        const outbox = await av.__internal.mock.getOutbox(ADDRESS)
+        outboxBaseline = outbox.length
 
-        await send('seq-1', 'sequential@test.com', 'first')
-        await waitForOutbox('sequential@test.com', 1)
+        await send('seq-1', 'first', 'seq-thread')
+        await waitForNewOutbox(1)
 
-        await send('seq-2', 'sequential@test.com', 'second')
-        const entries = await waitForOutbox('sequential@test.com', 2)
+        await send('seq-2', 'second', 'seq-thread')
+        const entries = await waitForNewOutbox(2)
         expect(entries[0].text).toBe('first')
         // Second reply sees full session history: first user msg + second user msg
         expect(entries[1].text).toBe('first | second')
@@ -453,63 +435,71 @@ describe('Channels', () => {
       test('rapid messages while agent is processing → batched into single outgoing reply', async () => {
         // Agent takes 2s to respond, giving us time to send more messages
         setParrotHandler({ delayMs: 4000 })
+        const outbox = await av.__internal.mock.getOutbox(ADDRESS)
+        outboxBaseline = outbox.length
 
-
-        await send('rapid-1', 'rapid@test.com', 'A', '2025-01-01T00:00:01Z')
+        await send('rapid-1', 'A', 'rapid-thread', '2025-01-01T00:00:01Z')
         // Wait just enough for the worker to pick up the run, then send more
         await new Promise(r => setTimeout(r, 2000))
 
-        send('rapid-2', 'rapid@test.com', 'B', '2025-01-01T00:00:02Z')
-        send('rapid-3', 'rapid@test.com', 'C', '2025-01-01T00:00:03Z')
+        send('rapid-2', 'B', 'rapid-thread', '2025-01-01T00:00:02Z')
+        send('rapid-3', 'C', 'rapid-thread', '2025-01-01T00:00:03Z')
 
         // First run gets cancelled, second run batches all 3 messages → single outgoing
-        const entries = await waitForOutbox('rapid@test.com', 1)
+        const entries = await waitForNewOutbox(1)
         expect(entries[0].text).toBe('A B C')
       }, 15000)
 
       test('agent failure → no outgoing, next message retries with batch', async () => {
+        const outbox = await av.__internal.mock.getOutbox(ADDRESS)
+        outboxBaseline = outbox.length
+
         // First message: agent fails
         setFailHandler()
-        await send('fail-1', 'fail-retry@test.com', 'X')
+        await send('fail-1', 'X', 'fail-thread')
         // Wait for the failed run to complete (no outgoing expected)
         await new Promise(r => setTimeout(r, 7000))
 
         // No outgoing message should exist
-        let entries = await getOutboxFor('fail-retry@test.com')
+        let entries = await getNewOutboxEntries()
         expect(entries).toHaveLength(0)
 
         // Second message: agent succeeds, should batch both messages
         setParrotHandler()
-        await send('fail-2', 'fail-retry@test.com', 'Y')
+        await send('fail-2', 'Y', 'fail-thread')
 
-        entries = await waitForOutbox('fail-retry@test.com', 1)
+        entries = await waitForNewOutbox(1)
         expect(entries[0].text).toBe('X Y')
       }, 15000)
 
       test('rapid out-of-order messages → batched in date order', async () => {
         setParrotHandler({ delayMs: 4000 })
+        const outbox = await av.__internal.mock.getOutbox(ADDRESS)
+        outboxBaseline = outbox.length
 
         // Send 3 messages quickly with out-of-order dates
-        await send('ooo-1', 'out-of-order@test.com', 'C', '2025-01-01T00:00:03Z')
+        await send('ooo-1', 'C', 'ooo-thread', '2025-01-01T00:00:03Z')
         await new Promise(r => setTimeout(r, 2000))
-        send('ooo-2', 'out-of-order@test.com', 'A', '2025-01-01T00:00:01Z')
-        send('ooo-3', 'out-of-order@test.com', 'B', '2025-01-01T00:00:02Z')
+        send('ooo-2', 'A', 'ooo-thread', '2025-01-01T00:00:01Z')
+        send('ooo-3', 'B', 'ooo-thread', '2025-01-01T00:00:02Z')
 
         // Messages should be sorted by date, not insertion order
-        const entries = await waitForOutbox('out-of-order@test.com', 1)
+        const entries = await waitForNewOutbox(1)
         expect(entries[0].text).toBe('A B C')
       }, 15000)
 
       test('out-of-order messages where first is already processed → preserves order', async () => {
         setParrotHandler()
+        const outbox = await av.__internal.mock.getOutbox(ADDRESS)
+        outboxBaseline = outbox.length
 
         // B arrives first (later date) and gets fully processed
-        await send('order-1', 'order-preserved@test.com', 'B', '2025-01-01T00:00:02Z')
-        await waitForOutbox('order-preserved@test.com', 1)
+        await send('order-1', 'B', 'order-thread', '2025-01-01T00:00:02Z')
+        await waitForNewOutbox(1)
 
         // A arrives second (earlier date) and gets processed as a new run
-        await send('order-2', 'order-preserved@test.com', 'A', '2025-01-01T00:00:01Z')
-        const entries = await waitForOutbox('order-preserved@test.com', 2)
+        await send('order-2', 'A', 'order-thread', '2025-01-01T00:00:01Z')
+        const entries = await waitForNewOutbox(2)
         // First outgoing is from B (processed first), second from A (arrived later)
         expect(entries[0].text).toBe('B')
         expect(entries[1].text).toBe('B | A')

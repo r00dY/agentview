@@ -536,15 +536,11 @@ export const channelThreads = pgTable('channel_threads', {
   organizationId: text('organization_id').notNull().references(() => organizations.id),
   channelId: uuid('channel_id').notNull().references(() => channels.id, { onDelete: 'cascade' }),
   sourceThreadId: varchar('source_thread_id', { length: 255 }),
-  contact: varchar('contact', { length: 255 }).notNull(),
-  contactKind: varchar('contact_kind', { length: 32 }).notNull(), // 'email'
-  // status: varchar('status', { length: 32 }).notNull().default('whatever'), // 'idle' | 'dirty' | 'processing'
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
 }, (table) => [
-  unique('channel_threads_channel_source_contact_unique').on(table.channelId, table.sourceThreadId, table.contact, table.contactKind),
+  unique('channel_threads_channel_source_unique').on(table.channelId, table.sourceThreadId),
   index('channel_threads_channel_id_idx').on(table.channelId),
-  // index('channel_threads_status_idx').on(table.status),
   createTenantPolicy('channel_threads'),
 ]);
 
@@ -555,6 +551,10 @@ export const channelMessages = pgTable('channel_messages', {
   direction: varchar('direction', { length: 16 }).notNull().$type<'incoming' | 'outgoing'>(), // 'incoming' | 'outgoing'
   sourceId: varchar('source_id', { length: 255 }),
   text: text('text'),
+  authorEmail: varchar('author_email', { length: 255 }),
+  authorName: varchar('author_name', { length: 255 }),
+  authorHeadline: varchar('author_headline', { length: 255 }),
+  authorDetails: text('author_details'),
   attachments: jsonb('attachments'),
   providerData: jsonb('provider_data'),
   date: timestamp('date', { withTimezone: true, mode: 'string' }).notNull(),
