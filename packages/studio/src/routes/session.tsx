@@ -4,7 +4,7 @@ import { findAgentConfig, findAgentConfigBySession, findItemConfigById, findRunC
 import { enhanceSession, getActiveRuns, getAllSessionItems, getLastRun } from "agentview/sessionUtils";
 import { unwrapError } from "agentview";
 import type { AgentConfig, AgentInputComponent, InputUIMessage, ScoreConfig, UserMessageDisplayComponent } from "../types";
-import { AlertCircleIcon, Brain, ChevronDown, CircleGauge, Ellipsis, InfoIcon, Loader2, Lock, MessageCirclePlus, RotateCcw, UsersIcon, Wrench } from "lucide-react";
+import { AlertCircleIcon, Brain, ChevronDown, CircleGauge, Ellipsis, InfoIcon, Loader2, Lock, MessageCirclePlus, RotateCcw, UserIcon, UsersIcon, Wrench } from "lucide-react";
 import { useEffect, useLayoutEffect, useOptimistic, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import type { LoaderFunctionArgs, RouteObject } from "react-router";
@@ -272,27 +272,37 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 
     const wallItems: WallItem[] = [];
 
+    // Check if all incoming channel messages belong to the session user (single talker)
+    const allIncoming = (session.channelMessages ?? []).filter(m => m.direction === 'incoming');
+    const isSingleTalker = allIncoming.length > 0 && allIncoming.every(m =>
+        (m.authorEmail && m.authorEmail === session.user.email) ||
+        (!m.authorEmail && m.authorName && m.authorName === session.user.name)
+    );
+
     function addChannelMessages(channelMessages: ChannelMessage[]) {
         channelMessages.forEach((channelMessage) => {
 
-            let name: React.ReactNode | null = null;
-            let headline: string | null = channelMessage.authorHeadline;
-            if (channelMessage.authorName && channelMessage.authorEmail) {
-                name = <><span className="text-sm font-semibold">{channelMessage.authorName}</span> <span className="text-sm text-muted-foreground">&lt;{channelMessage.authorEmail}&gt;</span></>
-            }
-            else if (channelMessage.authorName) {
-                name = <span className="text-sm font-semibold">{channelMessage.authorName}</span>;
-            }
-            else if (channelMessage.authorEmail) {
-                name = <span className="text-sm font-semibold">{channelMessage.authorEmail}</span>;
-            }
-
             let header: React.ReactNode | undefined = undefined;
-            if (name || headline) {
-                header = <div>
-                    <div>{name}</div>
-                    {headline && <div className="text-sm text-muted-foreground">{headline}</div>}
-                </div>
+
+            if (!isSingleTalker) {
+                let name: React.ReactNode | null = null;
+                let headline: string | null = channelMessage.authorHeadline;
+                if (channelMessage.authorName && channelMessage.authorEmail) {
+                    name = <><span className="text-sm font-semibold">{channelMessage.authorName}</span> <span className="text-sm text-muted-foreground">&lt;{channelMessage.authorEmail}&gt;</span></>
+                }
+                else if (channelMessage.authorName) {
+                    name = <span className="text-sm font-semibold">{channelMessage.authorName}</span>;
+                }
+                else if (channelMessage.authorEmail) {
+                    name = <span className="text-sm font-semibold">{channelMessage.authorEmail}</span>;
+                }
+
+                if (name || headline) {
+                    header = <div>
+                        <div>{name}</div>
+                        {headline && <div className="text-sm text-muted-foreground">{headline}</div>}
+                    </div>
+                }
             }
 
             const element = <div className="pl-[10%] relative">
@@ -806,6 +816,19 @@ function SessionDetails({ sessionBase, agentConfig }: { sessionBase: SessionBase
                     <PropertyListTitle>Channel</PropertyListTitle>
                     <PropertyListTextValue>
                         {sessionBase.channel.type} {sessionBase.channel.type === 'api' ? `(${sessionBase.channel.name})` : `(${sessionBase.channel.address})`}
+                    </PropertyListTextValue>
+                </PropertyListItem>
+                <PropertyListItem>
+                    <PropertyListTitle>User</PropertyListTitle>
+                    <PropertyListTextValue>
+                        {(() => {
+                            const user = sessionBase.user;
+                            const displayName = user.name || user.email;
+                            if (!displayName) return <span className="text-muted-foreground">Anonymous</span>;
+                            return <a href="#" className="text-cyan-700 hover:underline">
+                                {displayName}{user.headline && <span className="text-muted-foreground"> · {user.headline}</span>}
+                            </a>;
+                        })()}
                     </PropertyListTextValue>
                 </PropertyListItem>
                 <PropertyListItem>
