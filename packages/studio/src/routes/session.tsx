@@ -272,6 +272,48 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 
     const wallItems: WallItem[] = [];
 
+    function addChannelMessages(channelMessages: ChannelMessage[]) {
+        channelMessages.forEach((channelMessage) => {
+
+            let name: React.ReactNode | null = null;
+            let headline: string | null = channelMessage.authorHeadline;
+            if (channelMessage.authorName && channelMessage.authorEmail) {
+                name = <><span className="text-sm font-semibold">{channelMessage.authorName}</span> <span className="text-sm text-muted-foreground">&lt;{channelMessage.authorEmail}&gt;</span></>
+            }
+            else if (channelMessage.authorName) {
+                name = <span className="text-sm font-semibold">{channelMessage.authorName}</span>;
+            }
+            else if (channelMessage.authorEmail) {
+                name = <span className="text-sm font-semibold">{channelMessage.authorEmail}</span>;
+            }
+
+            let header: React.ReactNode | undefined = undefined;
+            if (name || headline) {
+                header = <div>
+                    {name}
+                    {headline && <span className="text-sm text-muted-foreground">{headline}</span>}
+                </div>
+            }
+
+            const element = <div className="pl-[10%] relative">
+                <UserMessage header={header}>
+                    {/* {header} */}
+                    {channelMessage.text}
+                </UserMessage>
+            </div>
+
+            wallItems.push({
+                id: channelMessage.id,
+                element,
+                commentsAndScores: {
+                    target: { sessionId: session.id, channelMessageId: channelMessage.id },
+                    comments: props.comments.filter((c) => c.channelMessageId === channelMessage.id),
+                },
+            })
+        });
+    }
+
+
     messages.forEach((message, index) => {
 
         /**
@@ -316,24 +358,26 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                     ? getIncomingChannelMessages(session, run.id)
                     : [];
 
-                for (const channelMessage of incomingMessages) {
-                    const element = <div className="pl-[10%] relative">
-                        <UserMessage>{channelMessage.text}</UserMessage>
-                    </div>
+                addChannelMessages(incomingMessages);
 
-                    const commentsAndScores: CommentsThreadData | undefined = {
-                        target: { sessionId: session.id, channelMessageId: channelMessage.id },
-                        comments: props.comments.filter((c) => c.channelMessageId === channelMessage.id),
-                    }
+                // for (const channelMessage of incomingMessages) {
+                //     const element = <div className="pl-[10%] relative">
+                //         <UserMessage>{channelMessage.text}</UserMessage>
+                //     </div>
 
-                    wallItems.push({
-                        id: channelMessage.id,
-                        element,
-                        commentsAndScores,
-                        run,
-                        messageId: message.id,
-                    })
-                }
+                //     const commentsAndScores: CommentsThreadData | undefined = {
+                //         target: { sessionId: session.id, channelMessageId: channelMessage.id },
+                //         comments: props.comments.filter((c) => c.channelMessageId === channelMessage.id),
+                //     }
+
+                //     wallItems.push({
+                //         id: channelMessage.id,
+                //         element,
+                //         commentsAndScores,
+                //         run,
+                //         messageId: message.id,
+                //     })
+                // }
             }
         }
         else if (message.role === "assistant") {
@@ -519,20 +563,22 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
     if (session.channel.type !== 'api') {
         const pendingMessages = getIncomingChannelMessages(session);
 
-        pendingMessages.forEach((channelMessage) => {
-            const element = <div className="pl-[10%] relative">
-                <UserMessage>{channelMessage.text}</UserMessage>
-            </div>
+        addChannelMessages(pendingMessages);
 
-            wallItems.push({
-                id: channelMessage.id,
-                element,
-                commentsAndScores: {
-                    target: { sessionId: session.id, channelMessageId: channelMessage.id },
-                    comments: props.comments.filter((c) => c.channelMessageId === channelMessage.id),
-                },
-            })
-        });
+        // pendingMessages.forEach((channelMessage) => {
+        //     const element = <div className="pl-[10%] relative">
+        //         <UserMessage>{channelMessage.text}</UserMessage>
+        //     </div>
+
+        //     wallItems.push({
+        //         id: channelMessage.id,
+        //         element,
+        //         commentsAndScores: {
+        //             target: { sessionId: session.id, channelMessageId: channelMessage.id },
+        //             comments: props.comments.filter((c) => c.channelMessageId === channelMessage.id),
+        //         },
+        //     })
+        // });
     }
 
     const cancelRun = async () => {

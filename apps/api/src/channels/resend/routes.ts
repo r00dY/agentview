@@ -79,7 +79,7 @@ export function createResendRoutes(provider: EmailChannelProvider): OpenAPIHono 
           inReplyTo,
           references,
           subject: email.subject,
-          from: email.from,
+          from: email.headers.from,
           to: toAddresses.join(', '),
           cc: email.cc?.join(', '),
           htmlBody: email.html ?? undefined,

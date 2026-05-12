@@ -33,10 +33,12 @@ export function Message({
     variant,
     className,
     children,
+    header,
     ...props
-}: VariantProps<typeof messageVariants> & React.ComponentProps<"div">) {
+}: VariantProps<typeof messageVariants> & React.ComponentProps<"div"> & { header?: React.ReactNode }) {
     return <MessageContext.Provider value={{ variant }}>
         <div className={cn(messageVariants({ variant }), className)} {...props}>
+            {header && <div className="mb-2">{header}</div>}
             <AutoContent>{children}</AutoContent>
         </div>
     </MessageContext.Provider>
@@ -201,14 +203,14 @@ export function AutoContent({ children }: { children: React.ReactNode }) {
     return children;
 }
 
-export function UserMessage({ children, className, ...props }: { children: React.ReactNode, className?: string } & React.ComponentProps<"div">) {
-    return <Message variant="fill" className={className} {...props}>
+export function UserMessage({ children, className, header, ...props }: { children: React.ReactNode, className?: string, header?: React.ReactNode } & React.ComponentProps<"div">) {
+    return <Message variant="fill" className={className} header={header} {...props}>
         <AutoContent>{children}</AutoContent>
     </Message>
 }
 
-export function AssistantMessage({ children, className, ...props }: { children: React.ReactNode, className?: string } & React.ComponentProps<"div">) {
-    return <Message variant="default" className={className} {...props}>
+export function AssistantMessage({ children, className, header, ...props }: { children: React.ReactNode, className?: string, header?: React.ReactNode } & React.ComponentProps<"div">) {
+    return <Message variant="default" className={className} header={header} {...props}>
         <AutoContent>{children}</AutoContent>
     </Message>
 }

@@ -118,10 +118,7 @@ export async function resolveChannel(type: string, address: string)  {
       await createChannelFn(org.id, type, address, {}, environment.id);
       channel = await getChannelFn(type, address);
 
-      console.log('CHANNEL CREATED', channel);
-
       if (!channel) {
-        console.log('CHANNEL NOT CREATED');
         throw new Error(`Channel not created for address: ${address}`);
       }
     }
@@ -129,8 +126,6 @@ export async function resolveChannel(type: string, address: string)  {
       throw new Error(`Channel not found for address: ${address}`);
     }
   }
-
-  console.log('CHANNEL', channel);
 
   return channel;
 }

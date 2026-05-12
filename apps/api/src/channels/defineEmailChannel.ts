@@ -17,9 +17,13 @@ import { emailToMarkdown } from './emailToMarkdown';
 
 const presence = (s?: string) => s?.trim() || undefined;
 
-function extractEmailAddress(from: string): string {
-  const match = from.match(/<([^>]+)>/);
-  return (match ? match[1] : from).trim().toLowerCase();
+function extractEmailInfo(from: string): { email: string; name?: string } {
+  const match = from.match(/^(.+?)\s*<([^>]+)>$/);
+  if (match) {
+    const name = match[1].replace(/^["']|["']$/g, '').trim();
+    return { email: match[2].trim().toLowerCase(), name: name || undefined };
+  }
+  return { email: from.trim().toLowerCase() };
 }
 
 export type EmailMessageData = {
@@ -287,7 +291,7 @@ export function defineEmailChannel(config: {
       text: params.email.textBody,
     });
 
-    const fromEmail = extractEmailAddress(params.email.from);
+    const fromInfo = extractEmailInfo(params.email.from);
 
     return provider.ingestMessage(address, {
       sourceId: params.email.messageId,
@@ -296,8 +300,8 @@ export function defineEmailChannel(config: {
       text: parsed.content,
       providerData,
       author: {
-        email: fromEmail,
-        name: presence(parsed.user?.name),
+        email: fromInfo.email,
+        name: fromInfo.name ?? presence(parsed.user?.name),
         headline: presence(parsed.user?.headline),
         details: presence(parsed.user?.details),
       },
