@@ -55,6 +55,7 @@ type IngestMessageParams = {
 
   text?: string;
   providerData?: any;
+  title?: string;
 
   author: {
     name?: string;
@@ -341,6 +342,7 @@ export function channelProvider(type: string) {
           channel: channelRef,
           channelThreadId: thread.id,
           userId,
+          title: params.title,
         });
         await activateSession(tx, session.id); // channel sessions should be active immediately
 

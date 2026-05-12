@@ -299,6 +299,7 @@ export function defineEmailChannel(config: {
       date: params.date,
       text: parsed.content,
       providerData,
+      title: params.email.subject || undefined,
       author: {
         email: fromInfo.email,
         name: fromInfo.name ?? presence(parsed.user?.name),

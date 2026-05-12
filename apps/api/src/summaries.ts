@@ -15,6 +15,19 @@ import { eq, and, asc } from 'drizzle-orm';
 export async function generateSessionSummary(sessionId: string, organizationId: string): Promise<string | undefined> {
   const client = new OpenAI();
 
+  // Skip if session already has a title (e.g. set from email subject)
+  const session = await withOrg(organizationId, async (tx) => {
+    return tx.query.sessions.findFirst({
+      where: eq(sessions.id, sessionId),
+      columns: { title: true },
+    });
+  });
+
+  if (session?.title) {
+    log.info({ sessionId }, 'session already has a title, skipping generation');
+    return session.title;
+  }
+
   // Fetch session with its first item
   const firstItem = await withOrg(organizationId, async (tx) => {
     return tx.query.sessionItems.findFirst({
