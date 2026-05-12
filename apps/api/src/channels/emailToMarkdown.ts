@@ -78,7 +78,7 @@ You receive the cleaned email body (HTML and/or text). Your job:
    - Preserve the original wording EXACTLY. Do not paraphrase, summarize, or add anything.
    - Only change styling: HTML tags become markdown (bold, links, lists, tables, etc.)
    - Remove the signature from the content (extract it separately — see below).
-   - Strip out noise that isn't part of the actual message: tracking pixels, spacer images, legal disclaimers, confidentiality notices, unsubscribe links, "sent from my iPhone" lines, social media icon links, banner images, etc.
+   - Strip out noise that isn't part of the actual message: tracking pixels, spacer images, legal disclaimers, confidentiality notices, unsubscribe links, "sent from my iPhone" lines, social media icon links, banner images, attribution lines from quoted replies (e.g. "On <date>, <name> wrote:"), etc.
 
 2. USER: Extract the sender's identity from the email signature. Return null if no signature is present.
    - name: the person's full name
@@ -108,7 +108,7 @@ export async function emailToMarkdown(email: { html?: string; text?: string }): 
   if (cleanedHtml) {
     parts.push(`<html_body>\n${cleanedHtml}\n</html_body>`);
   }
-  if (cleanedText) {
+  if (cleanedText && !cleanedHtml) {
     parts.push(`<text_body>\n${cleanedText}\n</text_body>`);
   }
 
