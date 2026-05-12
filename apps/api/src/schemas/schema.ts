@@ -16,7 +16,11 @@ export const endUsers = pgTable("end_users", {
   id: uuid("id").primaryKey().defaultRandom(),
   organizationId: text("organization_id").notNull().references(() => organizations.id),
   externalId: varchar("external_id", { length: 255 }),
+
+  name: text("name"),
   email: varchar("email", { length: 255 }),
+  headline: text("headline"),
+  details: text("details"),
 
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),

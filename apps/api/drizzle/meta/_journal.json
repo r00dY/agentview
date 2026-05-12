@@ -211,6 +211,13 @@
       "when": 1778229176509,
       "tag": "0029_acoustic_medusa",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1778584559775,
+      "tag": "0030_melted_drax",
+      "breakpoints": true
     }
   ]
 }

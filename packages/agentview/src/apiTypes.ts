@@ -19,6 +19,10 @@ export const UserSchema = z.object({
   id: z.string(),
   externalId: z.string().nullable(),
   email: z.string().nullable(),
+  name: z.string().nullable(),
+  headline: z.string().nullable(),
+  details: z.string().nullable(),
+
   createdAt: z.iso.date(),
   updatedAt: z.iso.date(),
   ownerId: z.string().nullable(),
@@ -30,6 +34,10 @@ export type User = z.infer<typeof UserSchema>
 export const UserCreateSchema = UserSchema.pick({
   externalId: true,
   email: true,
+  name: true,
+  headline: true,
+  details: true,
+  
   space: true, // default based on env
   ownerId: true,
 }).partial();

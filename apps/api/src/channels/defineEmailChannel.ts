@@ -15,6 +15,8 @@ import { marked } from 'marked';
 import { withOrg } from 'src/withOrg';
 import { emailToMarkdown } from './emailToMarkdown';
 
+const presence = (s?: string) => s?.trim() || undefined;
+
 export type EmailMessageData = {
   messageId: string;
   inReplyTo?: string;
@@ -287,9 +289,12 @@ export function defineEmailChannel(config: {
       contact: params.contact,
       contactKind: params.contactKind,
       text: parsed.content,
-      providerData: {
-        ...providerData,
-        ...(parsed.signature ? { signature: parsed.signature } : {}),
+      providerData,
+      author: {
+        email: params.contact,
+        name: presence(parsed.user?.name),
+        headline: presence(parsed.user?.headline),
+        details: presence(parsed.user?.details),
       },
     });
   };

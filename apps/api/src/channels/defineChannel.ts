@@ -8,7 +8,7 @@ import { createAutoRun2ForChannel, terminateRun } from '../runs';
 import { channelMessages, channels, channelThreads, runs, sessions } from '../schemas/schema';
 import { activateSession, createSession, setAgentForSession } from '../sessions';
 import type { Transaction } from '../types';
-import { ensureUserForEmail } from '../users';
+import { createUser, ensureUserForEmail, findUser } from '../users';
 import { withOrg, withTenant } from '../withOrg';
 import type { WorkerHandle } from '../workers/utils';
 import { getConfigFromEnvironment, getEnvironment, getEnvironmentByHandleAndOrgId, requireEnvironment } from '../environments';
@@ -58,6 +58,13 @@ type IngestMessageParams = {
 
   text?: string;
   providerData?: any;
+
+  author: {
+    name?: string;
+    headline?: string;
+    details?: string
+    email?: string
+  }
 }
 
 type IngestMessageResultSuccess = {
@@ -317,8 +324,18 @@ export function channelProvider(type: string) {
       }
       else {
         if (thread.contactKind === 'email') {
-          const user = await ensureUserForEmail(tx, thread.contact);
-          userId = user?.id;
+
+          // contact must be identical to user.email
+          if (thread.contact !== params.author.email) {
+            throw new Error(`Contact kind mismatch: ${thread.contactKind} !== ${params.author.email}`);
+          }
+
+          userId = (await findUser(tx, { email: params.author.email }))?.id;
+
+          if (!userId) {
+            userId = (await createUser(tx, params.author)).user.id;
+          }
+
           log.info({ sourceId: params.sourceId, contact: thread.contact, userId }, 'user resolved from email');
         } else {
           throw new Error(`Unsupported contact kind: ${thread.contactKind}`);

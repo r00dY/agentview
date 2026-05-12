@@ -61,11 +61,11 @@ const EXTRA_VENDOR_QUOTES = [
 
 const emailSchema = z.object({
   content: z.string().describe('The email body converted to clean markdown. Must preserve the original wording exactly — only change formatting/styling to markdown.'),
-  signature: z.nullable(z.object({
-    name: z.string().describe('Full name of the sender'),
-    oneLiner: z.string().describe('Role/title and company, e.g. "Co-Founder, Commerce-UI"'),
-    extra: z.string().describe('Any additional info: phone, website, address, etc. Empty string if none.'),
-  })).describe('Email signature if present, null otherwise'),
+  user: z.nullable(z.object({
+    name: z.string().describe('Full name of the sender. Empty string if unknown.'),
+    headline: z.string().describe('A single-line description displayed under the name. Usually role/title and company (e.g. "Co-Founder, Commerce-UI"), but could be any short descriptor that best identifies who this person is. Empty string if unknown.'),
+    details: z.string().describe('Other genuinely useful info: phone, website, address, etc. Empty string if none.'),
+  })).describe('Sender identity extracted from the email signature. null if no signature present.'),
 });
 
 export type EmailParseResult = z.infer<typeof emailSchema>;
@@ -80,10 +80,10 @@ You receive the cleaned email body (HTML and/or text). Your job:
    - Remove the signature from the content (extract it separately — see below).
    - Strip out noise that isn't part of the actual message: tracking pixels, spacer images, legal disclaimers, confidentiality notices, unsubscribe links, "sent from my iPhone" lines, social media icon links, banner images, etc.
 
-2. SIGNATURE: Extract only the useful identity info from the signature — the stuff a human would actually care about. Return null if no signature is present.
+2. USER: Extract the sender's identity from the email signature. Return null if no signature is present.
    - name: the person's full name
-   - oneLiner: their role/title and company, e.g. "Co-Founder, Commerce-UI"
-   - extra: other genuinely useful contact info (phone, email, website, address) — as a short string
+   - headline: a single-line description that best identifies who this person is — usually role/title and company (e.g. "Co-Founder, Commerce-UI"), but could be anything that fits as a one-liner under their name
+   - details: other genuinely useful contact info (phone, email, website, address) — as a short string
    - Drop everything else: logos, banners, social media links, legal text, promotional taglines, "think before you print" messages, etc. These are noise.`;
 
 export async function emailToMarkdown(email: { html?: string; text?: string }): Promise<EmailParseResult> {
