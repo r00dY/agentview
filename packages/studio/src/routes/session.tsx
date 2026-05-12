@@ -290,8 +290,8 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
             let header: React.ReactNode | undefined = undefined;
             if (name || headline) {
                 header = <div>
-                    {name}
-                    {headline && <span className="text-sm text-muted-foreground">{headline}</span>}
+                    <div>{name}</div>
+                    {headline && <div className="text-sm text-muted-foreground">{headline}</div>}
                 </div>
             }
 
