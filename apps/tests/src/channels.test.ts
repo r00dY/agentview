@@ -92,6 +92,9 @@ describe('Channels', () => {
       contactKind: 'email',
       contact: 'someone@test.com',
       text: 'hello',
+      author: {
+        email: 'someone@test.com',
+      },
     })
 
     expect(result.ingested).toBe(false)
@@ -106,6 +109,9 @@ describe('Channels', () => {
         contactKind: 'email',
         contact: 'someone@test.com',
         text: 'hello',
+        author: {
+          email: 'someone@test.com',
+        },
       })
     ).rejects.toThrowError(
       expect.objectContaining({ statusCode: 404 })
@@ -135,6 +141,9 @@ describe('Channels', () => {
         contactKind: 'email',
         contact: 'customer@example.com',
         text: 'I need help with my order',
+        author: {
+          email: 'customer@example.com',
+        },
       })
 
       expect(result.message).toBeDefined()
@@ -155,6 +164,9 @@ describe('Channels', () => {
         contactKind: 'email',
         contact: 'customer@example.com',
         text: 'I need help with my order',
+        author: {
+          email: 'customer@example.com',
+        },
       })
 
       expect(result.ingested).toBe(true)
@@ -167,6 +179,9 @@ describe('Channels', () => {
         contactKind: 'email',
         contact: 'customer@example.com',
         text: 'I need help with my order',
+        author: {
+          email: 'customer@example.com',
+        },
       })
 
       expect(result2.ingested).toBe(false)
@@ -183,6 +198,9 @@ describe('Channels', () => {
           contactKind: 'email',
           contact: 'alice@example.com',
           text: 'first message from alice',
+          author: {
+            email: 'alice@example.com',
+          },
         })
 
         const r2 = await av.__internal.mock.sendMessage({
@@ -192,6 +210,9 @@ describe('Channels', () => {
           contactKind: 'email',
           contact: 'alice@example.com',
           text: 'second message from alice',
+          author: {
+            email: 'alice@example.com',
+          },
         })
 
         const s1 = await av.getSession({ id: r1.sessionId })
@@ -209,6 +230,9 @@ describe('Channels', () => {
           contactKind: 'email',
           contact: 'bob@example.com',
           text: 'hello from bob',
+          author: {
+            email: 'bob@example.com',
+          },
         })
 
         const r2 = await av.__internal.mock.sendMessage({
@@ -218,6 +242,9 @@ describe('Channels', () => {
           contactKind: 'email',
           contact: 'carol@example.com',
           text: 'hello from carol',
+          author: {
+            email: 'carol@example.com',
+          },
         })
 
         const s1 = await av.getSession({ id: r1.sessionId })
@@ -234,6 +261,9 @@ describe('Channels', () => {
           contactKind: 'email',
           contact: 'dave@example.com',
           text: 'message one',
+          author: {
+            email: 'dave@example.com',
+          },
         })
 
         const r2 = await av.__internal.mock.sendMessage({
@@ -243,6 +273,9 @@ describe('Channels', () => {
           contactKind: 'email',
           contact: 'dave@example.com',
           text: 'message two',
+          author: {
+            email: 'dave@example.com',
+          },
         })
 
         expect(r1.sessionId).toBe(r2.sessionId)
@@ -257,6 +290,9 @@ describe('Channels', () => {
           contact: 'eve@example.com',
           text: 'thread A message',
           sourceThreadId: 'thread-A',
+          author: {
+            email: 'eve@example.com',
+          },
         })
 
         const r2 = await av.__internal.mock.sendMessage({
@@ -267,6 +303,9 @@ describe('Channels', () => {
           contact: 'eve@example.com',
           text: 'thread B message',
           sourceThreadId: 'thread-B',
+          author: {
+            email: 'eve@example.com',
+          },
         })
 
         // Different threads → different sessions
@@ -288,6 +327,9 @@ describe('Channels', () => {
           contact: 'frank@example.com',
           text: 'first in thread X',
           sourceThreadId: 'thread-X',
+          author: {
+            email: 'frank@example.com',
+          },
         })
 
         const r2 = await av.__internal.mock.sendMessage({
@@ -298,7 +340,10 @@ describe('Channels', () => {
           contact: 'frank@example.com',
           text: 'second in thread X',
           sourceThreadId: 'thread-X',
-        })
+          author: {
+            email: 'frank@example.com',
+          },
+          })
 
         expect(r1.sessionId).toBe(r2.sessionId)
       })
@@ -360,6 +405,9 @@ describe('Channels', () => {
           contactKind: 'email',
           contact,
           text,
+          author: {
+            email: contact,
+          },
         })
       }
 

@@ -135,7 +135,7 @@ export class AgentViewBase {
       createChannel: async (data: { address: string }): Promise<Channel> => {
         return await this._request<Channel>('POST', `/api/channels/mock/create-channel`, data)
       },
-      sendMessage: async (data: { address: string, sourceId: string, date: string, contact: string, contactKind: string, text: string, sourceThreadId?: string, providerData?: any }): Promise<any> => {
+      sendMessage: async (data: { address: string, sourceId: string, date: string, contact: string, contactKind: string, text: string, sourceThreadId?: string, providerData?: any, author: { email: string, name?: string, headline?: string, details?: string } }): Promise<any> => {
         return await this._request<any>('POST', `/api/channels/mock/send-message`, data)
       },
       getOutbox: async (address?: string): Promise<Array<{ id: string, address: string, contact: string, contactKind: string, text: string | null, timestamp: number }>> => {

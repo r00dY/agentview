@@ -66,6 +66,12 @@ export function createMockRoutes(mock: ChannelProvider): OpenAPIHono {
               sourceThreadId: z.string().optional(),
               text: z.string(),
               providerData: z.any().optional(),
+              author: z.object({
+                email: z.string(),
+                name: z.string().optional(),
+                headline: z.string().optional(),
+                details: z.string().optional(),
+              })
             }),
           },
         },
@@ -99,6 +105,7 @@ export function createMockRoutes(mock: ChannelProvider): OpenAPIHono {
         sourceThreadId: body.sourceThreadId,
         text: body.text,
         providerData: body.providerData,
+        author: body.author,
       });
 
       return c.json(result, 200);
