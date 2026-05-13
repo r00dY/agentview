@@ -30,7 +30,7 @@ export type ExternalChannelConfig = {
     metadata?: Record<string, any>;
     initialState?: any;
 } | {
-    type: 'resend',
+    type: 'agentview-email',
     metadata?: Record<string, any>;
     initialState?: any;
 }
@@ -119,7 +119,7 @@ function baseRunSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
 
 function baseConfigSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
     const externalChannelSchema = z.object({
-        type: z.union([z.literal('gmail'), z.literal('mock'), z.literal('resend')]),
+        type: z.union([z.literal('gmail'), z.literal('mock'), z.literal('agentview-email')]),
         address: z.string(),
         metadata: z.record(z.string(), z.any()).optional(),
         initialState: z.any().optional(),

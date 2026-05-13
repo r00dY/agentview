@@ -100,7 +100,7 @@ export default defineConfig({
       },
       channels: [
         {
-          type: "resend",
+          type: "agentview-email",
           metadata: {
             userLocation: "Warsaw"
           }

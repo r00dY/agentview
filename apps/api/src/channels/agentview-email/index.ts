@@ -5,8 +5,8 @@ import { createResendRoutes } from './routes';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-export const resendChannel = defineEmailChannel({
-  type: 'resend',
+export const agentviewEmailChannel = defineEmailChannel({
+  type: 'agentview-email',
   routes: (provider) => createResendRoutes(provider),
   sendEmail: () => async ({ channel, to, from, subject, textBody, htmlBody, inReplyTo, references }) => {
     const headers: Record<string, string> = {};

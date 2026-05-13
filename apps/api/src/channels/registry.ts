@@ -1,5 +1,5 @@
 import { gmailChannel } from './gmail/index';
 import { mockChannel } from './mock/index';
-import { resendChannel } from './resend/index';
+import { agentviewEmailChannel } from './agentview-email/index';
 
-export const channelApps = [gmailChannel, mockChannel, resendChannel];
+export const channelApps = [gmailChannel, mockChannel, agentviewEmailChannel];

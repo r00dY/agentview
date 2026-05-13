@@ -18,7 +18,7 @@ export function defineConfig(config: AgentViewConfig): AgentViewConfig {
           scores,
         },
         channels: agent.channels?.map((channel) => {
-          if (channel.type === 'resend') {
+          if (channel.type === 'agentview-email') {
             return {
               ...channel,
               address: ""

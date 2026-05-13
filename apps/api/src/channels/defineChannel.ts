@@ -92,12 +92,12 @@ export async function resolveChannel(type: string, address: string)  {
   let channel = await getChannelFn(type, address);
   if (channel) return channel;
 
-  if (type === 'resend') {
+  if (type === 'agentview-email') {
     const base = address.split('@')[0];
     const parts = base.split('.');
 
     if (parts.length < 3) {
-      throw new Error(`Invalid resend address format: ${address}. Expected {orgSlug}.{envSlug}.{agentName}@domain`);
+      throw new Error(`Invalid agentview built-in email address format: ${address}. Expected {orgSlug}.{envSlug}.{agentName}@agent.agentview.app`);
     }
 
     const orgSlug = parts[0];
@@ -220,9 +220,6 @@ export function channelProvider(type: string) {
   async function ingestMessage(address: string, params: IngestMessageParams): Promise<IngestMessageResult> {
     log.info({ address, sourceId: params.sourceId, type, authorEmail: params.author.email }, 'ingesting message');
 
-    /**
-     * Resend has special treatment. Automatically creates a channel if it doesn't exist.
-     */
     let channel: Awaited<ReturnType<typeof resolveChannel>>;
     try {
       channel = await resolveChannel(type, address);
@@ -234,11 +231,8 @@ export function channelProvider(type: string) {
 
     /**
      * Find environment. If no environment connected, ignore.
-     * 
-     * TODO:
-     * 
-     * If it's RESEND -> we can INFER environment and organization from the EMAIL ADDRESS.
      */
+
     let envHandle = channel.environment?.handle;
     if (!envHandle) {
       return ignoreMessage(`Channel is not routed to any environment: type=${channel.type} address=${channel.address}`);
@@ -392,7 +386,7 @@ export function channelProvider(type: string) {
             }
 
             const channelConfigs = agent.channels?.filter((c) => {
-              return (c.type === channel.type && c.address === channel.address) || (c.type === 'resend' && channel.type === 'resend'); // resend doesn't check for address, as it's wildcarded
+              return (c.type === channel.type && c.address === channel.address) || (c.type === 'agentview-email' && channel.type === 'agentview-email'); // agentview-email doesn't check for address, as it's wildcarded
             })
             channelConfigs.forEach((channelConfig) => {
               matches.push({ agent: agent.name, channelConfig })
