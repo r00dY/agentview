@@ -391,7 +391,9 @@ export function channelProvider(type: string) {
               return;
             }
 
-            const channelConfigs = agent.channels?.filter((c) => c.type === channel.type && c.address === channel.address)
+            const channelConfigs = agent.channels?.filter((c) => {
+              return (c.type === channel.type && c.address === channel.address) || (c.type === 'resend' && channel.type === 'resend'); // resend doesn't check for address, as it's wildcarded
+            })
             channelConfigs.forEach((channelConfig) => {
               matches.push({ agent: agent.name, channelConfig })
             })

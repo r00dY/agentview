@@ -2,7 +2,7 @@ import { like } from "./scores";
 import type { AgentViewConfig } from "./types";
 
 export function defineConfig(config: AgentViewConfig): AgentViewConfig {
-  return {
+  const newConfig = {
     ...config,
     agents: config.agents?.map((agent) => {
 
@@ -17,7 +17,17 @@ export function defineConfig(config: AgentViewConfig): AgentViewConfig {
           ...agent.run,
           scores,
         },
+        channels: agent.channels?.map((channel) => {
+          if (channel.type === 'resend') {
+            return {
+              ...channel,
+              address: ""
+            }
+          }
+          return channel;
+        }),
       }
     })
   }
+  return newConfig;
 }

@@ -24,12 +24,17 @@ export interface BaseRunConfig<TSessionItemConfig extends BaseSessionItemConfig 
     idleTimeout?: number;
 }
 
-export interface ExternalChannelConfig {
-    type: 'gmail' | 'mock' | 'resend';
+export type ExternalChannelConfig = {
+    type: 'gmail' | 'mock';
     address: string;
     metadata?: Record<string, any>;
     initialState?: any;
+} | {
+    type: 'resend',
+    metadata?: Record<string, any>;
+    initialState?: any;
 }
+
 
 export type BaseChannelConfig = ExternalChannelConfig;
 

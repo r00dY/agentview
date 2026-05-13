@@ -99,13 +99,12 @@ export default defineConfig({
         ]
       },
       channels: [
-        // {
-        //   type: "resend",
-        //   address: "acme.dupa@agent.agentview.app",
-        //   metadata: {
-        //     userLocation: "Warsaw"
-        //   }
-        // },
+        {
+          type: "resend",
+          metadata: {
+            userLocation: "Warsaw"
+          }
+        },
         {
           type: "gmail",
           address: "agentviewtest@gmail.com2",
