@@ -3,7 +3,7 @@ import type { LoaderFunctionArgs, RouteObject } from "react-router";
 import { Suspense, useEffect } from "react";
 
 import { Button } from "../components/ui/button";
-import { ChevronLeftIcon, ChevronRightIcon, Loader2, MessageCircle, PlusIcon, UserIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon, Globe, Loader2, Mail, MessageCircle, PlusIcon, UserIcon } from "lucide-react";
 import { Header, HeaderTitle } from "../components/header";
 import { getListParams, getListParamsAndCheckForRedirect, toQueryParams } from "../lib/listParams";
 import { agentview, AgentViewError } from "../lib/agentview";
@@ -146,37 +146,54 @@ export function SessionCard({ session, listParams, sessionStats }: { session: Se
   const itemsMentionsCount = allItemEvents.filter((event: any) => Array.isArray(event?.payload?.user_mentions) && (event.payload.user_mentions as any[]).includes(me.id)).length;
   const hasUnreads = hasSessionUnreads || hasUnreadItems;
 
-  const author = members.find((member) => member.userId === session.user.ownerId);
+  const playgroundOwner = session.space !== 'production'
+    ? members.find((member) => member.userId === session.user.ownerId)
+    : undefined;
+
+  const userName = session.user.name || session.user.email || "Anonymous";
+  const channelLabel = session.channel.type === 'api'
+    ? session.channel.name
+    : session.channel.address;
 
   return <div key={session.id}>
     <NavLink to={`/sessions/${session.id}?${toQueryParams(listParams)}`}>
       {({ isActive, isPending }) => (
         <div className={`p-3 border-b hover:bg-neutral-50 transition-colors duration-50 ${isActive ? 'bg-neutral-100' : ''}`}>
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col">
 
-            <div className="flex flex-row gap-1 justify-between">
-
-              <div className="flex flex-row gap-2 items-center min-w-0">
-                { !author && <MessageCircle className="size-4 flex-shrink-0 text-neutral-500" />}
-                { author && <UserAvatar image={author?.user.image} className="flex-shrink-0" size="sm" />}
-
-                <div className={`text-sm truncate ${hasUnreads ? 'font-semibold' : 'font-normal'}`}>
-                  {session.title ?? "Untitled"}
-                </div>
-
-                {/* {isPending && <Loader2 className="size-3 animate-spin text-neutral-500" />} */}
-
+            {/* Row 1: User + Time/Notifications */}
+            <div className="flex flex-row gap-1 justify-between mb-1">
+              <div className="flex flex-row gap-1.5 items-center min-w-0">
+                {session.channel.type === 'api'
+                  ? <Globe className="size-3 flex-shrink-0 text-neutral-400" />
+                  : <Mail className="size-3 flex-shrink-0 text-neutral-400" />
+                }
+                <span className={`truncate ${hasUnreads ? 'font-semibold' : 'font-medium'} text-sm`}>{userName}</span>
               </div>
-
               <div className="flex flex-row gap-1 items-center flex-shrink-0">
                 <div className="text-xs text-neutral-500">{timeAgoShort(date)}</div>
                 {itemsMentionsCount > 0 && <NotificationBadge>@</NotificationBadge>}
                 {itemsMentionsCount === 0 && itemsEventsCount > 0 && <NotificationDot />}
               </div>
-
             </div>
-            {/* { session.summary && <div className="text-sm truncate  text-neutral-600">{session.summary}</div> } */}
-            {/* <div className="text-xs text-neutral-500 mt-1">0.0.1-dev</div> */}
+
+            {/* Row 2: Title */}
+            <div className={`truncate min-w-0 ${hasUnreads ? 'font-semibold' : 'font-normal'} text-sm mb-1.5`}>
+              {session.title ?? "Untitled"}
+            </div>
+
+            {/* Row 3: Playground + Agent */}
+            {(playgroundOwner || session.agent) && (
+              <div className="flex flex-row gap-2 items-center text-neutral-500" style={{ fontSize: '12px' }}>
+                {playgroundOwner && (
+                  <UserAvatar image={playgroundOwner.user.image} size="sm" className="!size-3.5" />
+                )}
+                {session.agent && (
+                  <span>{session.agent.name}@{session.agent.version}</span>
+                )}
+              </div>
+            )}
+
           </div>
         </div>
       )}
