@@ -571,7 +571,7 @@ export async function fastApplyRunPatch(
     updatedRun.finishedAt = nowIso;
 
     dbOps.push(
-      markOutputItems(tx, run.id, op.outputItemCount ?? 1),//, runConfig), // validation inside
+      markOutputItems(tx, run.id, op.outputItemCount ?? 0),//, runConfig), // validation inside
       handleChannelReply(tx, run.id, run.sessionId, tx.organizationId, op.channelReply),
     );
   }

@@ -36,11 +36,24 @@ export async function saveData(
   ) {
     const parts = conn.state.message.parts;
 
+    let channelReply: { text: string } | undefined = undefined;
+
     for (const part of parts) {
-      await saveData(conn, {
-        type: 'item',
-        content: part,
-      });
+      if (part.type === 'data-agentview-state') {
+        await saveData(conn, {
+          type: 'state',
+          content: part.data,
+        });
+      }
+      else if (part.type === 'data-agentview-output') {
+        channelReply = { text: typeof part.data === 'string' ? part.data : JSON.stringify(part.data) };
+      }
+      else {
+        await saveData(conn, {
+          type: 'item',
+          content: part,
+        });
+      }
     }
 
     await saveData(conn, {
@@ -67,19 +80,31 @@ export async function saveData(
       });
     }
     else {
-      // TODO: make this algo better
-      const textParts : { type: 'text', text: string }[] = [];
+      let outputItemCount = 0;
+      if (!channelReply) {
+        const textParts : { type: 'text', text: string }[] = [];
 
-      for (const part of parts.reverse()) {
-        if (part.type === 'text') {
-          textParts.push(part);
+        // we take text parts from the end of message, we stop with reasoning / tool / step-start
+        for (const part of parts.reverse()) {
+          if (part.type === 'text') {
+            textParts.push(part);
+          }
+          else if (part.type === 'step-start' || part.type === 'reasoning' || part.type.startsWith('tool-')) {
+            break;
+          }
+          else {
+            // ignore other parts
+          }
+          outputItemCount++;
         }
-      }
 
+        channelReply = { text: textParts.map(part => part.text).join('\n\n') };
+      }
+      
       await saveData(conn, {
         type: 'complete',
-        outputItemCount: textParts.length,
-        channelReply: { text: textParts.map(part => part.text).join('\n\n') },
+        outputItemCount,
+        channelReply,
       });
     }
   }
