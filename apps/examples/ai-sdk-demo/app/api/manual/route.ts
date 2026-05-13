@@ -63,6 +63,7 @@ export async function POST() {
     // { type: "custom", kind: "dupa.dupa" },
     { type: "finish-step" },
     { type: "finish" },
+    { type: "data-agentview-output", data: "gunwo cycki" },
   ];
 
   const stream = new ReadableStream({
