@@ -505,6 +505,57 @@ describe('Channels', () => {
         expect(entries[1].text).toBe('B | A')
       }, 15000)
 
+      test('data-agentview-output: overrides default channel reply', async () => {
+        const outbox = await av.__internal.mock.getOutbox(ADDRESS)
+        outboxBaseline = outbox.length
+
+        // Agent streams both text AND data-agentview-output.
+        // The output part should override the default text-based reply.
+        mockServer!.setHandler((body, res) => {
+          writeAISDKSuccessHeaders(res)
+          writeAISDKChunks(res, [
+            { type: 'start', messageId: 'msg_1' },
+            { type: 'text-start', id: 't1' },
+            { type: 'text-delta', id: 't1', delta: 'This is internal reasoning text' },
+            { type: 'text-end', id: 't1' },
+            { type: 'data-agentview-output', data: 'Custom reply for channel' },
+            { type: 'finish', finishReason: 'stop' },
+          ])
+          writeAISDKDone(res)
+          res.end()
+        })
+
+        await send('output-1', 'please help', 'output-thread')
+
+        const entries = await waitForNewOutbox(1)
+        // Should use the data-agentview-output value, NOT the text part
+        expect(entries[0].text).toBe('Custom reply for channel')
+      }, 15000)
+
+      test('data-agentview-output: object data is JSON-stringified', async () => {
+        const outbox = await av.__internal.mock.getOutbox(ADDRESS)
+        outboxBaseline = outbox.length
+
+        mockServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res)
+          writeAISDKChunks(res, [
+            { type: 'start', messageId: 'msg_1' },
+            { type: 'text-start', id: 't1' },
+            { type: 'text-delta', id: 't1', delta: 'Some text' },
+            { type: 'text-end', id: 't1' },
+            { type: 'data-agentview-output', data: { subject: 'Re: Help', body: 'Here is your answer' } },
+            { type: 'finish', finishReason: 'stop' },
+          ])
+          writeAISDKDone(res)
+          res.end()
+        })
+
+        await send('output-obj-1', 'help me', 'output-obj-thread')
+
+        const entries = await waitForNewOutbox(1)
+        expect(entries[0].text).toBe(JSON.stringify({ subject: 'Re: Help', body: 'Here is your answer' }))
+      }, 15000)
+
     })
   })
 

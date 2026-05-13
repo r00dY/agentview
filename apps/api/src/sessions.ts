@@ -1,7 +1,7 @@
 import { AgentViewError } from "agentview";
 import type { ChannelMessage, ChannelRef, Environment, SessionBase, SessionsGetQueryParams, SessionsGetQueryParamsSchema, SessionsPaginatedResponse, SessionStatus, SessionUpdate, StandardSession, StandardSessionCreate } from "agentview/apiTypes";
 import { randomBytes } from "crypto";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type z from "zod";
 import { resolveAgentRef } from "./agentRefs";
 import { authorize } from "./authMiddleware";
@@ -157,8 +157,6 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
     return undefined;
   }
 
-  const state = await fetchSessionState(tx, row.id);
-
   // channel messages at session level (all messages in the thread)
   let sessionChannelMessages: ChannelMessage[] | undefined = undefined;
   if (row.channelType !== 'api' && row.channelThreadId) {
@@ -189,6 +187,8 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
     }
     return chain;
   })();
+
+  const state = await fetchSessionState(tx, row.id, activeRuns.map(r => r.id));
 
 
 
@@ -261,18 +261,22 @@ export async function requireSessionBase(tx: Transaction, sessionId: string, opt
   return session
 }
 
-async function fetchSessionState(tx: Transaction, session_id: string) {
-  // Fetch the latest __state__ session item by createdAt descending
-  const stateItem = await tx.query.sessionItems.findFirst({
-    where: and(eq(sessionItems.sessionId, session_id), eq(sessionItems.isState, true)),
-    orderBy: (sessionItem, { desc }) => [desc(sessionItem.createdAt)],
-  });
+async function fetchSessionState(tx: Transaction, session_id: string, activeRunIds: string[]) {
+  if (activeRunIds.length === 0) return null;
 
-  if (!stateItem) {
-    return null
-  }
+  // Fetch the latest state item scoped to the active run lineage
+  const result = await tx
+    .select({ content: sessionItems.content })
+    .from(sessionItems)
+    .where(and(
+      eq(sessionItems.sessionId, session_id),
+      eq(sessionItems.isState, true),
+      inArray(sessionItems.runId, activeRunIds),
+    ))
+    .orderBy(desc(sessionItems.createdAt))
+    .limit(1);
 
-  return stateItem.content as any
+  return result[0]?.content as any ?? null;
 }
 
 export function getSessionStatusFields(session: StandardSession): { status: SessionStatus, failReason: any | null } {

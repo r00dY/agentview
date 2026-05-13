@@ -1356,6 +1356,277 @@ describe('ai-sdk', () => {
         expect(sessionState.status).toBe("idle");
       }, TEST_TIMEOUT);
 
+      // ---------------------------------------------------------------
+      // data-agentview-state tests
+      // ---------------------------------------------------------------
+
+      test("data-agentview-state: session.state is set after run completes", async () => {
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
+
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "data-agentview-state", data: { counter: 1, notes: "hello" } },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "Done" },
+            { type: "text-end", id: "t1" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        const stream = await sendMessageViaTransport(
+          client.createTransport(),
+          session.id,
+          { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
+        );
+        await consumeChunksFromTransportStream(stream);
+
+        const finalSession = await client.sessions.get(session.id);
+        expect(finalSession.status).toBe("idle");
+        expect(finalSession.state).toEqual({ counter: 1, notes: "hello" });
+        // data-agentview-state should NOT appear in message parts
+        expect(finalSession.messages[1].parts.length).toBe(1);
+        expect(finalSession.messages[1].parts[0].type).toBe("text");
+      }, TEST_TIMEOUT);
+
+      test("data-agentview-state: multiple state updates → last one wins", async () => {
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
+
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "data-agentview-state", data: { step: 1 } },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "First" },
+            { type: "text-end", id: "t1" },
+            { type: "data-agentview-state", data: { step: 2 } },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        const stream = await sendMessageViaTransport(
+          client.createTransport(),
+          session.id,
+          { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
+        );
+        await consumeChunksFromTransportStream(stream);
+
+        const finalSession = await client.sessions.get(session.id);
+        expect(finalSession.status).toBe("idle");
+        // fetchSessionState orders by createdAt desc, so the last inserted state wins
+        expect(finalSession.state).toEqual({ step: 2 });
+      }, TEST_TIMEOUT);
+
+      test("data-agentview-state: state persists across runs", async () => {
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
+
+        // First run: set state
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "data-agentview-state", data: { count: 1 } },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "Run 1" },
+            { type: "text-end", id: "t1" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        let stream = await sendMessageViaTransport(
+          client.createTransport(),
+          session.id,
+          { id: "msg_1", role: "user", parts: [{ type: "text", text: "First" }] }
+        );
+        await consumeChunksFromTransportStream(stream);
+
+        let finalSession = await client.sessions.get(session.id);
+        expect(finalSession.state).toEqual({ count: 1 });
+
+        // Second run: update state
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "data-agentview-state", data: { count: 2 } },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "Run 2" },
+            { type: "text-end", id: "t1" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        stream = await sendMessageViaTransport(
+          client.createTransport(),
+          session.id,
+          { id: "msg_2", role: "user", parts: [{ type: "text", text: "Second" }] }
+        );
+        await consumeChunksFromTransportStream(stream);
+
+        finalSession = await client.sessions.get(session.id);
+        expect(finalSession.state).toEqual({ count: 2 });
+
+        // Third run: no state update → previous state still persists
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "Run 3" },
+            { type: "text-end", id: "t1" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        stream = await sendMessageViaTransport(
+          client.createTransport(),
+          session.id,
+          { id: "msg_3", role: "user", parts: [{ type: "text", text: "Third" }] }
+        );
+        await consumeChunksFromTransportStream(stream);
+
+        finalSession = await client.sessions.get(session.id);
+        expect(finalSession.state).toEqual({ count: 2 });
+      }, TEST_TIMEOUT);
+
+      test("data-agentview-state: state with initialState on session create", async () => {
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({
+          agent: "test-ai-sdk",
+          userId: user.id,
+          initialState: { initialized: true },
+        });
+
+        let fetched = await client.sessions.get(session.id);
+        expect(fetched.state).toEqual({ initialized: true });
+
+        // Run overwrites state
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "data-agentview-state", data: { initialized: true, updated: true } },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "Done" },
+            { type: "text-end", id: "t1" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        const stream = await sendMessageViaTransport(
+          client.createTransport(),
+          session.id,
+          { id: "msg_1", role: "user", parts: [{ type: "text", text: "Go" }] }
+        );
+        await consumeChunksFromTransportStream(stream);
+
+        fetched = await client.sessions.get(session.id);
+        expect(fetched.state).toEqual({ initialized: true, updated: true });
+      }, TEST_TIMEOUT);
+
+      test("data-agentview-state: regeneration without state reverts to previous run's state", async () => {
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
+
+        // Run 1: set state
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "data-agentview-state", data: { count: 1 } },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "First" },
+            { type: "text-end", id: "t1" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        let stream = await sendMessageViaTransport(
+          client.createTransport(),
+          session.id,
+          { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
+        );
+        await consumeChunksFromTransportStream(stream);
+
+        let sessionState = await client.sessions.get(session.id);
+        expect(sessionState.state).toEqual({ count: 1 });
+
+        // Run 2: update state
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "data-agentview-state", data: { count: 2 } },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "Second" },
+            { type: "text-end", id: "t1" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        stream = await sendMessageViaTransport(
+          client.createTransport(),
+          session.id,
+          { id: "msg_2", role: "user", parts: [{ type: "text", text: "More" }] }
+        );
+        await consumeChunksFromTransportStream(stream);
+
+        sessionState = await client.sessions.get(session.id);
+        expect(sessionState.state).toEqual({ count: 2 });
+        expect(sessionState.messages.length).toBe(4);
+
+        // Regenerate last assistant message WITHOUT setting state
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "Regenerated" },
+            { type: "text-end", id: "t1" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        const lastAssistantId = sessionState.messages[3].id;
+        stream = await regenerateMessageViaTransport(
+          client.createTransport(),
+          session.id,
+          sessionState.messages,
+          lastAssistantId
+        );
+        await consumeChunksFromTransportStream(stream);
+
+        sessionState = await client.sessions.get(session.id);
+        expect(sessionState.status).toBe("idle");
+        expect(sessionState.messages.length).toBe(4);
+        expect(sessionState.messages[3].parts[0].text).toBe("Regenerated");
+        // State should revert to run 1's state since the regenerated run didn't set state
+        expect(sessionState.state).toEqual({ count: 1 });
+      }, TEST_TIMEOUT);
+
       test("regenerate: error when previousRunId is invalid", async () => {
         await updateEnvironment(client, { config: buildConfig() });
         const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
