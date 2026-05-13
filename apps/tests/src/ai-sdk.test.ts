@@ -122,7 +122,7 @@ describe('ai-sdk', () => {
           // standardClient = org.admin.localStandardClient;
 
           // start real proxy with real tunnel
-          proxyProcess = spawn('npx', ['agentview', 'dev', '--api-key', org.apiKeySecret.key, '--env', 'local:' + org.admin.user.email, '--no-studio'], {
+          proxyProcess = spawn('npx', ['agentview', 'dev', '--api-key', org.apiKeySecret.key, '--env', 'local-admin', '--no-studio'], {
             detached: true,
             stdio: 'inherit',
             shell: process.platform === 'win32' // needed on Windows for .cmd shims

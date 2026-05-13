@@ -15,7 +15,7 @@ async function main() {
 
   updateEnv("AGENTVIEW_API_KEY", apiKeySecret.key, { includeRoot: false });
   updateEnv("NEXT_PUBLIC_AGENTVIEW_API_KEY", apiKeyPublic.key, { includeRoot: false });
-  updateEnv("NEXT_PUBLIC_AGENTVIEW_ENV", "local:"+admin.user.email, { includeRoot: false });
+  updateEnv("NEXT_PUBLIC_AGENTVIEW_ENV", "local-admin", { includeRoot: false });
 }
 
 main().catch(console.error);

@@ -7,6 +7,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { Resend } from 'resend';
 import { db__dangerous } from "./db";
 import { createEnvironment } from "./environments";
+import { emailToEnvSlug } from "agentview/slugs";
 import { getAllowedOrigin } from "./getAllowedOrigin";
 import { getWebAppUrl } from "./getWebAppUrl";
 import { log } from "./logger";
@@ -98,14 +99,14 @@ The AgentView Team`,
                     user,
                     organization,
                 }) => {
-                    await createEnvironment(organization.id, `local:${user.email}`, user.id);
+                    await createEnvironment(organization.id, emailToEnvSlug(user.email), user.id);
                 },
 
                 afterAcceptInvitation: async ({
                     user,
                     organization,
                 }) => {
-                    await createEnvironment(organization.id, `local:${user.email}`, user.id);
+                    await createEnvironment(organization.id, emailToEnvSlug(user.email), user.id);
                 },
             }
         })

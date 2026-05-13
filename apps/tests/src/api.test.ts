@@ -442,8 +442,8 @@ describe('API', () => {
       // });
       // await authClient.signOut();
 
-      const avBob = createStandardClient({ apiKey: org.apiKeySecret.key, env: `local:bob@${org.organization.slug}.com` });
-      const avAlice = createStandardClient({ apiKey: org.apiKeySecret.key, env: `local:alice@${org.organization.slug}.com` });
+      const avBob = createStandardClient({ apiKey: org.apiKeySecret.key, env: 'local-bob' });
+      const avAlice = createStandardClient({ apiKey: org.apiKeySecret.key, env: 'local-alice' });
 
       // Bob uploads his config
       const BOB_CONFIG = { agents: [{ name: "bob-agent", version: "1.0.0" }], __internal: { disableSummaries: true } };

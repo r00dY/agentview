@@ -90,45 +90,42 @@ function ignoreMessage(reason: string): IngestMessageResult {
 
 export async function resolveChannel(type: string, address: string)  {
   let channel = await getChannelFn(type, address);
-  if (!channel) {
+  if (channel) return channel;
 
-    if (type === 'resend') {
-      console.log('RESEND!!!!');
-      
-      const base = address.split('@')[0];
-      const split = base.split('.');
-      const orgSlug = split[0];
+  if (type === 'resend') {
+    const base = address.split('@')[0];
+    const parts = base.split('.');
 
-      console.log('ORG SLUG', orgSlug);
-
-      const org = await db__dangerous.query.organizations.findFirst({
-        where: eq(organizations.slug, orgSlug),
-      });
-
-      if (!org) {
-        console.log('ORG NOT FOUND', orgSlug);
-        throw new Error(`Organization not found: org.slug=${orgSlug}`);
-      }
-
-      const environment = await getEnvironmentByHandleAndOrgId(org.id, 'local:admin@acme.com');
-      if (!environment) {
-        console.log('ENVIRONMENT NOT FOUND');
-        throw new Error(`Environment not found: org.id=${org.id} envHandle=local:admin@acme.com`);
-      }
-
-      await createChannelFn(org.id, type, address, {}, environment.id);
-      channel = await getChannelFn(type, address);
-
-      if (!channel) {
-        throw new Error(`Channel not created for address: ${address}`);
-      }
+    if (parts.length < 3) {
+      throw new Error(`Invalid resend address format: ${address}. Expected {orgSlug}.{envSlug}.{agentName}@domain`);
     }
-    else {
-      throw new Error(`Channel not found for address: ${address}`);
+
+    const orgSlug = parts[0];
+    const envSlug = parts[1];
+
+    const org = await db__dangerous.query.organizations.findFirst({
+      where: eq(organizations.slug, orgSlug),
+    });
+    if (!org) {
+      throw new Error(`Organization not found: org.slug=${orgSlug}`);
     }
+
+    const environment = await getEnvironmentByHandleAndOrgId(org.id, envSlug);
+    if (!environment) {
+      throw new Error(`Environment not found: org.id=${org.id} envSlug=${envSlug}`);
+    }
+
+    await createChannelFn(org.id, type, address, {}, environment.id);
+    channel = await getChannelFn(type, address);
+
+    if (!channel) {
+      throw new Error(`Channel not created for address: ${address}`);
+    }
+
+    return channel;
   }
 
-  return channel;
+  throw new Error(`Channel not found for address: ${address}`);
 }
 
 

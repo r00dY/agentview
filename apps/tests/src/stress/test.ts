@@ -153,10 +153,10 @@ async function main() {
 
   const authHeaders = {
     Authorization: `Bearer ${apiKey}`,
-    'X-Env': `local:${adminEmail}`,
+    'X-Env': 'local-admin',
   };
 
-  const av = createStandardClient({ apiKey, env: `local:${adminEmail}` });
+  const av = createStandardClient({ apiKey, env: 'local-admin' });
 
   await av.updateEnvironment({
     config: {
@@ -179,7 +179,7 @@ async function main() {
     },
   });
 
-  const avAISDK = createClient({ apiKey, env: `local:${adminEmail}` });
+  const avAISDK = createClient({ apiKey, env: 'local-admin' });
 
   // ELU monitor
   const eluInterval = setInterval(() => {

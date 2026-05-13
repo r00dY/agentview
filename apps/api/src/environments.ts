@@ -39,7 +39,6 @@ import { AgentViewError } from "agentview";
 // }
 
 export async function getEnvironmentByHandleAndOrgId(orgId: string, envHandle: string) {
-  console.log('GETTING ENVIRONMENT BY HANDLE AND ORG ID', orgId, envHandle);
   return await db__dangerous.query.environments.findFirst({
     columns: {
       id: true,

@@ -25,12 +25,12 @@ export async function setupTestOrg() {
 
     const localStandardClient = createStandardClient({
         apiKey: result.apiKeySecret.key,
-        env: "local:" + result.admin.user.email
+        env: "local-admin"
     })
 
     const localClient = createClient({
         apiKey: result.apiKeySecret.key,
-        env: "local:" + result.admin.user.email
+        env: "local-admin"
     })
 
     const prodStandardClient = createStandardClient({

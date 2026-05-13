@@ -411,12 +411,20 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
              * 
              * Also, output squashing only applies to 'completed' runs. For cancelled / eror runs we have no idea whether output is actually there (probably not, as run was interrupted), so we display error state as a wall item that represents the run.
              */
+
+            const relevantParts = message.parts.filter((part) => {
+                if (part.type.startsWith('data-agentview-')) {
+                    return false;
+                }
+                return true;
+            });
+            
             const stepParts: UIMessage['parts'][number][] = [];
             const outputParts: UIMessage['parts'][number][] = [];
 
             // only for completed runs we try to select output parts
             if (status === 'completed') {
-                message.parts.forEach((part, index) => {
+                relevantParts.forEach((part, index) => {
                     if (part.type === 'step-start' || part.type === 'reasoning' || part.type.startsWith('tool-')) { // reasoning or step-start "resets" and pushes all speculated output parts into step parts
                         stepParts.push(...outputParts);
                         outputParts.length = 0;
@@ -431,7 +439,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                 });
             }
             else {
-                stepParts.push(...message.parts);
+                stepParts.push(...relevantParts);
             }
 
             /**

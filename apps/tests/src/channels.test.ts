@@ -27,7 +27,7 @@ describe('Channels', () => {
     mockServer = await createMockServer(AGENT_PORT)
 
     const result = await seedUsers(orgSlug)
-    av = createStandardClient({ apiKey: result.apiKeySecret.key, env: `local:bob@${orgSlug}.com` })
+    av = createStandardClient({ apiKey: result.apiKeySecret.key, env: 'local-bob' })
     avProd = createStandardClient({ apiKey: result.apiKeySecret.key, env: 'production' })
 
     // create environment

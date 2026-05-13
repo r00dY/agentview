@@ -91,7 +91,7 @@ async function getDefaultSpace(tx: TenantTransaction): Promise<{ space: Space, o
       ownerId: null,
     }
   }
-  else if (environment.handle.startsWith('local:')) {
+  else if (environment.handle.startsWith('local-')) {
     return {
       space: 'playground',
       ownerId: environment.user!.id as string,

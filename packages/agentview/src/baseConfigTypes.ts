@@ -122,7 +122,7 @@ function baseConfigSchema<T extends z.ZodType>(jsonSchemaSchema: T) {
 
     return z.object({
         agents: z.array(z.object({
-            name: z.string(),
+            name: z.string().regex(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/, 'Agent name must be a valid slug (lowercase alphanumeric and hyphens)'),
             version: z.string(),
             url: z.string().optional(),
             adapter: z.enum(['agentview', 'ai-sdk']).optional(),

@@ -7,14 +7,16 @@ import { Button } from "../components/ui/button";
 import { requireEnvironment } from "../lib/environment";
 // import { useSessionContext } from "../lib/SessionContext";
 import { PropertyList, PropertyListTextValue, PropertyListItem, PropertyListTitle } from "../components/PropertyList";
+import { agentview } from "../lib/agentview";
 
 async function loader() {
   const environment = await requireEnvironment();
-  return { environment };
+  const organization = await agentview().organization.get();
+  return { environment, organization };
 }
 
 function Component() {
-  const { environment } = useLoaderData<typeof loader>();
+  const { environment, organization } = useLoaderData<typeof loader>();
   // const { organization } = useSessionContext()
   // const configEnvOwner = organization.members.find(m => m.userId === environment.user.id);
 
@@ -26,23 +28,37 @@ function Component() {
     <div className="p-6 max-w-6xl">
       <div>
         <PropertyList>
+
+        <PropertyListItem>
+            <PropertyListTitle>Organization</PropertyListTitle>
+            <PropertyListTextValue>
+              {organization.name}
+            </PropertyListTextValue>
+          </PropertyListItem>
+
           <PropertyListItem>
             <PropertyListTitle>Environment</PropertyListTitle>
             <PropertyListTextValue>
-              {environment.user === null && "production"}
-              {environment.user !== null && `dev (${environment.user.email})`}
+              {environment.handle}
             </PropertyListTextValue>
           </PropertyListItem>
-          <PropertyListItem>  
 
-          <PropertyListTitle>Tunnel URL</PropertyListTitle>
+          <PropertyListItem>
+            <PropertyListTitle>E-mail</PropertyListTitle>
+            <PropertyListTextValue>
+              {organization.slug}.{environment.handle}.[agent-name]@agent.agentview.com
+            </PropertyListTextValue>
+          </PropertyListItem>
+
+          <PropertyListItem>
+            <PropertyListTitle>Tunnel URL</PropertyListTitle>
             <PropertyListTextValue>
               {environment.tunnelUrl}
             </PropertyListTextValue>
           </PropertyListItem>
 
         </PropertyList>
-        
+
         <Button variant="outline" onClick={() => {
           console.log(environment.config);
         }} className="mt-4"><TerminalIcon /> Print config to console</Button>
