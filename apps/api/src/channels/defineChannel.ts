@@ -275,7 +275,7 @@ export function channelProvider(type: string) {
       });
 
       /**
-       * TODO: We should aquire SESSION LOCK TOO HERE.
+       * When we ingest message we terminate current run ASAP.
        */
       if (session) {
         await tx.acquireLock({ type: "edit_session", sessionId: session.id });
