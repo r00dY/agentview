@@ -230,9 +230,11 @@ export function channelProvider(type: string) {
     }
 
     /**
-     * Find environment. If no environment connected, ignore.
+     * Why we need environment handle?
+     * 
+     * It's because ingestion might actually have to create a new user. And new user must be qualified to a space -> which is determined by environment.
+     * 
      */
-
     let envHandle = channel.environment?.handle;
     if (!envHandle) {
       return ignoreMessage(`Channel is not routed to any environment: type=${channel.type} address=${channel.address}`);
