@@ -772,7 +772,7 @@ export async function sendRunTerminationSignal(runId: string, reason: RunTermina
         reason,
         graceful: options.graceful,
       }),
-    }); 
+    });
   } catch (error) {
     log.error({ runId, error }, 'Failed to send run termination signal');
     return false;
@@ -1128,7 +1128,7 @@ export async function createManualRun(
 }
 
 
-export async function updateRun(tx: TenantTransaction, sessionId: string, runId: string,body: RunUpdate) {
+export async function updateRun(tx: TenantTransaction, sessionId: string, runId: string, body: RunUpdate) {
   await tx.acquireLock({ type: "edit_session", sessionId });
 
   const session = await requireSessionBase(tx, sessionId);
