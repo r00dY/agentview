@@ -274,13 +274,6 @@ export function channelProvider(type: string) {
         where: eq(sessions.channelThreadId, thread.id),
       });
 
-      if (session) {
-        log.info({ sourceId: params.sourceId, sessionId: session.id }, 'session found');
-      }
-      else {
-        log.info({ sourceId: params.sourceId }, 'no session found');
-      }
-
       /**
        * Ensure user
        */
