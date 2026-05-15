@@ -17,23 +17,40 @@ import { OUTGOING_CHANNEL_MESSAGE_QUEUE } from '../workers/outgoingChannelMessag
 const PENDING_OUTGOING_POLL_INTERVAL = 1000;
 const PENDING_OUTGOING_TIMEOUT = 30000;
 
-// ─── Run finish handler (called from runs.ts via onRunFinished) ──────────────
+async function insertAndQueueOutgoingMessage(tx: OrgTransaction, values: {
+  channelThreadId: string;
+  text: string;
+  runId: string;
+  internal: boolean;
+}) {
+  const [msg] = await tx.insert(channelMessages).values({
+    ...values,
+    organizationId: tx.organizationId,
+    direction: 'outgoing',
+    status: 'pending',
+    date: new Date().toISOString(),
+  }).returning();
+
+  await getBoss().send(
+    OUTGOING_CHANNEL_MESSAGE_QUEUE,
+    { messageId: msg.id, organizationId: tx.organizationId },
+    { db: fromDrizzle(tx, sql) },
+  );
+}
+
 
 /**
- * Channel-specific handler for run finish events.
- *
- * - Completed: keep runId on incoming messages, create normal outgoing message
- * - Failed: clean runId, create internal outgoing message
- * - Discarded/Cancelled: clean runId, no outgoing message
+ * channel "domain" listens to run finish to react properly
  */
 export async function channelOnRunFinishHandler(tx: OrgTransaction, params: {
   runId: string;
   sessionId: string;
-  organizationId: string;
   status: string;
   channelReply?: { text: string };
   failReason?: any;
 }) {
+  await tx.acquireLock({ type: "edit_session", sessionId: params.sessionId });
+  
   const sessionRow = await tx.query.sessions.findFirst({
     where: eq(sessions.id, params.sessionId),
     columns: { channelThreadId: true },
@@ -58,41 +75,21 @@ export async function channelOnRunFinishHandler(tx: OrgTransaction, params: {
       return;
     }
 
-    const [insertedMsg] = await tx.insert(channelMessages).values({
-      organizationId: params.organizationId,
+    await insertAndQueueOutgoingMessage(tx, {
       channelThreadId: sessionRow.channelThreadId,
-      direction: 'outgoing',
-      status: 'pending',
-      date: new Date().toISOString(),
       text,
       runId: params.runId,
       internal: false,
-    }).returning();
-
-    await getBoss().send(
-      OUTGOING_CHANNEL_MESSAGE_QUEUE,
-      { messageId: insertedMsg.id, organizationId: params.organizationId },
-      { db: fromDrizzle(tx, sql) },
-    );
+    });
   } else if (params.status === 'failed') {
     const text = params.failReason?.message ?? 'Run failed';
 
-    const [insertedMsg] = await tx.insert(channelMessages).values({
-      organizationId: params.organizationId,
+    await insertAndQueueOutgoingMessage(tx, {
       channelThreadId: sessionRow.channelThreadId,
-      direction: 'outgoing',
-      status: 'pending',
-      date: new Date().toISOString(),
       text,
       runId: params.runId,
       internal: true,
-    }).returning();
-
-    await getBoss().send(
-      OUTGOING_CHANNEL_MESSAGE_QUEUE,
-      { messageId: insertedMsg.id, organizationId: params.organizationId },
-      { db: fromDrizzle(tx, sql) },
-    );
+    });
   }
   // discarded, cancelled → no outgoing message (runId already cleaned above)
 }
@@ -113,7 +110,7 @@ export async function createRunForChannel(
   principal: Principal,
   sessionId: string,
   signal?: AbortSignal
-): Promise<{ runId: string; response: Response; success: boolean }> {
+) {
   log.debug(`[${sessionId}] [createRunForChannel] start`);
 
   const startTime = Date.now();
@@ -252,22 +249,12 @@ async function sendInternalErrorMessage(
 ) {
   try {
     await withOrg(organizationId, async (tx) => {
-      const [insertedMsg] = await tx.insert(channelMessages).values({
-        organizationId,
+      await insertAndQueueOutgoingMessage(tx, {
         channelThreadId,
-        direction: 'outgoing',
-        status: 'pending',
-        date: new Date().toISOString(),
         text: errorText,
         runId,
         internal: true,
-      }).returning();
-
-      await getBoss().send(
-        OUTGOING_CHANNEL_MESSAGE_QUEUE,
-        { messageId: insertedMsg.id, organizationId },
-        { db: fromDrizzle(tx, sql) },
-      );
+      });
     });
   } catch (e) {
     log.warn({ runId, err: e }, 'failed to send internal error message');

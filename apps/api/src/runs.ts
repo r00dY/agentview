@@ -34,7 +34,6 @@ export const DEFAULT_IDLE_TIME = 1000 * 60; // 60 seconds
 async function onRunFinished(tx: OrgTransaction, params: {
   runId: string;
   sessionId: string;
-  organizationId: string;
   status: string;
   channelReply?: { text: string };
   failReason?: any;
@@ -526,7 +525,7 @@ export async function fastApplyRunPatch(
     updatedRun.finishedAt = nowIso;
 
     dbOps.push(
-      onRunFinished(tx, { runId: run.id, sessionId: run.sessionId, organizationId: tx.organizationId, status: 'cancelled' }),
+      onRunFinished(tx, { runId: run.id, sessionId: run.sessionId, status: 'cancelled' }),
     );
 
   } else if (op.type === 'fail') {
@@ -535,7 +534,7 @@ export async function fastApplyRunPatch(
     updatedRun.finishedAt = nowIso;
 
     dbOps.push(
-      onRunFinished(tx, { runId: run.id, sessionId: run.sessionId, organizationId: tx.organizationId, status: 'failed', failReason: op.failReason }),
+      onRunFinished(tx, { runId: run.id, sessionId: run.sessionId, status: 'failed', failReason: op.failReason }),
     );
 
   } else if (op.type === 'complete') {
@@ -544,7 +543,7 @@ export async function fastApplyRunPatch(
 
     dbOps.push(
       markOutputItems(tx, run.id, op.outputItemCount ?? 0),//, runConfig), // validation inside
-      onRunFinished(tx, { runId: run.id, sessionId: run.sessionId, organizationId: tx.organizationId, status: 'completed', channelReply: op.channelReply }),
+      onRunFinished(tx, { runId: run.id, sessionId: run.sessionId, status: 'completed', channelReply: op.channelReply }),
     );
   }
 
@@ -741,7 +740,7 @@ export async function applyRunPatch(
 
   /** Notify on terminal status change */
   if (isFinished && !isRunFinished(run)) {
-    await onRunFinished(tx, { runId: run.id, sessionId: run.sessionId, organizationId: tx.organizationId, status, channelReply: body.channelReply, failReason: body.failReason });
+    await onRunFinished(tx, { runId: run.id, sessionId: run.sessionId, status, channelReply: body.channelReply, failReason: body.failReason });
   }
 
   // Publish to Redis stream only after transaction finished successfully in DB
@@ -813,7 +812,7 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
       expiresAt: null,
     }).where(eq(runs.id, runId));
 
-    await onRunFinished(tx, { runId, sessionId, organizationId: tx.organizationId, status: reason.status, failReason: reason.failReason });
+    await onRunFinished(tx, { runId, sessionId, status: reason.status, failReason: reason.failReason });
 
     // this is important, we must send the last run patch event to the stream
     tx.afterCommit(async () => {
