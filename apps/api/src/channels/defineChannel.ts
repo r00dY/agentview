@@ -4,8 +4,8 @@ import { and, eq, isNull } from 'drizzle-orm';
 import type { ServicePrincipal } from 'src/authMiddleware';
 import { log } from '../logger';
 import { db__dangerous } from '../db';
-import { createAutoRun2ForChannel, terminateRun } from '../runs';
-import { channelMessages, channels, channelThreads, runs, sessions } from '../schemas/schema';
+import { createRunForChannel } from './channelRuns';
+import { channelMessages, channels, channelThreads, sessions } from '../schemas/schema';
 import { activateSession, createSession, setAgentForSession } from '../sessions';
 import type { Transaction } from '../types';
 import { createUser, findUser } from '../users';
@@ -274,26 +274,8 @@ export function channelProvider(type: string) {
         where: eq(sessions.channelThreadId, thread.id),
       });
 
-      /**
-       * When we ingest message we terminate current run ASAP.
-       */
       if (session) {
-        await tx.acquireLock({ type: "edit_session", sessionId: session.id });
-
         log.info({ sourceId: params.sourceId, sessionId: session.id }, 'session found');
-        const activeRun = await tx.query.runs.findFirst({
-          where: and(
-            eq(runs.sessionId, session?.id),
-            eq(runs.status, 'in_progress')
-          )
-        })
-
-        if (activeRun) {
-          log.info({ sourceId: params.sourceId, runId: activeRun.id }, 'active run found, terminating');
-          await terminateRun(tx, session.id, activeRun.id, { status: 'discarded', failReason: { message: 'New message ingested, discarding active run' } });
-        } else {
-          log.debug({ sourceId: params.sourceId }, 'no active run found');
-        }
       }
       else {
         log.info({ sourceId: params.sourceId }, 'no session found');
@@ -358,37 +340,22 @@ export function channelProvider(type: string) {
     }
 
 
-    /**
-     * This is on purpose async, it should not block and should go to the worker soon.
-     * 
-     * IMPORTANT: It's not perfect, and requires improvement.
-     * 
-     * There's no retry here, IF THERE IS NO AGENT ASSIGNED IT MEANS ERROR.
-     * 
-     * But actually also, if for some reason run can't be run, then it's also final error.
-     * 
-     * Needs work.
-     */
-
     (async () => {
       try {
         // Set up session agent, metadata, initialState
         await withTenant(principal, async (tx) => {
           const environment = await requireEnvironment(tx);
           const config = getConfigFromEnvironment(environment);
-    
-          // let channelConfig: ExternalChannelConfig | undefined = undefined;
-          // let agentName: string | undefined = undefined;
 
           const matches : { agent: string, channelConfig: ExternalChannelConfig }[] = [];
-    
+
           config.agents?.forEach((agent) => {
             if (!agent.channels) {
               return;
             }
 
             const channelConfigs = agent.channels?.filter((c) => {
-              return (c.type === channel.type && c.address === channel.address) || (c.type === 'agentview-email' && channel.type === 'agentview-email'); // agentview-email doesn't check for address, as it's wildcarded
+              return (c.type === channel.type && c.address === channel.address) || (c.type === 'agentview-email' && channel.type === 'agentview-email');
             })
             channelConfigs.forEach((channelConfig) => {
               matches.push({ agent: agent.name, channelConfig })
@@ -401,14 +368,14 @@ export function channelProvider(type: string) {
           if (matches.length > 1) {
             throw new Error(`Multiple agents found for this channel: ${channel.type} ${channel.address}`);
           }
-    
+
           const { agent, channelConfig } = matches[0];
-    
+
           await setAgentForSession(tx, result.sessionId, { agent, metadata: channelConfig!.metadata, initialState: channelConfig!.initialState });
         })
 
-        // Start run
-        await createAutoRun2ForChannel(principal, result.sessionId);
+        // Create and execute run (handles waiting, termination, run creation)
+        await createRunForChannel(principal, result.sessionId);
       }
       catch (error) {
         log.warn({ sourceId: params.sourceId, err: error }, 'failed to create run from channel messages');

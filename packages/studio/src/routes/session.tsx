@@ -155,39 +155,19 @@ type WallItem = {
 
 /**
  * Get incoming channel messages for a specific run or unassigned ones.
- * With runId: returns incoming messages within that run's [first, last] createdAt range.
- * Without runId: returns incoming messages not consumed by any run.
+ * With runId: returns incoming messages assigned to that run via runId.
+ * Without runId: returns incoming messages not assigned to any run.
  */
 function getIncomingChannelMessages(session: Session, runId?: string): ChannelMessage[] {
     const channelMessages = session.channelMessages ?? [];
-    const incoming = channelMessages.filter(m => m.direction === 'incoming');
-
-    // Collect all run ranges from message metadata
-    const runRanges = session.messages
-        .map(m => m.metadata?._agentview)
-        .filter((meta): meta is { id: string, firstIncomingChannelMessageId?: string, lastIncomingChannelMessageId?: string } =>
-            meta?.id && meta?.firstIncomingChannelMessageId && meta?.lastIncomingChannelMessageId
-        );
-
-    // Resolve a range to a set of consumed message IDs
-    function getConsumedIds(range: { firstIncomingChannelMessageId?: string, lastIncomingChannelMessageId?: string }): Set<string> {
-        const first = channelMessages.find(m => m.id === range.firstIncomingChannelMessageId);
-        const last = channelMessages.find(m => m.id === range.lastIncomingChannelMessageId);
-        if (!first || !last) return new Set();
-        return new Set(
-            incoming.filter(m => m.createdAt >= first.createdAt && m.createdAt <= last.createdAt).map(m => m.id)
-        );
-    }
+    const incoming = channelMessages.filter(m => m.direction === 'incoming' && !m.internal);
 
     if (runId) {
-        const range = runRanges.find(r => r.id === runId);
-        if (!range) return [];
-        return incoming.filter(m => getConsumedIds(range).has(m.id));
+        return incoming.filter(m => m.runId === runId);
     }
 
-    // Unassigned: all incoming messages not consumed by any run
-    const allConsumed = new Set(runRanges.flatMap(r => [...getConsumedIds(r)]));
-    return incoming.filter(m => !allConsumed.has(m.id));
+    // Unassigned: no runId
+    return incoming.filter(m => !m.runId);
 }
 
 function SessionPage(props: { session: Session, comments: CommentMessage[], scores: Score[], sessionStats?: SessionStats }) {

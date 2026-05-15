@@ -82,9 +82,6 @@ export const runs = pgTable("runs", {
   previousRunId: uuid("previous_run_id").references((): AnyPgColumn => runs.id, { onDelete: 'set null' }),
   active: boolean("active").notNull(), // active runs are 'the main branch'
 
-  firstIncomingChannelMessageId: uuid("first_incoming_channel_message_id").references((): AnyPgColumn => channelMessages.id, { onDelete: 'set null' }),
-  lastIncomingChannelMessageId: uuid("last_incoming_channel_message_id").references((): AnyPgColumn => channelMessages.id, { onDelete: 'set null' }),
-  outgoingChannelMessageId: uuid("outgoing_channel_message_id").references((): AnyPgColumn => channelMessages.id, { onDelete: 'set null' }),
 }, (table) => [
   index('runs_expires_at_status_idx').on(table.expiresAt, table.status),
   index('runs_session_id_created_at_idx').on(table.sessionId, table.createdAt),
@@ -358,21 +355,7 @@ export const runRelations = relations(runs, ({ one, many }) => ({
   sessionItems: many(sessionItems),
   commentMessages: many(commentMessages),
   scores: many(scores),
-  firstIncomingChannelMessage: one(channelMessages, {
-    fields: [runs.firstIncomingChannelMessageId],
-    references: [channelMessages.id],
-    relationName: 'firstIncomingChannelMessage',
-  }),
-  lastIncomingChannelMessage: one(channelMessages, {
-    fields: [runs.lastIncomingChannelMessageId],
-    references: [channelMessages.id],
-    relationName: 'lastIncomingChannelMessage',
-  }),
-  outgoingChannelMessage: one(channelMessages, {
-    fields: [runs.outgoingChannelMessageId],
-    references: [channelMessages.id],
-    relationName: 'outgoingChannelMessage',
-  }),
+  channelMessages: many(channelMessages),
 }));
 
 export const sessionItemsRelations = relations(sessionItems, ({ one, many }) => ({
@@ -562,11 +545,14 @@ export const channelMessages = pgTable('channel_messages', {
   failReason: jsonb('fail_reason'),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  runId: uuid('run_id').references(() => runs.id, { onDelete: 'set null' }),
+  internal: boolean('internal').notNull().default(false),
 }, (table) => [
   uniqueIndex('channel_messages_thread_source_unique').on(table.channelThreadId, table.sourceId),
   index('channel_messages_thread_id_idx').on(table.channelThreadId),
   index('channel_messages_status_direction_idx').on(table.status, table.direction),
   index('channel_messages_date_idx').on(table.date),
+  index('channel_messages_run_id_idx').on(table.runId),
   createTenantPolicy('channel_messages'),
 ]);
 
@@ -591,6 +577,10 @@ export const channelMessagesRelations = relations(channelMessages, ({ one, many 
   channelThread: one(channelThreads, {
     fields: [channelMessages.channelThreadId],
     references: [channelThreads.id],
+  }),
+  run: one(runs, {
+    fields: [channelMessages.runId],
+    references: [runs.id],
   }),
   commentMessages: many(commentMessages),
 }));

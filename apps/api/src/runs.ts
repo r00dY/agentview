@@ -20,8 +20,8 @@ import { withTenant, type OrgTransaction, type TenantTransaction } from './withO
 import { getBoss } from './pgboss';
 import { fromDrizzle } from 'pg-boss';
 import { WEBHOOK_QUEUE, type WebhookJobData } from './workers/webhooks';
-import { OUTGOING_CHANNEL_MESSAGE_QUEUE } from './workers/outgoingChannelMessages';
 import { SESSION_GENERATE_TITLE_QUEUE } from './workers/generateTitle';
+import { onRunEnded } from './channels/channelRunEnd';
 import { standardToDefaultSession } from './standardToDefaultSession';
 import { isToolUIPart } from 'ai';
 
@@ -67,56 +67,6 @@ export function validateItems(runConfig: BaseRunConfig, previousRunItems: any[],
   return parsedItems;
 }
 
-async function handleChannelReply(
-  tx: OrgTransaction,
-  runId: string,
-  sessionId: string,
-  organizationId: string,
-  channelReply?: { text: string },
-) {
-  const sessionRow = await tx.query.sessions.findFirst({
-    where: eq(sessions.id, sessionId),
-    columns: { channelThreadId: true },
-  });
-
-  if (!sessionRow) {
-    throw new Error("Unexpected error. Session doesn't exist when handling channel reply.");
-  }
-
-  if (sessionRow.channelThreadId) {
-    if (!channelReply) {
-      throw new AgentViewError("No channel reply for a session that has a channel thread.", 400);
-    }
-
-    const [insertedMsg] = await tx.insert(channelMessages).values({
-      organizationId,
-      channelThreadId: sessionRow.channelThreadId,
-      direction: 'outgoing',
-      status: 'pending',
-      date: new Date().toISOString(),
-      text: channelReply.text,
-    }).returning();
-
-    await tx.update(runs).set({
-      outgoingChannelMessageId: insertedMsg.id,
-    }).where(eq(runs.id, runId));
-
-    await getBoss().send(
-      OUTGOING_CHANNEL_MESSAGE_QUEUE,
-      { messageId: insertedMsg.id, organizationId },
-      { db: fromDrizzle(tx, sql) },
-    );
-  }
-  // else if (!sessionRow.channelThreadId && channelReply) {
-  //   throw new AgentViewError("You can't set channel reply for a session that doesn't have a channel thread.", 400);
-  // }
-  // else if (sessionRow.channelThreadId && !channelReply) {
-  //   throw new AgentViewError("No channel reply for a session that has a channel thread.", 400);
-  // }
-  // else if (!sessionRow.channelThreadId && !channelReply) {
-  //   // no-op
-  // }
-}
 
 
 /**
@@ -566,13 +516,17 @@ export async function fastApplyRunPatch(
     updatedRun.failReason = op.failReason;
     updatedRun.finishedAt = nowIso;
 
+    dbOps.push(
+      onRunEnded(tx, { runId: run.id, sessionId: run.sessionId, organizationId: tx.organizationId, status: 'failed', failReason: op.failReason }),
+    );
+
   } else if (op.type === 'complete') {
     updatedRun.status = 'completed';
     updatedRun.finishedAt = nowIso;
 
     dbOps.push(
       markOutputItems(tx, run.id, op.outputItemCount ?? 0),//, runConfig), // validation inside
-      handleChannelReply(tx, run.id, run.sessionId, tx.organizationId, op.channelReply),
+      onRunEnded(tx, { runId: run.id, sessionId: run.sessionId, organizationId: tx.organizationId, status: 'completed', channelReply: op.channelReply }),
     );
   }
 
@@ -765,7 +719,12 @@ export async function applyRunPatch(
   if (status === 'completed' && runConfig) {
     const outputItemCount = body.outputItemCount ?? 1;
     await markOutputItems(tx, run.id, outputItemCount)//, runConfig);
-    await handleChannelReply(tx, run.id, run.sessionId, tx.organizationId, body.channelReply);
+    await onRunEnded(tx, { runId: run.id, sessionId: run.sessionId, organizationId: tx.organizationId, status: 'completed', channelReply: body.channelReply });
+  }
+
+  /** Notify channels on failure */
+  if (status === 'failed' && !isRunFinished(run)) {
+    await onRunEnded(tx, { runId: run.id, sessionId: run.sessionId, organizationId: tx.organizationId, status: 'failed', failReason: body.failReason });
   }
 
   // Publish to Redis stream only after transaction finished successfully in DB
@@ -837,6 +796,11 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
       expiresAt: null,
     }).where(eq(runs.id, runId));
 
+    // Notify channels of failed runs (not discarded/cancelled)
+    if (reason.status === 'failed') {
+      await onRunEnded(tx, { runId, sessionId, organizationId: tx.organizationId, status: 'failed', failReason: reason.failReason });
+    }
+
     // this is important, we must send the last run patch event to the stream
     tx.afterCommit(async () => {
       sendRunTerminationSignal(runId, reason, { graceful: false }) // super important
@@ -862,15 +826,13 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
  * Creates an auto-run in the database within an existing transaction.
  * Caller must hold the session lock.
  */
-async function createAutoRunInTx(
+export async function createAutoRunInTx(
   tx: TenantTransaction,
   sessionId: string,
   input: Record<string, any>,
   options: {
     id?: string,
     previousRunId?: string | null,
-    firstIncomingChannelMessageId?: string,
-    lastIncomingChannelMessageId?: string,
   }
 ) {
   const session = await requireSessionBase(tx, sessionId);
@@ -908,13 +870,6 @@ async function createAutoRunInTx(
     active: false,
   });
 
-  if (options.firstIncomingChannelMessageId && options.lastIncomingChannelMessageId) {
-    await tx.update(runs).set({
-      firstIncomingChannelMessageId: options.firstIncomingChannelMessageId,
-      lastIncomingChannelMessageId: options.lastIncomingChannelMessageId,
-    }).where(eq(runs.id, newRunId));
-  }
-
   const agentUrl = agentConfig.url;
   if (!agentUrl) {
     throw new AgentViewError("Agent URL not provided", 400);
@@ -936,7 +891,7 @@ async function createAutoRunInTx(
 /**
  * Post-transaction: converts session, establishes streaming connection, handles errors.
  */
-async function executeAutoRun(
+export async function executeAutoRun(
   principal: Principal,
   sessionId: string,
   txResult: Awaited<ReturnType<typeof createAutoRunInTx>>,
@@ -1087,106 +1042,6 @@ export async function createAutoRun2(
 }
 
 
-export async function createAutoRun2ForChannel(
-  principal: Principal,
-  sessionId: string,
-  signal?: AbortSignal
-): Promise<{ runId: string, response: Response, success: boolean }> {
-
-  log.debug(`[${sessionId}] [createAutoRun2ForChannel] start`);
-
-  const txResult = await withTenant(principal, async (tx) => {
-    await tx.acquireLock({ type: "edit_session", sessionId });
-
-    const session = await requireSessionBase(tx, sessionId);
-    authorize(tx.principal, { action: "end-user:update", user: session.user });
-
-    const environment = await requireEnvironment(tx);
-    const config = getConfigFromEnvironment(environment);
-    const agentConfig = requireAgentConfigBySession(config, session);
-
-    // Find channel thread
-    const channelThreadId = session.channelThreadId;
-
-    if (typeof channelThreadId !== 'string') {
-      throw new AgentViewError("Session has no channel thread.", 422);
-    }
-
-    // Get all channel messages for this thread, ordered by date (conversation timeline)
-    const allMessages = await tx.query.channelMessages.findMany({
-      where: eq(channelMessages.channelThreadId, channelThreadId),
-      orderBy: (cm, { asc }) => [asc(cm.date)],
-    });
-
-    // If any outgoing message is still 'pending' or 'sending', we can't determine the
-    // conversation state yet. The caller should retry once delivery resolves to 'sent' or 'failed'.
-    // This avoids creating a run against an ambiguous state where we don't know if the user
-    // has seen the previous reply or not.
-    const unresolvedOutgoing = allMessages.find(m =>
-      m.direction === 'outgoing' && (m.status === 'pending' || m.status === 'sending')
-    );
-    if (unresolvedOutgoing) {
-      throw new AgentViewError(
-        "Cannot create run while an outgoing message is still being delivered. Retry after delivery completes.",
-        409
-      );
-    }
-
-    // Find the last successfully sent outgoing message — this marks the conversation boundary.
-    // Failed outgoing messages are ignored (treated as if they don't exist).
-    const lastSentOutgoingIdx = allMessages.findLastIndex(m =>
-      m.direction === 'outgoing' && m.status === 'sent'
-    );
-
-    let previousRunId: string | null = null; // must be `null`!!! null means -> from ROOT, undefined is "append at the end"
-    let incomingMessages: typeof allMessages;
-
-    if (lastSentOutgoingIdx >= 0) {
-      const lastSentOutgoing = allMessages[lastSentOutgoingIdx];
-
-      // The run that produced this outgoing reply is our branch point.
-      // New run branches from it, so old dead branches are ignored.
-      const ownerRun = await tx.query.runs.findFirst({
-        where: eq(runs.outgoingChannelMessageId, lastSentOutgoing.id),
-        columns: { id: true },
-      });
-      previousRunId = ownerRun?.id ?? null;
-
-      // Incoming messages that arrived after the last sent outgoing was created.
-      // We use createdAt (insertion time) rather than date, because messages can
-      // arrive out of order (earlier date arriving after a later-dated message).
-      incomingMessages = allMessages.filter(m =>
-        m.direction === 'incoming' && m.createdAt > lastSentOutgoing.createdAt
-      );
-    } else {
-      // No sent outgoing → first run, consume all incoming messages
-      incomingMessages = allMessages.filter(m => m.direction === 'incoming');
-    }
-
-    if (incomingMessages.length === 0) {
-      throw new AgentViewError("No incoming messages to create a run from.", 422);
-    }
-
-    log.info({ sessionId, count: incomingMessages.length }, 'incoming messages found');
-
-    // Build input from channel messages
-    const newRunId = crypto.randomUUID();
-    const adapter = getAdapter(agentConfig.adapter);
-    const input = adapter.createDefaultInputForChannelMessages(incomingMessages, newRunId);
-
-    // Sort by createdAt to get first/last by insertion order (handles out-of-order dates)
-    const byCreatedAt = [...incomingMessages].sort((a, b) => a.createdAt < b.createdAt ? -1 : 1);
-
-    return createAutoRunInTx(tx, sessionId, input, {
-      id: newRunId,
-      previousRunId,
-      firstIncomingChannelMessageId: byCreatedAt[0].id,
-      lastIncomingChannelMessageId: byCreatedAt[byCreatedAt.length - 1].id,
-    });
-  });
-
-  return executeAutoRun(principal, sessionId, txResult, signal);
-}
 
 
 

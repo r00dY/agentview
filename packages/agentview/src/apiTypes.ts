@@ -165,6 +165,8 @@ export const ChannelMessageSchema = z.object({
   authorName: z.string().nullable(),
   authorHeadline: z.string().nullable(),
   authorDetails: z.string().nullable(),
+  runId: z.string().nullable(),
+  internal: z.boolean(),
 })
 
 export type ChannelMessage = z.infer<typeof ChannelMessageSchema>
@@ -210,9 +212,6 @@ export type RunBase = z.infer<typeof RunBaseSchema>
 
 export const StandardRunSchema = RunBaseSchema.extend({
   sessionItems: z.array(SessionItemSchema),
-  firstIncomingChannelMessageId: z.string().nullable(),
-  lastIncomingChannelMessageId: z.string().nullable(),
-  outgoingChannelMessageId: z.string().nullable(),
 });
 
 // Auto-fetch run creation: just send the input

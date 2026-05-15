@@ -232,6 +232,13 @@
       "when": 1778589961988,
       "tag": "0032_black_king_bedlam",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1778830348036,
+      "tag": "0033_marvelous_ultimo",
+      "breakpoints": true
     }
   ]
 }

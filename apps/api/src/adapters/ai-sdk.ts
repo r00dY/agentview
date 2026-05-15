@@ -23,18 +23,7 @@ export const aiSDKAdapter = {
     }
 } satisfies Adapter;
 
-// function getRunIncomingMessages(allMessages: ChannelMessage[], run: StandardRun): ChannelMessage[] {
-//     if (!run.firstIncomingChannelMessageId || !run.lastIncomingChannelMessageId) return [];
-//     const first = allMessages.find(m => m.id === run.firstIncomingChannelMessageId);
-//     const last = allMessages.find(m => m.id === run.lastIncomingChannelMessageId);
-//     if (!first || !last) return [];
-//     // Filter by createdAt range (handles out-of-order dates)
-//     return allMessages.filter(m =>
-//         m.direction === 'incoming' &&
-//         m.createdAt >= first.createdAt &&
-//         m.createdAt <= last.createdAt
-//     );
-// }
+
 
 function sessionToUIMessages(session: StandardSession): UIMessage[] {
     const messages: UIMessage[] = [];
@@ -68,16 +57,11 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
             throw new Error("[sessionToUIMessages] Assistant message ID is required");
         }
 
-        // const outgoingMessage = run.outgoingChannelMessageId
-        //     ? allChannelMessages.find(m => m.id === run.outgoingChannelMessageId)
-        //     : undefined;
-
         messages.push({
             id: assistantMessageId,
             metadata: {
                 ...assistantMessageMetadata,
                 _agentview: {
-                    // channelMessage: outgoingMessage,
                     id: run.id,
                     status: run.status,
                     failReason: run.failReason,
@@ -85,9 +69,6 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
                     finishedAt: run.finishedAt,
                     agent: run.agent,
                     metadata,
-                    firstIncomingChannelMessageId: run.firstIncomingChannelMessageId,
-                    lastIncomingChannelMessageId: run.lastIncomingChannelMessageId,
-                    outgoingChannelMessageId: run.outgoingChannelMessageId,
                 }
             },
             role: 'assistant',

@@ -450,26 +450,24 @@ describe('Channels', () => {
         expect(entries[0].text).toBe('A B C')
       }, 15000)
 
-      test('agent failure → no outgoing, next message retries with batch', async () => {
+      test('agent failure → internal error outgoing, next message retries with batch', async () => {
         const outbox = await av.__internal.mock.getOutbox(ADDRESS)
         outboxBaseline = outbox.length
 
         // First message: agent fails
         setFailHandler()
         await send('fail-1', 'X', 'fail-thread')
-        // Wait for the failed run to complete (no outgoing expected)
-        await new Promise(r => setTimeout(r, 7000))
-
-        // No outgoing message should exist
-        let entries = await getNewOutboxEntries()
-        expect(entries).toHaveLength(0)
+        // Wait for the failed run — produces an internal error outgoing message
+        let entries = await waitForNewOutbox(1)
+        expect(entries[0].text).toBe('Error response from AI Endpoint')
 
         // Second message: agent succeeds, should batch both messages
+        // (internal error message is excluded from previousRunId calculation)
         setParrotHandler()
         await send('fail-2', 'Y', 'fail-thread')
 
-        entries = await waitForNewOutbox(1)
-        expect(entries[0].text).toBe('X Y')
+        entries = await waitForNewOutbox(2)
+        expect(entries[1].text).toBe('X Y')
       }, 15000)
 
       test('rapid out-of-order messages → batched in date order', async () => {
