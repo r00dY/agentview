@@ -517,7 +517,7 @@ export type SetAgentForSessionBody = {
 }
 
 export async function setAgentForSession(tx: TenantTransaction, sessionId: string, body: SetAgentForSessionBody) {
-  await tx.acquireLock({ type: "create_resource" });
+  await tx.acquireLock({ type: "edit_session", sessionId });
 
   const session = await requireSessionBase(tx, sessionId);
   const config = await requireConfig(tx)
