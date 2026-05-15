@@ -11,45 +11,98 @@ import { getBoss } from '../pgboss';
 import { createAutoRunInTx, executeAutoRun, terminateRun } from '../runs';
 import { channelMessages, runs, sessions } from '../schemas/schema';
 import { requireSessionBase } from '../sessions';
-import { withOrg, withTenant } from '../withOrg';
+import { withOrg, withTenant, type OrgTransaction } from '../withOrg';
 import { OUTGOING_CHANNEL_MESSAGE_QUEUE } from '../workers/outgoingChannelMessages';
 
 const PENDING_OUTGOING_POLL_INTERVAL = 1000;
 const PENDING_OUTGOING_TIMEOUT = 30000;
 
-/**
- * Wait until there are no pending/sending outgoing messages for the channel thread.
- * Polls outside of a transaction to avoid holding locks.
- */
-async function waitForPendingOutgoing(
-  organizationId: string,
-  channelThreadId: string,
-): Promise<void> {
-  const startTime = Date.now();
-  while (Date.now() - startTime < PENDING_OUTGOING_TIMEOUT) {
-    const hasPending = await withOrg(organizationId, async (tx) => {
-      const unresolved = await tx.query.channelMessages.findFirst({
-        where: and(
-          eq(channelMessages.channelThreadId, channelThreadId),
-          eq(channelMessages.direction, 'outgoing'),
-          inArray(channelMessages.status, ['pending', 'sending']),
-        ),
-      });
-      return !!unresolved;
-    });
-    if (!hasPending) return;
+// ─── Run finish handler (called from runs.ts via onRunFinished) ──────────────
 
-    log.debug({ channelThreadId }, 'waiting for pending outgoing message...');
-    await new Promise(r => setTimeout(r, PENDING_OUTGOING_POLL_INTERVAL));
+/**
+ * Channel-specific handler for run finish events.
+ *
+ * - Completed: keep runId on incoming messages, create normal outgoing message
+ * - Failed: clean runId, create internal outgoing message
+ * - Discarded/Cancelled: clean runId, no outgoing message
+ */
+export async function channelOnRunFinishHandler(tx: OrgTransaction, params: {
+  runId: string;
+  sessionId: string;
+  organizationId: string;
+  status: string;
+  channelReply?: { text: string };
+  failReason?: any;
+}) {
+  const sessionRow = await tx.query.sessions.findFirst({
+    where: eq(sessions.id, params.sessionId),
+    columns: { channelThreadId: true },
+  });
+
+  if (!sessionRow?.channelThreadId) {
+    return; // not a channel session
   }
 
-  throw new AgentViewError("Timed out waiting for pending outgoing message.", 408);
+  // Clean runId from channel messages for unsuccessful runs
+  // This releases incoming messages so the next run can pick them up
+  if (params.status !== 'completed') {
+    await tx.update(channelMessages)
+      .set({ runId: null })
+      .where(eq(channelMessages.runId, params.runId));
+  }
+
+  if (params.status === 'completed') {
+    const text = params.channelReply?.text ?? '';
+    if (!text) {
+      log.warn({ runId: params.runId }, 'channelOnRunFinishHandler: no reply text for completed run');
+      return;
+    }
+
+    const [insertedMsg] = await tx.insert(channelMessages).values({
+      organizationId: params.organizationId,
+      channelThreadId: sessionRow.channelThreadId,
+      direction: 'outgoing',
+      status: 'pending',
+      date: new Date().toISOString(),
+      text,
+      runId: params.runId,
+      internal: false,
+    }).returning();
+
+    await getBoss().send(
+      OUTGOING_CHANNEL_MESSAGE_QUEUE,
+      { messageId: insertedMsg.id, organizationId: params.organizationId },
+      { db: fromDrizzle(tx, sql) },
+    );
+  } else if (params.status === 'failed') {
+    const text = params.failReason?.message ?? 'Run failed';
+
+    const [insertedMsg] = await tx.insert(channelMessages).values({
+      organizationId: params.organizationId,
+      channelThreadId: sessionRow.channelThreadId,
+      direction: 'outgoing',
+      status: 'pending',
+      date: new Date().toISOString(),
+      text,
+      runId: params.runId,
+      internal: true,
+    }).returning();
+
+    await getBoss().send(
+      OUTGOING_CHANNEL_MESSAGE_QUEUE,
+      { messageId: insertedMsg.id, organizationId: params.organizationId },
+      { db: fromDrizzle(tx, sql) },
+    );
+  }
+  // discarded, cancelled → no outgoing message (runId already cleaned above)
 }
+
+// ─── Channel run creation ────────────────────────────────────────────────────
 
 /**
  * Creates and executes a run for a channel session.
  *
- * 1. Waits for any pending outgoing messages to resolve
+ * 1. Locks the session, checks for pending outgoing messages (retries if found)
  * 2. Terminates any active run for the session
  * 3. Determines previousRunId from last successful (sent, non-internal) outgoing message
  * 4. Creates a new run from unprocessed incoming messages
@@ -63,113 +116,129 @@ export async function createRunForChannel(
 ): Promise<{ runId: string; response: Response; success: boolean }> {
   log.debug(`[${sessionId}] [createRunForChannel] start`);
 
-  // Get channelThreadId outside the main transaction
-  const { channelThreadId, organizationId } = await withTenant(principal, async (tx) => {
-    const session = await requireSessionBase(tx, sessionId);
-    if (typeof session.channelThreadId !== 'string') {
-      throw new AgentViewError("Session has no channel thread.", 422);
-    }
-    return { channelThreadId: session.channelThreadId, organizationId: tx.organizationId };
-  });
+  const startTime = Date.now();
 
-  // Wait for any pending outgoing messages
-  await waitForPendingOutgoing(organizationId, channelThreadId);
+  while (true) {
+    const txResult = await withTenant(principal, async (tx) => {
+      await tx.acquireLock({ type: "edit_session", sessionId });
 
-  // Main transaction: terminate active run, create new run
-  const txResult = await withTenant(principal, async (tx) => {
-    await tx.acquireLock({ type: "edit_session", sessionId });
+      const session = await requireSessionBase(tx, sessionId);
+      const channelThreadId = session.channelThreadId;
+      if (typeof channelThreadId !== 'string') {
+        throw new AgentViewError("Session has no channel thread.", 422);
+      }
 
-    const session = await requireSessionBase(tx, sessionId);
-
-    // Terminate any active run
-    const activeRun = await tx.query.runs.findFirst({
-      where: and(
-        eq(runs.sessionId, sessionId),
-        eq(runs.status, 'in_progress'),
-      ),
-    });
-
-    if (activeRun) {
-      log.info({ sessionId, runId: activeRun.id }, 'terminating active run before creating new channel run');
-      await terminateRun(tx, sessionId, activeRun.id, {
-        status: 'discarded',
-        failReason: { message: 'New message ingested, discarding active run' },
+      // Check for pending outgoing messages under the lock — no race condition
+      const unresolvedOutgoing = await tx.query.channelMessages.findFirst({
+        where: and(
+          eq(channelMessages.channelThreadId, channelThreadId),
+          eq(channelMessages.direction, 'outgoing'),
+          inArray(channelMessages.status, ['pending', 'sending']),
+        ),
       });
-    }
 
-    // Get all channel messages for this thread
-    const allMessages = await tx.query.channelMessages.findMany({
-      where: eq(channelMessages.channelThreadId, channelThreadId),
-      orderBy: (cm, { asc }) => [asc(cm.date)],
-    });
+      if (unresolvedOutgoing) {
+        return { pending: true as const };
+      }
 
-    // Find the last successfully sent, non-internal outgoing message — this is the conversation boundary.
-    const lastSuccessful = [...allMessages].reverse().find(m =>
-      m.direction === 'outgoing' && m.status === 'sent' && !m.internal && m.runId
-    );
+      // Terminate any active run
+      const activeRun = await tx.query.runs.findFirst({
+        where: and(
+          eq(runs.sessionId, sessionId),
+          eq(runs.status, 'in_progress'),
+        ),
+      });
 
-    let previousRunId: string | null = null; // null means from ROOT
-    let incomingMessages: typeof allMessages;
+      if (activeRun) {
+        log.info({ sessionId, runId: activeRun.id }, 'terminating active run before creating new channel run');
+        await terminateRun(tx, sessionId, activeRun.id, {
+          status: 'discarded',
+          failReason: { message: 'New message ingested, discarding active run' },
+        });
+      }
 
-    if (lastSuccessful) {
-      previousRunId = lastSuccessful.runId;
+      // Get all channel messages for this thread
+      const allMessages = await tx.query.channelMessages.findMany({
+        where: eq(channelMessages.channelThreadId, channelThreadId),
+        orderBy: (cm, { asc }) => [asc(cm.date)],
+      });
 
-      // Incoming messages that arrived after the last successful outgoing was created
-      incomingMessages = allMessages.filter(m =>
-        m.direction === 'incoming' && m.createdAt > lastSuccessful.createdAt
+      // Find the last successfully sent, non-internal outgoing message — conversation boundary
+      const lastSuccessful = [...allMessages].reverse().find(m =>
+        m.direction === 'outgoing' && m.status === 'sent' && !m.internal && m.runId
       );
-    } else {
-      // No successful outgoing — first run, consume all incoming messages
-      incomingMessages = allMessages.filter(m => m.direction === 'incoming');
-    }
 
-    if (incomingMessages.length === 0) {
-      throw new AgentViewError("No incoming messages to create a run from.", 422);
-    }
+      let previousRunId: string | null = null; // null means from ROOT
+      let incomingMessages: typeof allMessages;
 
-    log.info({ sessionId, count: incomingMessages.length }, 'incoming messages found');
+      if (lastSuccessful) {
+        previousRunId = lastSuccessful.runId;
 
-    // Build input from channel messages
-    const newRunId = crypto.randomUUID();
-    const environment = await requireEnvironment(tx);
-    const config = getConfigFromEnvironment(environment);
-    const agentConfig = requireAgentConfigBySession(config, session);
-    const adapter = getAdapter(agentConfig.adapter);
-    const input = adapter.createDefaultInputForChannelMessages(incomingMessages, newRunId);
+        // Incoming messages that arrived after the last successful outgoing was created
+        incomingMessages = allMessages.filter(m =>
+          m.direction === 'incoming' && m.createdAt > lastSuccessful.createdAt
+        );
+      } else {
+        // No successful outgoing — first run, consume all incoming messages
+        incomingMessages = allMessages.filter(m => m.direction === 'incoming');
+      }
 
-    // Create the run
-    const result = await createAutoRunInTx(tx, sessionId, input, {
-      id: newRunId,
-      previousRunId,
+      if (incomingMessages.length === 0) {
+        throw new AgentViewError("No incoming messages to create a run from.", 422);
+      }
+
+      log.info({ sessionId, count: incomingMessages.length }, 'incoming messages found');
+
+      // Build input from channel messages
+      const newRunId = crypto.randomUUID();
+      const environment = await requireEnvironment(tx);
+      const config = getConfigFromEnvironment(environment);
+      const agentConfig = requireAgentConfigBySession(config, session);
+      const adapter = getAdapter(agentConfig.adapter);
+      const input = adapter.createDefaultInputForChannelMessages(incomingMessages, newRunId);
+
+      // Create the run
+      const result = await createAutoRunInTx(tx, sessionId, input, {
+        id: newRunId,
+        previousRunId,
+      });
+
+      // Set runId on consumed incoming messages
+      const incomingIds = incomingMessages.map(m => m.id);
+      if (incomingIds.length > 0) {
+        await tx.update(channelMessages)
+          .set({ runId: newRunId })
+          .where(inArray(channelMessages.id, incomingIds));
+      }
+
+      return { pending: false as const, txResult: result, channelThreadId };
     });
 
-    // Set runId on consumed incoming messages
-    const incomingIds = incomingMessages.map(m => m.id);
-    if (incomingIds.length > 0) {
-      await tx.update(channelMessages)
-        .set({ runId: newRunId })
-        .where(inArray(channelMessages.id, incomingIds));
+    if (txResult.pending) {
+      if (Date.now() - startTime > PENDING_OUTGOING_TIMEOUT) {
+        throw new AgentViewError("Timed out waiting for pending outgoing message.", 408);
+      }
+      log.debug(`[${sessionId}] waiting for pending outgoing message...`);
+      await new Promise(r => setTimeout(r, PENDING_OUTGOING_POLL_INTERVAL));
+      continue;
+    }
+
+    // Execute the run (streaming connection)
+    let result: { runId: string; response: Response; success: boolean };
+    try {
+      result = await executeAutoRun(principal, sessionId, txResult.txResult, signal);
+    } catch (error) {
+      await sendInternalErrorMessage(principal.organizationId, txResult.channelThreadId, txResult.txResult.runBase.id, 'Failed to start run');
+      throw error;
+    }
+
+    // If the streaming server returned an error response, send internal error message
+    if (!result.success) {
+      await sendInternalErrorMessage(principal.organizationId, txResult.channelThreadId, result.runId, 'Error response from AI Endpoint');
     }
 
     return result;
-  });
-
-  // Execute the run (streaming connection)
-  let result: { runId: string; response: Response; success: boolean };
-  try {
-    result = await executeAutoRun(principal, sessionId, txResult, signal);
-  } catch (error) {
-    // Connection failure — send internal error message
-    await sendInternalErrorMessage(organizationId, channelThreadId, txResult.runBase.id, 'Failed to start run');
-    throw error;
   }
-
-  // If the streaming server returned an error response, send internal error message
-  if (!result.success) {
-    await sendInternalErrorMessage(organizationId, channelThreadId, result.runId, 'Error response from AI Endpoint');
-  }
-
-  return result;
 }
 
 /**

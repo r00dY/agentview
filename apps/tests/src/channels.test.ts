@@ -369,9 +369,10 @@ describe('Channels', () => {
       }
 
       // Wait for any async outgoing messages from previous tests to settle
+      // (failed runs now produce internal error messages that need time to deliver)
       beforeAll(async () => {
-        await new Promise(r => setTimeout(r, 3000))
-      }, 10000)
+        await new Promise(r => setTimeout(r, 6000))
+      }, 15000)
 
       // Each outgoing test uses its own sourceThreadId for isolation
       async function send(sourceId: string, text: string, sourceThreadId: string, date?: string) {

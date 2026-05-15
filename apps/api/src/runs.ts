@@ -21,12 +21,26 @@ import { getBoss } from './pgboss';
 import { fromDrizzle } from 'pg-boss';
 import { WEBHOOK_QUEUE, type WebhookJobData } from './workers/webhooks';
 import { SESSION_GENERATE_TITLE_QUEUE } from './workers/generateTitle';
-import { onRunEnded } from './channels/channelRunEnd';
+import { channelOnRunFinishHandler } from './channels/channelRuns';
 import { standardToDefaultSession } from './standardToDefaultSession';
 import { isToolUIPart } from 'ai';
 
 export const DEFAULT_IDLE_TIME = 1000 * 60; // 60 seconds
 
+/**
+ * Run lifecycle event — fired whenever a run reaches a terminal state.
+ * Delegates to domain-specific handlers (channels, etc).
+ */
+async function onRunFinished(tx: OrgTransaction, params: {
+  runId: string;
+  sessionId: string;
+  organizationId: string;
+  status: string;
+  channelReply?: { text: string };
+  failReason?: any;
+}) {
+  await channelOnRunFinishHandler(tx, params);
+}
 
 export function isRunFinished(run: { status: string }) {
   return run.status === 'completed' || run.status === 'cancelled' || run.status === 'failed' || run.status === 'discarded';
@@ -511,13 +525,17 @@ export async function fastApplyRunPatch(
     updatedRun.status = 'cancelled';
     updatedRun.finishedAt = nowIso;
 
+    dbOps.push(
+      onRunFinished(tx, { runId: run.id, sessionId: run.sessionId, organizationId: tx.organizationId, status: 'cancelled' }),
+    );
+
   } else if (op.type === 'fail') {
     updatedRun.status = 'failed';
     updatedRun.failReason = op.failReason;
     updatedRun.finishedAt = nowIso;
 
     dbOps.push(
-      onRunEnded(tx, { runId: run.id, sessionId: run.sessionId, organizationId: tx.organizationId, status: 'failed', failReason: op.failReason }),
+      onRunFinished(tx, { runId: run.id, sessionId: run.sessionId, organizationId: tx.organizationId, status: 'failed', failReason: op.failReason }),
     );
 
   } else if (op.type === 'complete') {
@@ -526,7 +544,7 @@ export async function fastApplyRunPatch(
 
     dbOps.push(
       markOutputItems(tx, run.id, op.outputItemCount ?? 0),//, runConfig), // validation inside
-      onRunEnded(tx, { runId: run.id, sessionId: run.sessionId, organizationId: tx.organizationId, status: 'completed', channelReply: op.channelReply }),
+      onRunFinished(tx, { runId: run.id, sessionId: run.sessionId, organizationId: tx.organizationId, status: 'completed', channelReply: op.channelReply }),
     );
   }
 
@@ -719,12 +737,11 @@ export async function applyRunPatch(
   if (status === 'completed' && runConfig) {
     const outputItemCount = body.outputItemCount ?? 1;
     await markOutputItems(tx, run.id, outputItemCount)//, runConfig);
-    await onRunEnded(tx, { runId: run.id, sessionId: run.sessionId, organizationId: tx.organizationId, status: 'completed', channelReply: body.channelReply });
   }
 
-  /** Notify channels on failure */
-  if (status === 'failed' && !isRunFinished(run)) {
-    await onRunEnded(tx, { runId: run.id, sessionId: run.sessionId, organizationId: tx.organizationId, status: 'failed', failReason: body.failReason });
+  /** Notify on terminal status change */
+  if (isFinished && !isRunFinished(run)) {
+    await onRunFinished(tx, { runId: run.id, sessionId: run.sessionId, organizationId: tx.organizationId, status, channelReply: body.channelReply, failReason: body.failReason });
   }
 
   // Publish to Redis stream only after transaction finished successfully in DB
@@ -796,10 +813,7 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
       expiresAt: null,
     }).where(eq(runs.id, runId));
 
-    // Notify channels of failed runs (not discarded/cancelled)
-    if (reason.status === 'failed') {
-      await onRunEnded(tx, { runId, sessionId, organizationId: tx.organizationId, status: 'failed', failReason: reason.failReason });
-    }
+    await onRunFinished(tx, { runId, sessionId, organizationId: tx.organizationId, status: reason.status, failReason: reason.failReason });
 
     // this is important, we must send the last run patch event to the stream
     tx.afterCommit(async () => {
