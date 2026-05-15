@@ -5,6 +5,7 @@ import { channelMessages, channelThreads } from '../schemas/schema';
 import { eq } from 'drizzle-orm';
 import { log, setContext } from '../logger';
 import { channelApps } from '../channels/registry';
+import { createRunForChannelThreadIfNecessary } from '../channels/channelRuns';
 
 export const OUTGOING_CHANNEL_MESSAGE_QUEUE = 'outgoing-channel-message';
 
@@ -70,6 +71,14 @@ export function registerOutgoingChannelMessageWorker(boss: PgBoss) {
           });
 
           log.info('outgoing message sent and saved');
+
+          // Re-trigger run creation in case incoming messages arrived while this
+          // outgoing was pending/sending. Only for non-internal messages — internal
+          // messages (error notifications) must not retrigger to avoid infinite loops
+          // (failed run → error msg → retrigger → failed run → ...).
+          if (!message.internal) {
+            createRunForChannelThreadIfNecessary(message.channelThreadId);
+          }
         } catch (e) {
           const errorMessage = e instanceof Error ? e.message : String(e);
           log.error({ err: e }, `failed to send message: ${errorMessage}`);

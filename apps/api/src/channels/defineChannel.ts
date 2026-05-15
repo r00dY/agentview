@@ -4,7 +4,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import type { ServicePrincipal } from 'src/authMiddleware';
 import { log } from '../logger';
 import { db__dangerous } from '../db';
-import { createRunForChannel } from './channelRuns';
+import { createRunForChannelThreadIfNecessary } from './channelRuns';
 import { channelMessages, channels, channelThreads, sessions } from '../schemas/schema';
 import { activateSession, createSession, setAgentForSession } from '../sessions';
 import type { Transaction } from '../types';
@@ -354,7 +354,7 @@ export function channelProvider(type: string) {
        * If message was properly ingested, we create a run for it. Async on purpose.
        */
       if (result.ingested) {
-        createRunForChannel(principal, result.sessionId);
+        createRunForChannelThreadIfNecessary(result.thread.id);
       }
       
       return result;
