@@ -18,7 +18,7 @@ import { OUTGOING_CHANNEL_MESSAGE_QUEUE } from '../workers/outgoingChannelMessag
 async function insertAndQueueOutgoingMessage(tx: OrgTransaction, values: {
   channelThreadId: string;
   text: string;
-  runId: string;
+  runId: string | null;
   internal: boolean;
 }) {
   const [msg] = await tx.insert(channelMessages).values({
@@ -48,7 +48,7 @@ export async function channelOnRunFinishHandler(tx: OrgTransaction, params: {
   failReason?: any;
 }) {
   await tx.acquireLock({ type: "edit_session", sessionId: params.sessionId });
-  
+
   const sessionRow = await tx.query.sessions.findFirst({
     where: eq(sessions.id, params.sessionId),
     columns: { channelThreadId: true },
@@ -110,6 +110,8 @@ export async function channelOnRunFinishHandler(tx: OrgTransaction, params: {
  * 5. Create and execute new run, set runId on consumed messages
  */
 export async function createRunForChannelThreadIfNecessary(channelThreadId: string) {
+  let organizationId: string | null = null;
+
   try {
     // Resolve session + channel environment to construct a principal
     const [session, thread] = await Promise.all([
@@ -127,7 +129,7 @@ export async function createRunForChannelThreadIfNecessary(channelThreadId: stri
     const envHandle = thread?.channel?.environment?.handle;
     if (!envHandle) return;
 
-    const organizationId = session.organizationId;
+    organizationId = session.organizationId;
     const sessionId = session.id;
 
     const principal = {
@@ -139,7 +141,7 @@ export async function createRunForChannelThreadIfNecessary(channelThreadId: stri
     log.debug(`[${sessionId}] [createRunForChannelThread] start`);
 
     // result == undefined -> ignore
-    const result = await withTenant(principal, async (tx) => {
+    const txResult = await withTenant(principal, async (tx) => {
       await tx.acquireLock({ type: "edit_session", sessionId });
 
       const session = await requireSessionBase(tx, sessionId);
@@ -222,72 +224,90 @@ export async function createRunForChannelThreadIfNecessary(channelThreadId: stri
       if (incomingMessages.length === 0) {
         // Shouldn't happen (gate 2 passed), but guard anyway
         log.debug(`[${sessionId}] skipping: no incoming messages after conversation boundary`);
-        return null;
+        return;
       }
 
       log.info({ sessionId, count: incomingMessages.length }, 'incoming messages found');
 
-      const newRunId = crypto.randomUUID();
-      const environment = await requireEnvironment(tx);
-      const config = getConfigFromEnvironment(environment);
-      const agentConfig = requireAgentConfigBySession(config, session);
-      const adapter = getAdapter(agentConfig.adapter);
-      const input = adapter.createDefaultInputForChannelMessages(incomingMessages, newRunId);
+      /**
+       * Create run in TX.
+       * 
+       * From now we literally mimick createAutoRun2, as if it was called from API.
+       * 
+       * We use try / catch here because error here should not kill the transaction.
+       * The termination of the run above should succeed.
+       * If new channel message arrived, we should first kill old run, and then if there's error... propagate it to the channel.
+       * But there's no point continuing execution of old run.
+       * 
+       * However, the throw here should be very rare.
+       */
+      try {
+        const newRunId = crypto.randomUUID();
+        const environment = await requireEnvironment(tx);
+        const config = getConfigFromEnvironment(environment);
+        const agentConfig = requireAgentConfigBySession(config, session);
+        const adapter = getAdapter(agentConfig.adapter);
+        const input = adapter.createDefaultInputForChannelMessages(incomingMessages, newRunId);
 
-      const result = await createAutoRunInTx(tx, sessionId, input, {
-        id: newRunId,
-        previousRunId,
-      });
+        const txResult = await createAutoRunInTx(tx, sessionId, input, {
+          id: newRunId,
+          previousRunId,
+        });
 
-      // Mark consumed incoming messages with the new runId
-      const incomingIds = incomingMessages.map(m => m.id);
-      if (incomingIds.length > 0) {
-        await tx.update(channelMessages)
-          .set({ runId: newRunId })
-          .where(inArray(channelMessages.id, incomingIds));
+        // Mark consumed incoming messages with the new runId
+        const incomingIds = incomingMessages.map(m => m.id);
+        if (incomingIds.length > 0) {
+          await tx.update(channelMessages)
+            .set({ runId: newRunId })
+            .where(inArray(channelMessages.id, incomingIds));
+        }
+
+        return txResult;
       }
-
-      return result;
+      catch (error) {
+        await insertAndQueueOutgoingMessage(tx, {
+          channelThreadId,
+          text: error instanceof Error ? error.message : String(error),
+          runId: null,
+          internal: true,
+        });
+        return;
+      }
     });
 
-    if (!result) return;
+    if (!txResult) return;
 
-    // Execute the run (streaming connection) — outside the transaction
-    let result: { runId: string; response: Response; success: boolean };
-    try {
-      result = await executeAutoRun(principal, sessionId, txResult.txResult);
-    } catch (error) {
-      await sendInternalErrorMessage(organizationId, channelThreadId, txResult.txResult.runBase.id, 'Failed to start run');
-      throw error;
-    }
+    const result = await executeAutoRun(principal, sessionId, txResult);
 
     if (!result.success) {
-      await sendInternalErrorMessage(organizationId, channelThreadId, result.runId, 'Error response from AI Endpoint');
-    }
-  } catch (error) {
-    log.error({ err: error, channelThreadId }, 'createRunForChannelThreadIfNecessary failed');
-  }
-}
+      const text = `Error response from AI Endpoint: ${result.response.statusText}. Body:
 
-/**
- * Creates an internal (error) outgoing channel message and queues it for delivery.
- */
-async function sendInternalErrorMessage(
-  organizationId: string,
-  channelThreadId: string,
-  runId: string,
-  errorText: string,
-) {
-  try {
+      ${await result.response.text()}
+      `;
+
+      await withOrg(organizationId, async (tx) => {
+        await insertAndQueueOutgoingMessage(tx, {
+          channelThreadId,
+          text,
+          runId: null,
+          internal: true,
+        });
+      });
+    }
+
+  } catch (error) {
+
+    if (!organizationId) return;
+
     await withOrg(organizationId, async (tx) => {
       await insertAndQueueOutgoingMessage(tx, {
         channelThreadId,
-        text: errorText,
-        runId,
+        text: error instanceof Error ? error.message : String(error),
+        runId: null,
         internal: true,
       });
     });
-  } catch (e) {
-    log.warn({ runId, err: e }, 'failed to send internal error message');
+    
+    log.error({ err: error, channelThreadId }, 'createRunForChannelThreadIfNecessary failed for unexpected reason');
   }
 }
