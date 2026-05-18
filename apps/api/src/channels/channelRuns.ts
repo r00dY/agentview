@@ -31,58 +31,65 @@ async function insertAndQueueOutgoingMessage(tx: OrgTransaction, values: {
 
 
 /**
- * channel "domain" listens to run finish to react properly
+ * channel "domain" listens to run finish to react properly.
+ *
+ * Runs in its own transaction (deferred via afterCommit by the caller).
+ * This should really be a queue job, but doing it inline-after-commit for now.
  */
-export async function channelOnRunFinishHandler(tx: OrgTransaction, params: {
+export async function channelOnRunFinishHandler(params: {
+  organizationId: string;
   runId: string;
   sessionId: string;
   status: string;
   channelReply?: { text: string };
   failReason?: any;
 }) {
-  await tx.acquireLock({ type: "edit_session", sessionId: params.sessionId });
+  await withOrg(params.organizationId, async (tx) => {
+    await tx.acquireLock({ type: "edit_session", sessionId: params.sessionId });
 
-  const sessionRow = await tx.query.sessions.findFirst({
-    where: eq(sessions.id, params.sessionId),
-    columns: { channelThreadId: true },
-  });
+    const sessionRow = await tx.query.sessions.findFirst({
+      where: eq(sessions.id, params.sessionId),
+      columns: { channelThreadId: true },
+    });
 
-  if (!sessionRow?.channelThreadId) {
-    return; // not a channel session
-  }
-
-  // Clean runId from channel messages for unsuccessful runs
-  // This releases incoming messages so the next run can pick them up
-  if (params.status !== 'completed') {
-    await tx.update(channelMessages)
-      .set({ runId: null })
-      .where(eq(channelMessages.runId, params.runId));
-  }
-
-  if (params.status === 'completed') {
-    const text = params.channelReply?.text ?? '';
-    if (!text) {
-      log.warn({ runId: params.runId }, 'channelOnRunFinishHandler: no reply text for completed run');
-      return;
+    if (!sessionRow?.channelThreadId) {
+      return; // not a channel session
     }
 
-    await insertAndQueueOutgoingMessage(tx, {
-      channelThreadId: sessionRow.channelThreadId,
-      text,
-      runId: params.runId,
-      internal: false,
-    });
-  } else if (params.status === 'failed') {
-    const text = params.failReason?.message ?? 'Run failed';
+    // Clean runId from channel messages for unsuccessful runs
+    // This releases incoming messages so the next run can pick them up
+    if (params.status !== 'completed') {
+      await tx.update(channelMessages)
+        .set({ runId: null })
+        .where(eq(channelMessages.runId, params.runId));
+    }
 
-    await insertAndQueueOutgoingMessage(tx, {
-      channelThreadId: sessionRow.channelThreadId,
-      text,
-      runId: params.runId,
-      internal: true,
-    });
-  }
-  // discarded, cancelled → no outgoing message (runId already cleaned above)
+    if (params.status === 'completed') {
+      const text = params.channelReply?.text ?? '';
+      if (!text) {
+        log.warn({ runId: params.runId }, 'channelOnRunFinishHandler: no reply text for completed run');
+        return;
+      }
+
+      await insertAndQueueOutgoingMessage(tx, {
+        channelThreadId: sessionRow.channelThreadId,
+        text,
+        runId: params.runId,
+        internal: false,
+      });
+    } else if (params.status === 'failed') {
+      const text = params.failReason?.message ?? 'Run failed';
+
+      await insertAndQueueOutgoingMessage(tx, {
+        channelThreadId: sessionRow.channelThreadId,
+        text,
+        runId: params.runId,
+        internal: true,
+      });
+    }
+    // cancelled → no outgoing message (runId already cleaned above)
+    // discarded → handler is not invoked at all (terminateRun skips it)
+  });
 }
 
 // ─── Channel run creation ────────────────────────────────────────────────────
@@ -179,8 +186,9 @@ export async function createRunForChannelThreadIfNecessary(channelThreadId: stri
 
       // ── Terminate active run ──
       // New unprocessed messages exist, so any in-progress run is stale.
-      // terminateRun → onRunFinished → channelOnRunFinishHandler clears runId
-      // on the terminated run's messages (within this same transaction).
+      // Discarded here → no finish handler fires, so messages keep their old runId.
+      // That's fine: the boundary logic below is independent of runId, and
+      // STEP 2 overwrites runId on consumed messages anyway.
       const activeRun = await tx.query.runs.findFirst({
         where: and(
           eq(runs.sessionId, sessionId),

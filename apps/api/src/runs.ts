@@ -28,7 +28,8 @@ export const DEFAULT_IDLE_TIME = 1000 * 60; // 60 seconds
 /**
  * Run lifecycle event — fired whenever a run reaches a terminal state.
  * Delegates to domain-specific handlers (channels, etc).
- * 
+ *
+ * Scheduled via tx.afterCommit so handlers run outside the caller's transaction.
  * THIS SHOULD BE A QUEUE!
  */
 async function onRunFinished(tx: OrgTransaction, params: {
@@ -38,7 +39,10 @@ async function onRunFinished(tx: OrgTransaction, params: {
   channelReply?: { text: string };
   failReason?: any;
 }) {
-  await channelOnRunFinishHandler(tx, params);
+  const organizationId = tx.organizationId;
+  tx.afterCommit(async () => {
+    await channelOnRunFinishHandler({ organizationId, ...params });
+  });
 }
 
 export function isRunFinished(run: { status: string }) {
@@ -810,7 +814,11 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
       expiresAt: null,
     }).where(eq(runs.id, runId));
 
-    await onRunFinished(tx, { runId, sessionId, status: reason.status, failReason: reason.failReason });
+    // Discarded runs were never visible to users — treat them as "no run happened",
+    // so no finish handler fires.
+    if (reason.status !== 'discarded') {
+      await onRunFinished(tx, { runId, sessionId, status: reason.status, failReason: reason.failReason });
+    }
 
     // this is important, we must send the last run patch event to the stream
     tx.afterCommit(async () => {
