@@ -1,5 +1,5 @@
 import { withOrg } from "../withOrg";
-import { log, setContext } from "../logger";
+import { log } from "../logger";
 import { channelMessages, channelThreads } from "../schemas/schema";
 import { eq } from "drizzle-orm";
 import { db__dangerous } from "../db";
@@ -7,8 +7,6 @@ import { channelApps } from "./registry";
 import { createRunForChannelThreadIfNecessary } from "./channelRuns";
 
 export async function sendOutgoingChannelMessage(messageId: string, organizationId: string) {
-    setContext({ channelMessageId: messageId, organizationId });
-
     const message = await withOrg(organizationId, async (tx) => {
         return tx.query.channelMessages.findFirst({
             where: eq(channelMessages.id, messageId),

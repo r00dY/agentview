@@ -1,17 +1,17 @@
 import { fromDrizzle, PgBoss } from 'pg-boss';
 import { getDatabaseURL } from '../getDatabaseURL';
 import { log } from '../logger';
-import { WEBHOOK_QUEUE } from '../workers/webhooks';
-import { SESSION_GENERATE_TITLE_QUEUE } from '../workers/generateTitle';
 
 import { sendOutgoingChannelMessageQueue } from './sendOutgoingChannelMessage.queue';
+import { webhookQueue } from './webhook.queue';
+import { generateTitleQueue } from './generateTitle.queue';
 import type { Queue } from './types';
 import type { OrgTransaction } from '../withOrg';
 import { sql } from 'drizzle-orm';
 
 let boss: PgBoss | null = null;
 
-const queues = [sendOutgoingChannelMessageQueue]
+const queues: Queue<any>[] = [sendOutgoingChannelMessageQueue, webhookQueue, generateTitleQueue]
 
 export function getBoss(): PgBoss {
   if (!boss) {
@@ -30,18 +30,6 @@ export async function startBoss(): Promise<PgBoss> {
   });
 
   await boss.start();
-
-  await boss.createQueue(WEBHOOK_QUEUE, {
-    retryLimit: 3,
-    retryDelay: 5,
-    retryBackoff: true,
-  });
-
-  await boss.createQueue(SESSION_GENERATE_TITLE_QUEUE, {
-    retryLimit: 2,
-    retryDelay: 10,
-    retryBackoff: true,
-  });
 
   for (const queue of queues) {
     await boss.createQueue(queue.name, queue.options ?? {});

@@ -17,10 +17,9 @@ import { agentRefs, channelMessages, runs, sessionItems, sessions } from './sche
 import { activateSession, fetchSessionBase, requireSession, requireSessionBase } from './sessions';
 import type { Transaction } from './types';
 import { withTenant, type OrgTransaction, type TenantTransaction } from './withOrg';
-import { getBoss } from './queues/pgboss';
-import { fromDrizzle } from 'pg-boss';
-import { WEBHOOK_QUEUE, type WebhookJobData } from './workers/webhooks';
-import { SESSION_GENERATE_TITLE_QUEUE } from './workers/generateTitle';
+import { bossSendTx } from './queues/pgboss';
+import { webhookQueue } from './queues/webhook.queue';
+import { generateTitleQueue } from './queues/generateTitle.queue';
 import { channelOnRunFinishHandler } from './channels/channelRuns';
 import { standardToDefaultSession } from './standardToDefaultSession';
 import { isToolUIPart } from 'ai';
@@ -256,23 +255,21 @@ async function createRunCore(
   const config = getConfigFromEnvironment(environment);
   const isFirstRun = previousRun === undefined || previousRun === null;
   if (isFirstRun) {
-    const db = fromDrizzle(tx, sql);
-
     if (config.webhookUrl) {
-      await getBoss().send(WEBHOOK_QUEUE, {
+      await bossSendTx(tx, webhookQueue, {
         organizationId: tx.organizationId,
         environmentId: environment.id,
         eventType: 'session.on_first_run_created',
         payload: { session_id: sessionId },
         sessionId,
-      } satisfies WebhookJobData, { db });
+      });
     }
 
     if (!config.__internal?.disableSummaries) {
-      await getBoss().send(SESSION_GENERATE_TITLE_QUEUE, {
+      await bossSendTx(tx, generateTitleQueue, {
         sessionId,
         organizationId: tx.organizationId,
-      }, { db });
+      });
     }
   }
 
