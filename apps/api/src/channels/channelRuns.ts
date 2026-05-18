@@ -88,7 +88,6 @@ export async function channelOnRunFinishHandler(params: {
       });
     }
     // cancelled → no outgoing message (runId already cleaned above)
-    // discarded → handler is not invoked at all (terminateRun skips it)
   });
 }
 
