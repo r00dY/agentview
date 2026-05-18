@@ -17,7 +17,7 @@ import { agentRefs, channelMessages, runs, sessionItems, sessions } from './sche
 import { activateSession, fetchSessionBase, requireSession, requireSessionBase } from './sessions';
 import type { Transaction } from './types';
 import { withTenant, type OrgTransaction, type TenantTransaction } from './withOrg';
-import { getBoss } from './pgboss';
+import { getBoss } from './queues/pgboss';
 import { fromDrizzle } from 'pg-boss';
 import { WEBHOOK_QUEUE, type WebhookJobData } from './workers/webhooks';
 import { SESSION_GENERATE_TITLE_QUEUE } from './workers/generateTitle';

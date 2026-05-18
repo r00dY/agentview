@@ -1,7 +1,6 @@
 import { initDb } from './initDb';
-import { startBoss } from './pgboss';
+import { startBoss, startBossWorkers } from './queues/pgboss';
 import { registerWebhookWorker } from './workers/webhooks';
-import { registerOutgoingChannelMessageWorker } from './workers/outgoingChannelMessages';
 import { registerGenerateTitleWorker } from './workers/generateTitle';
 import { expiredRunsWorker } from './workers/expiredRuns';
 import { channelApps } from './channels/registry';
@@ -13,7 +12,7 @@ const boss = await startBoss();
  * pg-boss queues
  */
 registerWebhookWorker(boss);
-registerOutgoingChannelMessageWorker(boss);
+// registerOutgoingChannelMessageWorker(boss);
 registerGenerateTitleWorker(boss);
 
 /**
@@ -29,3 +28,5 @@ for (const channel of channelApps) {
     worker.start();
   }
 }
+
+startBossWorkers();

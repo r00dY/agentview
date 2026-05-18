@@ -8,12 +8,13 @@ import { getAdapter } from '../adapters/adapters';
 import { db__dangerous } from '../db';
 import { getConfigFromEnvironment, requireEnvironment } from '../environments';
 import { log } from '../logger';
-import { getBoss } from '../pgboss';
+import { bossSendTx, getBoss } from '../queues/pgboss';
 import { createAutoRunInTx, executeAutoRun, terminateRun } from '../runs';
 import { channelMessages, channelThreads, runs, sessions } from '../schemas/schema';
 import { requireSessionBase } from '../sessions';
 import { withOrg, withTenant, type OrgTransaction } from '../withOrg';
-import { OUTGOING_CHANNEL_MESSAGE_QUEUE } from '../workers/outgoingChannelMessages';
+// import { OUTGOING_CHANNEL_MESSAGE_QUEUE } from '../workers/outgoingChannelMessages';
+import { sendOutgoingChannelMessageQueue } from '../queues/sendOutgoingChannelMessage.queue';
 
 async function insertAndQueueOutgoingMessage(tx: OrgTransaction, values: {
   channelThreadId: string;
@@ -29,11 +30,13 @@ async function insertAndQueueOutgoingMessage(tx: OrgTransaction, values: {
     date: new Date().toISOString(),
   }).returning();
 
-  await getBoss().send(
-    OUTGOING_CHANNEL_MESSAGE_QUEUE,
-    { messageId: msg.id, organizationId: tx.organizationId },
-    { db: fromDrizzle(tx, sql) },
-  );
+  await bossSendTx(tx, sendOutgoingChannelMessageQueue, { messageId: msg.id, organizationId: tx.organizationId });
+
+  // await getBoss().send(
+  //   OUTGOING_CHANNEL_MESSAGE_QUEUE,
+  //   { messageId: msg.id, organizationId: tx.organizationId },
+  //   { db: fromDrizzle(tx, sql) },
+  // );
 }
 
 
