@@ -3,9 +3,8 @@ import type { Environment, ManualRunCreate, ManualRunUpdate, RunUpdate } from 'a
 import type { BaseAgentConfig, BaseRunConfig } from 'agentview/baseConfigTypes';
 import { findItemConfig, requireAgentConfigBySession, requireRunConfig, serializeRunConfig } from 'agentview/baseConfigUtils';
 import { getLastRun } from 'agentview/sessionUtils';
-import { and, eq, gt, inArray, not, sql } from 'drizzle-orm';
+import { and, eq, inArray, not, sql } from 'drizzle-orm';
 import { log } from './logger';
-import { getAdapter } from './adapters/adapters';
 import { resolveAgentRef } from './agentRefs';
 import { authorize, type Principal } from './authMiddleware';
 import { getConfigFromEnvironment, requireConfig, requireEnvironment } from './environments';
@@ -13,7 +12,7 @@ import { requireUUID } from './isUUID';
 import { parseMetadata } from './parseMetadata';
 import { publishEvent } from './redisPubSub';
 import { publishRunStreamEvent } from './runStream';
-import { agentRefs, channelMessages, runs, sessionItems, sessions } from './schemas/schema';
+import { agentRefs, runs, sessionItems } from './schemas/schema';
 import { activateSession, fetchSessionBase, requireSession, requireSessionBase } from './sessions';
 import type { Transaction } from './types';
 import { withTenant, type OrgTransaction, type TenantTransaction } from './withOrg';
@@ -29,6 +28,8 @@ export const DEFAULT_IDLE_TIME = 1000 * 60; // 60 seconds
 /**
  * Run lifecycle event — fired whenever a run reaches a terminal state.
  * Delegates to domain-specific handlers (channels, etc).
+ * 
+ * THIS SHOULD BE A QUEUE!
  */
 async function onRunFinished(tx: OrgTransaction, params: {
   runId: string;
