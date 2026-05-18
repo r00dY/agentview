@@ -11,7 +11,7 @@ import type { Transaction } from '../types';
 import { createUser, findUser } from '../users';
 import { withOrg, withTenant } from '../withOrg';
 import type { WorkerHandle } from '../workers/utils';
-import { getEnvironmentByHandleAndOrgId, requireConfig, requireEnvironment } from '../environments';
+import { getConfigFromEnvironment, getEnvironmentByHandleAndOrgId, requireConfig, requireEnvironment } from '../environments';
 import type { ExternalChannelConfig } from 'agentview/baseConfigTypes';
 import { createChannel as createChannelFn, getChannel as getChannelFn } from './channels';
 import { organizations } from 'src/schemas/auth-schema';
@@ -88,28 +88,43 @@ type IngestMessageResult = IngestMessageResultSuccess | IngestMessageResultError
 //   }
 // }
 
+export function parseAgentViewEmailAddress(address: string) {
+  const base = address.split('@')[0];
+  const parts = base.split('.');
+
+  let parsed: { orgSlug: string; envSlug: string; agentName: string } | null = null;
+
+  if (parts.length === 2) {
+    parsed = { orgSlug: parts[0], envSlug: 'prod', agentName: 'default' };
+  }
+  else if (parts.length === 3) {
+    parsed = { orgSlug: parts[0], envSlug: parts[1], agentName: parts[2] };
+  }
+  else {
+    throw new Error(`Invalid agentview built-in email address format: ${address}. Expected {orgSlug}.{envSlug}.{agentName}@agent.agentview.app`);
+  }
+
+  return parsed;
+}
+
+
 export async function resolveChannel(type: string, address: string) {
   let channel = await getChannelFn(type, address);
   if (channel) return channel;
 
   if (type === 'agentview-email') {
-    const base = address.split('@')[0];
-    const parts = base.split('.');
+    const { orgSlug, envSlug } = parseAgentViewEmailAddress(address);
 
-    if (parts.length < 3) {
-      throw new Error(`Invalid agentview built-in email address format: ${address}. Expected {orgSlug}.{envSlug}.{agentName}@agent.agentview.app`);
-    }
-
-    const orgSlug = parts[0];
-    const envSlug = parts[1];
-
+    // check org
     const org = await db__dangerous.query.organizations.findFirst({
       where: eq(organizations.slug, orgSlug),
     });
+
     if (!org) {
       throw new Error(`Organization not found: org.slug=${orgSlug}`);
     }
 
+    // check env
     const environment = await getEnvironmentByHandleAndOrgId(org.id, envSlug);
     if (!environment) {
       throw new Error(`Environment not found: org.id=${org.id} envSlug=${envSlug}`);
@@ -321,7 +336,8 @@ export function channelProvider(type: string) {
 
             const channelConfigs = agent.channels?.filter((c) => {
               if (c.type === 'agentview-email') { // we ignore address for our internal email, since it's wildcarded
-                return channel.type === 'agentview-email';
+                const { agentName } = parseAgentViewEmailAddress(channel.address);
+                return channel.type === 'agentview-email' && agent.name === agentName;
               }
               else {
                 return c.type === channel.type && c.address === channel.address;
@@ -360,8 +376,7 @@ export function channelProvider(type: string) {
       return result;
     }
     catch (error) {
-      // TODO: SEND ERROR MESSAGE
-      console.log('-------------------------------- ERROR --------------------------------');
+      console.log('------ERROR INGEST MESSAGE------');
       console.log(error);
       return { ingested: false as const, reason: (error as Error).message };
     }

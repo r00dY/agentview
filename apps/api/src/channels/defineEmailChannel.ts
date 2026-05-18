@@ -229,84 +229,85 @@ export function defineEmailChannel(config: {
   const ingestEmail = async (address: string, params: IngestEmailParams) => {
     // Look up channel to get channelId for thread resolution
 
-    let channel: Awaited<ReturnType<typeof resolveChannel>>;
+    console.log('################ INGEST EMAIL #################');
+
     try {
-      channel = await resolveChannel(config.type, address);
+      if (!params.email.messageId) {
+        throw new Error('[defineEmailChannel] Email has no Message-ID — this should never happen');
+      }
+
+      const channel = await resolveChannel(config.type, address);
+
+      /**
+       * We should only resolveThreadId for NEW emails. If the email is already in our inbox (we sent it ourselves), then it already has a threadId.
+       * We could pass it to ingestMessage, but it's not really necessary. We can just dedupe here (even though ingestMessage has deduping logic too!).
+       */
+      const duplicate = await withOrg(channel.organizationId, async (tx) => {
+        return tx
+          .select({ id: channelMessages.id })
+          .from(channelMessages)
+          .innerJoin(channelThreads, eq(channelMessages.channelThreadId, channelThreads.id))
+          .where(
+            and(
+              eq(channelThreads.channelId, channel.id),
+              eq(channelMessages.sourceId, params.email.messageId),
+            ),
+          )
+          .limit(1);
+      });
+
+      if (duplicate.length > 0) {
+        log.info({ messageId: params.email.messageId }, 'duplicate email, skipping');
+        return { ingested: false, reason: 'Duplicate message' };
+      }
+
+      /**
+       * Heuristic for finding the thread id based on the email's headers.
+       */
+      const sourceThreadId = await resolveThreadId(channel.organizationId, channel.id, params.email);
+
+      const providerData = {
+        email: {
+          messageId: params.email.messageId,
+          inReplyTo: params.email.inReplyTo,
+          references: params.email.references,
+          subject: params.email.subject,
+          from: params.email.from,
+          to: params.email.to,
+          cc: params.email.cc,
+          htmlBody: params.email.htmlBody,
+          textBody: params.email.textBody,
+        },
+        ...(params.providerData ?? {}),
+      };
+
+      const parsed = await emailToMarkdown({
+        html: params.email.htmlBody,
+        text: params.email.textBody,
+      });
+
+      const fromInfo = extractEmailInfo(params.email.from);
+
+      return provider.ingestMessage(address, {
+        sourceId: params.email.messageId,
+        sourceThreadId,
+        date: params.date,
+        text: parsed.content,
+        providerData,
+        title: params.email.subject || undefined,
+        author: {
+          email: fromInfo.email,
+          name: fromInfo.name ?? presence(parsed.user?.name),
+          headline: presence(parsed.user?.headline),
+          details: presence(parsed.user?.details),
+        },
+      });
     }
     catch (error) {
-      console.log('ERROR', error);
+      console.log('------ERROR INGEST EMAIL------');
+      console.log(error);
       return { ingested: false, reason: (error as Error).message }
     }
-    
-
-    if (!params.email.messageId) {
-      throw new Error('[defineEmailChannel] Email has no Message-ID — this should never happen');
-    }
-
-    /**
-     * We should only resolveThreadId for NEW emails. If the email is already in our inbox (we sent it ourselves), then it already has a threadId.
-     * We could pass it to ingestMessage, but it's not really necessary. We can just dedupe here (even though ingestMessage has deduping logic too!).
-     */
-    const duplicate = await withOrg(channel.organizationId, async (tx) => {
-      return tx
-        .select({ id: channelMessages.id })
-        .from(channelMessages)
-        .innerJoin(channelThreads, eq(channelMessages.channelThreadId, channelThreads.id))
-        .where(
-          and(
-            eq(channelThreads.channelId, channel.id),
-            eq(channelMessages.sourceId, params.email.messageId),
-          ),
-        )
-        .limit(1);
-    });
-
-    if (duplicate.length > 0) {
-      log.info({ messageId: params.email.messageId }, 'duplicate email, skipping');
-      return { ingested: false, reason: 'Duplicate message' };
-    }
-
-    /**
-     * Heuristic for finding the thread id based on the email's headers.
-     */
-    const sourceThreadId = await resolveThreadId(channel.organizationId, channel.id, params.email);
-
-    const providerData = {
-      email: {
-        messageId: params.email.messageId,
-        inReplyTo: params.email.inReplyTo,
-        references: params.email.references,
-        subject: params.email.subject,
-        from: params.email.from,
-        to: params.email.to,
-        cc: params.email.cc,
-        htmlBody: params.email.htmlBody,
-        textBody: params.email.textBody,
-      },
-      ...(params.providerData ?? {}),
-    };
-
-    const parsed = await emailToMarkdown({
-      html: params.email.htmlBody,
-      text: params.email.textBody,
-    });
-
-    const fromInfo = extractEmailInfo(params.email.from);
-
-    return provider.ingestMessage(address, {
-      sourceId: params.email.messageId,
-      sourceThreadId,
-      date: params.date,
-      text: parsed.content,
-      providerData,
-      title: params.email.subject || undefined,
-      author: {
-        email: fromInfo.email,
-        name: fromInfo.name ?? presence(parsed.user?.name),
-        headline: presence(parsed.user?.headline),
-        details: presence(parsed.user?.details),
-      },
-    });
   };
 
   const emailProvider: EmailChannelProvider = {
