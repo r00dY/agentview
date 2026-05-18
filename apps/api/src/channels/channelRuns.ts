@@ -1,19 +1,15 @@
-import { AgentViewError } from 'agentview/AgentViewError';
 import { requireAgentConfigBySession } from 'agentview/baseConfigUtils';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
-import { fromDrizzle } from 'pg-boss';
-import { sql } from 'drizzle-orm';
 import type { ServicePrincipal } from 'src/authMiddleware';
 import { getAdapter } from '../adapters/adapters';
 import { db__dangerous } from '../db';
-import { getConfigFromEnvironment, requireEnvironment } from '../environments';
+import { getConfigFromEnvironment } from '../environments';
 import { log } from '../logger';
-import { bossSendTx, getBoss } from '../queues/pgboss';
-import { createAutoRunInTx, executeAutoRun, terminateRun } from '../runs';
+import { bossSendTx } from '../queues/pgboss';
+import { createAutoRun2,terminateRun } from '../runs';
 import { channelMessages, channelThreads, runs, sessions } from '../schemas/schema';
 import { requireSessionBase } from '../sessions';
 import { withOrg, withTenant, type OrgTransaction } from '../withOrg';
-// import { OUTGOING_CHANNEL_MESSAGE_QUEUE } from '../workers/outgoingChannelMessages';
 import { sendOutgoingChannelMessageQueue } from '../queues/sendOutgoingChannelMessage.queue';
 
 async function insertAndQueueOutgoingMessage(tx: OrgTransaction, values: {
@@ -31,12 +27,6 @@ async function insertAndQueueOutgoingMessage(tx: OrgTransaction, values: {
   }).returning();
 
   await bossSendTx(tx, sendOutgoingChannelMessageQueue, { messageId: msg.id, organizationId: tx.organizationId });
-
-  // await getBoss().send(
-  //   OUTGOING_CHANNEL_MESSAGE_QUEUE,
-  //   { messageId: msg.id, organizationId: tx.organizationId },
-  //   { db: fromDrizzle(tx, sql) },
-  // );
 }
 
 
@@ -129,25 +119,34 @@ export async function createRunForChannelThreadIfNecessary(channelThreadId: stri
 
     if (!session) return;
 
-    const envHandle = thread?.channel?.environment?.handle;
-    if (!envHandle) return;
+    const environment = thread?.channel?.environment;
 
-    organizationId = session.organizationId;
+    if (!environment) return;
+
+    organizationId = thread.organizationId;
+
     const sessionId = session.id;
 
     const principal = {
       type: 'service' as const,
-      organizationId,
-      env: envHandle,
+      organizationId: thread.organizationId,
+      env: environment.handle,
     } as ServicePrincipal;
 
     log.debug(`[${sessionId}] [createRunForChannelThread] start`);
 
-    // result == undefined -> ignore
-    const txResult = await withTenant(principal, async (tx) => {
-      await tx.acquireLock({ type: "edit_session", sessionId });
 
-      const session = await requireSessionBase(tx, sessionId);
+
+    /**
+     * STEP 1
+     * 
+     * Check whether we should even create a new run.
+     * 
+     */
+    const preparationResult = await withTenant(principal, async (tx) => {
+      await tx.acquireLock({ type: "edit_session", sessionId }); // probably should be channel_thread_lock
+
+      // const session = await requireSessionBase(tx, sessionId);
 
       // ── Gate 1: bail if outgoing message is in-flight ──
       // We can't create a new run while side effects are uncertain.
@@ -177,7 +176,6 @@ export async function createRunForChannelThreadIfNecessary(channelThreadId: stri
         log.debug(`[${sessionId}] skipping: no unprocessed incoming messages`);
         return;
       }
-
 
       // ── Terminate active run ──
       // New unprocessed messages exist, so any in-progress run is stale.
@@ -232,74 +230,64 @@ export async function createRunForChannelThreadIfNecessary(channelThreadId: stri
 
       log.info({ sessionId, count: incomingMessages.length }, 'incoming messages found');
 
-      /**
-       * Create run in TX.
-       * 
-       * From now we literally mimick createAutoRun2, as if it was called from API.
-       * 
-       * We use try / catch here because error here should not kill the transaction.
-       * The termination of the run above should succeed.
-       * If new channel message arrived, we should first kill old run, and then if there's error... propagate it to the channel.
-       * But there's no point continuing execution of old run.
-       * 
-       * However, the throw here should be very rare.
-       */
-      try {
-        const newRunId = crypto.randomUUID();
-        const environment = await requireEnvironment(tx);
-        const config = getConfigFromEnvironment(environment);
-        const agentConfig = requireAgentConfigBySession(config, session);
-        const adapter = getAdapter(agentConfig.adapter);
-        const input = adapter.createDefaultInputForChannelMessages(incomingMessages, newRunId);
-
-        const txResult = await createAutoRunInTx(tx, sessionId, input, {
-          id: newRunId,
-          previousRunId,
-        });
-
-        // Mark consumed incoming messages with the new runId
-        const incomingIds = incomingMessages.map(m => m.id);
-        if (incomingIds.length > 0) {
-          await tx.update(channelMessages)
-            .set({ runId: newRunId })
-            .where(inArray(channelMessages.id, incomingIds));
-        }
-
-        return txResult;
-      }
-      catch (error) {
-        await insertAndQueueOutgoingMessage(tx, {
-          channelThreadId,
-          text: error instanceof Error ? error.message : String(error),
-          runId: null,
-          internal: true,
-        });
-        return;
-      }
+      return {
+        incomingMessages,
+        previousRunId,
+      };
     });
 
-    if (!txResult) return;
+    // Return if no incoming messages found -> idempotency
+    if (!preparationResult) {
+      return;
+    }
 
-    const result = await executeAutoRun(principal, sessionId, txResult);
+    /**
+     * STEP 2
+     * 
+     * Create input and create a run
+     * 
+     * Btw, above transaction is closed but there's NO RACE CONDITION.
+     * 
+     * If we have like "messages states": A, AB and ABC and they come in random order... ABC alwyas will be the last one.
+     * - first, above transaction is serialized
+     * - if messages come in order A, AB, ABC, then all will reach this point, but ABC will terminate both A and AB (since it's the last one).
+     * - if they come in order ABC, AB, A, then AB and A will be ignored by above transaction (return will be reached).
+     */
+    const { incomingMessages, previousRunId } = preparationResult;
 
-    if (!result.success) {
+    // Create input
+    const sessionBase = await withOrg(thread.organizationId, async (tx) => {
+      return await requireSessionBase(tx, sessionId);
+    });
+
+    const config = getConfigFromEnvironment(environment);
+    const agentConfig = requireAgentConfigBySession(config, sessionBase);
+    const adapter = getAdapter(agentConfig.adapter);
+    const input = adapter.createDefaultInputForChannelMessages(incomingMessages);
+
+    const result = await createAutoRun2(principal, sessionId, input, previousRunId);
+
+    // If success -> just assign active runId to incoming messages
+    if (result.success) {
+      const incomingIds = incomingMessages.map(m => m.id);
+      if (incomingIds.length > 0) {
+        await withOrg(thread.organizationId, async (tx) => {
+          await tx.update(channelMessages)
+            .set({ runId: result.runId })
+            .where(inArray(channelMessages.id, incomingIds));
+        });
+      }
+    }
+    else { // failure -> send error message to channel
       const text = `Error response from AI Endpoint: ${result.response.statusText}. Body:
 
       ${await result.response.text()}
       `;
 
-      await withOrg(organizationId, async (tx) => {
-        await insertAndQueueOutgoingMessage(tx, {
-          channelThreadId,
-          text,
-          runId: null,
-          internal: true,
-        });
-      });
+      throw new Error(text);
     }
 
   } catch (error) {
-
     if (!organizationId) return;
 
     await withOrg(organizationId, async (tx) => {
@@ -310,7 +298,7 @@ export async function createRunForChannelThreadIfNecessary(channelThreadId: stri
         internal: true,
       });
     });
-    
+
     log.error({ err: error, channelThreadId }, 'createRunForChannelThreadIfNecessary failed for unexpected reason');
   }
 }

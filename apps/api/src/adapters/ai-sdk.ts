@@ -14,9 +14,9 @@ export const aiSDKAdapter = {
             resume: statusFields.status === 'in_progress',
         }
     },
-    createDefaultInputForChannelMessages: (incomingMessages: any[], runId: string) => {
+    createDefaultInputForChannelMessages: (incomingMessages: any[]) => {
         return {
-            id: `${runId}-input`,
+            id: crypto.randomUUID(),
             role: 'user',
             parts: incomingMessages.map(cm => ({ type: 'text', text: cm.text ?? '' })),
         };

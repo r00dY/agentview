@@ -101,7 +101,7 @@ export async function createEnvironment(orgId: string, envHandle: string, userId
   })
 }
 
-export function getConfigFromEnvironment(environment: Environment) {
+export function getConfigFromEnvironment(environment: Pick<Environment, 'config'>) {
   return BaseConfigSchemaToZod.parse(environment.config)
 }
 
