@@ -113,7 +113,7 @@ export async function emailToMarkdown(email: { html?: string; text?: string }): 
   }
 
   if (parts.length === 0) {
-    return { content: '', signature: null };
+    return { content: '', user: null };
   }
 
   console.log('-------------------EMAIL TO MARKDOWN--------------');
@@ -138,5 +138,5 @@ export async function emailToMarkdown(email: { html?: string; text?: string }): 
   }
 
   // Fallback: return planer output as-is
-  return { content: cleanedText || '', signature: null };
+  return { content: cleanedText || '', user: null };
 }
