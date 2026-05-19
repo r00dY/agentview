@@ -11,6 +11,7 @@ import { channelMessages, channelThreads, runs, sessions } from '../schemas/sche
 import { requireSessionBase } from '../sessions';
 import { withOrg, withTenant, type OrgTransaction } from '../withOrg';
 import { sendOutgoingChannelMessageQueue } from '../queues/sendOutgoingChannelMessage.queue';
+import { formatChannelErrorBody } from './formatChannelErrorBody';
 
 async function insertAndQueueOutgoingMessage(tx: OrgTransaction, values: {
   channelThreadId: string;
@@ -78,7 +79,7 @@ export async function channelOnRunFinishHandler(params: {
         internal: false,
       });
     } else if (params.status === 'failed') {
-      const text = params.failReason?.message ?? 'Run failed';
+      const text = formatChannelErrorBody(params.failReason ?? new Error('Run failed'));
 
       await insertAndQueueOutgoingMessage(tx, {
         channelThreadId: sessionRow.channelThreadId,
@@ -98,7 +99,7 @@ export async function channelOnRunFinishHandler(params: {
  * Never throws. Safe to call multiple times; skips silently when there is no work to do.
  *
  * Triggered from two places:
- * - New incoming channel message ingested (from ingestMessage in defineChannel)
+ * - New incoming channel message ingested (from ingestMessage in defineChannelApp)
  * - Outgoing channel message sent by worker (outgoingChannelMessages)
  *
  * Inside a transaction with session lock:
@@ -300,7 +301,7 @@ export async function createRunForChannelThreadIfNecessary(channelThreadId: stri
     await withOrg(organizationId, async (tx) => {
       await insertAndQueueOutgoingMessage(tx, {
         channelThreadId,
-        text: error instanceof Error ? error.message : String(error),
+        text: formatChannelErrorBody(error),
         runId: null,
         internal: true,
       });

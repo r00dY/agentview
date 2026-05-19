@@ -11,10 +11,11 @@ import type { Transaction } from '../types';
 import { createUser, findUser } from '../users';
 import { withOrg, withTenant } from '../withOrg';
 import type { WorkerHandle } from '../workers/utils';
-import { getConfigFromEnvironment, getEnvironmentByHandleAndOrgId, requireConfig, requireEnvironment } from '../environments';
+import { getEnvironmentByHandleAndOrgId, requireConfig, requireEnvironment } from '../environments';
 import type { ExternalChannelConfig } from 'agentview/baseConfigTypes';
 import { createChannel as createChannelFn, getChannel as getChannelFn } from './channels';
 import { organizations } from 'src/schemas/auth-schema';
+import { formatChannelErrorBody } from './formatChannelErrorBody';
 
 export type Channel = typeof channels.$inferSelect;
 type ChannelThread = typeof channelThreads.$inferSelect;
@@ -22,30 +23,39 @@ type ChannelMessage = typeof channelMessages.$inferSelect;
 
 export type ChannelProvider = ReturnType<typeof channelProvider>;
 
-export type SendMessageParams = { channelThread: ChannelThread; channel: Channel; message: ChannelMessage };
+/**
+ * Agnostic send-message params — mirrors ingestMessage's shape: caller passes the
+ * markdown text + a sourceThreadId anchor; channel-specific logic (e.g. building
+ * email Re: chain from the persisted thread) lives inside each channel app.
+ */
+export type SendMessageParams = { address: string; text: string; sourceThreadId?: string };
 export type SendMessageResult = { sourceId: string; providerData?: any };
 export type SendMessageFn = (params: SendMessageParams) => Promise<SendMessageResult>;
 
 export interface ChannelApp {
   type: string;
+  sendMessage: SendMessageFn;
   routes: OpenAPIHono | null;
   workers: WorkerHandle[];
-  sendMessage?: SendMessageFn;
 }
 
-export function defineChannel(config: {
-  type: string;
-  routes?: (provider: ChannelProvider) => OpenAPIHono;
-  workers?: (provider: ChannelProvider) => WorkerHandle[];
-  sendMessage?: (provider: ChannelProvider) => SendMessageFn;
-}): ChannelApp {
-  const provider = channelProvider(config.type);
+export function defineChannelApp(
+  type: string,
+  creator: (provider: ChannelProvider) => {
+    sendMessage: SendMessageFn;
+    routes?: OpenAPIHono | null;
+    workers?: WorkerHandle[];
+  }
+): ChannelApp {
+  const provider = channelProvider(type);
+  const app = creator(provider);
+
   return {
-    type: config.type,
-    routes: config.routes ? config.routes(provider) : null,
-    workers: config.workers ? config.workers(provider) : [],
-    sendMessage: config.sendMessage ? config.sendMessage(provider) : undefined,
-  };
+    type,
+    sendMessage: app.sendMessage,
+    routes: app.routes ?? null,
+    workers: app.workers ?? [],
+  }
 }
 
 type IngestMessageParams = {
@@ -54,7 +64,6 @@ type IngestMessageParams = {
   date: string;
 
   text?: string;
-  providerData?: any;
   title?: string;
 
   author: {
@@ -63,6 +72,8 @@ type IngestMessageParams = {
     details?: string
     email?: string
   }
+
+  providerData?: any;
 }
 
 type IngestMessageResultSuccess = {
@@ -217,169 +228,160 @@ export function channelProvider(type: string) {
       .where(eq(channels.type, type));
   }
 
-
-
   async function ingestMessage(address: string, params: IngestMessageParams): Promise<IngestMessageResult> {
     log.info({ address, sourceId: params.sourceId, type, authorEmail: params.author.email }, 'ingesting message');
 
-    try {
-      const channel = await resolveChannel(type, address);
+    const channel = await resolveChannel(type, address);
+
+    /**
+     * Why we need environment handle?
+     *
+     * It's because ingestion might actually have to create a new user. And new user must be qualified to a space -> which is determined by environment.
+     */
+    let envHandle = channel.environment?.handle;
+    if (!envHandle) {
+      throw new Error(`Channel is not routed to any environment: type=${channel.type} address=${channel.address}`);
+    }
+
+    const principal : ServicePrincipal = {
+      type: 'service' as const,
+      organizationId: channel.organizationId,
+      env: envHandle,
+    } as ServicePrincipal;
+
+    const channelRef: ChannelRef = { type: channel.type as 'gmail' | 'mock', address: channel.address }
+
+    const result = await withTenant(principal, async (tx) => {
+      await tx.acquireLock({ type: "create_resource" });
+
+      const environment = await requireEnvironment(tx);
+
+      log.info({ sourceId: params.sourceId, env: environment.user?.email ?? 'production' }, 'environment resolved');
 
       /**
-       * Why we need environment handle?
-       * 
-       * It's because ingestion might actually have to create a new user. And new user must be qualified to a space -> which is determined by environment.
+       * Create or get channel thread and channel message
        */
-      let envHandle = channel.environment?.handle;
-      if (!envHandle) {
-        throw new Error(`Channel is not routed to any environment: type=${channel.type} address=${channel.address}`);
+      const thread = await getOrCreateThread(tx, channel, params);
+      const { message, isNew } = await getOrCreateMessage(tx, channel, thread, params);
+
+      if (!isNew) {
+        return {
+          ingested: false as const,
+          reason: 'Duplicate message (sourceId already exists)',
+        }
       }
 
-      const principal : ServicePrincipal = {
-        type: 'service' as const,
-        organizationId: channel.organizationId,
-        env: envHandle,
-      } as ServicePrincipal;
+      log.info({ sourceId: params.sourceId }, 'thread and message created');
 
-      const channelRef: ChannelRef = { type: channel.type as 'gmail' | 'mock', address: channel.address }
-
-      const result = await withTenant(principal, async (tx) => {
-        await tx.acquireLock({ type: "create_resource" });
-
-        const environment = await requireEnvironment(tx);
-
-        log.info({ sourceId: params.sourceId, env: environment.user?.email ?? 'production' }, 'environment resolved');
-
-        /**
-         * Create or get channel thread and channel message
-         */
-        const thread = await getOrCreateThread(tx, channel, params);
-        const { message, isNew } = await getOrCreateMessage(tx, channel, thread, params);
-
-        if (!isNew) {
-          return {
-            ingested: false as const,
-            reason: 'Duplicate message (sourceId already exists)',
-          }
-        }
-
-        log.info({ sourceId: params.sourceId }, 'thread and message created');
-
-        /**
-         * Last run associated with the thread -> allows us to find sessionId too.
-         */
-        let session = await tx.query.sessions.findFirst({
-          where: eq(sessions.channelThreadId, thread.id),
-        });
-
-        /**
-         * Ensure user
-         */
-        let userId: string | undefined;
-
-        // If session exists, let's just use it's userId
-        if (session) {
-          userId = session.userId;
-        }
-        else {
-          if (!params.author.email) {
-            throw new Error(`Author email is required to create a session`);
-          }
-
-          userId = (await findUser(tx, { email: params.author.email }))?.id;
-
-          if (!userId) {
-            userId = (await createUser(tx, params.author)).user.id;
-          }
-
-          log.info({ sourceId: params.sourceId, authorEmail: params.author.email, userId }, 'user resolved from email');
-        }
-
-        if (!userId) {
-          throw new Error(`Unreachable error: user not found and not created`);
-        }
-
-        /**
-         * Ensure session
-         */
-        if (!session) {
-          log.info({ sourceId: params.sourceId }, 'creating new session');
-          session = await createSession(tx, {
-            channel: channelRef,
-            channelThreadId: thread.id,
-            userId,
-            title: params.title,
-          });
-
-          await activateSession(tx, session.id); // channel sessions should be active immediately
-
-          /**
-           * WE CHECK CONFIG HERE
-           * 
-           * For now we allow for channel message ingestion only when following exist:
-           * - environment
-           * - agent config
-           * - channel config!
-           * - and channel config is correct (metadata, initialState, etc...)
-           * 
-           * If these conditions are not met, we throw which just ignores message.
-           * 
-           * IN THE FUTURE: ingestion could be separate from session creation.
-           */
-          const config = await requireConfig(tx);
-          const matches: { agent: string, channelConfig: ExternalChannelConfig }[] = [];
-
-          config.agents?.forEach((agent) => {
-            if (!agent.channels) {
-              return;
-            }
-
-            const channelConfigs = agent.channels?.filter((c) => {
-              if (c.type === 'agentview-email') { // we ignore address for our internal email, since it's wildcarded
-                const { agentName } = parseAgentViewEmailAddress(channel.address);
-                return channel.type === 'agentview-email' && agent.name === agentName;
-              }
-              else {
-                return c.type === channel.type && c.address === channel.address;
-              }
-            })
-
-            channelConfigs.forEach((channelConfig) => {
-              matches.push({ agent: agent.name, channelConfig })
-            })
-          });
-
-          if (matches.length === 0) {
-            throw new Error(`No agent found for this channel: ${channel.type} ${channel.address}`);
-          }
-          if (matches.length > 1) {
-            throw new Error(`Multiple agents found for this channel: ${channel.type} ${channel.address}`);
-          }
-
-          const { agent, channelConfig } = matches[0];
-
-          await setAgentForSession(tx, session.id, { agent, metadata: channelConfig!.metadata, initialState: channelConfig!.initialState });
-
-          log.info({ sourceId: params.sourceId, sessionId: session.id }, 'new session created');
-        }
-
-        return { ingested: true as const, sessionId: session.id, thread, message };
+      /**
+       * Last run associated with the thread -> allows us to find sessionId too.
+       */
+      let session = await tx.query.sessions.findFirst({
+        where: eq(sessions.channelThreadId, thread.id),
       });
 
       /**
-       * If message was properly ingested, we create a run for it. Async on purpose.
+       * Ensure user
        */
-      if (result.ingested) {
-        createRunForChannelThreadIfNecessary(result.thread.id);
+      let userId: string | undefined;
+
+      // If session exists, let's just use it's userId
+      if (session) {
+        userId = session.userId;
       }
-      
-      return result;
+      else {
+        if (!params.author.email) {
+          throw new Error(`Author email is required to create a session`);
+        }
+
+        userId = (await findUser(tx, { email: params.author.email }))?.id;
+
+        if (!userId) {
+          userId = (await createUser(tx, params.author)).user.id;
+        }
+
+        log.info({ sourceId: params.sourceId, authorEmail: params.author.email, userId }, 'user resolved from email');
+      }
+
+      if (!userId) {
+        throw new Error(`Unreachable error: user not found and not created`);
+      }
+
+      /**
+       * Ensure session
+       */
+      if (!session) {
+        log.info({ sourceId: params.sourceId }, 'creating new session');
+        session = await createSession(tx, {
+          channel: channelRef,
+          channelThreadId: thread.id,
+          userId,
+          title: params.title,
+        });
+
+        await activateSession(tx, session.id); // channel sessions should be active immediately
+
+        /**
+         * WE CHECK CONFIG HERE
+         * 
+         * For now we allow for channel message ingestion only when following exist:
+         * - environment
+         * - agent config
+         * - channel config!
+         * - and channel config is correct (metadata, initialState, etc...)
+         * 
+         * If these conditions are not met, we throw which just ignores message.
+         * 
+         * IN THE FUTURE: ingestion could be separate from session creation.
+         */
+        const config = await requireConfig(tx);
+        const matches: { agent: string, channelConfig: ExternalChannelConfig }[] = [];
+
+        config.agents?.forEach((agent) => {
+          if (!agent.channels) {
+            return;
+          }
+
+          const channelConfigs = agent.channels?.filter((c) => {
+            if (c.type === 'agentview-email') { // we ignore address for our internal email, since it's wildcarded
+              const { agentName } = parseAgentViewEmailAddress(channel.address);
+              return channel.type === 'agentview-email' && agent.name === agentName;
+            }
+            else {
+              return c.type === channel.type && c.address === channel.address;
+            }
+          })
+
+          channelConfigs.forEach((channelConfig) => {
+            matches.push({ agent: agent.name, channelConfig })
+          })
+        });
+
+        if (matches.length === 0) {
+          throw new Error(`No agent found for this channel: ${channel.type} ${channel.address}`);
+        }
+        if (matches.length > 1) {
+          throw new Error(`Multiple agents found for this channel: ${channel.type} ${channel.address}`);
+        }
+
+        const { agent, channelConfig } = matches[0];
+
+        await setAgentForSession(tx, session.id, { agent, metadata: channelConfig!.metadata, initialState: channelConfig!.initialState });
+
+        log.info({ sourceId: params.sourceId, sessionId: session.id }, 'new session created');
+      }
+
+      return { ingested: true as const, sessionId: session.id, thread, message };
+    });
+
+    /**
+     * If message was properly ingested, we create a run for it. Async on purpose.
+     */
+    if (result.ingested) {
+      createRunForChannelThreadIfNecessary(result.thread.id);
     }
-    catch (error) {
-      console.log('------ERROR INGEST MESSAGE------');
-      console.log(error);
-      return { ingested: false as const, reason: (error as Error).message };
-    }
+    
+    return result;
   }
 
   return {

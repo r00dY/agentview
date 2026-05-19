@@ -1,7 +1,7 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { Resend } from 'resend';
 import { log } from '../../logger';
-import type { EmailChannelProvider } from '../defineEmailChannel';
+import type { EmailChannelProvider, EmailMessageData } from '../defineEmailChannel';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -69,26 +69,48 @@ export function createResendRoutes(provider: EmailChannelProvider): OpenAPIHono 
     }
 
     // Ingest for each recipient address (each may map to a different channel)
-    for (const toAddress of toAddresses) {
-      const address = extractEmailAddress(toAddress);
 
+    // We take first address that has 'agent.agentview.app' domain
+    let address: string | undefined = undefined;
+
+    for (const toAddress of toAddresses) {
+      const emailAddress = extractEmailAddress(toAddress);
+      if (emailAddress.split('@')[1] === 'agent.agentview.app') {
+        address = emailAddress;
+        break;
+      }
+    }
+
+    if (!address) {
+      log.warn({ emailId }, 'resend webhook: no agentview email address found');
+      return c.json({ status: 'ok' }, 200);
+    }
+
+    const agentViewEmail : EmailMessageData = {
+      messageId: email.message_id,
+      inReplyTo,
+      references,
+      subject: email.subject,
+      from: email.headers.from,
+      to: toAddresses.join(', '),
+      cc: email.cc?.join(', '),
+      htmlBody: email.html ?? undefined,
+      textBody: email.text ?? undefined,
+    };
+
+    try {
       await provider.ingestEmail(address, {
         date: email.created_at,
-        email: {
-          messageId: email.message_id,
-          inReplyTo,
-          references,
-          subject: email.subject,
-          from: email.headers.from,
-          to: toAddresses.join(', '),
-          cc: email.cc?.join(', '),
-          htmlBody: email.html ?? undefined,
-          textBody: email.text ?? undefined,
-        },
+        email: agentViewEmail,
         providerData: {
           resendEmailId: emailId,
         },
       });
+    } catch (error) {
+      console.log("--- ingestEmail error ---");
+      console.log(error);
+      log.error({ err: error, address }, 'resend webhook: failed to ingest email');
+      // return c.json({ error: 'Failed to ingest email' }, 500);
     }
 
     return c.json({ status: 'ok' }, 200);

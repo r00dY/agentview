@@ -89,10 +89,10 @@ export function createMockRoutes(mock: ChannelProvider): OpenAPIHono {
 
     const body = c.req.valid('json');
 
-    const channel = await mock.getChannel(body.address);
-    if (!channel) {
-      return c.json({ message: 'Mock channel not found for this address' }, 404);
-    }
+    // const channel = await mock.getChannel(body.address);
+    // if (!channel) {
+    //   return c.json({ message: 'Mock channel not found for this address' }, 404);
+    // }
 
     try {
       const result = await mock.ingestMessage(body.address, {

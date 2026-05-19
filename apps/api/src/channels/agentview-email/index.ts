@@ -1,15 +1,19 @@
 import { Resend } from 'resend';
-import { defineEmailChannel } from '../defineEmailChannel';
+import { defineEmailChannelApp } from '../defineEmailChannel';
 import { log } from '../../logger';
 import { createResendRoutes } from './routes';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-export const agentviewEmailChannel = defineEmailChannel({
-  type: 'agentview-email',
-  routes: (provider) => createResendRoutes(provider),
-  sendEmail: () => async ({ channel, to, from, subject, textBody, htmlBody, inReplyTo, references }) => {
-    const headers: Record<string, string> = {};
+export const agentviewEmailChannel = defineEmailChannelApp('agentview-email', (provider) => ({
+  routes: createResendRoutes(provider),
+  sendEmail:  async ({ email }) => {
+    const { messageId, to, from, subject, textBody, htmlBody, inReplyTo, references } = email;
+    
+    const headers: Record<string, string> = {
+      'Message-ID': messageId, // this is good-faith but look at the comment below. This Message-ID will be overriden anyway.
+    };
+    
     if (inReplyTo) {
       headers['In-Reply-To'] = inReplyTo;
     }
@@ -23,7 +27,7 @@ export const agentviewEmailChannel = defineEmailChannel({
       from,
       to,
       subject,
-      text: textBody,
+      text: textBody ?? "",
       html: htmlBody,
       headers: Object.keys(headers).length > 0 ? headers : undefined,
     });
@@ -33,14 +37,14 @@ export const agentviewEmailChannel = defineEmailChannel({
       throw new Error(`Resend send failed: ${error?.message ?? 'unknown error'}`);
     }
 
-    log.info({ resendId: data.id, to, from }, 'resend: email sent');
+    log.info({ resendEmailId: data.id, to, from }, 'resend: email sent');
 
     // RESEND LIMITATION: This sourceId is NOT the real RFC Message-ID.
     //
     // Resend uses Amazon SES under the hood. SES assigns its own Message-ID
     // (e.g. <01020...@eu-west-1.amazonses.com>) and Resend's API never exposes it:
     //   - emails.send() returns only { id } (the Resend UUID)
-    //   - emails.get() does not include message_id or headers
+    //   - emails.get() does not include message_id or headersx
     //   - Custom Message-ID headers are silently overridden by SES
     //
     // This means when a recipient replies, their In-Reply-To will contain the
@@ -57,13 +61,13 @@ export const agentviewEmailChannel = defineEmailChannel({
     // If Resend ever exposes message_id on their GET /emails/{id} endpoint,
     // we should fetch it after send (like the Gmail channel does) and use
     // the real value here.
-    const sourceId = `<${data.id}@resend.dev>`;
+    const sourceId = messageId;
 
     return {
       sourceId,
       providerData: {
-        resendId: data.id,
+        resendEmailId: data.id,
       },
     };
   },
-});
+}));

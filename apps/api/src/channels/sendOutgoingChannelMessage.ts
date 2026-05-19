@@ -41,7 +41,11 @@ export async function sendOutgoingChannelMessage(messageId: string, organization
 
         log.info('sending outgoing message');
 
-        const result = await sendFn({ channel, channelThread, message });
+        const result = await sendFn({
+            address: channel.address,
+            text: message.text ?? '',
+            sourceThreadId: channelThread.sourceThreadId ?? undefined,
+        });
 
         log.info({ sourceId: result.sourceId }, 'message sent');
 

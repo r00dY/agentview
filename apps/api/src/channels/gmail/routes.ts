@@ -180,6 +180,7 @@ export function createGmailRoutes(gmail: EmailChannelProvider): OpenAPIHono {
       // Insert channel messages via threads
       for (const email of result.emails) {
         await gmail.ingestEmail(emailAddress, {
+          sourceThreadId: email.threadId, // for gmail we force gmail threadId as sourceThreadId. We rely on gmail threading.
           date: email.date,
           email: {
             messageId: email.messageId,
@@ -193,7 +194,6 @@ export function createGmailRoutes(gmail: EmailChannelProvider): OpenAPIHono {
           },
           providerData: {
             gmailId: email.id,
-            gmailThreadId: email.threadId,
             snippet: email.snippet,
           },
         });
