@@ -1,6 +1,11 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
+import { eq } from 'drizzle-orm';
 import { Resend } from 'resend';
+import { db__dangerous } from '../../db';
+import { getEnvironmentByHandleAndOrgId } from '../../environments';
 import { log } from '../../logger';
+import { organizations } from '../../schemas/auth-schema';
+import { parseAgentViewEmailAddress } from '../defineChannel';
 import type { EmailChannelProvider, EmailMessageData } from '../defineEmailChannel';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -9,6 +14,32 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 function extractEmailAddress(from: string): string {
   const match = from.match(/<([^>]+)>/);
   return (match ? match[1] : from).trim().toLowerCase();
+}
+
+/**
+ * Bootstrap an agentview-email channel on demand from its wildcarded address
+ * ({orgSlug}.{envSlug}.{agentName}@agent.agentview.app). Throws if the address
+ * format is invalid, or the referenced org/environment doesn't exist.
+ */
+async function ensureAgentViewEmailChannel(provider: EmailChannelProvider, address: string) {
+  const existing = await provider.getChannel(address);
+  if (existing) return;
+
+  const { orgSlug, envSlug } = parseAgentViewEmailAddress(address);
+
+  const org = await db__dangerous.query.organizations.findFirst({
+    where: eq(organizations.slug, orgSlug),
+  });
+  if (!org) {
+    throw new Error(`Organization not found: org.slug=${orgSlug}`);
+  }
+
+  const environment = await getEnvironmentByHandleAndOrgId(org.id, envSlug);
+  if (!environment) {
+    throw new Error(`Environment not found: org.id=${org.id} envSlug=${envSlug}`);
+  }
+
+  await provider.createChannel(org.id, address, {}, environment.id);
 }
 
 export function createResendRoutes(provider: EmailChannelProvider): OpenAPIHono {
@@ -99,6 +130,8 @@ export function createResendRoutes(provider: EmailChannelProvider): OpenAPIHono 
     };
 
     try {
+      await ensureAgentViewEmailChannel(provider, address);
+
       await provider.ingestEmail(address, {
         date: email.created_at,
         email: agentViewEmail,

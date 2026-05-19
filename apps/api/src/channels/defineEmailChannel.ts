@@ -9,7 +9,6 @@ import {
   type ChannelApp,
   type SendMessageFn,
   type SendMessageResult,
-  resolveChannel,
 } from './defineChannel';
 import { marked } from 'marked';
 import { withOrg } from 'src/withOrg';
@@ -77,7 +76,7 @@ export function defineEmailChannelApp(
       throw new Error('[defineEmailChannelApp] Email has no Message-ID — this should never happen');
     }
 
-    const channel = await resolveChannel(type, address);
+    const channel = await provider.requireChannel(address);
 
     /**
      * We should only resolveThreadId for NEW emails. If the email is already in our inbox (we sent it ourselves), then it already has a threadId.
@@ -146,7 +145,7 @@ export function defineEmailChannelApp(
     type,
     routes: emailApp.routes ?? null,
     workers: emailApp.workers ?? [],
-    sendMessage: buildSendMessage(type, emailApp.sendEmail),
+    sendMessage: buildSendMessage(provider, emailApp.sendEmail),
   };
 }
 
@@ -201,11 +200,11 @@ async function resolveThreadId(
 }
 
 function buildSendMessage(
-  type: string,
+  provider: ChannelProvider,
   emailSendFn: EmailSendFn,
 ): SendMessageFn {
   return async ({ address, text, sourceThreadId }) => {
-    const channel = await resolveChannel(type, address);
+    const channel = await provider.requireChannel(address);
 
     if (!sourceThreadId) {
       throw new Error(`[INTERNAL ERROR] no sourceThreadId provided for ${channel.type} ${channel.address}`);

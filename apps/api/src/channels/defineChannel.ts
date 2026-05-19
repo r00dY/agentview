@@ -11,11 +11,9 @@ import type { Transaction } from '../types';
 import { createUser, findUser } from '../users';
 import { withOrg, withTenant } from '../withOrg';
 import type { WorkerHandle } from '../workers/utils';
-import { getEnvironmentByHandleAndOrgId, requireConfig, requireEnvironment } from '../environments';
+import { requireConfig, requireEnvironment } from '../environments';
 import type { ExternalChannelConfig } from 'agentview/baseConfigTypes';
-import { createChannel as createChannelFn, getChannel as getChannelFn } from './channels';
-import { organizations } from 'src/schemas/auth-schema';
-import { formatChannelErrorBody } from './formatChannelErrorBody';
+import { createChannel as createChannelFn } from './channels';
 
 export type Channel = typeof channels.$inferSelect;
 type ChannelThread = typeof channelThreads.$inferSelect;
@@ -119,48 +117,12 @@ export function parseAgentViewEmailAddress(address: string) {
 }
 
 
-export async function resolveChannel(type: string, address: string) {
-  let channel = await getChannelFn(type, address);
-  if (channel) return channel;
-
-  if (type === 'agentview-email') {
-    const { orgSlug, envSlug } = parseAgentViewEmailAddress(address);
-
-    // check org
-    const org = await db__dangerous.query.organizations.findFirst({
-      where: eq(organizations.slug, orgSlug),
-    });
-
-    if (!org) {
-      throw new Error(`Organization not found: org.slug=${orgSlug}`);
-    }
-
-    // check env
-    const environment = await getEnvironmentByHandleAndOrgId(org.id, envSlug);
-    if (!environment) {
-      throw new Error(`Environment not found: org.id=${org.id} envSlug=${envSlug}`);
-    }
-
-    await createChannelFn(org.id, type, address, {}, environment.id);
-    channel = await getChannelFn(type, address);
-
-    if (!channel) {
-      throw new Error(`Channel not created for address: ${address}`);
-    }
-
-    return channel;
-  }
-
-  throw new Error(`Channel not found for address: ${address}`);
-}
-
-
 export function channelProvider(type: string) {
   /**
    * Strict create — fails on conflict (unique constraint on type+address).
    */
-  async function createChannel(orgId: string, address: string, config: any): Promise<Channel> {
-    return await createChannelFn(orgId, type, address, config);
+  async function createChannel(orgId: string, address: string, config: any, environmentId: string | null = null): Promise<Channel> {
+    return await createChannelFn(orgId, type, address, config, environmentId);
   }
 
   /**
@@ -231,7 +193,7 @@ export function channelProvider(type: string) {
   async function ingestMessage(address: string, params: IngestMessageParams): Promise<IngestMessageResult> {
     log.info({ address, sourceId: params.sourceId, type, authorEmail: params.author.email }, 'ingesting message');
 
-    const channel = await resolveChannel(type, address);
+    const channel = await requireChannel(address);
 
     /**
      * Why we need environment handle?
