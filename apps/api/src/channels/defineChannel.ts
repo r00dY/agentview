@@ -26,7 +26,7 @@ export type ChannelProvider = ReturnType<typeof channelProvider>;
  * markdown text + a sourceThreadId anchor; channel-specific logic (e.g. building
  * email Re: chain from the persisted thread) lives inside each channel app.
  */
-export type SendMessageParams = { address: string; text: string; sourceThreadId?: string };
+export type SendMessageParams = { address: string; text: string; sourceThreadId: string };
 export type SendMessageResult = { sourceId: string; providerData?: any };
 export type SendMessageFn = (params: SendMessageParams) => Promise<SendMessageResult>;
 

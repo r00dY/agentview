@@ -287,7 +287,7 @@ export async function createRunForChannelThreadIfNecessary(channelThreadId: stri
       }
     }
     else { // failure -> send error message to channel
-      const text = `Error response from AI Endpoint: ${result.response.statusText}. Body:
+      const text = `Error response from AI Endpoint: ${result.response.status}. Body:
 
       ${await result.response.text()}
       `;

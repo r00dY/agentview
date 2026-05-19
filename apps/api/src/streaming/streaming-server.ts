@@ -104,6 +104,9 @@ async function handleProfileStop(res: http.ServerResponse) {
   sendJson(res, 200, { ok: true, filepath });
 }
 
+/**
+ * TODO: res.on('close')??? What happens when user closes the connection?
+ */
 async function handleCreateStream(req: http.IncomingMessage, res: http.ServerResponse) {
   const { run, url, body, metadata, headers: extraHeaders } = await readJsonBody(req);
   const runId = run.id;

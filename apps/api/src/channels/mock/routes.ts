@@ -2,7 +2,7 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { authn, authorize } from '../../authMiddleware';
 import { response_data, response_error } from '../../hono_utils';
 import type { ChannelProvider } from '../defineChannel';
-import { mockOutbox } from './index';
+import { mockOutbox } from './mockOutbox';
 
 export function createMockRoutes(mock: ChannelProvider): OpenAPIHono {
   const app = new OpenAPIHono();
@@ -61,7 +61,7 @@ export function createMockRoutes(mock: ChannelProvider): OpenAPIHono {
               address: z.string(),
               sourceId: z.string(),
               date: z.string(),
-              sourceThreadId: z.string().optional(),
+              sourceThreadId: z.string(),
               text: z.string(),
               providerData: z.any().optional(),
               author: z.object({
@@ -122,7 +122,8 @@ export function createMockRoutes(mock: ChannelProvider): OpenAPIHono {
         content: {
           'application/json': {
             schema: z.object({
-              id: z.string(),
+              sourceId: z.string(),
+              sourceThreadId: z.string(),
               address: z.string(),
               text: z.string().nullable(),
               timestamp: z.number(),
@@ -151,7 +152,8 @@ export function createMockRoutes(mock: ChannelProvider): OpenAPIHono {
     tags: ['Channels'],
     request: {
       query: z.object({
-        address: z.string().optional(),
+        address: z.string(),
+        sourceThreadId: z.string(),
       }),
     },
     responses: {
@@ -164,13 +166,32 @@ export function createMockRoutes(mock: ChannelProvider): OpenAPIHono {
     const principal = await authn(c.req.raw.headers);
     authorize(principal, { action: 'environment:read' });
 
-    const { address } = c.req.valid('query');
+    const { address, sourceThreadId } = c.req.valid('query');
 
-    const entries = address
-      ? mockOutbox.filter(e => e.address === address)
-      : mockOutbox;
+    const entries = mockOutbox.filter(e => e.address === address && e.sourceThreadId === sourceThreadId);
 
     return c.json(entries, 200);
+  });
+
+
+  const clearOutboxRoute = createRoute({
+    method: 'post',
+    path: '/clear-outbox',
+    summary: 'Clear mock outbox (in-memory, for testing)',
+    tags: ['Channels'],
+    responses: {
+      200: response_data(z.any()),
+      401: response_error(),
+    },
+  });
+
+  app.openapi(clearOutboxRoute, async (c) => {
+    const principal = await authn(c.req.raw.headers);
+    authorize(principal, { action: 'environment:read' });
+
+    mockOutbox.length = 0;
+
+    return c.json({ ok: true }, 200);
   });
 
   return app;

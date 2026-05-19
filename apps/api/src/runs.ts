@@ -295,10 +295,18 @@ async function createRunCore(
 async function prepareRunCreation(tx: OrgTransaction, environment: Environment, sessionId: string, previousRunId?: string | null) {
   const session = await requireSession(tx, sessionId); // todo: optimize
 
-  const lastRun = getLastRun(session);
-  if (lastRun && !isRunFinished(lastRun)) {
+  const inProgressRun = await tx.query.runs.findFirst({
+    where: and(eq(runs.sessionId, sessionId), eq(runs.status, 'in_progress')),
+  });
+
+  if (inProgressRun) {
     throw new AgentViewError(`Can't create a run because session has already a run in progress.`, 422);
   }
+
+  const lastRun = getLastRun(session);
+  // if (lastRun && !isRunFinished(lastRun)) {
+  //   throw new AgentViewError(`Can't create a run because session has already a run in progress.`, 422);
+  // }
 
   const previousRun = (() => {
     if (previousRunId === null) {

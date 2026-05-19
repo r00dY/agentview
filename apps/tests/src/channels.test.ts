@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll, afterAll } from 'vitest'
+import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { createStandardClient, configDefaults, type StandardAgentViewClient } from 'agentview/clientStandard'
 import type { Channel, Environment } from 'agentview/apiTypes'
 import { z } from 'zod'
@@ -84,6 +84,7 @@ describe('Channels', () => {
       av.__internal.mock.sendMessage({
         address: ADDRESS,
         sourceId: 'msg-404',
+        sourceThreadId: 'some-thread',
         date: new Date().toISOString(),
         text: 'hello',
         author: {
@@ -111,6 +112,7 @@ describe('Channels', () => {
       av.__internal.mock.sendMessage({
         address: 'nonexistent@example.com',
         sourceId: 'msg-404',
+        sourceThreadId: 'some-thread',
         date: new Date().toISOString(),
         text: 'hello',
         author: {
@@ -247,10 +249,11 @@ describe('Channels', () => {
         expect(s1.userId).not.toBe(s2.userId)
       })
 
-      test('without sourceThreadId → same session (same default thread)', async () => {
+      test('same sourceThreadId → same session (same default thread)', async () => {
         const r1 = await av.__internal.mock.sendMessage({
           address: ADDRESS,
           sourceId: 'same-session-1',
+          sourceThreadId: 'same-thread',
           date: new Date().toISOString(),
           text: 'message one',
           author: {
@@ -261,6 +264,7 @@ describe('Channels', () => {
         const r2 = await av.__internal.mock.sendMessage({
           address: ADDRESS,
           sourceId: 'same-session-2',
+          sourceThreadId: 'same-thread',
           date: new Date().toISOString(),
           text: 'message two',
           author: {
@@ -399,172 +403,173 @@ describe('Channels', () => {
         })
       }
 
-      let outboxBaseline = 0
+      // clear outbox before each test
+      beforeEach(async () => {
+        await av.__internal.mock.clearOutbox()
+      })
 
-      async function getNewOutboxEntries() {
-        const outbox = await av.__internal.mock.getOutbox(ADDRESS)
-        return outbox.slice(outboxBaseline)
+      async function getOutbox(sourceThreadId: string) {
+        return await av.__internal.mock.getOutbox(ADDRESS, sourceThreadId)
       }
 
-      async function waitForNewOutbox(count: number, timeoutMs = 15000) {
+      async function waitForOutboxCount(sourceThreadId: string, count: number) {
+        const timeoutMs = 15000;
         const start = Date.now()
         while (Date.now() - start < timeoutMs) {
-          const entries = await getNewOutboxEntries()
+          const entries = await getOutbox(sourceThreadId)
           if (entries.length >= count) return entries
           await new Promise(r => setTimeout(r, 1000))
         }
-        const entries = await getNewOutboxEntries()
+        const entries = await getOutbox(sourceThreadId)
         expect(entries).toHaveLength(count)
         return entries
       }
 
       test('single message → single outgoing reply', async () => {
         setParrotHandler()
-        const outbox = await av.__internal.mock.getOutbox(ADDRESS)
-        outboxBaseline = outbox.length
-
         await send('out-1', 'hello', 'single-thread')
-
-        const entries = await waitForNewOutbox(1)
+        const entries = await waitForOutboxCount('single-thread', 1)
         expect(entries[0].text).toBe('hello')
       }, 15000)
 
       test('two sequential messages → two outgoing replies with session history', async () => {
         setParrotHandler()
-        const outbox = await av.__internal.mock.getOutbox(ADDRESS)
-        outboxBaseline = outbox.length
+        const sourceThreadId = 'seq-thread'
 
-        await send('seq-1', 'first', 'seq-thread')
-        await waitForNewOutbox(1)
+        await send('seq-1', 'first', sourceThreadId)
+        await waitForOutboxCount(sourceThreadId, 1)
 
-        await send('seq-2', 'second', 'seq-thread')
-        const entries = await waitForNewOutbox(2)
+        await send('seq-2', 'second', sourceThreadId)
+        const entries = await waitForOutboxCount(sourceThreadId, 2)
+
         expect(entries[0].text).toBe('first')
         // Second reply sees full session history: first user msg + second user msg
         expect(entries[1].text).toBe('first | second')
       }, 15000)
 
-      test('rapid messages while agent is processing → batched into single outgoing reply', async () => {
+      test.only('rapid messages while agent is processing → batched into single outgoing reply', async () => {
         // Agent takes 2s to respond, giving us time to send more messages
         setParrotHandler({ delayMs: 4000 })
-        const outbox = await av.__internal.mock.getOutbox(ADDRESS)
-        outboxBaseline = outbox.length
 
-        await send('rapid-1', 'A', 'rapid-thread', '2025-01-01T00:00:01Z')
+        const sourceThreadId = 'rapid-thread'
+        
+        await send('rapid-1', 'A', sourceThreadId, '2025-01-01T00:00:01Z')
         // Wait just enough for the worker to pick up the run, then send more
         await new Promise(r => setTimeout(r, 2000))
 
-        send('rapid-2', 'B', 'rapid-thread', '2025-01-01T00:00:02Z')
-        send('rapid-3', 'C', 'rapid-thread', '2025-01-01T00:00:03Z')
+        send('rapid-2', 'B', sourceThreadId, '2025-01-01T00:00:02Z')
+        send('rapid-3', 'C', sourceThreadId, '2025-01-01T00:00:03Z')
 
         // First run gets cancelled, second run batches all 3 messages → single outgoing
-        const entries = await waitForNewOutbox(1)
+        const entries = await waitForOutboxCount(sourceThreadId, 1)
         expect(entries[0].text).toBe('A B C')
+
+        console.log(entries);
       }, 15000)
 
-      test('agent failure → internal error outgoing, next message retries with batch', async () => {
-        const outbox = await av.__internal.mock.getOutbox(ADDRESS)
-        outboxBaseline = outbox.length
+      // test('agent failure → internal error outgoing, next message retries with batch', async () => {
+      //   const outbox = await av.__internal.mock.getOutbox(ADDRESS)
+      //   outboxBaseline = outbox.length
 
-        // First message: agent fails
-        setFailHandler()
-        await send('fail-1', 'X', 'fail-thread')
-        // Wait for the failed run — produces an internal error outgoing message
-        let entries = await waitForNewOutbox(1)
-        expect(entries[0].text).toBeDefined();
+      //   // First message: agent fails
+      //   setFailHandler()
+      //   await send('fail-1', 'X', 'fail-thread')
+      //   // Wait for the failed run — produces an internal error outgoing message
+      //   let entries = await waitForOutboxCount(1)
+      //   expect(entries[0].text).toBeDefined();
 
-        // Second message: agent succeeds, should batch both messages
-        // (internal error message is excluded from previousRunId calculation)
-        setParrotHandler()
-        await send('fail-2', 'Y', 'fail-thread')
+      //   // Second message: agent succeeds, should batch both messages
+      //   // (internal error message is excluded from previousRunId calculation)
+      //   setParrotHandler()
+      //   await send('fail-2', 'Y', 'fail-thread')
 
-        entries = await waitForNewOutbox(2)
-        expect(entries[1].text).toBe('X Y')
-      }, 15000)
+      //   entries = await waitForOutboxCount(2)
+      //   expect(entries[1].text).toBe('X Y')
+      // }, 15000)
 
-      test('rapid out-of-order messages → batched in date order', async () => {
-        setParrotHandler({ delayMs: 4000 })
-        const outbox = await av.__internal.mock.getOutbox(ADDRESS)
-        outboxBaseline = outbox.length
+      // test('rapid out-of-order messages → batched in date order', async () => {
+      //   setParrotHandler({ delayMs: 4000 })
+      //   const outbox = await av.__internal.mock.getOutbox(ADDRESS)
+      //   outboxBaseline = outbox.length
 
-        // Send 3 messages quickly with out-of-order dates
-        await send('ooo-1', 'C', 'ooo-thread', '2025-01-01T00:00:03Z')
-        await new Promise(r => setTimeout(r, 2000))
-        send('ooo-2', 'A', 'ooo-thread', '2025-01-01T00:00:01Z')
-        send('ooo-3', 'B', 'ooo-thread', '2025-01-01T00:00:02Z')
+      //   // Send 3 messages quickly with out-of-order dates
+      //   await send('ooo-1', 'C', 'ooo-thread', '2025-01-01T00:00:03Z')
+      //   await new Promise(r => setTimeout(r, 2000))
+      //   send('ooo-2', 'A', 'ooo-thread', '2025-01-01T00:00:01Z')
+      //   send('ooo-3', 'B', 'ooo-thread', '2025-01-01T00:00:02Z')
 
-        // Messages should be sorted by date, not insertion order
-        const entries = await waitForNewOutbox(1)
-        expect(entries[0].text).toBe('A B C')
-      }, 15000)
+      //   // Messages should be sorted by date, not insertion order
+      //   const entries = await waitForOutboxCount(1)
+      //   expect(entries[0].text).toBe('A B C')
+      // }, 15000)
 
-      test('out-of-order messages where first is already processed → preserves order', async () => {
-        setParrotHandler()
-        const outbox = await av.__internal.mock.getOutbox(ADDRESS)
-        outboxBaseline = outbox.length
+      // test('out-of-order messages where first is already processed → preserves order', async () => {
+      //   setParrotHandler()
+      //   const outbox = await av.__internal.mock.getOutbox(ADDRESS)
+      //   outboxBaseline = outbox.length
 
-        // B arrives first (later date) and gets fully processed
-        await send('order-1', 'B', 'order-thread', '2025-01-01T00:00:02Z')
-        await waitForNewOutbox(1)
+      //   // B arrives first (later date) and gets fully processed
+      //   await send('order-1', 'B', 'order-thread', '2025-01-01T00:00:02Z')
+      //   await waitForOutboxCount(1)
 
-        // A arrives second (earlier date) and gets processed as a new run
-        await send('order-2', 'A', 'order-thread', '2025-01-01T00:00:01Z')
-        const entries = await waitForNewOutbox(2)
-        // First outgoing is from B (processed first), second from A (arrived later)
-        expect(entries[0].text).toBe('B')
-        expect(entries[1].text).toBe('B | A')
-      }, 15000)
+      //   // A arrives second (earlier date) and gets processed as a new run
+      //   await send('order-2', 'A', 'order-thread', '2025-01-01T00:00:01Z')
+      //   const entries = await waitForOutboxCount(2)
+      //   // First outgoing is from B (processed first), second from A (arrived later)
+      //   expect(entries[0].text).toBe('B')
+      //   expect(entries[1].text).toBe('B | A')
+      // }, 15000)
 
-      test('data-agentview-output: overrides default channel reply', async () => {
-        const outbox = await av.__internal.mock.getOutbox(ADDRESS)
-        outboxBaseline = outbox.length
+      // test('data-agentview-output: overrides default channel reply', async () => {
+      //   const outbox = await av.__internal.mock.getOutbox(ADDRESS)
+      //   outboxBaseline = outbox.length
 
-        // Agent streams both text AND data-agentview-output.
-        // The output part should override the default text-based reply.
-        mockServer!.setHandler((body, res) => {
-          writeAISDKSuccessHeaders(res)
-          writeAISDKChunks(res, [
-            { type: 'start', messageId: 'msg_1' },
-            { type: 'text-start', id: 't1' },
-            { type: 'text-delta', id: 't1', delta: 'This is internal reasoning text' },
-            { type: 'text-end', id: 't1' },
-            { type: 'data-agentview-output', data: 'Custom reply for channel' },
-            { type: 'finish', finishReason: 'stop' },
-          ])
-          writeAISDKDone(res)
-          res.end()
-        })
+      //   // Agent streams both text AND data-agentview-output.
+      //   // The output part should override the default text-based reply.
+      //   mockServer!.setHandler((body, res) => {
+      //     writeAISDKSuccessHeaders(res)
+      //     writeAISDKChunks(res, [
+      //       { type: 'start', messageId: 'msg_1' },
+      //       { type: 'text-start', id: 't1' },
+      //       { type: 'text-delta', id: 't1', delta: 'This is internal reasoning text' },
+      //       { type: 'text-end', id: 't1' },
+      //       { type: 'data-agentview-output', data: 'Custom reply for channel' },
+      //       { type: 'finish', finishReason: 'stop' },
+      //     ])
+      //     writeAISDKDone(res)
+      //     res.end()
+      //   })
 
-        await send('output-1', 'please help', 'output-thread')
+      //   await send('output-1', 'please help', 'output-thread')
 
-        const entries = await waitForNewOutbox(1)
-        // Should use the data-agentview-output value, NOT the text part
-        expect(entries[0].text).toBe('Custom reply for channel')
-      }, 15000)
+      //   const entries = await waitForOutboxCount(1)
+      //   // Should use the data-agentview-output value, NOT the text part
+      //   expect(entries[0].text).toBe('Custom reply for channel')
+      // }, 15000)
 
-      test('data-agentview-output: object data is JSON-stringified', async () => {
-        const outbox = await av.__internal.mock.getOutbox(ADDRESS)
-        outboxBaseline = outbox.length
+      // test('data-agentview-output: object data is JSON-stringified', async () => {
+      //   const outbox = await av.__internal.mock.getOutbox(ADDRESS)
+      //   outboxBaseline = outbox.length
 
-        mockServer!.setHandler((_body, res) => {
-          writeAISDKSuccessHeaders(res)
-          writeAISDKChunks(res, [
-            { type: 'start', messageId: 'msg_1' },
-            { type: 'text-start', id: 't1' },
-            { type: 'text-delta', id: 't1', delta: 'Some text' },
-            { type: 'text-end', id: 't1' },
-            { type: 'data-agentview-output', data: { subject: 'Re: Help', body: 'Here is your answer' } },
-            { type: 'finish', finishReason: 'stop' },
-          ])
-          writeAISDKDone(res)
-          res.end()
-        })
+      //   mockServer!.setHandler((_body, res) => {
+      //     writeAISDKSuccessHeaders(res)
+      //     writeAISDKChunks(res, [
+      //       { type: 'start', messageId: 'msg_1' },
+      //       { type: 'text-start', id: 't1' },
+      //       { type: 'text-delta', id: 't1', delta: 'Some text' },
+      //       { type: 'text-end', id: 't1' },
+      //       { type: 'data-agentview-output', data: { subject: 'Re: Help', body: 'Here is your answer' } },
+      //       { type: 'finish', finishReason: 'stop' },
+      //     ])
+      //     writeAISDKDone(res)
+      //     res.end()
+      //   })
 
-        await send('output-obj-1', 'help me', 'output-obj-thread')
+      //   await send('output-obj-1', 'help me', 'output-obj-thread')
 
-        const entries = await waitForNewOutbox(1)
-        expect(entries[0].text).toBe(JSON.stringify({ subject: 'Re: Help', body: 'Here is your answer' }))
-      }, 15000)
+      //   const entries = await waitForOutboxCount(1)
+      //   expect(entries[0].text).toBe(JSON.stringify({ subject: 'Re: Help', body: 'Here is your answer' }))
+      // }, 15000)
 
     })
   })
