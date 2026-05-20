@@ -1,5 +1,5 @@
 import type { Queue } from './types';
-import { sendOutgoingChannelMessage } from '../channels/sendOutgoingChannelMessage';
+import { sendOutgoingChannelMessage } from '../channels/channelSyncOps';
 import { setContext } from '../logger';
 
 type SendOutgoingChannelMessageJobData = {

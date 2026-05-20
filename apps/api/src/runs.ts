@@ -19,7 +19,7 @@ import { withTenant, type OrgTransaction, type TenantTransaction } from './withO
 import { bossSendTx } from './queues/pgboss';
 import { webhookQueue } from './queues/webhook.queue';
 import { generateTitleQueue } from './queues/generateTitle.queue';
-import { channelOnRunFinishHandler } from './channels/channelRuns';
+import { channelOnRunFinishHandler } from './channels/channelSyncOps';
 import { standardToDefaultSession } from './standardToDefaultSession';
 import { isToolUIPart } from 'ai';
 

@@ -4,7 +4,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import type { ServicePrincipal } from 'src/authMiddleware';
 import { log } from '../logger';
 import { db__dangerous } from '../db';
-import { createRunForChannelThreadIfNecessary } from './channelRuns';
+import { createRunForChannelThreadIfNecessary } from './channelSyncOps';
 import { channelMessages, channels, channelThreads, sessions } from '../schemas/schema';
 import { activateSession, createSession, setAgentForSession } from '../sessions';
 import type { Transaction } from '../types';

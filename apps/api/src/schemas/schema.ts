@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, varchar, jsonb, boolean, uniqueIndex, integer, bigserial, bigint, serial, unique, smallint, index, pgPolicy, check, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, varchar, jsonb, boolean, uniqueIndex, integer, bigserial, bigint, serial, unique, smallint, index, pgPolicy, check, type AnyPgColumn, pgEnum } from "drizzle-orm/pg-core";
 import { users, accounts, verifications, authSessions, apikeys, organizations, members, invitations, invitationsRelations, organizationsRelations, membersRelations } from "./auth-schema";
 import { relations, sql } from "drizzle-orm";
 
@@ -514,6 +514,8 @@ export const channels = pgTable('channels', {
   createTenantPolicy('channels'),
 ]);
 
+
+
 export const channelThreads = pgTable('channel_threads', {
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: text('organization_id').notNull().references(() => organizations.id),
@@ -521,17 +523,43 @@ export const channelThreads = pgTable('channel_threads', {
   sourceThreadId: varchar('source_thread_id', { length: 255 }),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+
+  // activeRunStatus: varchar('active_run_status', { length: 32 }).$type<'idle' | 'connecting' | 'failed_to_connect' | 'streaming' | 'finished'>(),
+  // activeRunId: uuid('active_run_id'),
+  // activeRunResult: jsonb('active_run_result'),
+
+  // INCOMING: pending, processing, done, error?
+  // OUTGOING: pending, processing, done, error?
+
+  // THERE IS ALWAYS OUTGOING. incoming, incoming, incoming... OUTGOING. Always!!! FOR NOW.
+  // Channel run is *everything* from 'STARTING RUN' (intent) to 'SYNCING OUTGOING' (done).
+  // ACTIVE_RUN LASTS THIS ENTIRE TIME. So when we didn't manage to create RUN, and waiting for error with run_id === null -> active run still exists. 
+
+
+
+
 }, (table) => [
   unique('channel_threads_channel_source_unique').on(table.channelId, table.sourceThreadId),
   index('channel_threads_channel_id_idx').on(table.channelId),
   createTenantPolicy('channel_threads'),
+  // check('active_run_check', sql`(
+  //   (${table.activeRunStatus} IS NULL OR ${table.activeRunStatus} IN ('idle', 'connecting', 'streaming', 'finished'))
+  //   AND
+  //   (${table.activeRunId} IS NULL OR ${table.activeRunStatus} IN ('streaming', 'finished'))
+  //   AND
+  //   (${table.activeRunResult} IS NULL OR ${table.activeRunStatus} = 'finished')
+  // )`),
 ]);
 
 export const channelMessages = pgTable('channel_messages', {
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: text('organization_id').notNull().references(() => organizations.id),
   channelThreadId: uuid('channel_thread_id').notNull().references(() => channelThreads.id, { onDelete: 'cascade' }),
+
   direction: varchar('direction', { length: 16 }).notNull().$type<'incoming' | 'outgoing'>(), // 'incoming' | 'outgoing'
+  status: varchar('status', { length: 32 }).notNull(),//.$type<'received' | 'pending' | 'processing'>(),
+
+
   sourceId: varchar('source_id', { length: 255 }),
   text: text('text'),
   authorEmail: varchar('author_email', { length: 255 }),
@@ -541,7 +569,6 @@ export const channelMessages = pgTable('channel_messages', {
   attachments: jsonb('attachments'),
   providerData: jsonb('provider_data'),
   date: timestamp('date', { withTimezone: true, mode: 'string' }).notNull(),
-  status: varchar('status', { length: 32 }).notNull().default('received'),
   failReason: jsonb('fail_reason'),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
