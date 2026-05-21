@@ -143,7 +143,6 @@ export function createResendRoutes(provider: EmailChannelProvider): OpenAPIHono 
       console.log("--- ingestEmail error ---");
       console.log(error);
       log.error({ err: error, address }, 'resend webhook: failed to ingest email');
-      // return c.json({ error: 'Failed to ingest email' }, 500);
     }
 
     return c.json({ status: 'ok' }, 200);
