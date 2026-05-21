@@ -1,13 +1,12 @@
 import { requireAgentConfigBySession } from 'agentview/baseConfigUtils';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type { ServicePrincipal } from 'src/authMiddleware';
 import { getAdapter } from '../adapters/adapters';
-import { db__dangerous } from '../db';
 import { getConfigFromEnvironment } from '../environments';
 import { log } from '../logger';
 import { bossSendTx } from '../queues/pgboss';
 import { createAutoRun2, terminateRun } from '../runs';
-import { channelMessages, channelThreads, runs, sessions } from '../schemas/schema';
+import { channelMessages, channelThreads, sessions } from '../schemas/schema';
 import { requireSessionBase } from '../sessions';
 import { withOrg, withTenant, type OrgTransaction } from '../withOrg';
 import { sendOutgoingChannelMessageQueue } from '../queues/sendOutgoingChannelMessage.queue';
@@ -15,6 +14,214 @@ import { formatChannelErrorBody } from './formatChannelErrorBody';
 import { channelApps } from './registry';
 
 type ChannelMessage = typeof channelMessages.$inferSelect;
+type ChannelThread = Awaited<ReturnType<typeof requireChannelThread>>;
+
+
+
+/**
+ * onInboxUpdated
+ */
+export async function checkInbox(organizationId: string, channelThreadId: string) {
+  log.debug(`[${channelThreadId}] [createRunForChannelThread] start`);
+
+  /**
+   * Preparation (check session, environmen etc)
+   */
+  const { session, environment } = await withOrg(organizationId, async (tx) => {
+    const channelThread = await requireChannelThread(tx, channelThreadId);
+    const session = await requireSession(tx, channelThreadId);
+    const environment = channelThread.channel.environment;
+    if (!environment) {
+      throw new Error(`[${channelThreadId}] skipping: channel thread has no environment`);
+    }
+
+    return { session, environment };
+  })
+
+  const principal: ServicePrincipal = {
+    type: 'service' as const,
+    organizationId,
+    env: environment.handle,
+  }
+
+  /**
+   * STEP 1
+   * 
+   * Prepare for new run if necessary
+   */
+  let newRunParams: {
+    stagedMessages: ChannelMessage[];
+    previousRunId: string | null;
+  } | undefined = undefined;
+
+  try {
+    newRunParams = await withTenant(principal, async (tx) => {
+      await tx.acquireLock({ type: "edit_channel_thread", channelThreadId });
+
+      const channelThread = await requireChannelThread(tx, channelThreadId);
+
+      // if locked (side effects pending) -> skip, gonna be retried
+      if (isSideEffectCallInProgress(channelThread)) {
+        log.debug(`[${channelThreadId}] skipping: channel thread is locked`);
+        return;
+      }
+
+      const session = await requireSession(tx, channelThreadId);
+      const environment = channelThread.channel.environment;
+      if (!environment) {
+        log.error(`[${channelThreadId}] skipping: channel thread has no environment`);
+        return;
+      }
+
+      if (!isDirty(channelThread)) {
+        log.debug(`[${channelThreadId}] skipping: channel thread is dirty`);
+        return;
+      }
+
+      // If active run exists, terminate it ASAP.
+      const activeRun = getActiveRun(channelThread);
+      if (activeRun) {
+        log.info({ sessionId: session.id, runId: activeRun.id }, 'terminating active run before creating new channel run');
+        await terminateRun(tx, session.id, activeRun.id as string, {
+          status: 'discarded',
+          failReason: { message: 'New message ingested, discarding active run' },
+        });
+      }
+
+      // Let's find the last successful non-internal outgoing message. It's our boundary for a new run (we ignore internal messages!)
+      const lastSuccessful = [...channelThread.messages].reverse().find(m =>
+        m.direction === 'outgoing' && m.status === 'done' && !m.internal && m.runId
+      );
+
+      let previousRunId: string | null = null; // null means from ROOT
+      let stagedMessages: typeof channelThread.messages;
+
+      if (lastSuccessful) {
+        previousRunId = lastSuccessful.runId;
+        stagedMessages = channelThread.messages.filter(m =>
+          m.direction === 'incoming' && m.createdAt > lastSuccessful.createdAt
+        );
+      } else {
+        // No successful outgoing yet — first run, consume all incoming messages
+        stagedMessages = channelThread.messages.filter(m => m.direction === 'incoming');
+      }
+
+      if (stagedMessages.length === 0) {
+        // Shouldn't happen (gates above passed). Belt and suspenders
+        log.error(`[${channelThreadId}] skipping: no incoming messages after conversation boundary`);
+        return;
+      }
+
+      /**
+       * This is total reset of state.
+       * 
+       * 1. We remove all 'pending' outgoing messages
+       * 2. We set all incoming messages starting from last successful one to 'creating_run'.
+       * 
+       * IT TRIGGERS SIDE EFFECT (isSideEffectCallInProgress() will be true after that)
+       */
+
+      // Remove any pending outgoing messages
+      await tx.delete(channelMessages)
+        .where(and(
+          eq(channelMessages.channelThreadId, channelThreadId),
+          eq(channelMessages.direction, 'outgoing'),
+          eq(channelMessages.status, 'pending'),
+        ));
+
+      // SETS LOCK
+      await tx.update(channelMessages)
+        .set({
+          status: 'run_connecting',
+          runId: null,
+        })
+        .where(inArray(channelMessages.id, stagedMessages.map(m => m.id)));
+
+      log.info({ channelThreadId, count: stagedMessages.length }, 'incoming messages found');
+
+      return {
+        stagedMessages,
+        previousRunId,
+        session,
+        environment,
+        channelThread
+      };
+    });
+  } catch (error) {
+    log.error({ err: error, channelThreadId }, 'checkInbox failed for unexpected reason');
+    return;
+  }
+
+  // no new run needed
+  if (!newRunParams) {
+    return;
+  }
+
+
+  /**
+   * STEP 2
+   * 
+   * RUN SIDE EFFECT -> Create a run.
+   */
+
+  const { stagedMessages, previousRunId } = newRunParams;
+
+  const messageIds = stagedMessages.map(m => m.id);
+
+  try {
+    // Compute input
+    const config = getConfigFromEnvironment(environment);
+    const agentConfig = requireAgentConfigBySession(config, session);
+    const adapter = getAdapter(agentConfig.adapter);
+    const input = adapter.createDefaultInputForChannelMessages(stagedMessages);
+
+    // CreateRun API CALL started
+    const result = await createAutoRun2(principal, session.id, input, previousRunId);
+
+    // CreateRun API CALL finished
+    if (result.success) {
+      await withOrg(organizationId, async (tx) => {
+        await tx.acquireLock({ type: "edit_channel_thread", channelThreadId });
+
+        await tx.update(channelMessages)
+          .set({ status: 'run_streaming', runId: result.runId }) // setting status back from 'creating_run' releases lock
+          .where(inArray(channelMessages.id, messageIds));
+      });
+    }
+    else {
+      const errorText = `Error response from AI Endpoint: ${result.response.status}. Response body:\n\n${await result.response.text()}`
+      throw new Error(errorText);
+    }
+
+  } catch (error) {
+
+    await withOrg(organizationId, async (tx) => {
+      await tx.acquireLock({ type: "edit_channel_thread", channelThreadId });
+
+      await tx.update(channelMessages)
+        .set({ status: 'error', runId: null }) // set to streaming (not creating_run) -> releases lock
+        .where(inArray(channelMessages.id, messageIds));
+
+      await insertAndQueueOutgoingMessage(tx, {
+        channelThreadId,
+        text: formatChannelErrorBody(error),
+        runId: null,
+        internal: true,
+      });
+    });
+
+    log.debug({ err: error, channelThreadId }, 'checkInbox failed for unexpected reason');
+
+  } finally {
+    /**
+     * We must always re-trigger this function at the end, because while side effect was in progress, new messages could have arrived.
+     */
+    checkInbox(organizationId, channelThreadId);
+  }
+}
+
+
+
 
 /**
  * channel "domain" listens to run finish to react properly.
@@ -30,45 +237,35 @@ export async function channelOnRunFinishHandler(params: {
   channelReply?: { text: string };
   failReason?: any;
 }) {
+  const channelThreadId = await withOrg(params.organizationId, async (tx) => {
+    const session = await requireSessionBase(tx, params.sessionId);
+    return session.channelThreadId;
+  });
+  if (!channelThreadId) { // not a channel thread -> ignore
+    return;
+  }
+
+  /**
+   * 
+   */
   await withOrg(params.organizationId, async (tx) => {
-    await tx.acquireLock({ type: "edit_session", sessionId: params.sessionId });
+    await tx.acquireLock({ type: "edit_channel_thread", channelThreadId });
 
-    const sessionRow = await tx.query.sessions.findFirst({
-      where: eq(sessions.id, params.sessionId),
-      columns: { channelThreadId: true },
-    });
+    const channelThread = await requireChannelThread(tx, channelThreadId);
 
-    if (!sessionRow?.channelThreadId) {
-      return; // not a channel session
-    }
-
-    const allMessages = await getAllMessages(tx, sessionRow.channelThreadId);
-
-    /**
-     * When we find out run was finished, but channel is already either in:
-     * - LOCKED state (sending outgoing message or creating new run)
-     * - DIRTY state (new messages arrived while run was creating)
-     * 
-     * We just ignore. New run will be created soon.
-     */
-    if (isLocked(allMessages)) {
+    if (isSideEffectCallInProgress(channelThread)) {
       log.debug(`[${params.sessionId}] skipping: channel thread is locked`);
       return;
     }
 
-    if (isDirty(allMessages)) {
-      log.debug(`[${params.sessionId}] skipping: channel thread is dirty`);
-      return;
-    }
-
-    // skip if active run is already different
-    const activeRun = getActiveRun(allMessages);
+    // skip if active run is already different -> it means it was overriden
+    const activeRun = getActiveRun(channelThread);
     if (activeRun?.id !== params.runId) {
       log.debug(`[${params.sessionId}] skipping: active run is not the one we're finishing`);
       return;
     }
 
-
+    // Now we know that active run is the one we're finishing, so we can update the channel thread
     if (params.status === 'completed') {
       const text = params.channelReply?.text ?? 'no response';
 
@@ -77,7 +274,7 @@ export async function channelOnRunFinishHandler(params: {
         .where(inArray(channelMessages.id, activeRun.messages.map(m => m.id)));
 
       await insertAndQueueOutgoingMessage(tx, {
-        channelThreadId: sessionRow.channelThreadId,
+        channelThreadId,
         text,
         runId: params.runId,
         internal: false,
@@ -91,7 +288,7 @@ export async function channelOnRunFinishHandler(params: {
         .where(inArray(channelMessages.id, activeRun.messages.map(m => m.id)));
 
       await insertAndQueueOutgoingMessage(tx, {
-        channelThreadId: sessionRow.channelThreadId,
+        channelThreadId,
         text,
         runId: params.runId,
         internal: true,
@@ -107,231 +304,11 @@ export async function channelOnRunFinishHandler(params: {
 
 // ─── Channel run creation ────────────────────────────────────────────────────
 
-/**
- * Idempotent — tries to create and execute a run based on the current channel thread state.
- * Never throws. Safe to call multiple times; skips silently when there is no work to do.
- *
- * Triggered from two places:
- * - New incoming channel message ingested (from ingestMessage in defineChannelApp)
- * - Outgoing channel message sent by worker (outgoingChannelMessages)
- *
- * Inside a transaction with session lock:
- * 1. If any outgoing message is pending/sending → skip (worker will re-trigger when resolved)
- * 2. If no incoming messages without a runId → skip (no new work)
- * 3. Terminate any active run (new messages make it stale)
- * 4. Select incoming messages using conversation boundary (last successful outgoing)
- * 5. Create and execute new run, set runId on consumed messages
- */
-export async function createRunForChannelThreadIfNecessary(channelThreadId: string) {
-  const [session, thread] = await Promise.all([
-    db__dangerous.query.sessions.findFirst({
-      where: eq(sessions.channelThreadId, channelThreadId),
-    }),
-    db__dangerous.query.channelThreads.findFirst({
-      where: eq(channelThreads.id, channelThreadId),
-      with: { channel: { with: { environment: true } } },
-    }),
-  ]);
-
-  if (!session) return;
-
-  const environment = thread?.channel?.environment;
-
-  if (!environment) return;
-
-  const organizationId = thread.organizationId;
-
-  const sessionId = session.id;
-
-  const principal = {
-    type: 'service' as const,
-    organizationId: thread.organizationId,
-    env: environment.handle,
-  } as ServicePrincipal;
-
-
-
-  log.debug(`[${sessionId}] [createRunForChannelThread] start`);
-
-
-  /**
-   * STEP 1
-   * 
-   * Prepare for new run if necessary
-   */
-
-  let newRunParams: {
-    messages: ChannelMessage[];
-    previousRunId: string | null;
-  } | undefined = undefined;
-
-  try {
-    newRunParams = await withTenant(principal, async (tx) => {
-      await tx.acquireLock({ type: "edit_session", sessionId }); // probably should be channel_thread_lock
-
-      const allMessages = await getAllMessages(tx, channelThreadId);
-
-      // if locked (side effects pending) -> skip, gonna be retried
-      if (isLocked(allMessages)) {
-        log.debug(`[${sessionId}] skipping: channel thread is locked`);
-        return;
-      }
-
-      // if not dirty, there's nothing to do
-      if (!isDirty(allMessages)) {
-        log.debug(`[${sessionId}] skipping: channel thread is not dirty`);
-        return;
-      }
-
-      // If active run exists, terminate it ASAP.
-      const activeRun = getActiveRun(allMessages);
-      if (activeRun) {
-        log.info({ sessionId, runId: activeRun.id }, 'terminating active run before creating new channel run');
-        await terminateRun(tx, sessionId, activeRun.id as string, {
-          status: 'discarded',
-          failReason: { message: 'New message ingested, discarding active run' },
-        });
-      }
-
-      // Let's find the last successful non-internal outgoing message. It's our boundary for a new run (we ignore internal messages!)
-      const lastSuccessful = [...allMessages].reverse().find(m =>
-        m.direction === 'outgoing' && m.status === 'sent' && !m.internal && m.runId
-      );
-
-      let previousRunId: string | null = null; // null means from ROOT
-      let stagedMessages: typeof allMessages;
-
-      if (lastSuccessful) {
-        previousRunId = lastSuccessful.runId;
-        stagedMessages = allMessages.filter(m =>
-          m.direction === 'incoming' && m.createdAt > lastSuccessful.createdAt
-        );
-      } else {
-        // No successful outgoing yet — first run, consume all incoming messages
-        stagedMessages = allMessages.filter(m => m.direction === 'incoming');
-      }
-
-      if (stagedMessages.length === 0) {
-        // Shouldn't happen (gate 2 passed), but guard anyway
-        log.debug(`[${sessionId}] skipping: no incoming messages after conversation boundary`);
-        return;
-      }
-
-      /**
-       * Update channel state -> no pending messages, the rest is 'creating_run'
-       * 
-       * THIS IS LOCK!!!! Setting 'creating_run' is a lock.
-       */
-
-      // Remove any pending outgoing messages
-      await tx.delete(channelMessages)
-        .where(and(
-          eq(channelMessages.channelThreadId, channelThreadId),
-          eq(channelMessages.direction, 'outgoing'),
-          eq(channelMessages.status, 'pending'),
-        ));
-
-      await tx.update(channelMessages)
-        .set({
-          status: 'creating_run',
-          runId: null,
-        })
-        .where(inArray(channelMessages.id, stagedMessages.map(m => m.id)));
-
-      log.info({ sessionId, count: stagedMessages.length }, 'incoming messages found');
-
-      return {
-        messages: stagedMessages,
-        previousRunId,
-      };
-    });
-  } catch (error) {
-    log.error({ err: error, channelThreadId }, 'createRunForChannelThreadIfNecessary failed for unexpected reason');
-    return;
-  }
-
-  // no new run needed
-  if (!newRunParams) {
-    return;
-  }
-
-
-  /**
-   * STEP 2
-   * 
-   * Create input and create a run
-   * 
-   * Btw, above transaction is closed but there's NO RACE CONDITION.
-   * 
-   * If we have like "messages states": A, AB and ABC and they come in random order... ABC alwyas will be the last one.
-   * - first, above transaction is serialized
-   * - if messages come in order A, AB, ABC, then all will reach this point, but ABC will terminate both A and AB (since it's the last one).
-   * - if they come in order ABC, AB, A, then AB and A will be ignored by above transaction (return will be reached).
-   */
-
-
-  const messageIds = newRunParams.messages.map(m => m.id);
-  
-  try {
-    // Create input
-    const sessionBase = await withOrg(thread.organizationId, async (tx) => {
-      return await requireSessionBase(tx, sessionId);
-    });
-
-    const config = getConfigFromEnvironment(environment);
-    const agentConfig = requireAgentConfigBySession(config, sessionBase);
-    const adapter = getAdapter(agentConfig.adapter);
-    const input = adapter.createDefaultInputForChannelMessages(newRunParams.messages);
-
-    const result = await createAutoRun2(principal, sessionId, input, newRunParams.previousRunId);
-
-    // If success -> just assign active runId to incoming messages
-    if (result.success) {
-      await withOrg(thread.organizationId, async (tx) => {
-        await tx.update(channelMessages)
-          .set({ status: 'streaming', runId: result.runId })
-          .where(inArray(channelMessages.id, messageIds));
-      });
-    }
-    else { // failure -> send error message to channel
-      const text = `Error response from AI Endpoint: ${result.response.status}. Body:
-
-  ${await result.response.text()}
-  `;
-
-      throw new Error(text);
-    }
-
-  } catch (error) {
-    await withOrg(organizationId, async (tx) => {
-      await tx.update(channelMessages)
-        .set({ status: 'error', runId: null })
-        .where(inArray(channelMessages.id, messageIds));
-
-      await insertAndQueueOutgoingMessage(tx, {
-        channelThreadId,
-        text: formatChannelErrorBody(error),
-        runId: null,
-        internal: true,
-      });
-    });
-
-    log.debug({ err: error, channelThreadId }, 'createRunForChannelThreadIfNecessary failed for unexpected reason');
-  }
-}
-
 
 export async function sendOutgoingChannelMessage(messageId: string, organizationId: string) {
   const message = await withOrg(organizationId, async (tx) => {
     return tx.query.channelMessages.findFirst({
-      where: eq(channelMessages.id, messageId),
-      with: {
-        channelThread: {
-          with: {
-            channel: true,
-          }
-        }
-      }
+      where: eq(channelMessages.id, messageId)
     });
   });
 
@@ -340,81 +317,71 @@ export async function sendOutgoingChannelMessage(messageId: string, organization
     return; // message could have been deleted
   }
 
-  const session = await db__dangerous.query.sessions.findFirst({
-    where: eq(sessions.channelThreadId, message.channelThreadId),
-  });
+  const channelThreadId = message.channelThreadId;
 
-  if (!session) {
-    log.debug({ messageId }, 'sendOutgoingChannelMessage: session not found');
-    return; // session could have been deleted
-  }
 
-  const channelThread = message.channelThread;
-  const channel = channelThread.channel;
-  const channelApp = channelApps.find((app) => app.type === channel.type);
-  const sendFn = channelApp?.sendMessage;
 
-  if (!sendFn) {
-    throw new Error(`No send function registered for channel type '${channel.type}'`);
-  }
+  const result = await withOrg(organizationId, async (tx) => {
+    await tx.acquireLock({ type: "edit_channel_thread", channelThreadId });
 
-  const readyToSend = await withOrg(organizationId, async (tx) => {
-    await tx.acquireLock({ type: "edit_session", sessionId: session.id });
+    const channelThread = await requireChannelThread(tx, channelThreadId);
 
-    const allMessages = await getAllMessages(tx, channelThread.id);
-
-    if (isLocked(allMessages)) {
+    if (isSideEffectCallInProgress(channelThread)) {
       log.debug({ messageId }, 'sendOutgoingChannelMessage: channel thread is locked');
-      return false;
+      return;
     }
 
-    if (isDirty(allMessages)) {
-      log.debug({ messageId }, 'sendOutgoingChannelMessage: channel thread is dirty');
-      return false;
+    const message = channelThread.messages.find(m => m.id === messageId);
+    if (!message) {
+      log.debug({ messageId }, 'sendOutgoingChannelMessage: message not found');
+      return; // message deleted -> not doing job -> marking as done
     }
 
-    // LOCK!!!
+    // Preparing for send
+    const channel = channelThread.channel;
+    const channelApp = channelApps.find((app) => app.type === channel.type);
+    const sendFn = channelApp?.sendMessage;
+  
+    if (!sendFn) {
+      throw new Error(`No send function registered for channel type '${channel.type}'`);
+    }
+
+    // Side effect lock on
     await tx.update(channelMessages).set({
       status: 'sending',
     }).where(eq(channelMessages.id, messageId));
 
-    return true;
-  }); 
+    return { sendFn, channelThread };
+  });
 
-  if (!readyToSend) {
+  if (!result) {
     return;
   }
+
+  const { sendFn, channelThread } = result;
 
   try {
     log.info('sending outgoing message');
 
-    const result = await sendFn({
-      address: channel.address,
+    const { sourceId, providerData } = await sendFn({
+      address: channelThread.channel.address,
       text: message.text ?? '',
-      sourceThreadId: channelThread.sourceThreadId ?? undefined,
+      sourceThreadId: channelThread.sourceThreadId,
     });
 
-    log.info({ sourceId: result.sourceId }, 'message sent');
+    log.info({ sourceId }, 'message sent');
 
     // RELEASE LOCK (atomic)
     await withOrg(organizationId, async (tx) => {
       await tx.update(channelMessages).set({
-        status: 'sent',
-        ...(result?.sourceId ? { sourceId: result.sourceId } : {}),
-        ...(result?.providerData ? { providerData: result.providerData } : {}),
+        status: 'done',
+        sourceId,
+        providerData,
         updatedAt: new Date().toISOString(),
       }).where(eq(channelMessages.id, messageId));
     });
 
-    log.info('outgoing message sent and saved');
-
-    // Re-trigger run creation in case incoming messages arrived while this
-    // outgoing was pending/sending. Only for non-internal messages — internal
-    // messages (error notifications) must not retrigger to avoid infinite loops
-    // (failed run → error msg → retrigger → failed run → ...).
-    if (!message.internal) {
-      createRunForChannelThreadIfNecessary(message.channelThreadId);
-    }
+    log.info({ sourceId }, 'outgoing message sent and saved');
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : String(e);
     log.error({ err: e }, `failed to send message: ${errorMessage}`);
@@ -429,33 +396,69 @@ export async function sendOutgoingChannelMessage(messageId: string, organization
     });
 
     throw e; // re-throw so pg-boss retries
+
+  } finally {
+    // after side effect we should run checkInbox
+    checkInbox(organizationId, channelThreadId);
   }
 }
 
-async function getAllMessages(tx: OrgTransaction, channelThreadId: string) {
-  return await tx.query.channelMessages.findMany({
-    where: eq(channelMessages.channelThreadId, channelThreadId),
-    orderBy: (cm, { asc }) => [asc(cm.date)],
+
+
+
+async function requireChannelThread(tx: OrgTransaction, channelThreadId: string) {
+  const channelThread = await tx.query.channelThreads.findFirst({
+    where: eq(channelThreads.id, channelThreadId),
+    with: {
+      channel: {
+        with: {
+          environment: true,
+        }
+      },
+      messages: true,
+    },
   });
+
+  if (!channelThread) {
+    throw new Error(`Channel thread ${channelThreadId} not found`);
+  }
+  return channelThread;
+}
+
+async function requireSession(tx: OrgTransaction, channelThreadId: string) {
+  const session = await tx.query.sessions.findFirst({
+    columns: {
+      id: true,
+    },
+    where: eq(sessions.channelThreadId, channelThreadId),
+  });
+  if (!session) {
+    throw new Error(`Session for channel thread ${channelThreadId} not found`);
+  }
+
+  return requireSessionBase(tx, session.id);
 }
 
 // dirty means new messages that weren't processed yet (added by defineChannel)
-function isDirty(allMessages: ChannelMessage[]) {
-  return allMessages.some(m => m.direction === 'incoming' && m.status === 'received')
+function isDirty(channelThread: ChannelThread) {
+  return channelThread.messages.some(m => m.direction === 'incoming' && m.status === 'pending')
 }
 
+
+
+
 // lock means there's external system operation in progress (side effect). We shouldn't do operations while channel thread is locked.
-function isLocked(allMessages: ChannelMessage[]) {
-  return allMessages.some(m =>
+function isSideEffectCallInProgress(channelThread: ChannelThread) {
+  return channelThread.messages.some(m =>
     (m.direction === 'outgoing' && m.status === 'sending') || // sending to external channel is in progress
-    (m.direction === 'incoming' && m.status === 'creating_run') // establishment of connection is in progress
-  )
+    (m.direction === 'incoming' && m.status === 'run_connecting') // establishment of connection is in progress
+  );
 }
 
 // This function *only checks whether there's active run in external service!!! The only source of truth is 'incoming' + 'streaming' (+ run_id).
 // When streaming is finished, and outgoing message is 'pending', it's still *NO ACTIVE RUN*.
-function getActiveRun(allMessages: ChannelMessage[]) {
-  const messagesBeingProcessedWithRun = allMessages.filter(m => m.direction === 'incoming' && m.status === 'streaming');
+function getActiveRun(channelThread: ChannelThread) {
+  const messagesBeingProcessedWithRun = channelThread.messages.filter(m => m.direction === 'incoming' && m.status === 'run_streaming');
 
   if (messagesBeingProcessedWithRun.length === 0) {
     return null;
@@ -471,9 +474,6 @@ function getActiveRun(allMessages: ChannelMessage[]) {
     messages: messagesBeingProcessedWithRun
   };
 }
-
-
-
 
 
 async function insertAndQueueOutgoingMessage(tx: OrgTransaction, values: {

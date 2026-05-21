@@ -4,7 +4,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import type { ServicePrincipal } from 'src/authMiddleware';
 import { log } from '../logger';
 import { db__dangerous } from '../db';
-import { createRunForChannelThreadIfNecessary } from './channelSyncOps';
+import { checkInbox } from './channelSyncOps';
 import { channelMessages, channels, channelThreads, sessions } from '../schemas/schema';
 import { activateSession, createSession, setAgentForSession } from '../sessions';
 import type { Transaction } from '../types';
@@ -340,7 +340,7 @@ export function channelProvider(type: string) {
      * If message was properly ingested, we create a run for it. Async on purpose.
      */
     if (result.ingested) {
-      createRunForChannelThreadIfNecessary(result.thread.id);
+      checkInbox(channel.organizationId, result.thread.id);
     }
     
     return result;
@@ -394,7 +394,7 @@ async function getOrCreateMessage(tx: Transaction, channel: Channel, thread: Cha
       organizationId: channel.organizationId,
       channelThreadId: thread.id,
       direction: 'incoming',
-      status: 'received',
+      status: 'pending',
       sourceId: params.sourceId ?? null,
       date: params.date,
       text: params.text ?? null,

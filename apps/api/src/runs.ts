@@ -41,7 +41,7 @@ async function onRunFinished(tx: OrgTransaction, params: {
 }) {
   const organizationId = tx.organizationId;
   tx.afterCommit(async () => {
-    await channelOnRunFinishHandler({ organizationId, ...params });
+    channelOnRunFinishHandler({ organizationId, ...params });
   });
 }
 

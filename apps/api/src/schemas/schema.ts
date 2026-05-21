@@ -520,11 +520,11 @@ export const channelThreads = pgTable('channel_threads', {
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: text('organization_id').notNull().references(() => organizations.id),
   channelId: uuid('channel_id').notNull().references(() => channels.id, { onDelete: 'cascade' }),
-  sourceThreadId: varchar('source_thread_id', { length: 255 }),
+  sourceThreadId: varchar('source_thread_id', { length: 255 }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
 
-  // activeRunStatus: varchar('active_run_status', { length: 32 }).$type<'idle' | 'connecting' | 'failed_to_connect' | 'streaming' | 'finished'>(),
+  // activeRunStatus: varchar('active_run_status', { length: 32 }).$type<'idle' | 'connecting' | 'failed_to_connect'???? | 'streaming' | 'finished'>(),
   // activeRunId: uuid('active_run_id'),
   // activeRunResult: jsonb('active_run_result'),
 
@@ -557,8 +557,7 @@ export const channelMessages = pgTable('channel_messages', {
   channelThreadId: uuid('channel_thread_id').notNull().references(() => channelThreads.id, { onDelete: 'cascade' }),
 
   direction: varchar('direction', { length: 16 }).notNull().$type<'incoming' | 'outgoing'>(), // 'incoming' | 'outgoing'
-  status: varchar('status', { length: 32 }).notNull(),//.$type<'received' | 'pending' | 'processing'>(),
-
+  status: varchar('status', { length: 32 }).notNull().$type<'pending' | 'done' | 'error' | /* in progress incoming */ 'run_connecting' | 'run_streaming' | /* in progress outgoing */ 'sending'>(),
 
   sourceId: varchar('source_id', { length: 255 }),
   text: text('text'),

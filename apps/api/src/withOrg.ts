@@ -5,15 +5,20 @@ import type { Principal } from './authMiddleware';
 
 export type AfterCommit = (fn: () => void | Promise<void>) => void;
 
+type ChannelThreadLock = { type: "edit_channel_thread", channelThreadId: string }
+
+
 type EditSessionLock = { type: "edit_session", sessionId: string }
 type CreateResourceLock = { type: "create_resource" }
-type Lock = EditSessionLock | CreateResourceLock;
+type Lock = EditSessionLock | CreateResourceLock | ChannelThreadLock;
 
 function getLockKey(organizationId: string, lock: Lock) {
   if (lock.type === "edit_session") {
     return `${organizationId}:edit_session:${lock.sessionId}`;
   } else if (lock.type === "create_resource") {
     return `${organizationId}:create_resource`;
+  } else if (lock.type === "edit_channel_thread") {
+    return `${organizationId}:edit_channel_thread:${lock.channelThreadId}`;
   }
 }
 
