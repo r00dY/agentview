@@ -98,6 +98,8 @@ export async function checkInbox(organizationId: string, channelThreadId: string
 
       if (lastSuccessful) {
         previousRunId = lastSuccessful.runId;
+        // Boundary uses createdAt (not date) so backdated/late-arriving messages
+        // still get processed — filtering by date would silently drop them.
         stagedMessages = channelThread.messages.filter(m =>
           m.direction === 'incoming' && m.createdAt > lastSuccessful.createdAt
         );
@@ -415,7 +417,9 @@ async function requireChannelThread(tx: OrgTransaction, channelThreadId: string)
           environment: true,
         }
       },
-      messages: true,
+      messages: {
+        orderBy: (m, { asc }) => [asc(m.date)],
+      },
     },
   });
 
