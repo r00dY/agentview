@@ -120,6 +120,13 @@
  *    Not reachable in practice — runs always involve streaming setup + LLM
  *    latency that dwarfs the tx commit window.
  *
+ *  • channelOnRunFinishHandler is called inline-after-commit, not via a queue.
+ *    If the worker dies between the run-engine tx commit and this handler's
+ *    tx commit, the finish event is lost forever — no retry. Affected messages
+ *    stay in 'run_streaming' until a new incoming arrives and terminates the
+ *    (now-stale) active run via checkInbox. Same recovery profile as the
+ *    side-effect crash above; same fix family (janitor or queue conversion).
+ *
  * ===========================================================================
  */
 
@@ -432,9 +439,12 @@ export async function channelOnRunFinishHandler(params: {
         internal: true,
       });
     } else {
-      log.error({ runId: params.runId, status: params.status }, 'channelOnRunFinishHandler: forbidden run status');
+      // Only 'completed' and 'failed' are expected to reach this handler.
+      // 'discarded' (set by terminateRun in checkInbox) is internal and does NOT emit a finish event.
+      // 'cancelled' is never triggered today — terminateRun is the only cancellation path and it uses 'discarded'.
+      // So this branch is a defensive guard for an "impossible" status; if it ever fires, the contract has drifted.
+      log.error({ runId: params.runId, status: params.status }, 'channelOnRunFinishHandler: unexpected run status');
     }
-    // cancelled → no outgoing message (runId already cleaned above)
   });
 }
 
@@ -540,7 +550,12 @@ export async function sendOutgoingChannelMessage(messageId: string, organization
     await withOrg(organizationId, async (tx) => {
       await tx.acquireLock({ type: "edit_channel_thread", channelThreadId });
       await tx.update(channelMessages).set({
-        status: 'error', // error doesn't mean message won't be retriggered! It will be. Stop triggering can be achieved only by DELETING message (for now).
+        // 'error' releases the side-effect lock so the thread can be acted on again.
+        // The message is still re-sendable: pg-boss will retry per its retry policy (re-throw below),
+        // and if pg-boss exhausts retries, the row stays in 'error' as a dead message —
+        // no automatic retrigger exists from this file. The only way back into the queue today
+        // is deleting the row and re-inserting it.
+        status: 'error',
         failReason: { message: errorMessage },
         updatedAt: new Date().toISOString(),
       }).where(eq(channelMessages.id, messageId));
