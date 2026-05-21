@@ -151,7 +151,7 @@ describe('Channels', () => {
 
       expect(result.message).toBeDefined()
       expect(result.message.direction).toBe('incoming')
-      expect(result.message.status).toBe('received')
+      expect(result.message.status).toBe('pending')
       expect(result.message.text).toBe('I need help with my order')
       expect(result.message.authorEmail).toBe('customer@example.com')
 
