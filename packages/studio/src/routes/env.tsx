@@ -46,7 +46,7 @@ function Component() {
           <PropertyListItem>
             <PropertyListTitle>E-mail</PropertyListTitle>
             <PropertyListTextValue>
-              {organization.slug}.{environment.handle}.[agent-name]@agent.agentview.com
+              {organization.slug}.{environment.handle}.[agent-name]@agent.agentview.app
             </PropertyListTextValue>
           </PropertyListItem>
 

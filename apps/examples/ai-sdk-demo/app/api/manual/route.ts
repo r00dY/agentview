@@ -1,12 +1,18 @@
-export async function POST() {
+export async function POST(request: Request) {
 
   // return new Response('Something went wrong in AI endpoint', {
   //   status: 400,
   //   headers: { 'Content-Type': 'text/plain' },
   // });
 
+  const body = await request.json();
+  const messages = body.messages ?? [];
+  const lastMessage = messages[messages.length - 1];
+  const copyInput = `copy input: ${JSON.stringify(lastMessage)}`;
+
   const encoder = new TextEncoder();
   const messageId = `msg_${crypto.randomUUID()}`;
+  const textId0 = `txt_${crypto.randomUUID()}`;
   const textId1 = `txt_${crypto.randomUUID()}`;
   const textId2 = `txt_${crypto.randomUUID()}`;
 
@@ -19,6 +25,10 @@ export async function POST() {
 
     { type: "start", messageId },
     { type: "start-step" },
+
+    { type: "text-start", id: textId0 },
+    { type: "text-delta", id: textId0, delta: copyInput },
+    { type: "text-end", id: textId0 },
 
     { type: "reasoning-start", id: "reasoning_1" },
     { type: "reasoning-delta", id: "reasoning_1", delta: "Thinking " },
@@ -61,9 +71,13 @@ export async function POST() {
     // { type: "tool-input-available", toolCallId: "tool_call_1", toolName: "getWeatherInformation", input: { location: "San Francisco", temperature: 18 } },
 
     // { type: "custom", kind: "dupa.dupa" },
-    { type: "finish-step" },
-    { type: "finish" },
-    { type: "data-agentview-output", data: "gunwo cycki" },
+
+    // { type: "error", errorText: "This is some error from the stream part"},
+
+    // { type: "finish-step" },
+    // { type: "finish" },
+
+    // { type: "data-agentview-output", data: "gunwo cycki" },
   ];
 
   const stream = new ReadableStream({
