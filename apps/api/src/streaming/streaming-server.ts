@@ -394,6 +394,15 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     log.info({ runId }, '[streaming] connection established');
   });
 
+  // If this connection is closed before upstream started streaming (for example run POST call aborted by user), we should just close upstreamReq.
+  // We should do this without argument, then 'error' event won't be called.
+  req.on('close', () => {
+    if (liveConnections.has(runId)) return; // if already streaming - do nothing.
+
+    log.info({ runId }, '[streaming] client disconnected before upstream responded, aborting upstream');
+    upstreamReq.destroy(); // doesn't trigger 'error' event
+  });
+
   upstreamReq.on('error', (err) => {
     log.info({ err }, '[streaming] upstream request error');
 
