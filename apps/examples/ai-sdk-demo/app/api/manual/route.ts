@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   const textId1 = `txt_${crypto.randomUUID()}`;
   const textId2 = `txt_${crypto.randomUUID()}`;
 
-  const DELTA = 100;
+  const DELTA = 1000;
 
   const deltas = (seconds: number) => Array.from({ length: seconds * 1000 / DELTA }, (_, i) => ({ type: "text-delta", id: textId1, delta: `.${i} ` }));
 
