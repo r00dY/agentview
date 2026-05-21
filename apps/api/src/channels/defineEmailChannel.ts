@@ -10,10 +10,10 @@ import {
   type SendMessageFn,
   type SendMessageResult,
 } from './defineChannel';
-import { marked } from 'marked';
 import { withOrg } from 'src/withOrg';
 import { emailToMarkdown } from './emailToMarkdown';
 import { formatChannelErrorBody } from './formatChannelErrorBody';
+import { buildReplyEmail } from './buildReplyEmail';
 
 const presence = (s?: string) => s?.trim() || undefined;
 
@@ -206,13 +206,8 @@ function buildSendMessage(
   return async ({ address, text, sourceThreadId }) => {
     const channel = await provider.requireChannel(address);
 
-    if (!sourceThreadId) {
-      throw new Error(`[INTERNAL ERROR] no sourceThreadId provided for ${channel.type} ${channel.address}`);
-    }
-
     // Look up the last incoming message in this thread to build a proper Re: chain.
     // No sourceThreadId (or no matching thread) means we can't derive a recipient.
-
     const thread = await db__dangerous.query.channelThreads.findFirst({
       where: and(
         eq(channelThreads.channelId, channel.id),
@@ -228,6 +223,7 @@ function buildSendMessage(
       where: and(
         eq(channelMessages.channelThreadId, thread.id),
         eq(channelMessages.direction, 'incoming'),
+        // inArray(channelMessages.status, ['done', 'error']),
       ),
       orderBy: (cm, { desc }) => [desc(cm.date)],
     });
@@ -237,73 +233,16 @@ function buildSendMessage(
     }
 
     const lastEmailData = (lastMessage?.providerData as any)?.email as EmailMessageData | undefined;
-
-    // lastEmailData.from has the full "Name <email>" format when available,
-    // fall back to bare author email from the last message
-    const replyTo = lastEmailData?.from || lastMessage?.authorEmail || '';
-    if (!replyTo) {
-      throw new Error(`Cannot send email on channel ${channel.type} ${channel.address}: no recipient (no incoming message found for sourceThreadId=${sourceThreadId ?? '(none)'})`);
+    if (!lastEmailData) {
+      throw new Error(`[INTERNAL ERROR] no email data found for sourceThreadId=${sourceThreadId} on ${channel.type} ${channel.address}`);
     }
 
-    const originalSubject = lastEmailData?.subject ?? '';
-    const subject = originalSubject
-      ? (originalSubject.startsWith('Re:') ? originalSubject : `Re: ${originalSubject}`)
-      : 'No subject';
-
-    const inReplyTo = lastMessage?.sourceId ?? undefined;
-
-    // Build References chain: last message's references + last message's sourceId
-    let references: string[] | undefined;
-    if (lastEmailData?.references || lastMessage?.sourceId) {
-      references = [...(lastEmailData?.references ?? [])];
-      if (lastMessage?.sourceId && !references.includes(lastMessage.sourceId)) {
-        references.push(lastMessage.sourceId);
-      }
-    }
-
-    // Include quoted previous message with attribution line.
-    // The attribution ("On <date>, <from> wrote:") is what email clients like
-    // Gmail use to detect and collapse quoted text behind "..." in threaded view.
-    let textBody = text;
-    const quotedText = lastMessage?.text || lastEmailData?.textBody;
-    if (quotedText) {
-      const date = lastMessage?.date
-        ? new Date(lastMessage.date).toUTCString()
-        : undefined;
-      const attribution = date
-        ? `On ${date}, ${replyTo} wrote:`
-        : `${replyTo} wrote:`;
-      const quoted = quotedText.split('\n').map((line) => `> ${line}`).join('\n');
-      textBody = `${textBody}\n\n${attribution}\n${quoted}`;
-    }
-
-    // Build HTML version: convert the reply markdown to HTML,
-    // then append the quoted original as a standard blockquote.
-    const replyHtml = await marked.parse(text);
-    let htmlBody = replyHtml;
-    const quotedHtml = lastEmailData?.htmlBody || lastEmailData?.textBody;
-    if (quotedHtml) {
-      const date = lastMessage?.date
-        ? new Date(lastMessage.date).toUTCString()
-        : undefined;
-      const attr = date
-        ? `On ${date}, ${replyTo} wrote:`
-        : `${replyTo} wrote:`;
-      htmlBody += `<div class="gmail_quote"><p>${attr}</p><blockquote style="margin:0 0 0 0.8ex;border-left:1px solid #ccc;padding-left:1ex">${quotedHtml}</blockquote></div>`;
-    }
-
-    const newEmail: EmailMessageData = {
-      messageId: `${crypto.randomUUID()}@${channel.address}`,
-      to: replyTo,
-      from: channel.address,
-
-      subject,
-      textBody,
-      htmlBody,
-
-      inReplyTo,
-      references,
-    };
+    const newEmail = await buildReplyEmail({
+      inReplyTo: lastEmailData,
+      inReplyToDate: lastMessage.date,
+      fromAddress: channel.address,
+      text,
+    });
 
     const result = await emailSendFn({
       address,

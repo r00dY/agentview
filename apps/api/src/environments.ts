@@ -108,7 +108,7 @@ export function getConfigFromEnvironment(environment: Pick<Environment, 'config'
 export async function requireConfig(tx: TenantTransaction): Promise<BaseAgentViewConfig> {
   const environment = await requireEnvironment(tx);
   if (environment.config === null) {
-    throw new AgentViewError("Environment has no config.", 400);
+    throw new AgentViewError(`Environment "${environment.handle}" has no config.`, 400);
   }
   return getConfigFromEnvironment(environment)
 }

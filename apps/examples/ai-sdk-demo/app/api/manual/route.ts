@@ -72,7 +72,7 @@ export async function POST(request: Request) {
 
     // { type: "custom", kind: "dupa.dupa" },
 
-    // { type: "error", errorText: "This is some error from the stream part"},
+    { type: "error", errorText: "This is some error from the stream part"},
 
     // { type: "finish-step" },
     // { type: "finish" },

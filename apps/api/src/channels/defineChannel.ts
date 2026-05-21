@@ -104,13 +104,13 @@ export function parseAgentViewEmailAddress(address: string) {
   let parsed: { orgSlug: string; envSlug: string; agentName: string } | null = null;
 
   if (parts.length === 2) {
-    parsed = { orgSlug: parts[0], envSlug: 'prod', agentName: 'default' };
+    parsed = { orgSlug: parts[0], envSlug: 'production', agentName: 'default' };
   }
   else if (parts.length === 3) {
     parsed = { orgSlug: parts[0], envSlug: parts[1], agentName: parts[2] };
   }
   else {
-    throw new Error(`Invalid agentview built-in email address format: ${address}. Expected {orgSlug}.{envSlug}.{agentName}@agent.agentview.app`);
+    throw new Error(`Invalid email format. Expected {orgSlug}.{envSlug}.{agentName}@agent.agentview.app. Got: ${address}`);
   }
 
   return parsed;
@@ -297,38 +297,58 @@ export function channelProvider(type: string) {
          * IN THE FUTURE: ingestion could be separate from session creation.
          */
         const config = await requireConfig(tx);
-        const matches: { agent: string, channelConfig: ExternalChannelConfig }[] = [];
 
-        config.agents?.forEach((agent) => {
-          if (!agent.channels) {
-            return;
+        let agentWithChannelConfig : {
+          agent: string;
+          channelConfig?: ExternalChannelConfig;
+        } | undefined = undefined;
+
+        if (channel.type === 'agentview-email') {
+          const { agentName } = parseAgentViewEmailAddress(channel.address);
+          const agent = config.agents?.find((a) => a.name === agentName);
+
+          if (!agent) {
+            throw new Error(`Could not find agent named "${agentName}" in the configuration (env: ${environment.handle})`);
           }
 
-          const channelConfigs = agent.channels?.filter((c) => {
-            if (c.type === 'agentview-email') { // we ignore address for our internal email, since it's wildcarded
-              const { agentName } = parseAgentViewEmailAddress(channel.address);
-              return channel.type === 'agentview-email' && agent.name === agentName;
-            }
-            else {
-              return c.type === channel.type && c.address === channel.address;
-            }
-          })
+          agentWithChannelConfig = {
+            agent: agent.name,
+            channelConfig: agent.channels?.find((c) => c.type === 'agentview-email'),
+          }
+        }
+        else {
+          const matches: { agent: string, channelConfig: ExternalChannelConfig }[] = [];
 
-          channelConfigs.forEach((channelConfig) => {
-            matches.push({ agent: agent.name, channelConfig })
-          })
+          config.agents?.forEach((agent) => {
+            if (!agent.channels) {
+              return;
+            }
+  
+            const channelConfigs = agent.channels?.filter((c) => {
+              return c.type !== 'agentview-email' && c.type === channel.type && c.address === channel.address
+            })
+  
+            channelConfigs.forEach((channelConfig) => {
+              matches.push({ agent: agent.name, channelConfig })
+            })
+          });
+  
+          if (matches.length === 0) {
+            throw new Error(`No agent found for this channel: ${channel.type} ${channel.address}`);
+          }
+  
+          if (matches.length > 1) {
+            throw new Error(`Bad config. Multiple agents found for this channel: ${channel.type} ${channel.address}`);
+          }
+
+          agentWithChannelConfig = matches[0];
+        }
+
+        await setAgentForSession(tx, session.id, { 
+          agent: agentWithChannelConfig.agent, 
+          metadata: agentWithChannelConfig.channelConfig?.metadata,
+          initialState: agentWithChannelConfig.channelConfig?.initialState 
         });
-
-        if (matches.length === 0) {
-          throw new Error(`No agent found for this channel: ${channel.type} ${channel.address}`);
-        }
-        if (matches.length > 1) {
-          throw new Error(`Multiple agents found for this channel: ${channel.type} ${channel.address}`);
-        }
-
-        const { agent, channelConfig } = matches[0];
-
-        await setAgentForSession(tx, session.id, { agent, metadata: channelConfig!.metadata, initialState: channelConfig!.initialState });
 
         log.info({ sourceId: params.sourceId, sessionId: session.id }, 'new session created');
       }

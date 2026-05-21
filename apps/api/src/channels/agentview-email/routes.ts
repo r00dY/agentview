@@ -5,8 +5,10 @@ import { db__dangerous } from '../../db';
 import { getEnvironmentByHandleAndOrgId } from '../../environments';
 import { log } from '../../logger';
 import { organizations } from '../../schemas/auth-schema';
+import { buildReplyEmail } from '../buildReplyEmail';
 import { parseAgentViewEmailAddress } from '../defineChannel';
 import type { EmailChannelProvider, EmailMessageData } from '../defineEmailChannel';
+import { formatChannelErrorBody } from '../formatChannelErrorBody';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -31,12 +33,12 @@ async function ensureAgentViewEmailChannel(provider: EmailChannelProvider, addre
     where: eq(organizations.slug, orgSlug),
   });
   if (!org) {
-    throw new Error(`Organization not found: org.slug=${orgSlug}`);
+    throw new Error(`Organization "${orgSlug}" not found.`);
   }
 
   const environment = await getEnvironmentByHandleAndOrgId(org.id, envSlug);
   if (!environment) {
-    throw new Error(`Environment not found: org.id=${org.id} envSlug=${envSlug}`);
+    throw new Error(`Environment "${envSlug}" not found in organization "${orgSlug}".`);
   }
 
   await provider.createChannel(org.id, address, {}, environment.id);
@@ -140,13 +142,54 @@ export function createResendRoutes(provider: EmailChannelProvider): OpenAPIHono 
         },
       });
     } catch (error) {
-      console.log("--- ingestEmail error ---");
-      console.log(error);
-      log.error({ err: error, address }, 'resend webhook: failed to ingest email');
+      log.info({ err: error, address }, 'resend webhook: failed to ingest email');
+      await sendIngestErrorReply(address, agentViewEmail, email.created_at, error);
     }
 
     return c.json({ status: 'ok' }, 200);
   });
 
   return app;
+}
+
+/**
+ * Send an error reply back to the original sender when ingestion fails so
+ * they aren't left wondering why nothing happened. Best-effort — swallows
+ * its own failures so the webhook still returns 200.
+ */
+async function sendIngestErrorReply(
+  fromAddress: string,
+  incoming: EmailMessageData,
+  date: string,
+  error: unknown,
+) {
+  try {
+    const reply = await buildReplyEmail({
+      inReplyTo: incoming,
+      inReplyToDate: date,
+      fromAddress,
+      text: formatChannelErrorBody(error),
+    });
+
+    const headers: Record<string, string> = { 'Message-ID': reply.messageId };
+    if (reply.inReplyTo) headers['In-Reply-To'] = reply.inReplyTo;
+    if (reply.references && reply.references.length > 0) {
+      headers['References'] = reply.references.join(' ');
+    }
+
+    const { error: sendError } = await resend.emails.send({
+      from: reply.from,
+      to: reply.to,
+      subject: reply.subject,
+      text: reply.textBody ?? '',
+      html: reply.htmlBody,
+      headers,
+    });
+
+    if (sendError) {
+      log.error({ err: sendError, fromAddress }, 'resend webhook: failed to send error reply');
+    }
+  } catch (replyErr) {
+    log.error({ err: replyErr, fromAddress }, 'resend webhook: failed to build/send error reply');
+  }
 }
