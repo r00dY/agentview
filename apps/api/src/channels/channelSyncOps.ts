@@ -358,7 +358,7 @@ export async function checkInbox(organizationId: string, channelThreadId: string
       });
     });
 
-    log.error({ err: error, channelThreadId }, 'checkInbox: create-run side effect failed');
+    log.info({ err: error, channelThreadId }, 'checkInbox: create-run side effect failed');
 
   } finally {
     /**
