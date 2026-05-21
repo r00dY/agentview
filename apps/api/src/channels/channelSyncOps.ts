@@ -126,6 +126,11 @@
  *    stay in 'run_streaming' until a new incoming arrives and terminates the
  *    (now-stale) active run via checkInbox. Same recovery profile as the
  *    side-effect crash above; same fix family (janitor or queue conversion).
+ * 
+ *  • terminateRun is called to terminate run. It breaks the contract of this file.
+ *    It should be called via normal "call" to "session API" (cancel).
+ *    It could be part of side effect... Before calling `createAutoRun2` we could
+ *    call cancel the run. 
  *
  * ===========================================================================
  */
