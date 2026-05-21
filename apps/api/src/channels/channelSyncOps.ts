@@ -13,6 +13,9 @@ import { sendOutgoingChannelMessageQueue } from '../queues/sendOutgoingChannelMe
 import { formatChannelErrorBody } from './formatChannelErrorBody';
 import { channelApps } from './registry';
 
+
+
+
 type ChannelMessage = typeof channelMessages.$inferSelect;
 type ChannelThread = Awaited<ReturnType<typeof requireChannelThread>>;
 
@@ -391,7 +394,7 @@ export async function sendOutgoingChannelMessage(messageId: string, organization
     // RELEASE LOCK (atomic)
     await withOrg(organizationId, async (tx) => {
       await tx.update(channelMessages).set({
-        status: 'error',
+        status: 'error', // error doesn't mean message won't be retriggered! It will be. Stop triggering can be achieved only by DELETING message (for now).
         failReason: { message: errorMessage },
         updatedAt: new Date().toISOString(),
       }).where(eq(channelMessages.id, messageId));
