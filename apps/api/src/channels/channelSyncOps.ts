@@ -1,3 +1,112 @@
+/**
+ * ===========================================================================
+ *  Channel sync operations
+ * ===========================================================================
+ *
+ *  Bridges external channels (email, WhatsApp, …) with AI runs. A
+ *  `channel_thread` is the local mirror of an external conversation; its
+ *  `channel_messages` are split by direction:
+ *
+ *    incoming — arrived from the user via the external channel
+ *    outgoing — what we want to send back (AI reply, or an internal error note)
+ *
+ *  Status lifecycles:
+ *
+ *    incoming:  pending → run_connecting → run_streaming → done | error
+ *    outgoing:  pending → sending        → done | error
+ *
+ *
+ *  --- The three external events ---------------------------------------------
+ *
+ *  Nothing in this file is driven by request/response; everything reacts to
+ *  three events we don't control:
+ *
+ *    1. New incoming message — written elsewhere with direction='incoming',
+ *       status='pending'. Whoever inserts it then calls `checkInbox`.
+ *    2. Run finished — the AI run engine emits a terminal status. Handled by
+ *       `channelOnRunFinishHandler` (called via afterCommit from the run code).
+ *    3. pg-boss send job — scheduled when an outgoing message is queued.
+ *       Handled by `sendOutgoingChannelMessage`.
+ *
+ *  All three entry points grab the `edit_channel_thread` advisory lock, so
+ *  DB-side work on a single thread is serialised.
+ *
+ *
+ *  --- The two side-effect calls ---------------------------------------------
+ *
+ *  Two operations escape the DB transaction and call external services. Both
+ *  are non-cancellable mid-flight and must not run concurrently on the same
+ *  thread:
+ *
+ *    • createAutoRun2 — calls the agent endpoint. Only one run can be created
+ *      at a time; cancellation only works once a run is in `streaming`, not
+ *      while connection is still being established.
+ *    • sendFn (channel provider) — until it returns we don't know whether
+ *      the message was delivered, so we mustn't act on the thread.
+ *
+ *  We can't hold a DB row lock across these calls (seconds-long external HTTP).
+ *  Instead, the lock is encoded in the *message status* itself:
+ *
+ *    incoming message in 'run_connecting' ⇒ "create run is in flight"
+ *    outgoing message in 'sending'        ⇒ "send is in flight"
+ *
+ *  `isSideEffectCallInProgress` is just "is any message in those states?".
+ *  Every entry point checks it and bails if true. So while a side effect runs,
+ *  all three external events become no-ops on this thread.
+ *
+ *
+ *  --- Why dropping events while locked is correct ---------------------------
+ *
+ *    new message during lock     — dropped. Caught by the `finally`-block
+ *                                  `checkInbox` re-trigger that runs at the
+ *                                  end of every side effect.
+ *    run-finished during lock    — dropped. If we're already creating a *new*
+ *                                  run, the old run's finish is moot. Events
+ *                                  are not queued; they're fire-and-forget,
+ *                                  and that's fine by the same argument.
+ *    pg-boss send during lock    — dropped. pg-boss will retry; the post-side-
+ *                                  effect `checkInbox` will also resurface
+ *                                  anything that's still actionable.
+ *
+ *  Mental model: every operation on a thread is serialised, and the
+ *  serialisation extends through the external side effect — as if
+ *  "creating_run" and "sending" were states the whole thread state machine
+ *  sits in until the call returns.
+ *
+ *
+ *  --- Entry-point summaries -------------------------------------------------
+ *
+ *  checkInbox(orgId, threadId):
+ *    1. Acquire lock. Bail if thread is already locked or not dirty.
+ *    2. If a previous run is active, terminate it server-side.
+ *    3. Pick the boundary: last successful non-internal outgoing message.
+ *       Everything `incoming` after it (by createdAt, not date — backdated
+ *       messages still count) becomes `stagedMessages`.
+ *    4. Delete leftover pending outgoing messages from a now-stale run.
+ *    5. Flip stagedMessages to 'run_connecting' (this *sets* the lock).
+ *       Release the DB lock.
+ *    6. Call createAutoRun2. On success ⇒ flip messages to 'run_streaming'
+ *       with the new runId. On failure ⇒ flip to 'error' and queue an
+ *       internal outgoing message describing the error.
+ *    7. `finally` re-triggers `checkInbox` to catch messages that arrived
+ *       during step 6.
+ *
+ *  channelOnRunFinishHandler({ runId, status, channelReply, … }):
+ *    Lock the thread. Drop if locked, or if `activeRun` no longer matches the
+ *    finishing runId (superseded). Otherwise:
+ *      completed ⇒ mark incoming 'done', queue outgoing reply.
+ *      failed    ⇒ mark incoming 'error', queue internal error outgoing.
+ *      cancelled ⇒ nothing — the run that cancelled it owns subsequent state.
+ *
+ *  sendOutgoingChannelMessage(messageId, orgId):
+ *    Lock thread, bail if already locked. Flip message to 'sending' (sets
+ *    side-effect lock), release DB lock. Call sendFn. On success ⇒ 'done' with
+ *    sourceId/providerData. On failure ⇒ 'error' and rethrow so pg-boss
+ *    retries. `finally` re-triggers checkInbox.
+ *
+ * ===========================================================================
+ */
+
 import { requireAgentConfigBySession } from 'agentview/baseConfigUtils';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { ServicePrincipal } from 'src/authMiddleware';
