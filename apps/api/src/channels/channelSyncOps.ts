@@ -130,7 +130,8 @@
  *  • terminateRun is called to terminate run. It breaks the contract of this file.
  *    It should be called via normal "call" to "session API" (cancel).
  *    It could be part of side effect... Before calling `createAutoRun2` we could
- *    call cancel the run. 
+ *    call cancel the run. Thanks to this we wouldn't cross boundaries between 
+ *    AI part (sessions / runs) and channel thread management.
  *
  * ===========================================================================
  */
