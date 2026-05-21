@@ -104,6 +104,22 @@
  *    sourceId/providerData. On failure ⇒ 'error' and rethrow so pg-boss
  *    retries. `finally` re-triggers checkInbox.
  *
+ *
+ *  --- Known issues ----------------------------------------------------------
+ *
+ *  • Process crash during a side-effect call leaves the thread permanently
+ *    locked. If the worker dies after the external call returns but before
+ *    the unlocking update commits, incoming messages stay in 'run_connecting'
+ *    (or outgoing in 'sending') forever and every entry point will treat the
+ *    thread as locked. No recovery exists today — fix is a janitor that
+ *    sweeps stale 'run_connecting'/'sending' rows older than N minutes.
+ *
+ *  • (Minor, theoretical) Race between createAutoRun2 returning and the
+ *    'run_streaming' commit: if the run somehow completed before we wrote
+ *    'run_streaming', the finish event would see 'run_connecting' and drop.
+ *    Not reachable in practice — runs always involve streaming setup + LLM
+ *    latency that dwarfs the tx commit window.
+ *
  * ===========================================================================
  */
 
@@ -136,34 +152,37 @@ type ChannelThread = Awaited<ReturnType<typeof requireChannelThread>>;
 export async function checkInbox(organizationId: string, channelThreadId: string) {
   log.debug(`[${channelThreadId}] [createRunForChannelThread] start`);
 
-  /**
-   * Preparation (check session, environmen etc)
-   */
-  const { session, environment } = await withOrg(organizationId, async (tx) => {
-    const channelThread = await requireChannelThread(tx, channelThreadId);
-    const session = await requireSession(tx, channelThreadId);
-    const environment = channelThread.channel.environment;
-    if (!environment) {
-      throw new Error(`[${channelThreadId}] skipping: channel thread has no environment`);
-    }
-
-    return { session, environment };
-  })
+  // Minimal pre-step: we need the env handle to build the tenancy principal for withTenant.
+  // The authoritative reads of session/environment happen under the edit_channel_thread lock
+  // in step 1 and are what flows into step 2 — this read is purely for constructing principal.
+  const envHandle = await withOrg(organizationId, async (tx) => {
+    const ct = await tx.query.channelThreads.findFirst({
+      where: eq(channelThreads.id, channelThreadId),
+      with: { channel: { with: { environment: true } } },
+    });
+    return ct?.channel.environment?.handle;
+  });
+  if (!envHandle) {
+    log.debug(`[${channelThreadId}] checkInbox: thread missing or has no environment, skipping`);
+    return;
+  }
 
   const principal: ServicePrincipal = {
     type: 'service' as const,
     organizationId,
-    env: environment.handle,
+    env: envHandle,
   }
 
   /**
    * STEP 1
-   * 
+   *
    * Prepare for new run if necessary
    */
   let newRunParams: {
     stagedMessages: ChannelMessage[];
     previousRunId: string | null;
+    session: Awaited<ReturnType<typeof requireSession>>;
+    environment: NonNullable<ChannelThread['channel']['environment']>;
   } | undefined = undefined;
 
   try {
@@ -186,7 +205,7 @@ export async function checkInbox(organizationId: string, channelThreadId: string
       }
 
       if (!isDirty(channelThread)) {
-        log.debug(`[${channelThreadId}] skipping: channel thread is dirty`);
+        log.debug(`[${channelThreadId}] skipping: channel thread is not dirty, nothing to do`);
         return;
       }
 
@@ -200,7 +219,10 @@ export async function checkInbox(organizationId: string, channelThreadId: string
         });
       }
 
-      // Let's find the last successful non-internal outgoing message. It's our boundary for a new run (we ignore internal messages!)
+      // Last successful non-internal outgoing message — our boundary for a new run.
+      // `runId` is required: outgoing messages we generate ourselves (e.g. error notifications when
+      // run establishment failed) have runId=null and must NOT count as a boundary, otherwise we'd
+      // skip re-processing the incoming messages that triggered the failed run.
       const lastSuccessful = [...channelThread.messages].reverse().find(m =>
         m.direction === 'outgoing' && m.status === 'done' && !m.internal && m.runId
       );
@@ -258,11 +280,10 @@ export async function checkInbox(organizationId: string, channelThreadId: string
         previousRunId,
         session,
         environment,
-        channelThread
       };
     });
   } catch (error) {
-    log.error({ err: error, channelThreadId }, 'checkInbox failed for unexpected reason');
+    log.error({ err: error, channelThreadId }, 'checkInbox: prep transaction failed');
     return;
   }
 
@@ -278,7 +299,7 @@ export async function checkInbox(organizationId: string, channelThreadId: string
    * RUN SIDE EFFECT -> Create a run.
    */
 
-  const { stagedMessages, previousRunId } = newRunParams;
+  const { stagedMessages, previousRunId, session, environment } = newRunParams;
 
   const messageIds = stagedMessages.map(m => m.id);
 
@@ -313,7 +334,7 @@ export async function checkInbox(organizationId: string, channelThreadId: string
       await tx.acquireLock({ type: "edit_channel_thread", channelThreadId });
 
       await tx.update(channelMessages)
-        .set({ status: 'error', runId: null }) // set to streaming (not creating_run) -> releases lock
+        .set({ status: 'error', runId: null }) // any non-'run_connecting' status releases the side-effect lock
         .where(inArray(channelMessages.id, messageIds));
 
       await insertAndQueueOutgoingMessage(tx, {
@@ -324,13 +345,16 @@ export async function checkInbox(organizationId: string, channelThreadId: string
       });
     });
 
-    log.debug({ err: error, channelThreadId }, 'checkInbox failed for unexpected reason');
+    log.error({ err: error, channelThreadId }, 'checkInbox: create-run side effect failed');
 
   } finally {
     /**
-     * We must always re-trigger this function at the end, because while side effect was in progress, new messages could have arrived.
+     * Re-trigger to catch new messages that may have arrived during the side effect.
+     * Intentionally NOT awaited — fire-and-forget so the caller (e.g. the entry that triggered this
+     * checkInbox) doesn't block on follow-up work. Errors inside the recursive call are handled
+     * by its own try/catches.
      */
-    checkInbox(organizationId, channelThreadId);
+    void checkInbox(organizationId, channelThreadId);
   }
 }
 
@@ -451,6 +475,12 @@ export async function sendOutgoingChannelMessage(messageId: string, organization
       return; // message deleted -> not doing job -> marking as done
     }
 
+    // Only 'pending' (first attempt) or 'error' (retry) are eligible to send.
+    if (message.status !== 'pending' && message.status !== 'error') {
+      log.debug({ messageId, status: message.status }, 'sendOutgoingChannelMessage: message not in a sendable state');
+      return;
+    }
+
     // Preparing for send
     const channel = channelThread.channel;
     const channelApp = channelApps.find((app) => app.type === channel.type);
@@ -460,10 +490,15 @@ export async function sendOutgoingChannelMessage(messageId: string, organization
       throw new Error(`No send function registered for channel type '${channel.type}'`);
     }
 
-    // Side effect lock on
+    // Side effect lock on.
+    // Guard on status so we never resurrect a message that's no longer eligible to be sent.
+    // 'error' is eligible too — failed sends stay retriable until the message is deleted (see release-on-error comment below).
     await tx.update(channelMessages).set({
       status: 'sending',
-    }).where(eq(channelMessages.id, messageId));
+    }).where(and(
+      eq(channelMessages.id, messageId),
+      inArray(channelMessages.status, ['pending', 'error']),
+    ));
 
     return { sendFn, channelThread };
   });
@@ -487,6 +522,7 @@ export async function sendOutgoingChannelMessage(messageId: string, organization
 
     // RELEASE LOCK (atomic)
     await withOrg(organizationId, async (tx) => {
+      await tx.acquireLock({ type: "edit_channel_thread", channelThreadId });
       await tx.update(channelMessages).set({
         status: 'done',
         sourceId,
@@ -502,6 +538,7 @@ export async function sendOutgoingChannelMessage(messageId: string, organization
 
     // RELEASE LOCK (atomic)
     await withOrg(organizationId, async (tx) => {
+      await tx.acquireLock({ type: "edit_channel_thread", channelThreadId });
       await tx.update(channelMessages).set({
         status: 'error', // error doesn't mean message won't be retriggered! It will be. Stop triggering can be achieved only by DELETING message (for now).
         failReason: { message: errorMessage },
@@ -512,8 +549,10 @@ export async function sendOutgoingChannelMessage(messageId: string, organization
     throw e; // re-throw so pg-boss retries
 
   } finally {
-    // after side effect we should run checkInbox
-    checkInbox(organizationId, channelThreadId);
+    // After the side effect, re-trigger checkInbox to catch any messages that arrived during send.
+    // Intentionally fire-and-forget (no await) — the pg-boss job is done once send is settled;
+    // follow-up work shouldn't keep the worker busy. Errors are handled inside checkInbox itself.
+    void checkInbox(organizationId, channelThreadId);
   }
 }
 
