@@ -59,7 +59,7 @@ import { applyRunPatch, createAutoRun2, createManualRun, DEFAULT_IDLE_TIME, fast
 import { createRunStreamConsumer } from './runStream';
 import { organizations, users } from './schemas/auth-schema';
 import { commentMessages, endUsers, environments, inboxItems, runs, scores, sessions } from './schemas/schema';
-import { activateSession, createSession, getSessionListFilter, getSessions, setAgentForSession, updateSession } from './sessions';
+import { activateSession, createSession, getCurrentlyStreamingOrConnectingRun, getSessionListFilter, getSessions, setAgentForSession, updateSession } from './sessions';
 import { createUser, requireUser, updateUser } from './users';
 import { withOrg, withTenant } from './withOrg';
 
@@ -1131,28 +1131,28 @@ async function sessionStandardCancelHandler(c: Parameters<RouteHandler<typeof se
   const { session_id } = c.req.param()
 
   // Phase 1. Throw error if run is not in progress
-  const { lastRun } = await withOrg(principal.organizationId, async (tx) => {
-    const session = await requireSession(tx, session_id);
+  const { currentlyStreamingOrConnectingRun } = await withOrg(principal.organizationId, async (tx) => {
+    const session = await requireSessionBase(tx, session_id);
 
     authorize(principal, { action: "end-user:update", user: session.user });
 
-    const lastRun = getLastRun(session);
-    if (!lastRun) {
+    const currentlyStreamingOrConnectingRun = await getCurrentlyStreamingOrConnectingRun(tx, session_id);
+    if (!currentlyStreamingOrConnectingRun) {
       throw new AgentViewError("The session has no run.", 422);
     }
 
-    if (lastRun.manual) {
+    if (currentlyStreamingOrConnectingRun.manual) {
       throw new AgentViewError("This endpoint is allowed only for auto-fetch runs.", 422);
     }
 
-    return { lastRun }
+    return { currentlyStreamingOrConnectingRun }
   });
 
   // this function contract is that it takes max 5s to complete, should return almost immediately after proper cleanup and termination
-  await sendRunTerminationSignal(lastRun.id, { status: 'cancelled' }, { graceful: true });
+  await sendRunTerminationSignal(currentlyStreamingOrConnectingRun.id, { status: 'cancelled' }, { graceful: true });
 
   return await withOrg(principal.organizationId, async (tx) => {
-    await terminateRun(tx, session_id, lastRun.id, { status: 'cancelled' }); // idempotent cleanup (if above didn't work)
+    await terminateRun(tx, session_id, currentlyStreamingOrConnectingRun.id, { status: 'cancelled' }); // idempotent cleanup (if above didn't work)
 
     return await requireSession(tx, session_id);
   });

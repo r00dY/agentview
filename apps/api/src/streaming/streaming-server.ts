@@ -6,7 +6,7 @@ import { startCpuProfiling, stopCpuProfiling } from './profiler';
 
 import { RunTerminationError, type RunTerminationReason } from '../runs';
 import { createState, processChunk, StreamUpstreamError } from './processEvent';
-import { GracefulRunTerminationError, type LiveConnection } from './types';
+import { GracefulRunTerminationError, type LiveConnection, type LiveConnectionStreaming } from './types';
 import { saveDataAll } from './saveData';
 import { createParser, type EventSourceMessage } from 'eventsource-parser';
 import { ChunkParseError, parseUIMessageChunk, type ExtendedUIMessageChunk } from './parseUIMessageChunk';
@@ -38,12 +38,12 @@ perf.startPrinting('streaming-server');
 
 // --- Buffer helpers ---
 
-function pushToBuffer(conn: LiveConnection, data: string) {
+function pushToBuffer(conn: LiveConnectionStreaming, data: string) {
   conn.streamBuffer.push(data);
   for (const listener of conn.streamListeners) listener(data);
 }
 
-function markStreamDone(conn: LiveConnection) {
+function markStreamDone(conn: LiveConnectionStreaming) {
   conn.streamDone = true;
   for (const listener of conn.streamDoneListeners) listener();
 }
@@ -71,7 +71,7 @@ function readJsonBody(req: http.IncomingMessage): Promise<any> {
 
 function sendJson(res: http.ServerResponse, status: number, body: Record<string, any>) {
   const payload = JSON.stringify(status >= 400 ? { source: "agentview", ...body } : body);
-  
+
   res.writeHead(status, {
     'Content-Type': 'application/json',
     'Content-Length': Buffer.byteLength(payload),
@@ -134,6 +134,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
     if (statusCode >= 400) {
       upstreamRes.pipe(res);
+      liveConnections.delete(runId); // never made it to streaming phase
       return;
     }
     else {
@@ -143,16 +144,16 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     /**
      * Connection established
      */
-    let conn: LiveConnection;
+    let conn: LiveConnectionStreaming;
 
     const state = createState(crypto.randomUUID()); // random message id (it can be overriden by user anyway in 'start' chunk)
 
     upstreamRes.setEncoding('utf-8'); // automatic decoding of stream to the string
 
-    let streamFinishReason : { type: 'error', message: string, code: string, [key: string]: any } | { type: 'abort' } | { type: 'complete' } | undefined = undefined;
+    let streamFinishReason: { type: 'error', message: string, code: string, [key: string]: any } | { type: 'abort' } | { type: 'complete' } | undefined = undefined;
 
     function sendInternalMetadata(metadata: Record<string, any>) {
-      const newChunk : ExtendedUIMessageChunk = {
+      const newChunk: ExtendedUIMessageChunk = {
         type: 'message-metadata',
         messageMetadata: {
           _agentview: metadata
@@ -179,7 +180,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
            * 
            * It's error state ONLY FOR 'completed' runs. In case of cancellation or error -> we expect that tools might be broken mid-way.
            */
-          const pendingToolCalls : number[] = [];
+          const pendingToolCalls: number[] = [];
 
           for (let i = 0; i < conn.state.message.parts.length; i++) {
             const part = conn.state.message.parts[i];
@@ -194,7 +195,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
           else {
             streamFinishReason = { type: 'complete' };
           }
-  
+
           upstreamRes.destroy(); // will trigger 'close' event without 'error' event
           return;
         }
@@ -273,7 +274,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
       streamFinishReason = { type: 'error', code: "STREAM_INCOMPLETE", message: "Stream ended incomplete" };
     });
 
-    function cleanup(conn: LiveConnection) {
+    function cleanup(conn: LiveConnectionStreaming) {
       log.info({ runId }, `[streaming] sending ${DONE_MSG}`);
 
       pushToBuffer(conn, DONE_MSG);
@@ -292,7 +293,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
      * - last chunk: 'error' -> there was error (of any kind)
      * - last chunk 'abort' -> user cancelled the stream
      * - last chunk: [done] -> nice finish -> complete.
-     * 
+     *
      * If stream ended without [done] and without error, we trigger error in on('end')
      */
     upstreamRes.on('close', () => {
@@ -376,9 +377,11 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     });
 
     conn = {
+      phase: 'streaming',
       run,
       metadata,
 
+      upstreamReq,
       upstreamRes,
 
       state,
@@ -394,13 +397,19 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     log.info({ runId }, '[streaming] connection established');
   });
 
+  // Track the connection from the moment we kick off the upstream request, so
+  // DELETE /streams/:runId can find and terminate it during the connecting phase.
+  liveConnections.set(runId, { phase: 'connecting', upstreamReq });
+
   // If this connection is closed before upstream started streaming (for example run POST call aborted by user), we should just close upstreamReq.
   // We should do this without argument, then 'error' event won't be called.
   req.on('close', () => {
-    if (liveConnections.has(runId)) return; // if already streaming - do nothing.
+    const current = liveConnections.get(runId);
+    if (current && current.phase === 'streaming') return; // already streaming (or gone) - do nothing.
 
     log.info({ runId }, '[streaming] client disconnected before upstream responded, aborting upstream');
     upstreamReq.destroy(); // doesn't trigger 'error' event
+    liveConnections.delete(runId);
   });
 
   upstreamReq.on('error', (err) => {
@@ -410,7 +419,15 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     // which also triggers this error — but res is already finished by then.
     if (res.headersSent) return;
 
-    if (isNodeHttpConnectionError(err)) {
+    const current = liveConnections.get(runId);
+
+    if (!current) return; // nothing to do
+
+    if (current.phase === 'streaming') return; // rather unreachable. belts and suspenders.
+
+    if (err instanceof RunTerminationError) {
+      sendJson(res, 409, { code: "CONNECTION_CANCELLED", message: "This request was cancelled by another request." });
+    } else if (isNodeHttpConnectionError(err)) {
       sendJson(res, 502, { code: "CONNECTION_NETWORK_ERROR", message: err.message, detailedCode: (err as any).code });
       return;
     }
@@ -418,6 +435,8 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
       log.error({ err }, '[streaming] unexpected error while streaming');
       sendJson(res, 500, { code: "CONNECTION_INTERNAL_ERROR", message: err.message });
     }
+
+    liveConnections.delete(runId);
   });
 
   upstreamReq.write(body);
@@ -439,30 +458,36 @@ async function handleDeleteStream(req: http.IncomingMessage, res: http.ServerRes
     return;
   }
 
-  if (!graceful) {
-    conn.upstreamRes.destroy(new RunTerminationError(reason));
+  if (conn.phase === 'connecting') {
+    conn.upstreamReq.destroy(new RunTerminationError(reason));
+    sendJson(res, 200, { ok: true });
+    return;
   }
-  else {
-    conn.upstreamRes.destroy(new GracefulRunTerminationError(reason));
-  }
+  else if (conn.phase === 'streaming') {
+    const terminationError = graceful
+      ? new GracefulRunTerminationError(reason)
+      : new RunTerminationError(reason);
 
-  /**
-   * Here we wait max 5s for termination to be completed.
-   * If it doesn't happen, we treat it as an error state. This should be immediate.
-   */
-  let time = 0;
-  const TOTAL_WAIT_TIME = 5000;
-  const INTERVAL = 100;
+    conn.upstreamRes.destroy(terminationError);
 
-  while (!conn.streamDone) {
-    if (time > TOTAL_WAIT_TIME) {
-      log.error({ runId }, '[streaming] run not closed after 5 seconds after cancellation');
-      sendJson(res, 500, { message: 'Run not closed after 5 seconds after cancellation' });
-      return;
+    /**
+     * Here we wait max 5s for termination to be completed.
+     * If it doesn't happen, we treat it as an error state. This should be immediate.
+     */
+    let time = 0;
+    const TOTAL_WAIT_TIME = 5000;
+    const INTERVAL = 100;
+
+    while (!conn.streamDone) {
+      if (time > TOTAL_WAIT_TIME) {
+        log.error({ runId }, '[streaming] run not closed after 5 seconds after cancellation');
+        sendJson(res, 500, { message: 'Run not closed after 5 seconds after cancellation' });
+        return;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, INTERVAL));
+      time += INTERVAL;
     }
-
-    await new Promise(resolve => setTimeout(resolve, INTERVAL));
-    time += INTERVAL;
   }
 
   sendJson(res, 200, { ok: true });
@@ -474,7 +499,7 @@ async function handleDeleteStream(req: http.IncomingMessage, res: http.ServerRes
 function handleGetStream(req: http.IncomingMessage, res: http.ServerResponse, runId: string) {
   const conn = liveConnections.get(runId);
 
-  if (!conn) {
+  if (!conn || conn.phase !== 'streaming') {
     sendJson(res, 404, { message: 'Stream not found' });
     return;
   }
@@ -586,5 +611,6 @@ const server = http.createServer(requestHandler);
 server.listen(port, () => {
   log.info(`[streaming-server] listening on port ${port}`);
 });
+
 
 

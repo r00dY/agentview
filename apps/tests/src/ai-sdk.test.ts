@@ -76,7 +76,7 @@ describe('ai-sdk', () => {
     }
 
     async function consumeChunksFromTransportStream(stream: ReadableStream<UIMessageChunk<unknown, UIDataTypes>>) {
-      let chunks : UIMessageChunk[] = []
+      let chunks: UIMessageChunk[] = []
       for await (const chunk of stream) {
         chunks.push(chunk);
       }
@@ -143,7 +143,7 @@ describe('ai-sdk', () => {
 
       afterAll(async () => {
         if (proxyProcess?.pid) {
-          try { process.kill(-proxyProcess.pid, 'SIGTERM'); } catch {}
+          try { process.kill(-proxyProcess.pid, 'SIGTERM'); } catch { }
         }
       });
 
@@ -418,7 +418,7 @@ describe('ai-sdk', () => {
           }, 2000)
         });
 
-        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] }});
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] } });
         expect(session.status).toBe("in_progress");
         expect(session.messages.length).toBe(1);
         expect(session.messages[0]).toMatchObject({
@@ -520,7 +520,7 @@ describe('ai-sdk', () => {
           res.end(jsonError);
         });
 
-        const promise = client.sessions.create({ agent: "test-ai-sdk" , userId: user.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
+        const promise = client.sessions.create({ agent: "test-ai-sdk", userId: user.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
 
         await expect(promise).rejects.not.toBeInstanceOf(AgentViewError);
         await expect(promise).rejects.toThrowError(jsonError);
@@ -535,7 +535,7 @@ describe('ai-sdk', () => {
           res.end("");
         });
 
-        const promise = client.sessions.create({ agent: "test-ai-sdk" , userId: user.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
+        const promise = client.sessions.create({ agent: "test-ai-sdk", userId: user.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } });
 
         await expect(promise).rejects.not.toBeInstanceOf(AgentViewError);
         await expect(promise).rejects.toThrowError("");
@@ -652,7 +652,7 @@ describe('ai-sdk', () => {
 
       test("multi-turn: second request has full conversation history", async () => {
         await updateEnvironment(client, { config: buildConfig() });
-        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id  });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
 
         // First turn
         mockAISDKServer!.setHandler((_body, res) => {
@@ -784,6 +784,89 @@ describe('ai-sdk', () => {
         await streamPromise;
       }, TEST_TIMEOUT);
 
+      test("cancellation while upstream is still connecting → run cancelled and upstream aborted", async () => {
+        // Upstream takes "forever" to respond — streaming-server is stuck in the
+        // 'connecting' phase. cancelRun must still terminate the run and tear down
+        // the upstream request.
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
+
+        let upstreamReceived: () => void;
+        const upstreamReceivedPromise = new Promise<void>(r => { upstreamReceived = r; });
+        let upstreamClosed = false;
+        let upstreamWroteHeaders = false;
+
+        mockAISDKServer!.setHandler((_body, res, req) => {
+          // Long connection establishment: hold the request without writing anything.
+          req.on('close', () => { upstreamClosed = true; });
+          res.on('finish', () => { upstreamWroteHeaders = true; });
+          upstreamReceived();
+        });
+
+        const runPromise = client.sessions.createRun(session.id, { input: { role: "user", parts: [{ type: "text", text: "Hello 1" }] } });
+
+        // We'll expect this run creation to fail
+        const runPromiseExpect = expect(runPromise).rejects.toThrowError(expect.objectContaining({
+          statusCode: 409,
+          message: expect.any(String)
+        }))
+
+        await upstreamReceivedPromise;
+        await new Promise(r => setTimeout(r, 500));
+
+        // Immediate consecutive createRun should fail (this must come after those awiats above. If it's immedaitely after runPromise, then race condition might happen)
+        await expect(client.sessions.createRun(session.id, { input: { role: "user", parts: [{ type: "text", text: "Hello 2" }] } })).rejects.toThrowError(expect.objectContaining({
+          statusCode: 422,
+          message: expect.any(String)
+        }));
+
+        const cancelled = await client.sessions.cancelRun(session.id);
+        expect(cancelled.status).toBe("idle");
+
+        // Upstream connection must be torn down.
+        await new Promise(r => setTimeout(r, 500));
+        expect(upstreamClosed).toBe(true);
+        expect(upstreamWroteHeaders).toBe(false);
+
+        const updatedSession = await client.sessions.get(session.id);
+        expect(updatedSession.status).toBe("idle");
+        expect(updatedSession.messages.length).toBe(0);
+
+        await runPromiseExpect;
+
+
+        /**
+         * Second turn: respond normally
+         */
+        // Second turn: respond normally.
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "After cancel" },
+            { type: "text-end", id: "t1" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        // we must consume till the end
+        const stream = await sendMessageViaTransport(
+          client.createTransport(),
+          session.id,
+          { id: "msg_2", role: "user", parts: [{ type: "text", text: "Hello 3" }] }
+        );
+        await consumeChunksFromTransportStream(stream);
+
+        const updatedSession2 = await client.sessions.get(session.id);
+        expect(updatedSession2.status).toBe("idle");
+        expect(updatedSession2.messages.length).toBe(2);
+        expect(updatedSession2.messages[0].parts[0].text).toBe("Hello 3");
+        expect(updatedSession2.messages[1].parts[0].text).toBe("After cancel");
+
+      }, TEST_TIMEOUT);
 
       test("message id is auto set when undefined", async () => {
         await updateEnvironment(client, { config: buildConfig() });
@@ -842,7 +925,7 @@ describe('ai-sdk', () => {
 
         // for run
         const session2 = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
-        await client.sessions.createRun(session2.id, { input: { role: "user", parts: [{ type: "text", text: "Hello" }] }});
+        await client.sessions.createRun(session2.id, { input: { role: "user", parts: [{ type: "text", text: "Hello" }] } });
         const finalSession2 = await client.sessions.get(session2.id);
         expect(finalSession2.messages[0].id).toMatch(UUID_REGEX);
       }, TEST_TIMEOUT);
@@ -861,7 +944,7 @@ describe('ai-sdk', () => {
             { type: "message-metadata", messageMetadata: { b: { bb: "xxx" } } },
             { type: "text-delta", id: "t1", delta: "world!" },
             { type: "text-end", id: "t1" },
-            { type: "finish", finishReason: "stop", messageMetadata: { c: 100 }  },
+            { type: "finish", finishReason: "stop", messageMetadata: { c: 100 } },
           ]);
           writeAISDKDone(res);
           res.end();
@@ -1009,7 +1092,7 @@ describe('ai-sdk', () => {
               res.write(`data: ${JSON.stringify(chunk)}\n\n`);
             }
             ready();
-            res.on('close', () => {});
+            res.on('close', () => { });
           });
 
           const streamPromise = sendMessageViaTransport(

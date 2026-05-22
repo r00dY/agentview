@@ -1,9 +1,9 @@
 import { RunTerminationError, type FastPatchOp } from "../runs";
-import { type LiveConnection } from "./types";
+import { type LiveConnectionStreaming } from "./types";
 import { log } from "../logger";
 
 export async function saveData(
-    conn: LiveConnection,
+    conn: LiveConnectionStreaming,
     op: FastPatchOp,
   ) {
     log.info({ runId: conn.run.id }, '[streaming] saving data');
@@ -31,7 +31,7 @@ export async function saveData(
   
 
   export async function saveDataAll(
-    conn: LiveConnection,
+    conn: LiveConnectionStreaming,
     streamFinishReason: { type: 'error', message: string } | { type: 'abort' } | { type: 'complete' },
   ) {
     const parts = conn.state.message.parts;

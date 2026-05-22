@@ -1,4 +1,4 @@
-import type { IncomingMessage } from "node:http";
+import type { ClientRequest, IncomingMessage } from "node:http";
 import { RunTerminationError } from "../runs";
 import type { StreamingUIMessageState } from "./processUIMessageStream";
 import type { UIMessage } from "ai";
@@ -7,7 +7,14 @@ import type { UIMessage } from "ai";
 export class GracefulRunTerminationError extends RunTerminationError {}
 
 
-export interface LiveConnection {
+export type LiveConnectionConnecting = {
+  phase: 'connecting';
+  upstreamReq: ClientRequest;
+};
+
+export interface LiveConnectionStreaming {
+  phase: 'streaming';
+
   run: {
     id: string;
     agentRef: {
@@ -22,6 +29,7 @@ export interface LiveConnection {
     metadata: Record<string, any> | null;
   };
 
+  upstreamReq: ClientRequest;
   upstreamRes: IncomingMessage;
   metadata: string;
 
@@ -33,3 +41,5 @@ export interface LiveConnection {
   streamListeners: Set<(data: string) => void>;
   streamDoneListeners: Set<() => void>;
 }
+
+export type LiveConnection = LiveConnectionConnecting | LiveConnectionStreaming;

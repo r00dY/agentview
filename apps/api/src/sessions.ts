@@ -286,6 +286,13 @@ export function getSessionStatusFields(session: StandardSession): { status: Sess
   }
 }
 
+// Takes into account "connecting" phase.
+export async function getCurrentlyStreamingOrConnectingRun(tx: Transaction, sessionId: string) {
+  return await tx.query.runs.findFirst({
+    where: and(eq(runs.sessionId, sessionId), eq(runs.status, 'in_progress')),
+  });
+}
+
 /**
  * 
  * Lists
@@ -590,6 +597,8 @@ export async function activateSession(tx: OrgTransaction, sessionId: string, aut
 }
 
 export async function updateSession(tx: TenantTransaction, session_id: string, body: SessionUpdate) {
+  await tx.acquireLock({ type: "edit_session", sessionId: session_id });
+
   const session = await requireSessionBase(tx, session_id);
 
   authorize(tx.principal, { action: "end-user:update", user: session.user });
