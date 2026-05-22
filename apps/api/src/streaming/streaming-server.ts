@@ -7,7 +7,7 @@ import { startCpuProfiling, stopCpuProfiling } from './profiler';
 import { RunTerminationError, type RunTerminationReason } from '../runs';
 import { createState, processChunk, StreamUpstreamError } from './processEvent';
 import { GracefulRunTerminationError, type LiveConnection, type LiveConnectionStreaming } from './types';
-import { saveDataAll } from './saveData';
+import { ping, saveDataAll } from './saveData';
 import { createParser, type EventSourceMessage } from 'eventsource-parser';
 import { ChunkParseError, parseUIMessageChunk, type ExtendedUIMessageChunk } from './parseUIMessageChunk';
 import { UIMessageStreamError, isToolUIPart } from 'ai';
@@ -235,6 +235,14 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     });
 
     upstreamRes.on('data', function onData(chunk: string) { // chunk is string thanks to setEncoding('utf-8')
+      // Keep run.expiresAt fresh while upstream is actively sending data.
+      // Throttled to once per 5s; if upstream goes silent, pings stop and the
+      // expired-runs worker terminates the run after idleTimeout. Fire-and-forget.
+      const now = Date.now();
+      if (now - conn.lastActivityAt >= 5000) {
+        conn.lastActivityAt = now;
+        ping(conn);
+      }
       sseParser.feed(chunk);
     });
 
@@ -385,6 +393,8 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
       upstreamRes,
 
       state,
+
+      lastActivityAt: 0,
 
       streamBuffer: [],
       streamDone: false,

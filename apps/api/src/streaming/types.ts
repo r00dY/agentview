@@ -35,6 +35,10 @@ export interface LiveConnectionStreaming {
 
   state: StreamingUIMessageState<UIMessage>;
 
+  // Timestamp (ms) of the last keep-alive ping sent to the HTTP server.
+  // Updated when upstream sends data; used to throttle pings to once per 5s.
+  lastActivityAt: number;
+
   // In-memory stream buffer for GET /stream consumers
   streamBuffer: string[];
   streamDone: boolean;

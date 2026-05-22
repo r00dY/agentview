@@ -470,7 +470,11 @@ export type FastPatchCompleteOp = {
   channelReply?: { text: string }
 }
 
-export type FastPatchOp = FastPatchItemOp | FastPatchStateOp | FastPatchMetadataOp | FastPatchCancelOp | FastPatchFailOp | FastPatchCompleteOp;
+export type FastPatchPingOp = {
+  type: "ping",
+}
+
+export type FastPatchOp = FastPatchItemOp | FastPatchStateOp | FastPatchMetadataOp | FastPatchCancelOp | FastPatchFailOp | FastPatchCompleteOp | FastPatchPingOp;
 
 
 export async function fastApplyRunPatch(
@@ -499,6 +503,15 @@ export async function fastApplyRunPatch(
   const idleTimeout = runConfig.idleTimeout ?? DEFAULT_IDLE_TIME;
   const now = Date.now();
   const nowIso = new Date(now).toISOString();
+
+  // Ping: just bump expiresAt; no item writes, no stream event.
+  if (op.type === 'ping') {
+    await tx.update(runs).set({
+      updatedAt: nowIso,
+      expiresAt: new Date(now + idleTimeout).toISOString(),
+    }).where(eq(runs.id, run.id));
+    return;
+  }
 
   const updatedRun: { updatedAt: string, expiresAt: string, metadata?: Record<string, any>, status?: string, finishedAt?: string, failReason?: any } = {
     updatedAt: nowIso,

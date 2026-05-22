@@ -2,6 +2,17 @@ import { RunTerminationError, type FastPatchOp } from "../runs";
 import { type LiveConnectionStreaming } from "./types";
 import { log } from "../logger";
 
+/**
+ * Fire-and-forget keep-alive. Bumps run.expiresAt on the HTTP server so the
+ * expired-runs worker doesn't kill a run that's still actively streaming.
+ * Errors (network, 409 termination, etc.) are intentionally swallowed.
+ */
+export function ping(conn: LiveConnectionStreaming): void {
+  saveData(conn, { type: 'ping' }).catch((err) => {
+    log.debug({ runId: conn.run.id, err }, '[streaming] ping failed (ignored)');
+  });
+}
+
 export async function saveData(
     conn: LiveConnectionStreaming,
     op: FastPatchOp,
