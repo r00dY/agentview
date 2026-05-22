@@ -95,12 +95,14 @@ export class AgentViewBase {
   async _request<T>(
     method: string,
     path: string,
-    body?: any
+    body?: any,
+    options?: { signal?: AbortSignal }
   ): Promise<T> {
     const response = await fetch(`${getApiUrl()}${path}`, {
       method,
       headers: this._getHeaders(),
       body: body ? JSON.stringify(body) : undefined,
+      signal: options?.signal,
     })
 
     // artificial delay
@@ -339,8 +341,8 @@ class SessionsResource {
     return await this.client._request<Session>('PATCH', `/api/sessions/${id}`, options)
   }
 
-  async createRun(id: string, options: RunCreate) {
-    return await this.client._request<Run>('POST', `/api/sessions/${id}/runs`, options)
+  async createRun(id: string, options: RunCreate, requestOptions?: { signal?: AbortSignal }) {
+    return await this.client._request<Run>('POST', `/api/sessions/${id}/runs`, options, requestOptions)
   }
 
   async cancelRun(id: string) {

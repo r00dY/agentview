@@ -784,6 +784,93 @@ describe('ai-sdk', () => {
         await streamPromise;
       }, TEST_TIMEOUT);
 
+      test("client disconnect while upstream is still connecting → run aborted and upstream aborted", async () => {
+        // Same scenario as the cancellation test below, but the client abandons the
+        // createRun call instead of explicitly cancelling. The upstream connection
+        // must still be torn down, the discarded run must not be visible, and a
+        // subsequent createRun on the same session must succeed.
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
+
+        let upstreamReceived: () => void;
+        const upstreamReceivedPromise = new Promise<void>(r => { upstreamReceived = r; });
+        let upstreamClosed = false;
+        let upstreamWroteHeaders = false;
+
+        mockAISDKServer!.setHandler((_body, res, req) => {
+          // Long connection establishment: hold without writing anything.
+          req.on('close', () => { upstreamClosed = true; });
+          res.on('finish', () => { upstreamWroteHeaders = true; });
+          upstreamReceived();
+        });
+
+        const abortController = new AbortController();
+        const runPromise = client.sessions.createRun(
+          session.id,
+          { input: { role: "user", parts: [{ type: "text", text: "Hello 1" }] } },
+          { signal: abortController.signal }
+        );
+
+        // Aborting fetch() rejects the promise. Attach the matcher immediately to
+        // avoid an unhandled rejection between abort() and the final await.
+        const runPromiseExpect = expect(runPromise).rejects.toThrow();
+
+        await upstreamReceivedPromise;
+        await new Promise(r => setTimeout(r, 500));
+
+        // While the (about-to-be-aborted) run is still pending on the server, a
+        // parallel createRun should fail with 422 — there's already a run in progress.
+        await expect(client.sessions.createRun(session.id, { input: { role: "user", parts: [{ type: "text", text: "Hello 2" }] } })).rejects.toThrowError(expect.objectContaining({
+          statusCode: 422,
+          message: expect.any(String)
+        }));
+
+        // Client disconnects.
+        abortController.abort();
+        await runPromiseExpect;
+
+        // Server-side: closing the inbound request aborts the API server's fetch
+        // to /streams, which closes streaming-server's POST, which destroys
+        // upstreamReq → mock sees req.on('close').
+        await new Promise(r => setTimeout(r, 500));
+        expect(upstreamClosed).toBe(true);
+        expect(upstreamWroteHeaders).toBe(false);
+
+        // The run was discarded — session looks like nothing happened.
+        const updatedSession = await client.sessions.get(session.id);
+        expect(updatedSession.status).toBe("idle");
+        expect(updatedSession.messages.length).toBe(0);
+
+        /**
+         * Second turn: respond normally — verifies the session is in a clean state.
+         */
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "After disconnect" },
+            { type: "text-end", id: "t1" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        const stream = await sendMessageViaTransport(
+          client.createTransport(),
+          session.id,
+          { id: "msg_2", role: "user", parts: [{ type: "text", text: "Hello 3" }] }
+        );
+        await consumeChunksFromTransportStream(stream);
+
+        const updatedSession2 = await client.sessions.get(session.id);
+        expect(updatedSession2.status).toBe("idle");
+        expect(updatedSession2.messages.length).toBe(2);
+        expect(updatedSession2.messages[0].parts[0].text).toBe("Hello 3");
+        expect(updatedSession2.messages[1].parts[0].text).toBe("After disconnect");
+      }, TEST_TIMEOUT);
+
       test("cancellation while upstream is still connecting → run cancelled and upstream aborted", async () => {
         // Upstream takes "forever" to respond — streaming-server is stuck in the
         // 'connecting' phase. cancelRun must still terminate the run and tear down
