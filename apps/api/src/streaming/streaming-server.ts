@@ -436,7 +436,8 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     if (current.phase === 'streaming') return; // rather unreachable. belts and suspenders.
 
     if (err instanceof RunTerminationError) {
-      sendJson(res, 409, { code: "CONNECTION_CANCELLED", message: "This request was cancelled by another request." });
+      // err.message comes from terminationReasonText, e.g. "cancelled" or "failed (Timeout)".
+      sendJson(res, 409, { code: "CONNECTION_TERMINATED", message: err.message });
     } else if (isNodeHttpConnectionError(err)) {
       sendJson(res, 502, { code: "CONNECTION_NETWORK_ERROR", message: err.message, detailedCode: (err as any).code });
       return;
