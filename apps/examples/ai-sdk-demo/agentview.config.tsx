@@ -27,8 +27,8 @@ export default defineConfig({
           value: ({ session }) => session?.metadata?.userLocation
         }
       ],
+      
       newSessionComponent: WeatherChatNewSessionComponent,
-
       // inputComponent: ({ sendMessage, cancel, isRunning, session }) => <UserMessageInput
       //   onSubmit={(val) => {
       //     sendMessage({

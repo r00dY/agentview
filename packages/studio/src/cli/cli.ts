@@ -75,6 +75,14 @@ function logError(message: string) {
   console.error(`${marker.error} ${ansi.red}${message}${ansi.reset}`);
 }
 
+function timestamp(): string {
+  const d = new Date();
+  const h = d.getHours().toString().padStart(2, '0');
+  const m = d.getMinutes().toString().padStart(2, '0');
+  const s = d.getSeconds().toString().padStart(2, '0');
+  return `${ansi.dim}${h}:${m}:${s}${ansi.reset}`;
+}
+
 function handleError(error: unknown): never {
   if (error instanceof AgentViewError) {
     logError(`${error.message} (${error.statusCode})`);
@@ -286,7 +294,7 @@ async function runProxyServer(client: StandardAgentViewClient) {
     if (healthy) return;
 
     regenerating = true;
-    logWarn(`Connection lost, reconnecting...`);
+    logWarn(`Connection lost, reconnecting... ${timestamp()}`);
     const oldTunnel = tunnel;
     tunnel = null;
     try { await oldTunnel.stop(); } catch { /* best-effort */ }
@@ -294,9 +302,9 @@ async function runProxyServer(client: StandardAgentViewClient) {
     try {
       tunnel = await startCloudflareTunnel(PROXY_PORT);
       await updateEnvironment(client, { tunnelUrl: tunnel.url });
-      logSuccess(`Reconnected`);
+      logSuccess(`Reconnected ${timestamp()}`);
     } catch (e) {
-      logError(`Reconnect failed: ${(e as Error).message}`);
+      logError(`Reconnect failed: ${(e as Error).message} ${timestamp()}`);
     } finally {
       regenerating = false;
     }
@@ -308,9 +316,9 @@ async function pushConfig() {
 
   try {
     await updateEnvironment(client, { config: toBaseConfig(config) });
-    logSuccess(`Config updated`);
+    logSuccess(`Config updated ${timestamp()}`);
   } catch (e) {
-    logError(`Config update failed: ${(e as Error).message}`);
+    logError(`Config update failed: ${(e as Error).message} ${timestamp()}`);
     const cause = (e as any)?.details?.cause;
     if (cause) console.error(JSON.stringify(cause, null, 2));
     throw e;
