@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 import 'dotenv/config'
 
+// Silence untun's consola output before any module that pulls it in is loaded.
+process.env.CONSOLA_LEVEL ??= "-999";
+
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -10,7 +13,6 @@ import { type AgentViewConfig } from "../types";
 import { createStandardClient, StandardAgentViewClient } from "agentview/clientStandard";
 import { updateEnvironment } from "agentview/updateEnvironment";
 import { AgentViewError } from "agentview";
-import { startStudioServer } from "./studioServer.js";
 import { startProxyServer, PROXY_PORT, type ProxyServer } from "./proxyServer.js";
 import { startCloudflareTunnel, type CloudflareTunnel } from "./tunnel.js";
 import { toBaseConfig } from '../toBaseConfig.js';
@@ -22,18 +24,70 @@ const DEFAULT_CONFIG_FILES = [
   "agentview.config.jsx"
 ];
 
+const useColor = !!process.stdout.isTTY && !process.env.NO_COLOR;
+const ansi = {
+  reset: useColor ? "\x1b[0m" : "",
+  red: useColor ? "\x1b[31m" : "",
+  green: useColor ? "\x1b[32m" : "",
+  yellow: useColor ? "\x1b[33m" : "",
+  dim: useColor ? "\x1b[2m" : "",
+  bold: useColor ? "\x1b[1m" : "",
+};
+
+const marker = {
+  info: `${ansi.dim}→${ansi.reset}`,
+  success: `${ansi.green}✓${ansi.reset}`,
+  warn: `${ansi.yellow}⚠${ansi.reset}`,
+  error: `${ansi.red}✗${ansi.reset}`,
+};
+
+const VERSION: string = (() => {
+  try {
+    const pkg = JSON.parse(
+      fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf-8')
+    );
+    return pkg.version ?? 'unknown';
+  } catch {
+    return 'unknown';
+  }
+})();
+
+function printBanner(env: string) {
+  console.log();
+  console.log(`   ${ansi.bold}AgentView${ansi.reset} ${ansi.dim}${VERSION}${ansi.reset}`);
+  console.log(`   ${ansi.dim}- Environment:${ansi.reset} ${env}`);
+  console.log();
+}
+
+function log(message: string) {
+  console.log(`${marker.info} ${message}`);
+}
+
+function logSuccess(message: string) {
+  console.log(`${marker.success} ${message}`);
+}
+
+function logWarn(message: string) {
+  console.log(`${marker.warn} ${message}`);
+}
+
+function logError(message: string) {
+  console.error(`${marker.error} ${ansi.red}${message}${ansi.reset}`);
+}
+
 function handleError(error: unknown): never {
   if (error instanceof AgentViewError) {
-    console.error(`Error (${error.statusCode}): ${error.message}`);
+    logError(`${error.message} (${error.statusCode})`);
     if (error.details) console.error(error.details);
   } else {
-    console.error((error as Error).message ?? error);
+    logError((error as Error).message ?? String(error));
   }
   process.exit(1);
 }
 
-let client : StandardAgentViewClient;
-let configPathFromArg : string | undefined; // config path from command (usually undefined)
+let client: StandardAgentViewClient;
+let currentEnv: string | undefined;
+let configPathFromArg: string | undefined; // config path from command (usually undefined)
 
 export async function runCli() {
   const program = new Command();
@@ -48,27 +102,23 @@ export async function runCli() {
       const opts = thisCommand.opts();
       const apiKey = opts.apiKey ?? getAPIKey();
       const env = opts.env ?? (await loadConfig()).env;
+      currentEnv = env;
 
       // For now, no custom config paths.
       // configPathFromArg = opts.config; // required to resolve path later
 
       client = createStandardClient({ apiKey, env });
+
+      printBanner(env);
     });
 
 
   program
     .command("dev")
-    .description("Start Studio dev server")
-    .option("-p, --port <port>", "Port for the dev server", parseInt)
-    .option('--no-studio', 'disable colored output')
-    .action(async (opts) => {
+    .description("Start the proxy server and watch the config file")
+    .action(async () => {
       await runProxyServer(client);
       await watchConfig();
-
-      if (opts.studio) {
-        const configPath = resolveConfigPath(configPathFromArg);
-        await startStudioServer(configPath, { port: opts.port });
-      }
     });
 
   const configCmd = program
@@ -78,15 +128,26 @@ export async function runCli() {
   configCmd
     .command("push")
     .description("Send the config file to the AgentView server once")
-    .action(async (opts) => {
+    .action(async () => {
       await pushConfig();
     });
 
   configCmd
     .command("watch")
     .description("Watch the config file and sync on every change")
-    .action(async (opts) => {
+    .action(async () => {
       await watchConfig();
+    });
+
+  const proxyCmd = program
+    .command("proxy")
+    .description("Manage proxy");
+
+  proxyCmd
+    .command("start")
+    .description("Start the proxy server and Cloudflare tunnel")
+    .action(async () => {
+      await runProxyServer(client);
     });
 
   try {
@@ -150,14 +211,36 @@ function getAPIKey(): string {
   return apiKey;
 }
 
+const TUNNEL_HEALTH_CHECK_INTERVAL_MS = 30_000;
+const TUNNEL_HEALTH_CHECK_TIMEOUT_MS = 5_000;
+
+async function checkTunnelHealth(tunnelUrl: string): Promise<boolean> {
+  // The proxy responds with 400 (missing X-Target-Url) for any direct GET.
+  // If the tunnel is dead, Cloudflare returns a 5xx error page or the
+  // request fails entirely (DNS / network error / timeout).
+  try {
+    const res = await fetch(tunnelUrl, {
+      method: "GET",
+      signal: AbortSignal.timeout(TUNNEL_HEALTH_CHECK_TIMEOUT_MS),
+    });
+    return res.status < 500;
+  } catch {
+    return false;
+  }
+}
+
 async function runProxyServer(client: StandardAgentViewClient) {
   let proxy: ProxyServer | null = null;
   let tunnel: CloudflareTunnel | null = null;
+  let healthTimer: NodeJS.Timeout | null = null;
+  let regenerating = false;
   let cleanedUp = false;
 
   const cleanup = async (exitCode: number) => {
     if (cleanedUp) return;
     cleanedUp = true;
+
+    if (healthTimer) clearInterval(healthTimer);
 
     try {
       await Promise.race([
@@ -184,15 +267,40 @@ async function runProxyServer(client: StandardAgentViewClient) {
   process.on("SIGINT", () => { void cleanup(0); });
   process.on("SIGTERM", () => { void cleanup(0); });
 
+  log(`Starting...`);
+
   proxy = await startProxyServer(PROXY_PORT);
-  console.log(`[agentview] proxy listening on http://127.0.0.1:${proxy.port}`);
 
   tunnel = await startCloudflareTunnel(PROXY_PORT);
-  console.log(`[agentview] tunnel URL: ${tunnel.url}`);
-
   await updateEnvironment(client, { tunnelUrl: tunnel.url });
-  console.log(`[agentview] tunnel registered with AgentView backend`);
+  logSuccess(`Ready`);
 
+  healthTimer = setInterval(() => {
+    void regenerateIfUnhealthy();
+  }, TUNNEL_HEALTH_CHECK_INTERVAL_MS);
+
+  async function regenerateIfUnhealthy() {
+    if (regenerating || cleanedUp || !tunnel) return;
+
+    const healthy = await checkTunnelHealth(tunnel.url);
+    if (healthy) return;
+
+    regenerating = true;
+    logWarn(`Connection lost, reconnecting...`);
+    const oldTunnel = tunnel;
+    tunnel = null;
+    try { await oldTunnel.stop(); } catch { /* best-effort */ }
+
+    try {
+      tunnel = await startCloudflareTunnel(PROXY_PORT);
+      await updateEnvironment(client, { tunnelUrl: tunnel.url });
+      logSuccess(`Reconnected`);
+    } catch (e) {
+      logError(`Reconnect failed: ${(e as Error).message}`);
+    } finally {
+      regenerating = false;
+    }
+  }
 }
 
 async function pushConfig() {
@@ -200,20 +308,18 @@ async function pushConfig() {
 
   try {
     await updateEnvironment(client, { config: toBaseConfig(config) });
-    console.log(`Config pushed`);
+    logSuccess(`Config updated`);
   } catch (e) {
-    console.log('CONFIG ERROR');
-    console.error((e as Error).message);
-    console.error(JSON.stringify((e as any)?.details?.cause, null, 2));
+    logError(`Config update failed: ${(e as Error).message}`);
+    const cause = (e as any)?.details?.cause;
+    if (cause) console.error(JSON.stringify(cause, null, 2));
     throw e;
   }
 }
 
 async function watchConfig() {
-  console.log(`[agentview] watching for config changes...`);
-
   // Push once on startup
-  try { await pushConfig(); } catch (e) { }
+  try { await pushConfig(); } catch { /* logged inside pushConfig */ }
 
   let debounceTimer: NodeJS.Timeout | null = null;
   fs.watch(process.cwd(), { recursive: true }, (_event, filename) => {
@@ -223,7 +329,7 @@ async function watchConfig() {
 
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(async () => {
-      try { await pushConfig(); } catch (e) { console.error((e as Error).message); }
+      try { await pushConfig(); } catch { /* logged inside pushConfig */ }
     }, 300);
   });
 }
