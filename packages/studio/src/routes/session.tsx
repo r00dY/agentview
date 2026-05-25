@@ -1033,6 +1033,7 @@ function RunFooter(props: RunFooterProps) {
 
         if (remainingScores.length > 0) {
             toolbarBlocks.push(<ScoreDialog
+                key="score-dialog"
                 scores={scores}
                 target={target}
                 open={scoreDialogOpen}
@@ -1041,15 +1042,15 @@ function RunFooter(props: RunFooterProps) {
             />);
         }
 
-        toolbarBlocks.push(<Button variant="ghost" size="icon_sm" onClick={props.regenerate}><RotateCcw className="size-4" /></Button>);
+        toolbarBlocks.push(<Button key="regenerate" variant="ghost" size="icon_sm" onClick={props.regenerate}><RotateCcw className="size-4" /></Button>);
     }
 
-    toolbarBlocks.push(<Button variant="ghost" size="sm" asChild>
+    toolbarBlocks.push(<Button key="run-info" variant="ghost" size="sm" asChild>
         <Link to={`/sessions/${session.id}/runs/${run.id}?${toQueryParams(listParams)}`}><InfoIcon className="size-4" />Run</Link>
     </Button>);
 
     if (toolbarBlocks.length > 0) {
-        blocks.push(<div>
+        blocks.push(<div key="toolbar">
             <div className="text-xs flex justify-between gap-2 items-start">
                 <div className="flex flex-row flex-wrap gap-1 items-center -ml-2">
                     {toolbarBlocks}

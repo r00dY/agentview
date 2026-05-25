@@ -114,18 +114,21 @@ export function PillSelect<T extends string | number | boolean>(props: ControlCo
             </SelectPrimitive.Trigger>
 
             <SelectContent>
-                {options.map((option) => (
-                    <SelectPrimitive.Item
+                {options.map((option) => {
+                    const stringValue = optionValueToString(option.value);
+                    
+                    return <SelectPrimitive.Item
                         data-slot="select-item"
                         className={"focus:bg-accent hover:bg-accent cursor-pointer outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 py-1 px-1 rounded-md flex w-full"}
-                        value={optionValueToString(option.value)}
+                        value={stringValue}
+                        key={stringValue}
                     >
                         <Pill color={option.color}>
                             {option.icon && <option.icon />}
                             <SelectPrimitive.ItemText>{option.label ?? option.value}</SelectPrimitive.ItemText>
                         </Pill>
                     </SelectPrimitive.Item>
-                ))}
+                })}
             </SelectContent>
         </Select>
     );
