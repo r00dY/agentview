@@ -1,38 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,100..900;1,100..900&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
-
 @plugin "./tailwindcss-typography/src/index.js";
 
-
-
-/* 
----break--- */
 @custom-variant dark (&:is(.dark *));
-/* 
-@custom-variant dark (&:is(.dark *)); */
-
-@theme {
-  --font-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-}
-
-html,
-body {
-  font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
-
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-
-
-    background-color:#F7F8F3;
-
-  /* @apply bg-white dark:bg-gray-950;
-
-  @media (prefers-color-scheme: dark) {
-    color-scheme: dark;
-  } */
-}
 
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
@@ -107,7 +78,7 @@ body {
   --sidebar-border: oklch(0.94 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 }
- 
+
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
@@ -143,19 +114,7 @@ body {
   --sidebar-ring: oklch(0.556 0 0);
 }
 
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
-}
-
-/* 
----break--- */
-
-.dark {
+/* .dark {
   --sidebar: hsl(240 5.9% 10%);
   --sidebar-foreground: hsl(240 4.8% 95.9%);
   --sidebar-primary: hsl(224.3 76.3% 48%);
@@ -164,34 +123,69 @@ body {
   --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
   --sidebar-border: hsl(240 3.7% 15.9%);
   --sidebar-ring: hsl(217.2 91.2% 59.8%);
+} */
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
 }
 
+#agentview-root {
+  font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
 
-.tiptap p.is-editor-empty:first-child::before {
-  color: var(--muted-foreground);
-  content: attr(data-placeholder);
-  float: left;
-  height: 0;
-  pointer-events: none;
-}
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 
-/* HTML: <div class="loader"></div> */
-.agentview__loader {
-  position: relative;
-  width: 16px;
-  aspect-ratio: 2;
-  --_g: no-repeat radial-gradient(circle closest-side,currentColor 90%,#0000);
-  background: 
-    var(--_g) 0%   50%,
-    var(--_g) 50%  50%,
-    var(--_g) 100% 50%;
-  background-size: calc(100%/3) 50%;
-  animation: l3 1s infinite linear;
-}
+  background-color: #F7F8F3;
 
-@keyframes l3 {
-    20%{background-position:0%   0%, 50%  50%,100%  50%}
-    40%{background-position:0% 100%, 50%   0%,100%  50%}
-    60%{background-position:0%  50%, 50% 100%,100%   0%}
-    80%{background-position:0%  50%, 50%  50%,100% 100%}
+  @apply bg-white dark:bg-gray-950;
+
+  @media (prefers-color-scheme: dark) {
+    color-scheme: dark;
+  }  
+
+  .tiptap p.is-editor-empty:first-child::before {
+    color: var(--muted-foreground);
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+  }
+
+  /* HTML: <div class="loader"></div> */
+  .agentview__loader {
+    position: relative;
+    width: 16px;
+    aspect-ratio: 2;
+    --_g: no-repeat radial-gradient(circle closest-side, currentColor 90%, #0000);
+    background:
+      var(--_g) 0% 50%,
+      var(--_g) 50% 50%,
+      var(--_g) 100% 50%;
+    background-size: calc(100%/3) 50%;
+    animation: l3 1s infinite linear;
+  }
+
+  @keyframes l3 {
+    20% {
+      background-position: 0% 0%, 50% 50%, 100% 50%
+    }
+
+    40% {
+      background-position: 0% 100%, 50% 0%, 100% 50%
+    }
+
+    60% {
+      background-position: 0% 50%, 50% 100%, 100% 0%
+    }
+
+    80% {
+      background-position: 0% 50%, 50% 50%, 100% 100%
+    }
+  }
 }
