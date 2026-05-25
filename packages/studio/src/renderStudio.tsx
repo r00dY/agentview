@@ -17,7 +17,7 @@ export async function renderStudio(rootElement: HTMLElement | null, config: Agen
 
     (window as any).agentview.router = router;
     
-    root.render(<div className="agentview-root dark">
+    root.render(<div className="agentview-root">
       <RouterProvider router={router} unstable_useTransitions={true} />
     </div>)
   })
