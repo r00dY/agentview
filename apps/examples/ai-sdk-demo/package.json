@@ -27,10 +27,12 @@
     "zod": "^4.0"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.13",
     "@types/node": "^22.0",
     "@types/react": "^19.0",
     "@types/react-dom": "^19.0",
     "concurrently": "^9.2.1",
+    "tailwindcss": "^4.1.13",
     "typescript": "^5.7"
   }
 }

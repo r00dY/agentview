@@ -1,4 +1,5 @@
 export { renderStudio } from "./renderStudio";
+export { Studio } from "./Studio";
 
 export * from "./scores";
 

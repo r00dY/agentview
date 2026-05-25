@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["agentview"],
+  transpilePackages: ["agentview", "@agentview/studio"],
   webpack: (config) => {
     // The agentview package uses .js extensions in TS imports (ESM convention).
     // Tell webpack to try .ts before .js so it finds the source files.

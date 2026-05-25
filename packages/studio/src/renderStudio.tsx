@@ -1,24 +1,30 @@
-import { createBrowserRouter, RouterProvider } from "react-router";
+import { createRoot, type Root } from "react-dom/client";
 import type { AgentViewConfig } from "./types";
-import { createRoot } from "react-dom/client";
+import { Studio } from "./Studio";
 
-export async function renderStudio(rootElement: HTMLElement | null, config: AgentViewConfig) {
+export interface RenderStudioOptions {
+  basename?: string;
+}
+
+export interface StudioHandle {
+  unmount: () => void;
+}
+
+export async function renderStudio(
+  rootElement: HTMLElement | null,
+  config: AgentViewConfig,
+  options: RenderStudioOptions = {},
+): Promise<StudioHandle> {
   if (!rootElement) {
     throw new Error("Root element not found");
   }
 
-  (window as any).agentview = {
-    config
-  }
+  const root: Root = createRoot(rootElement);
+  root.render(<Studio config={config} basename={options.basename} />);
 
-  import("./routes").then(({ routes }) => {
-    const root = createRoot(rootElement);
-    const router = createBrowserRouter(routes(config.customRoutes));
-
-    (window as any).agentview.router = router;
-    
-    root.render(<div className="agentview-root">
-      <RouterProvider router={router} unstable_useTransitions={true} />
-    </div>)
-  })
+  return {
+    unmount: () => {
+      root.unmount();
+    },
+  };
 }
