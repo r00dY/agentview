@@ -1,8 +1,7 @@
 import http from "node:http";
 import https from "node:https";
 import { URL } from "node:url";
-
-export const PROXY_PORT = 19890;
+import type { AddressInfo } from "node:net";
 
 // Headers we should not forward when proxying — either computed by the
 // transport layer or specific to the incoming connection.
@@ -104,15 +103,16 @@ export interface ProxyServer {
   close: () => Promise<void>;
 }
 
-export function startProxyServer(port: number = PROXY_PORT): Promise<ProxyServer> {
+export function startProxyServer(port: number = 0): Promise<ProxyServer> {
   return new Promise((resolve, reject) => {
     const server = http.createServer(handleRequest);
 
     server.once("error", reject);
     server.listen(port, "127.0.0.1", () => {
       server.removeListener("error", reject);
+      const assigned = (server.address() as AddressInfo).port;
       resolve({
-        port,
+        port: assigned,
         close: () =>
           new Promise<void>((res, rej) => {
             server.close((err) => (err ? rej(err) : res()));

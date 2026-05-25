@@ -13,7 +13,7 @@ import { type AgentViewConfig } from "../types";
 import { createStandardClient, StandardAgentViewClient } from "agentview/clientStandard";
 import { updateEnvironment } from "agentview/updateEnvironment";
 import { AgentViewError } from "agentview";
-import { startProxyServer, PROXY_PORT, type ProxyServer } from "./proxyServer.js";
+import { startProxyServer, type ProxyServer } from "./proxyServer.js";
 import { startCloudflareTunnel, type CloudflareTunnel } from "./tunnel.js";
 import { toBaseConfig } from '../toBaseConfig.js';
 
@@ -24,7 +24,9 @@ const DEFAULT_CONFIG_FILES = [
   "agentview.config.jsx"
 ];
 
-const useColor = !!process.stdout.isTTY && !process.env.NO_COLOR;
+const useColor =
+  !process.env.NO_COLOR &&
+  (!!process.env.FORCE_COLOR || !!process.stdout.isTTY);
 const ansi = {
   reset: useColor ? "\x1b[0m" : "",
   red: useColor ? "\x1b[31m" : "",
@@ -95,6 +97,7 @@ function handleError(error: unknown): never {
 
 let client: StandardAgentViewClient;
 let currentEnv: string | undefined;
+let verbose = false;
 let configPathFromArg: string | undefined; // config path from command (usually undefined)
 
 export async function runCli() {
@@ -106,11 +109,13 @@ export async function runCli() {
     // .option("-c, --config <path>", "Path to agentview config file")
     .option("--api-key <key>", "AgentView API key (overrides AGENTVIEW_API_KEY env var)")
     .option("--env <env>", "Environment name (overrides env from config)")
+    .option("-v, --verbose", "Show implementation details (proxy URL, tunnel URL)")
     .hook('preAction', async (thisCommand) => {
       const opts = thisCommand.opts();
       const apiKey = opts.apiKey ?? getAPIKey();
       const env = opts.env ?? (await loadConfig()).env;
       currentEnv = env;
+      verbose = !!opts.verbose;
 
       // For now, no custom config paths.
       // configPathFromArg = opts.config; // required to resolve path later
@@ -277,10 +282,12 @@ async function runProxyServer(client: StandardAgentViewClient) {
 
   log(`Starting...`);
 
-  proxy = await startProxyServer(PROXY_PORT);
+  proxy = await startProxyServer();
+  if (verbose) log(`Proxy URL: ${ansi.dim}http://127.0.0.1:${proxy.port}${ansi.reset}`);
 
-  tunnel = await startCloudflareTunnel(PROXY_PORT);
+  tunnel = await startCloudflareTunnel(proxy.port);
   await updateEnvironment(client, { tunnelUrl: tunnel.url });
+  if (verbose) log(`Tunnel URL: ${ansi.dim}${tunnel.url}${ansi.reset}`);
   logSuccess(`Ready`);
 
   healthTimer = setInterval(() => {
@@ -300,8 +307,9 @@ async function runProxyServer(client: StandardAgentViewClient) {
     try { await oldTunnel.stop(); } catch { /* best-effort */ }
 
     try {
-      tunnel = await startCloudflareTunnel(PROXY_PORT);
+      tunnel = await startCloudflareTunnel(proxy!.port);
       await updateEnvironment(client, { tunnelUrl: tunnel.url });
+      if (verbose) log(`Tunnel URL: ${ansi.dim}${tunnel.url}${ansi.reset}`);
       logSuccess(`Reconnected ${timestamp()}`);
     } catch (e) {
       logError(`Reconnect failed: ${(e as Error).message} ${timestamp()}`);
