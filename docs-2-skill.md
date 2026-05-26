@@ -210,5 +210,9 @@ Like Claude/ChatGPT this function doesn't immediately cancel the stream in the f
 #### Versions
 
 
+#### First-class email integration
+
+
+
 ### Studio
 
