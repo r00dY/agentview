@@ -2,10 +2,6 @@
 
 The project is build as a pnpm monorepo.
 
-## Docs
-
-To learn about project read docs. You can find them in `apps/docs`. `apps/docs/docs.json` has a ToC.
-
 ## Backend
 
 AgentView has a backend API server. You can find the code in `apps/api`. Infra for local development is defined in `docker-compose.yml` in a root directory.
