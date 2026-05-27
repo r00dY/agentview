@@ -1,11 +1,11 @@
 import { AgentViewError } from 'agentview'
 import type { Environment, Space, UserCreate } from 'agentview/apiTypes'
 import { randomBytes } from 'crypto'
-import { and, eq } from 'drizzle-orm'
+import { and, desc, eq, isNull } from 'drizzle-orm'
 import { authorize } from './authMiddleware'
 import { getEnvironment, requireEnvironment } from './environments'
 import { requireUUID } from './isUUID'
-import { endUsers } from './schemas/schema'
+import { endUsers, endUserTokens } from './schemas/schema'
 import type { OrgTransaction, TenantTransaction } from './withOrg'
 
 type FindUserByIdOptions = {
@@ -44,8 +44,15 @@ export async function findUser(tx: OrgTransaction, args: FindUserByIdOptions | F
   }
 
   if ('token' in args) {
+    const tokenRow = await tx.query.endUserTokens.findFirst({
+      where: and(
+        eq(endUserTokens.token, args.token),
+        isNull(endUserTokens.revokedAt),
+      ),
+    });
+    if (!tokenRow) return undefined;
     return await tx.query.endUsers.findFirst({
-      where: eq(endUsers.token, args.token),
+      where: eq(endUsers.id, tokenRow.userId),
     });
   }
 
@@ -130,7 +137,7 @@ export async function createUser(tx: TenantTransaction, body: UserCreate) {
     }
   }
 
-  const [newEndUserRow] = await tx.insert(endUsers).values({
+  const [newEndUser] = await tx.insert(endUsers).values({
     organizationId: tx.organizationId,
     externalId: body.externalId,
     email: body.email,
@@ -139,12 +146,66 @@ export async function createUser(tx: TenantTransaction, body: UserCreate) {
     details: body.details,
     ownerId,
     space,
-    token: randomBytes(32).toString('hex'),
   }).returning()
 
-  const { token, ...newEndUser} = newEndUserRow
+  const { token } = await issueToken(tx, newEndUser.id);
 
   return { token, user: newEndUser }
+}
+
+/**
+ * Issues a new token for a user. The token string is only returned at issue time.
+ */
+export async function issueToken(tx: OrgTransaction, userId: string) {
+  const [row] = await tx.insert(endUserTokens).values({
+    organizationId: tx.organizationId,
+    userId,
+    token: randomBytes(32).toString('hex'),
+  }).returning()
+  return row
+}
+
+export async function listTokens(tx: OrgTransaction, userId: string) {
+  return await tx.query.endUserTokens.findMany({
+    where: eq(endUserTokens.userId, userId),
+    orderBy: [desc(endUserTokens.createdAt)],
+    columns: {
+      id: true,
+      userId: true,
+      createdAt: true,
+      revokedAt: true,
+    },
+  })
+}
+
+export async function revokeToken(tx: OrgTransaction, tokenId: string) {
+  requireUUID(tokenId);
+  const existing = await tx.query.endUserTokens.findFirst({
+    where: eq(endUserTokens.id, tokenId),
+  });
+  if (!existing) {
+    throw new AgentViewError("Token not found", 404);
+  }
+  if (existing.revokedAt) {
+    return existing;
+  }
+  const [row] = await tx.update(endUserTokens)
+    .set({ revokedAt: new Date().toISOString() })
+    .where(eq(endUserTokens.id, tokenId))
+    .returning();
+  return row;
+}
+
+export async function requireTokenOwner(tx: OrgTransaction, tokenId: string) {
+  requireUUID(tokenId);
+  const token = await tx.query.endUserTokens.findFirst({
+    where: eq(endUserTokens.id, tokenId),
+  });
+  if (!token) {
+    throw new AgentViewError("Token not found", 404);
+  }
+  const user = await requireUser(tx, { id: token.userId });
+  return { token, user };
 }
 
 

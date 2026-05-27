@@ -18,7 +18,9 @@ import type {
   InputTarget,
   ScoreCreate,
   Channel,
-  RunUpdate
+  RunUpdate,
+  Token,
+  TokenWithSecret
 } from './apiTypes.js'
 
 import { AgentViewError } from './AgentViewError.js'
@@ -42,6 +44,7 @@ export class AgentViewBase {
   protected organizationId?: string // required only for session auth
 
   users: UsersResource;
+  auth: AuthResource;
   comments: CommentsResource;
   scores: ScoresResource;
   channels: ChannelsResource;
@@ -55,6 +58,7 @@ export class AgentViewBase {
     this.user = options.user
 
     this.users = new UsersResource(this);
+    this.auth = new AuthResource(this);
     this.comments = new CommentsResource(this);
     this.scores = new ScoresResource(this);
     this.channels = new ChannelsResource(this);
@@ -427,6 +431,22 @@ class ScoresResource {
 
   async list(options: { sessionId: string }) {
     return await this.client._request<Score[]>('GET', `/api/sessions/${options.sessionId}/scores`, undefined)
+  }
+}
+
+class AuthResource {
+  constructor(private client: AgentViewBase) { }
+
+  async issueToken(userId: string): Promise<TokenWithSecret> {
+    return await this.client._request<TokenWithSecret>('POST', `/api/users/${userId}/tokens`, {})
+  }
+
+  async revokeToken(tokenId: string): Promise<Token> {
+    return await this.client._request<Token>('DELETE', `/api/tokens/${tokenId}`, undefined)
+  }
+
+  async listTokens(userId: string): Promise<Token[]> {
+    return await this.client._request<Token[]>('GET', `/api/users/${userId}/tokens`, undefined)
   }
 }
 

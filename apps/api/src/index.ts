@@ -33,6 +33,8 @@ import {
   StandardRunSchema,
   StandardSessionCreateSchema,
   StandardSessionSchema,
+  TokenSchema,
+  TokenWithSecretSchema,
   UserCreateSchema,
   UserSchema,
   UserWithTokenSchema,
@@ -60,7 +62,7 @@ import { createRunStreamConsumer } from './runStream';
 import { organizations, users } from './schemas/auth-schema';
 import { commentMessages, endUsers, environments, inboxItems, runs, scores, sessions } from './schemas/schema';
 import { activateSession, createSession, getCurrentlyStreamingOrConnectingRun, getSessionListFilter, getSessions, setAgentForSession, updateSession } from './sessions';
-import { createUser, requireUser, updateUser } from './users';
+import { createUser, issueToken, listTokens, requireTokenOwner, requireUser, revokeToken, updateUser } from './users';
 import { withOrg, withTenant } from './withOrg';
 
 import { resolveTarget, resolveTargetWithObjects, targetFilter } from './target';
@@ -335,6 +337,91 @@ app.openapi(apiUsersPATCHRoute, async (c) => {
   })
 })
 
+/* --------- USER TOKENS --------- */
+
+const userTokensPOSTRoute = createRoute({
+  method: 'post',
+  path: '/api/users/{id}/tokens',
+  summary: 'Issue a user token',
+  tags: ['Users'],
+  request: {
+    params: z.object({
+      id: z.string(),
+    }),
+  },
+  responses: {
+    201: response_data(TokenWithSecretSchema),
+    404: response_error(),
+  },
+})
+
+app.openapi(userTokensPOSTRoute, async (c) => {
+  const principal = await authn(c.req.raw.headers)
+  const { id } = c.req.param()
+
+  return withTenant(principal, async (tx) => {
+    const user = await requireUser(tx, { id })
+    await authorize(principal, { action: "end-user:update", user })
+    const row = await issueToken(tx, user.id)
+    return c.json(row, 201)
+  })
+})
+
+const userTokensGETRoute = createRoute({
+  method: 'get',
+  path: '/api/users/{id}/tokens',
+  summary: 'List user tokens',
+  tags: ['Users'],
+  request: {
+    params: z.object({
+      id: z.string(),
+    }),
+  },
+  responses: {
+    200: response_data(z.array(TokenSchema)),
+    404: response_error(),
+  },
+})
+
+app.openapi(userTokensGETRoute, async (c) => {
+  const principal = await authn(c.req.raw.headers)
+  const { id } = c.req.param()
+
+  return withTenant(principal, async (tx) => {
+    const user = await requireUser(tx, { id })
+    await authorize(principal, { action: "end-user:update", user })
+    const tokens = await listTokens(tx, user.id)
+    return c.json(tokens, 200)
+  })
+})
+
+const userTokenDELETERoute = createRoute({
+  method: 'delete',
+  path: '/api/tokens/{token_id}',
+  summary: 'Revoke a user token',
+  tags: ['Users'],
+  request: {
+    params: z.object({
+      token_id: z.string(),
+    }),
+  },
+  responses: {
+    200: response_data(TokenSchema),
+    404: response_error(),
+  },
+})
+
+app.openapi(userTokenDELETERoute, async (c) => {
+  const principal = await authn(c.req.raw.headers)
+  const { token_id } = c.req.param()
+
+  return withTenant(principal, async (tx) => {
+    const { user } = await requireTokenOwner(tx, token_id)
+    await authorize(principal, { action: "end-user:update", user })
+    const revoked = await revokeToken(tx, token_id)
+    return c.json(revoked, 200)
+  })
+})
 
 
 // internal

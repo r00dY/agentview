@@ -51,6 +51,19 @@ export const UserWithTokenSchema = z.object({
 
 export type UserWithToken = z.infer<typeof UserWithTokenSchema>
 
+export const TokenSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  createdAt: z.iso.date(),
+  revokedAt: z.iso.date().nullable(),
+})
+export type Token = z.infer<typeof TokenSchema>
+
+export const TokenWithSecretSchema = TokenSchema.extend({
+  token: z.string(),
+})
+export type TokenWithSecret = z.infer<typeof TokenWithSecretSchema>
+
 export const ScoreSchema = z.object({
   id: z.string(),
 

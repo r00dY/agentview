@@ -426,6 +426,101 @@ describe('API', () => {
   })
 
 
+  describe("auth tokens", () => {
+    test("issueToken returns a new working token alongside the original", async () => {
+      const issued = await org.admin.localClient.auth.issueToken(initUser1.id)
+      expect(issued.token).toBeDefined()
+      expect(issued.id).toBeDefined()
+      expect(issued.revokedAt).toBeNull()
+      expect(issued.token).not.toBe(initUser1Token)
+
+      // both the original token and the freshly issued one work
+      const meViaOld = await av.asUser({ token: initUser1Token }).users.me()
+      expect(meViaOld.id).toBe(initUser1.id)
+
+      const meViaNew = await av.asUser({ token: issued.token }).users.me()
+      expect(meViaNew.id).toBe(initUser1.id)
+    })
+
+    test("revokeToken invalidates only the targeted token, leaves others working", async () => {
+      const tokenA = await org.admin.localClient.auth.issueToken(initUser1.id)
+      const tokenB = await org.admin.localClient.auth.issueToken(initUser1.id)
+
+      // both work
+      expect((await av.asUser({ token: tokenA.token }).users.me()).id).toBe(initUser1.id)
+      expect((await av.asUser({ token: tokenB.token }).users.me()).id).toBe(initUser1.id)
+
+      const revoked = await org.admin.localClient.auth.revokeToken(tokenA.id)
+      expect(revoked.id).toBe(tokenA.id)
+      expect(revoked.revokedAt).not.toBeNull()
+
+      // revoked token now rejected
+      await expectToFail(av.asUser({ token: tokenA.token }).users.me(), 401)
+
+      // sibling token still works
+      expect((await av.asUser({ token: tokenB.token }).users.me()).id).toBe(initUser1.id)
+    })
+
+    test("revokeToken on unknown id returns 404", async () => {
+      await expectToFail(
+        org.admin.localClient.auth.revokeToken('00000000-0000-0000-0000-000000000000'),
+        404
+      )
+    })
+
+    test("revokeToken twice is idempotent (second call no-ops)", async () => {
+      const issued = await org.admin.localClient.auth.issueToken(initUser1.id)
+      const first = await org.admin.localClient.auth.revokeToken(issued.id)
+      expect(first.revokedAt).not.toBeNull()
+      const second = await org.admin.localClient.auth.revokeToken(issued.id)
+      // revoked_at preserved from first call
+      expect(second.revokedAt).toBe(first.revokedAt)
+    })
+
+    test("listTokens returns issued tokens (without exposing token strings) and reflects revocation", async () => {
+      const { user } = await org.admin.localClient.users.create({ name: "token-listing-user" })
+
+      const beforeIssue = await org.admin.localClient.auth.listTokens(user.id)
+      // createUser already issued one token at registration time
+      expect(beforeIssue.length).toBe(1)
+      expect((beforeIssue[0] as any).token).toBeUndefined() // never expose secret in list
+
+      const issued = await org.admin.localClient.auth.issueToken(user.id)
+      const afterIssue = await org.admin.localClient.auth.listTokens(user.id)
+      expect(afterIssue.length).toBe(2)
+      expect(afterIssue.every(t => t.userId === user.id)).toBe(true)
+      expect(afterIssue.every(t => t.revokedAt === null)).toBe(true)
+
+      await org.admin.localClient.auth.revokeToken(issued.id)
+      const afterRevoke = await org.admin.localClient.auth.listTokens(user.id)
+      const revokedEntry = afterRevoke.find(t => t.id === issued.id)
+      expect(revokedEntry?.revokedAt).not.toBeNull()
+    })
+
+    test("public api key cannot issue tokens", async () => {
+      const avPublic = createStandardClient({ apiKey: org.apiKeyPublic.key })
+      await expectToFail(avPublic.auth.issueToken(initUser1.id), 401)
+    })
+
+    test("public api key cannot revoke tokens", async () => {
+      const issued = await org.admin.localClient.auth.issueToken(initUser1.id)
+      const avPublic = createStandardClient({ apiKey: org.apiKeyPublic.key })
+      await expectToFail(avPublic.auth.revokeToken(issued.id), 401)
+    })
+
+    test("user-scoped principal cannot issue tokens for self", async () => {
+      // authn() (used by token routes) rejects user principals regardless of subject
+      await expectToFail(av.asUser({ token: initUser1Token }).auth.issueToken(initUser1.id), 401)
+    })
+
+    test("issueToken for unknown user returns 404", async () => {
+      await expectToFail(
+        org.admin.localClient.auth.issueToken('00000000-0000-0000-0000-000000000000'),
+        404
+      )
+    })
+  })
+
 
   describe("environments", () => {
 
@@ -608,9 +703,10 @@ describe('API', () => {
           id: initUser1.id,
           externalId: EXTERNAL_ID_1,
           space: "playground",
-          token: initUser1Token,
         }
       })
+      // tokens should never be embedded in session.user payloads
+      expect((session.user as any).token).toBeUndefined()
     })
 
     // test("create for no user (creates new user)", async () => {

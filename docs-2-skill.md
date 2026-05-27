@@ -102,19 +102,19 @@ The AgentView config is stored PER ENVIRONMENT. `local-user-id` is your local en
 Each member of organisation gets its own local environment, there's also `production` environment for deployment (you'll have to run `npx agentview config push` on deploy).
 
 
-### SDK - Typescript
+## SDK - Typescript
 
 
 
 AgentView provides and API for managing users, sessions and runs. The best way to consume it is via our SDK. For now we have Typescript, Python soon!
 
-#### Installation
+### Installation
 
 ```bash
 npm install agentview
 ```
 
-#### Create a client
+### Create a client
 
 ```tsx
 import { createClient } from "agentview"
@@ -132,7 +132,7 @@ export const publicClient = createClient({
 });
 ```
 
-#### Users
+### Users
 
 AgentView has first-class User entity. Every session must be assigned to a user. Here's how you can create a user:
 
@@ -162,33 +162,70 @@ await client.users.create({ email: "bob@acme.com" });
 const bob = await client.users.getByEmail("bob@acme.com");
 ```
 
-
-
-Users layer is purposefully very lightweight. Users usually live in external platform, for example if you build shopping assistant your users live in ecommerce platform. 
-
-
-
-
-
-
-Users layer is very lightweight.
-
-
-
-
-User entity is trivially simple, it has following properties:
-
+Here's the full list of User properties:
 - `email` (unique) - email of the user
 - `externalId` (unique) - identifier of the user in external platform (usually your users live in other platform, `externalId` is the unique identifier from it to identify users correctly)
 - `name` - (display purposes) user's name, just for the purpose of nice display in Studio
 - `headline` - (display purpose) 1-liner displayed near name ("Founder of Acme Ltd.")
 - `details` - (display purpose) a unstructured "bag" of info about user
-- `space` and `ownerId` - space, explained below
+- `space` and `ownerId` - space to which user is assigned, explained below
 
-Public client (browser facing) cannot set uniquely identifiable properties like `email` or `externalId`.
+`name`, `headline` and `details` are for display purposes (especially `name` and `headline`), they also serve context for the model about author of the message.
 
-// `as(user)` !!! 
+Our built-in email integration, AgentView parses the email footer and fills `name`, `headline` and `details` automatically.
 
+#### Authorization
+
+If you use AgentView client server-side (initialized with secret api key), you have access to all users within the organization:
+
+```tsx
+await client.sessions.list() // all users' sessions
+```
+
+AgentView allows to narrow down client scope to the specific user with `asUser` proprety:
+
+```tsx
+const bobClient = client.asUser({ id: "bobs-id" })
+await bobClient.sessions.list() // bob's sessions
+await bobClient.sessions.createRun(aliceSessionId, { input }) // throws! Bob doesn't have access to Alice's session
+```
+
+Any operation done with `bobClient` will throw an error if Bob is not authorised for it.
+
+You can also narrow down scope by external id: `client.asUser({ externalId })`.
+
+#### Browser
+
+AgentView client can be used in a browser (or any client). To create public client you must pass public API key:
+
+```tsx
+export const publicClient = createClient({
+  apiKey: process.env.NEXT_PUBLIC_AGENTVIEW_PUBLIC_API_KEY!, // public key
+  env: process.env.NEXT_PUBLIC_AGENTVIEW_ENV!,
+});
+```
+
+Obviously, `publicClient` initialized this way can't do much, as it doesn't yet have access to any organisation resources.
+
+In order to authorize public client, you must use the authorization token generated when creating user:
+
+```tsx
+// server-side
+const { user, token } = await client.users.create({ email: "bob@acme.com" })
+
+// browser
+const userClient = publicClient.asUser({ token });
+const sessions = await userClient.sessions.list()
+```
+
+One thing that public client can do is create **anonymous user**:
+
+```tsx
+// browser
+const { user, token } = await publicClient.users.createAnon()
+const userClient = publicClient.as({ token });
+const session = await userClient.sessions.create({ agent: "weather-agent" }) // session of anonymous user
+```
 
 
 
@@ -425,6 +462,8 @@ Like Claude/ChatGPT this function doesn't immediately cancel the stream in the f
 
 
 #### First-class email integration
+
+(channels, _channelMessages)
 
 
 

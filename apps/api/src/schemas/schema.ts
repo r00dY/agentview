@@ -28,14 +28,24 @@ export const endUsers = pgTable("end_users", {
   ownerId: text('owner_id').references(() => users.id, { onDelete: 'set null' }),
   space: varchar("space", { length: 24 }).notNull().$type<'production' | 'playground' | 'shared-playground'>(), // production, playground, shared-playground
 
-  token: text("token").notNull().unique(),
-
 }, (table) => [
   uniqueIndex('end_user_external_id_org_unique').on(table.externalId, table.organizationId),
   uniqueIndex('end_user_email_org_unique').on(table.email, table.organizationId),
   createTenantPolicy('end_users'),
   // If space = 'production' then ownerId must be null, otherwise ownerId must be defined
   check('end_users_owner_id_space_check', sql`(space = 'production' AND owner_id IS NULL) OR (space != 'production' AND owner_id IS NOT NULL)`),
+]);
+
+export const endUserTokens = pgTable("end_user_tokens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  userId: uuid("end_user_id").notNull().references(() => endUsers.id, { onDelete: 'cascade' }),
+  token: text("token").notNull().unique(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true, mode: "string" }),
+}, (table) => [
+  index('end_user_tokens_user_id_idx').on(table.userId),
+  createTenantPolicy('end_user_tokens'),
 ]);
 
 
@@ -324,6 +334,14 @@ export const endUserRelations = relations(endUsers, ({ many, one }) => ({
   owner: one(users, {
     fields: [endUsers.ownerId],
     references: [users.id],
+  }),
+  tokens: many(endUserTokens),
+}));
+
+export const endUserTokensRelations = relations(endUserTokens, ({ one }) => ({
+  user: one(endUsers, {
+    fields: [endUserTokens.userId],
+    references: [endUsers.id],
   }),
 }));
 
@@ -629,6 +647,7 @@ export const schema = {
   apikeys,
 
   endUsers,
+  endUserTokens,
   // endUserAuthSessions,
   sessions,
   sessionItems,
@@ -651,6 +670,7 @@ export const schema = {
   // endUserAuthSessionsRelations,
   sessionRelations,
   endUserRelations,
+  endUserTokensRelations,
   agentRefsRelations,
   runRelations,
   sessionItemsRelations,
