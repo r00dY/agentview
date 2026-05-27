@@ -321,6 +321,10 @@ class UsersResource {
     return await this.client._request<User>('GET', `/api/users/by-external-id/${externalId}`)
   }
 
+  async getByEmail(email: string) {
+    return await this.client._request<User>('GET', `/api/users/by-email/${encodeURIComponent(email)}`)
+  }
+
   async update(id: string, options: UserCreate): Promise<User> {
     return await this.client._request<User>('PATCH', `/api/users/${id}`, options)
   }

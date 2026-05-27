@@ -281,6 +281,34 @@ app.openapi(userByExternalIdGETRoute, async (c) => {
   })
 })
 
+const userByEmailGETRoute = createRoute({
+  method: 'get',
+  path: '/api/users/by-email/{email}',
+  summary: 'Retrieve a user by email',
+  tags: ['Users'],
+  request: {
+    params: z.object({
+      email: z.string(),
+    }),
+  },
+  responses: {
+    200: response_data(UserSchema),
+    404: response_error()
+  },
+})
+
+app.openapi(userByEmailGETRoute, async (c) => {
+  const principal = await authn(c.req.raw.headers)
+
+  const { email } = c.req.param()
+
+  return withTenant(principal, async (tx) => {
+    const user = await requireUser(tx, { email })
+    await authorize(principal, { action: "end-user:read", user })
+    return c.json(user, 200);
+  })
+})
+
 const apiUsersPATCHRoute = createRoute({
   method: 'patch',
   path: '/api/users/{id}',

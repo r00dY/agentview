@@ -25,6 +25,9 @@ describe('API', () => {
   const EXTERNAL_ID_2 = 'external-id-2'
   const EXTERNAL_PROD_ID_1 = 'external-prod-id-1'
 
+  const EMAIL_1 = 'user1+test@example.com'
+  const EMAIL_2 = 'user2@example.com'
+
   let org: Awaited<ReturnType<typeof setupTestOrg>>;
 
   let av: StandardAgentViewClient;
@@ -34,11 +37,11 @@ describe('API', () => {
 
     av = org.admin.localStandardClient;
     
-    const initUser1Result = await org.admin.localClient.users.create({ externalId: EXTERNAL_ID_1 })
+    const initUser1Result = await org.admin.localClient.users.create({ externalId: EXTERNAL_ID_1, email: EMAIL_1 })
     initUser1 = initUser1Result.user
     initUser1Token = initUser1Result.token
 
-    const initUser2Result = await org.admin.localClient.users.create({ externalId: EXTERNAL_ID_2 })
+    const initUser2Result = await org.admin.localClient.users.create({ externalId: EXTERNAL_ID_2, email: EMAIL_2 })
     initUser2 = initUser2Result.user
     initUser2Token = initUser2Result.token
     
@@ -227,6 +230,47 @@ describe('API', () => {
 
       test("fails when scoped with another user's token", async () => {
         await expect(av.asUser(initUser2).users.getByExternalId(EXTERNAL_ID_1)).rejects.toThrowError(expect.objectContaining({
+          statusCode: 401,
+          message: expect.any(String),
+        }))
+      })
+    })
+
+    describe("get by email", () => {
+      test("existing emails", async () => {
+        const user1 = await av.users.getByEmail(EMAIL_1)
+        expect(user1).toBeDefined()
+        expect(user1.email).toBe(EMAIL_1)
+        expect(user1.id).toBe(initUser1.id)
+
+        const user2 = await av.users.getByEmail(EMAIL_2)
+        expect(user2).toBeDefined()
+        expect(user2.email).toBe(EMAIL_2)
+        expect(user2.id).toBe(initUser2.id)
+      })
+
+      test("email with special characters (URL encoding)", async () => {
+        // EMAIL_1 contains '+' which must be URL-encoded to round-trip correctly
+        const user1 = await av.users.getByEmail(EMAIL_1)
+        expect(user1.email).toBe(EMAIL_1)
+      })
+
+      test("not found", async () => {
+        await expect(av.users.getByEmail('unknown@example.com')).rejects.toThrowError(expect.objectContaining({
+          statusCode: 404,
+          message: expect.any(String),
+        }))
+      })
+
+      test("fails when scoped with own user's token", async () => {
+        await expect(av.asUser(initUser1).users.getByEmail(EMAIL_1)).rejects.toThrowError(expect.objectContaining({
+          statusCode: 401,
+          message: expect.any(String),
+        }))
+      })
+
+      test("fails when scoped with another user's token", async () => {
+        await expect(av.asUser(initUser2).users.getByEmail(EMAIL_1)).rejects.toThrowError(expect.objectContaining({
           statusCode: 401,
           message: expect.any(String),
         }))

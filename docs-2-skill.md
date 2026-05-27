@@ -132,6 +132,71 @@ export const publicClient = createClient({
 });
 ```
 
+#### Users
+
+AgentView has first-class User entity. Every session must be assigned to a user. Here's how you can create a user:
+
+```tsx
+// Server
+const { user: unknownUser } = await client.users.create()
+const { user: bob } = await client.users.create({ email: "bob@acme.com", name: "Bob" })
+const { user: alice } = await client.users.create({ externalId: "alice-external-platform-id", name: "Alice" })
+
+// Browser
+const anonUser = client.users.createAnon()
+```
+
+`User` object is purposefully very minimal. In most cases users live in external platform, for example if you build shopping assistant your users live in ecommerce platform. The `User` in AgentView is only for organisational purposes and memory, it shouldn't be used as primary source of user data in your system.
+
+Each `User` object has optional `externalId` field, which is **unique** and you can set it to connect AgentView User with the User in your core plaform:
+
+```tsx
+await client.users.create({ externalId: "user-id-from-external-platform" }); // create user with external id
+const user = await client.users.getByExternalId("user-id-from-external-platform"); // fetch by external id
+```
+
+Another property by which you can identify users is email. It's also unique:
+
+```tsx
+await client.users.create({ email: "bob@acme.com" });
+const bob = await client.users.getByEmail("bob@acme.com");
+```
+
+
+
+Users layer is purposefully very lightweight. Users usually live in external platform, for example if you build shopping assistant your users live in ecommerce platform. 
+
+
+
+
+
+
+Users layer is very lightweight.
+
+
+
+
+User entity is trivially simple, it has following properties:
+
+- `email` (unique) - email of the user
+- `externalId` (unique) - identifier of the user in external platform (usually your users live in other platform, `externalId` is the unique identifier from it to identify users correctly)
+- `name` - (display purposes) user's name, just for the purpose of nice display in Studio
+- `headline` - (display purpose) 1-liner displayed near name ("Founder of Acme Ltd.")
+- `details` - (display purpose) a unstructured "bag" of info about user
+- `space` and `ownerId` - space, explained below
+
+Public client (browser facing) cannot set uniquely identifiable properties like `email` or `externalId`.
+
+// `as(user)` !!! 
+
+
+
+
+
+
+
+
+
 ### Create first AI run
 
 ```tsx
