@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev:studio": "npx agentview dev",
+    "dev:agentview": "npx agentview dev",
     "dev": "next dev",
-    "dev:both": "concurrently \"npm run dev:studio\" \"npm run dev\"",
+    "dev:both": "concurrently \"npm run dev:agentview\" \"npm run dev\"",
     "build": "next build",
     "start": "next start"
   },

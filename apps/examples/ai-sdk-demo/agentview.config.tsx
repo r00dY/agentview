@@ -16,7 +16,7 @@ export default defineConfig({
     {
       name: "weather-chat",
       version: "0.0.2",
-      url: "http://localhost:3000/api/manual",
+      url: "http://localhost:3000/api/chat-simple",
 
       metadata: {
         userLocation: z.string()
