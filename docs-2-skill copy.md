@@ -396,21 +396,48 @@ const sessionWithUserMessage = await client.sessions.createRun(sessionEmpty.id, 
 })
 ```
 
-Creating a run is bascially sending `UIMessage` with `role: "user"` to the AgentView. When second call ends, the `sessionWithUserMessage` will have user message.
 
-**At this point the agent is running in the background**. Even if you kill the process, or close the browser tab (so kill process).
 
-Here's what AgentView does under the hood after you call `createRun`:
-1. Validates user message format, checks whether there's no other run in progress, etc. In any error case -> immediate error response (`AgentViewError` thrown by client)
-2. Looks for the config of your environment, and searches for `weather-agent` and its `url`.
-3. Prepares new `Session` object with user message appeneded to the end of `meessages` array.
-4. **Creates a live persistent connection to the Agent Endpoint** (living in `url`). It works even if you work locally, since `npx agentview dev` creates a tunnel to your local environment.
-5. Sends `{ session }` as body.
 
-AgentView expect the Agent Endpoint to send back ai-sdk compatible stream (Stream Protocol). ai-sdk is naturally compatible, but any other framewrok implementing ai-sdk protocol also works (for example Pydantic AI). Here's an example of simple agent endpoint in our Next.js demo app:
+
+
+
+# --- old --- 
+
+
+
+
+### Create first AI run
 
 ```tsx
-// apps/api/weather-agent/route.tsx
+const user = await client.users.create({ email: "bob@acme.com", name: "Bob" })
+const session = await client.sessions.create({ userId: user.id, agent: "weather-agent" })
+const sessionUpdated = await client.sessions.createRun(session.id, { 
+  input: {
+    role: "user",
+    parts: [
+      {
+        type: "text",
+        text: "Hello, what's the weather in Warsaw now?"
+      }
+    ]
+  }
+})
+```
+
+In the first line we created a `User`. Users are first-class object in AgentView, each session *must* belong to some user.
+
+Then we created a new session for our `weather-agent`. Please keep in mind the agent must be in `agentview.config.tsx` to make it work.
+
+In the last line we started an AI run by sending an input to our session. AgentView is using AISDK `UIMessage[]` and Stream Protocol as data layer so the input must be correct `UIMessage` (must have role `user`). **The run is running in the background**, even if you close a browser tab or kill a process.
+
+Here's how it works. Under the hood AgentView registers new user message for `weather-agent`. It knows from the config that `weather-agent` lives in `"http://localhost:3000/api/weather-chat"` URL (called **agent endpoint**). AgentView creates a persistent connection to the Agent Endpoint and send a `Session` object.
+
+Here's how simple weather-chat endpoint could look:
+
+```ts
+// app/api/weather-chat/route.ts
+
 export async function POST(req: Request) {
   const { messages, session }: { messages: UIMessage[], session: SessionBase } = await req.json();
 
@@ -427,56 +454,184 @@ export async function POST(req: Request) {
 }
 ```
 
-That's all. All you need to provide is a **STATLESS AGENT ENDPOINT COMPATIBLE WITH AISDK STREAM PROTOCOL**. No need for thinking of persistence, resumability etc.
+`Session` object is the same as in SDK. Here's the list of Session properties:
 
-#### Validation and Error Handling
+| Property    | Type                                   | Description                                                                                       |
+|-------------|----------------------------------------|---------------------------------------------------------------------------------------------------|
+| id          | string                                 | Session ID (unique identifier)                                                                    |
+| userId      | string                                 | ID of the user who owns this session                                                              |
+| agent       | string                                 | The agent's key (matches the name from your agentview.config.tsx)                                 |
+| status      | "in_progress" \| "idle" \| "cancelled" \| "failed" | Current state of the session                                                                      |
+| **messages**   | UIMessage[]                            | Array of all messages in the session, including user inputs and agent replies                     |
+| resume      | boolean                                | Indicates if the session can be resumed                                                           |
+| state       | any (nullable, optional)               | Agent specific state or context object (if any, can be null)                                      |
+| failReason  | any (nullable, optional)               | Failure reason if the session/run failed                                                          |
+| createdAt   | string (ISO timestamp)                 | When the session was created                                                                      |
+| updatedAt   | string (ISO timestamp)                 | When the session was last updated                                                                 |
+| [metadata]  | object (optional)                      | Any additional agent/session metadata (custom or system injected)                                 |
 
-Agent Endpoint might return error response. In that case the run is simply discarded. It allows you do any additional validation apart from simple format validation done out-of-the-box by AgentView when the run is started.
+#### Agent Endpoint
 
-#### Stream
+When you start a run, AgentView appends user message to `session.messages` array and sends the full `Session` object as a `session` property of the JSON payload.
 
+AgentView expects Agent Endpoint to do one of 2 things:
+1. Stream response tokens with AI SDK Stream Protocol 
+2. **Return error response**. In this scenario AgentView API just pipes the error back to the user. TS SDK would throw `AgentViewError` with all the details of the response. The state of the session in the backend is not changed.
+
+This architecture **decouples generating response from infrastructure**. You keep a huge flexibility in terms of how you build your agent, but don't have to handle infra at all. Persistence and resumability work out of the box without any extra tricks.
+
+// TODO:
+- tell about assistant message being produced
+- `_agentview` property (errors, status etc)
+
+#### Consuming Stream
+
+
+
+
+
+#### Session State
+
+AgentView introduces a concept of "Session state". A state that is shared between runs, and remembered in a session timeline. Going back 
+
+
+
+
+
+
+
+#### Users
+
+AgentView has first-class User entity. Every session must belong to a user. Here's how you can create a user:
+
+```tsx
+const bob = client.users.create({ email: "bob@acme.com", name: "Bob" })
+const alice = client.users.create({ externalId: "alice-external-platform-id", name: "Alice" })
+
+// Browser
+const anonUser = client.users.createAnon()
 ```
-// chunk validation
-// correctness validation 
-// beautful error
-// if run is cancelled (described later), { type: "abort" }
-// [done] requirement
+
+User entity is trivially simple, it has following properties:
+
+- `email` (unique) - email of the user
+- `externalId` (unique) - identifier of the user in external platform (usually your users live in other platform, `externalId` is the unique identifier from it to identify users correctly)
+- `name` - (display purposes) user's name, just for the purpose of nice display in Studio
+- `headline` - (display purpose) 1-liner displayed near name ("Founder of Acme Ltd.")
+- `details` - (display purpose) a unstructured "bag" of info about user
+- `space` and `ownerId` - space, explained below
+
+Public client (browser facing) cannot set uniquely identifiable properties like `email` or `externalId`.
+
+// `as(user)` !!! 
+
+#### Spaces
+
+Every agent needs a playground. AgentView handles this via concept of Spaces.
+
+Each User belongs to a space, there are 3 spaces: `production`, `playground` and `shared-playground`. 
+
+`production` - 
+
+
+#### Sessions and Runs
+
+Create an agent session and start a run.
+
+// TODO: describe session shape. Tell about UIMessage[] array.
+// Tell about how it *injects* our internal metadata (like status, failReason etc)
+
+```tsx
+const bob = await client.users.create({ email: "bob@acme.com", name: "Bob" })
+const session = await client.sessions.create({ userId: bob.id, agent: "weather-chat" })
+
+await client.sessions.createRun({ sessionId: session.id, input: { parts: [...]}})
+
+// the response is being produced in the background
 ```
+
+You can create a session & run in one call. It's kind of like a db transaction, if any part of the call fails, no resource is created.
+
+```tsx
+const session = await client.sessions.create({ 
+  userId: bob.id, 
+  agent: "weather-chat",
+  input: { parts: [...] }
+})
+```
+
+`Session` object has `messages` property that holds `UIMessage` array.
+
+#### `useChat`
+
+The best way to consume stream in web is to use `useChat` from AI SDK. 
+
+// useChat example
+
+#### Session state
+
+Each sesssion has `state`. State belongs to the session and not to the specific message.
+
+You can define shape of the state in your config:
+
+```tsx
+import { defineConfig } from "@agentview/studio";
+
+export default defineConfig({
+  publicApiKey: process.env.NEXT_PUBLIC_AGENTVIEW_API_KEY!,
+  env: process.env.NEXT_PUBLIC_AGENTVIEW_ENV!,
+  agents: [
+    {
+      name: "weather-chat",
+      version: "0.0.1",
+      url: "http://localhost:3000/api/weather-chat",
+      state: z.object({
+        userLocation: z.string()
+      })
+    }
+  ]
+});
+```
+
+Now you can create a session with initial state:
+
+```tsx
+const session = await client.sessions.create({ 
+  userId: bob.id, 
+  agent: "weather-chat",
+  initialState: {
+    userLocation: "Warsaw"
+  }
+})
+```
+
+If you don't set initial state the API call is gonna throw.
+
+**Setting state**
+
+You change the session state by sending `data-agentview-state` data part in the stream:
+
+```tsx
+writer.write({
+  type: 'data-agentview-state',
+  data: { userLocation: "London" }
+});
+```
+
+State is time-aware. It knows the moment where you set state, so if you branch your conversation earlier it's gonna get back to the state that as active back at the last message from which you branched.
 
 #### Cancellation
 
 AgentView keeps your run alive even if you drop the connection. Here's how you can cancel:
 
 ```tsx
-await client.sessions.cancel(session.id)
+await client.sessions.cancel({ sessionId: session.id })
 ```
 
 Like Claude/ChatGPT this function doesn't immediately cancel the stream in the front-end. It sends the signal to the backend to cancel the stream and when it's acknowledged, the current streams will abort with `{ type: "abort" }` data part in the Stream.
 
 
-### Consuming stream
-
-```
-// get stream
-// create run and stream
-// TRANSPORT (!!!) / useChat
-```
-
-
-
-// errors - run in progress, no agent, etc... 
-
-
-
-
-
 #### Versions
-
-#### Miscalaneous
-
-- transactional `createSession`
-- list sessions
-- list users?
 
 
 #### First-class email integration
