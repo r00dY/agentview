@@ -460,36 +460,34 @@ const { messages, sendMessage, regenerate } = useChat({
 });
 ```
 
-You can now build any chat experience you want. Please keep in mind that chat id must be `session.id`, it's how ai-sdk `useChat` passes session identifier to transport under the hood.
+It allows you to quickly build your agent UI in any way you want.
 
-Given `id` constraint above, it's valuable to know what's the pattern to use `useChat` if the session doesn't exist yet:
+Important: chat id **must be** `session.id`. It's how ai-sdk `useChat` passes session identifier to transport under the hood.
+
+The above example assumes you already have Session object available, but of course often you'll start without session. Here's how you can do this:
 
 ```tsx
-const { id, messages, sendMessage, regenerate } = useChat({
-    generateId: () => crypto.randomUUID(), // chat id must be compatible with session id format from AgentView
-    transport: userClient.createTransport(),
-});
+const session : Session | null | undefined = /* session or undefined or null */
 
-// on "Send" button click
-<button onClick={() => {
-  const session = session ?? await userClient.sessions.create({ id, agent: "weather-agent" }); // make sure session exists before 'sendMessage' is called
-  sendMessage(userMessage)
-}}>
-  Send
-</button>
+const { messages, sendMessage, regenerate } = useChat({
+    id: session?.id,
+    messages: session?.messages,
+    resume: session?.isRunning,
+    generateId: () => crypto.randomUUID(),
+    transport: userClient.createTransport({
+      newSession: {
+        agent: "weather-agent",
+      }
+      onSessionCreated: ({ session }) => { /* ... */ }
+    }),
+});
 ```
 
-Here's what happens under the hood:
-1. `useChat` creates chat object with randomly generated UUID. No `Session` is created yet in AgentView.
-2. When you send first message, make sure to create a new session with the `id` you generated locally.
-3. When `sendMessage` is called the session with id equal to local chat id is already created, so everything works.
-
-
-
-
-
-
-
+When `session` is defined, nothing changes compared to previous example. Here's what happens when it's not defined:
+1. `id` is empty, so `useChat` generates one automatically. We need to set `crypto.randomUUID()` since it's what AgentView requires for session id.
+2. When you run `sendMessage` AgentView creates a session with the id you generated locally with `newSessionParams` as parameters.
+3. `onSessionCreated` is called to notify you about new session.
+4. Everything continues normally.
 
 
 #### Connecting to Stream - direct
@@ -605,7 +603,7 @@ console.log(lastAssistantMessage.metadata._agentview.agent) // { name: "weather-
 Versions allows for better visibility, but also protects sessions from being continued with incompatible version. AgentView follows semantic versioning convention. You can't create a run in a session where previous run was higher version, or whether new version is a breaking change (major number increased).
 
 
-#### First-class email integration
+#### First-class email integration (CHANNELS)
 
 (channels, _channelMessages)
 
@@ -614,3 +612,11 @@ TBD
 ### Studio
 
 TBD (configuration of visual builder via custom components)
+
+
+
+# -- to do --
+
+1. Channels (`_channelMessages` and channel info in Session object)
+2. Clean up Session object!! isRunning / status etc. 
+3. Studio -> make it quick god damn it
