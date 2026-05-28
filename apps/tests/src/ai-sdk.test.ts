@@ -492,6 +492,34 @@ describe('ai-sdk', () => {
         expect(updatedSession.messages.length).toBe(0);
       }, TEST_TIMEOUT);
 
+      test("happy path: client.createRun (no stream) appends user message to session", async () => {
+        await updateEnvironment(client, { config: buildConfig() });
+        const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
+
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "Hello world!" },
+            { type: "text-end", id: "t1" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        await client.sessions.createRun(session.id, {
+          input: { id: "msg_user_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] }
+        });
+
+        const sessionAfterCreateRun = await client.sessions.get(session.id);
+        expect(sessionAfterCreateRun.messages.length).toBeGreaterThanOrEqual(1);
+        expect(sessionAfterCreateRun.messages[0].id).toBe("msg_user_1");
+        expect(sessionAfterCreateRun.messages[0].role).toBe("user");
+        expect(sessionAfterCreateRun.messages[0].parts).toEqual([{ type: "text", text: "What is the answer?" }]);
+      }, TEST_TIMEOUT);
+
       test("HTTP error: 500 → client.createRun (no stream) passes error to client. No run is created.", async () => {
         await updateEnvironment(client, { config: buildConfig() });
         const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });

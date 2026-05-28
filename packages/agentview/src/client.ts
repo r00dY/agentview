@@ -233,41 +233,6 @@ export class AgentViewClient extends AgentViewBase {
             stream: true
           },
         }
-
-        // if (trigger === 'submit-message') {
-        //   return {
-        //     api: `${baseUrl}/api/sessions/${id}/runs`,
-        //     body: {
-        //       input: lastMessage,
-        //       stream: true
-        //     },
-        //   }
-        // } else if (trigger === 'regenerate-message') {
-        //   const previousRunId = (messages[messages.length - 2]?.metadata as any)?._agentview?.id;
-          
-        //   return {
-        //     api: `${baseUrl}/api/sessions/${id}/runs`,
-        //     body: {
-        //       input: lastMessage,
-        //       stream: true
-        //     },
-        //   }
-        // } else {
-        //   throw new AgentViewError("unknown trigger: " + trigger, 500);
-        // }
-
-        // let previousRunId: string | undefined = undefined;
-        // if (trigger === 'regenerate-message') {
-        //   const message = messageId ? messages.find(m => m.id === messageId) : messages[messages.length - 1];
-        // }
-
-        // return {
-        //   api: `${baseUrl}/api/sessions/${id}/runs`,
-        //   body: {
-        //     input: messages[messages.length - 1],
-        //     stream: true
-        //   },
-        // }
       },
       prepareReconnectToStreamRequest: ({ id }) => ({
         api: `${baseUrl}/api/sessions/${id}/stream`,
