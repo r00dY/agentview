@@ -25,7 +25,7 @@ import type {
 
 import { AgentViewError } from './AgentViewError.js'
 import { getApiUrl } from './urls.js'
-import { DefaultChatTransport } from 'ai'
+import { DefaultChatTransport, parseJsonEventStream, uiMessageChunkSchema, type UIMessageChunk } from 'ai'
 
 export type UserIdentifier = { id: string } | { externalId: string } | { token: string }
 
@@ -320,6 +320,39 @@ class SessionsResource {
 
   async cancelRun(id: string) {
     return await this.client._request<Session>('POST', `/api/sessions/${id}/cancel`)
+  }
+
+  async stream(id: string, requestOptions?: { signal?: AbortSignal }): Promise<ReadableStream<UIMessageChunk> | null> {
+    const response = await fetch(`${getApiUrl()}/api/sessions/${id}/stream`, {
+      method: 'GET',
+      headers: this.client._getHeaders(),
+      signal: requestOptions?.signal,
+    })
+
+    if (response.status === 204) {
+      return null;
+    }
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || "Failed to fetch the stream response.");
+    }
+    if (!response.body) {
+      throw new Error("The response body is empty.");
+    }
+
+    return parseJsonEventStream({
+      stream: response.body,
+      schema: uiMessageChunkSchema,
+    }).pipeThrough(
+      new TransformStream({
+        async transform(chunk, controller) {
+          if (!chunk.success) {
+            throw chunk.error;
+          }
+          controller.enqueue(chunk.value);
+        }
+      })
+    )
   }
 
   async updateRun(sessionId: string, runId: string, options: RunUpdate) {

@@ -455,6 +455,102 @@ describe('ai-sdk', () => {
 
       }, TEST_TIMEOUT);
 
+      test("sessions.stream(): yields UIMessageChunk stream for in-progress session", async () => {
+        await updateEnvironment(client, { config: buildConfig() });
+
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start", messageId: "msg_1" },
+          ]);
+
+          setTimeout(() => {
+            writeAISDKChunks(res, [
+              { type: "text-start", id: "t1" },
+              { type: "text-delta", id: "t1", delta: "Hello " },
+              { type: "text-delta", id: "t1", delta: "world!" },
+              { type: "text-end", id: "t1" },
+              { type: "finish", finishReason: "stop" },
+            ]);
+            writeAISDKDone(res);
+            res.end();
+          }, 1000)
+        });
+
+        const session = await client.sessions.create({
+          agent: "test-ai-sdk",
+          userId: user.id,
+          input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] }
+        });
+        expect(session.status).toBe("in_progress");
+
+        const stream = await client.sessions.stream(session.id);
+        if (!stream) {
+          throw new Error("Expected stream, got null");
+        }
+
+        const chunks = await consumeChunksFromTransportStream(stream);
+
+        const chunkTypes = chunks.map(c => c.type);
+        expect(chunkTypes).toContain("start");
+        expect(chunkTypes).toContain("text-start");
+        expect(chunkTypes).toContain("text-delta");
+        expect(chunkTypes).toContain("text-end");
+        expect(chunkTypes).toContain("finish");
+
+        const textDeltas = chunks.filter(c => c.type === "text-delta");
+        expect(textDeltas.map(d => d.delta).join("")).toBe("Hello world!");
+
+        const updatedSession = await client.sessions.get(session.id);
+        expect(updatedSession.status).toBe("idle");
+        expect(updatedSession.messages.length).toBe(2);
+        expect(updatedSession.messages[1].parts[0]).toMatchObject({
+          type: "text",
+          text: "Hello world!"
+        });
+      }, TEST_TIMEOUT);
+
+      test("sessions.stream(): returns null when there's nothing to stream", async () => {
+        await updateEnvironment(client, { config: buildConfig() });
+
+        // Session with no run -> nothing to stream
+        const emptySession = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
+        const noRunStream = await client.sessions.stream(emptySession.id);
+        expect(noRunStream).toBeNull();
+
+        // Run that already completed -> nothing to stream
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start", messageId: "msg_1" },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "Done." },
+            { type: "text-end", id: "t1" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        const finishedSession = await client.sessions.create({
+          agent: "test-ai-sdk",
+          userId: user.id,
+          input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
+        });
+
+        // wait for run to finish via transport reconnect
+        const reconnectStream = await client.createTransport().reconnectToStream({ chatId: finishedSession.id });
+        if (reconnectStream) {
+          await consumeChunksFromTransportStream(reconnectStream);
+        }
+
+        const idleSession = await client.sessions.get(finishedSession.id);
+        expect(idleSession.status).toBe("idle");
+
+        const afterFinishedStream = await client.sessions.stream(finishedSession.id);
+        expect(afterFinishedStream).toBeNull();
+      }, TEST_TIMEOUT);
+
       test("Upstream server is down → 502 error", async () => {
         await updateEnvironment(client, { config: buildConfig({ agentUrl: "http://localhost:10000/this-server-is-down" }) }); // 
         const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });

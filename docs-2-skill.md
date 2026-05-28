@@ -396,12 +396,12 @@ const sessionWithUserMessage = await client.sessions.createRun(sessionEmpty.id, 
 })
 ```
 
-Creating a run is bascially sending `UIMessage` with `role: "user"` to the AgentView. When second call ends, the `sessionWithUserMessage` will have user message.
+Since AgentView uses ai-sdk format for persistence, starting a run requires sending correct `UIMessage` with `role: "user"`.
 
-**At this point the agent is running in the background**. Even if you kill the process, or close the browser tab (so kill process).
+**What happens under the hood after you create a run is the most important architectural thing about AgentView**.
 
-Here's what AgentView does under the hood after you call `createRun`:
-1. Validates user message format, checks whether there's no other run in progress, etc. In any error case -> immediate error response (`AgentViewError` thrown by client)
+Here's what AgentView does:
+1. Validates user message format, checks whether there's no other run in progress, etc. In any error case -> immediate error response (`AgentViewError` thrown by client).
 2. Looks for the config of your environment, and searches for `weather-agent` and its `url`.
 3. Prepares new `Session` object with user message appeneded to the end of `meessages` array.
 4. **Creates a live persistent connection to the Agent Endpoint** (living in `url`). It works even if you work locally, since `npx agentview dev` creates a tunnel to your local environment.
@@ -429,11 +429,56 @@ export async function POST(req: Request) {
 
 That's all. All you need to provide is a **STATLESS AGENT ENDPOINT COMPATIBLE WITH AISDK STREAM PROTOCOL**. No need for thinking of persistence, resumability etc.
 
-#### Validation and Error Handling
+#### Error handling
 
-Agent Endpoint might return error response. In that case the run is simply discarded. It allows you do any additional validation apart from simple format validation done out-of-the-box by AgentView when the run is started.
+Before making a call to Agent Endpoint Agentview does validations: checks user message shape, looks for agent config, etc. In case of any such error user message won't be saved in the `messages` array, the operation is essentially discarded.
 
-#### Stream
+If Agent Endpoint call is made but it returns error response (40x / 50x), the user message also will be discarded. The error from Agent Endpoint is piped directly into API response from AgentView.
+
+#### Input Validation
+
+Given how error handling works, validation is trivial. in AgentView Endpoint you can validate user message (last message in `session.messages`) and if it doesn't pass validation -> just return error response.
+
+#### Connecting to Stream - `useChat`
+
+Since AgnetView is based on ai-sdk Stream Protocol the easiest way to consume the stream is to use `useChat`:
+
+```tsx
+const { messages, sendMessage, regenerate } = useChat({
+    id: session.id,
+    messages: session.messages,
+    resume: session.isRunning,
+    transport: userClient.createTransport(), // it must be user client to allow for access to the session
+});
+```
+
+
+
+
+
+#### Connecting to Stream - direct
+
+It might not be needed often but you can connect to chunks stream directly via API:
+
+```tsx
+const stream = await client.sessions.getStream(sessionId);
+
+if (stream) {
+  for await (chunk in stream) {
+    console.log(chunk) // UIMessageChunk
+  }
+}
+else {
+  console.log('no active stream')
+}
+```
+
+
+#### Stream Protocol
+
+
+
+
 
 ```
 // chunk validation
@@ -452,6 +497,10 @@ await client.sessions.cancel(session.id)
 ```
 
 Like Claude/ChatGPT this function doesn't immediately cancel the stream in the front-end. It sends the signal to the backend to cancel the stream and when it's acknowledged, the current streams will abort with `{ type: "abort" }` data part in the Stream.
+
+
+#### Branching
+
 
 
 ### Consuming stream
