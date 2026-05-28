@@ -23,9 +23,10 @@ import type {
   TokenWithSecret
 } from './apiTypes.js'
 
-import { AgentViewError } from './AgentViewError.js'
 import { getApiUrl } from './urls.js'
-import { DefaultChatTransport, parseJsonEventStream, uiMessageChunkSchema, type UIMessageChunk } from 'ai'
+import { throwIfNotOk } from './apiResponse.js'
+import { AgentViewChatTransport, parseUIMessageStream, type CreateTransportOptions } from './transport.js'
+import { type UIMessageChunk } from 'ai'
 
 export type UserIdentifier = { id: string } | { externalId: string } | { token: string }
 
@@ -118,22 +119,12 @@ export class AgentViewBase {
       }
     }
 
-    // upstream response
+    await throwIfNotOk(response);
+
     if (response.headers.get('X-Upstream-Response') === 'true') {
-      const text = await response.text();
-      if (!response.ok) {
-        throw new Error(text);
-      }
-      return JSON.parse(text);
+      return JSON.parse(await response.text());
     }
-    // agentview response
-    else {
-      const body = await response.json()
-      if (!response.ok) {
-        throw new AgentViewError(body.message ?? "Unknown error", response.status, body)
-      }
-      return body;
-    }
+    return await response.json();
   }
 
   __internal = {
@@ -181,63 +172,8 @@ export class AgentViewClient extends AgentViewBase {
     this.sessions = new SessionsResource(this);
   }
 
-  createTransport() {
-    const baseUrl = getApiUrl();
-    /**
-     * Here we leave "vanilla" error handling. It's because:
-     * - 
-     */
-    return new DefaultChatTransport({
-      headers: this._getHeaders(),
-      prepareSendMessagesRequest: ({ id, messages, trigger }) => {
-        /**
-         * Here we rely on some facts about ai-sdk:
-         * - messages is already truncated
-         * - `messages` can't be empty (aisdk throws)
-         * - ai-sdk makes sure last message is user message. It's technically possible to make last message assistant but we can safely throw on this case (it's incorrect for us anyway).
-         * 
-         * Essentially, if messages is already after truncation, so it's literally ui state, then we must keep it anyway. And we should assume last message is user message. It covers all cases:
-         * - new item
-         * - regeneration
-         * - edit message (sendMessage with proper messageId)
-         */
-
-        const lastMessage = messages[messages.length - 1];
-
-        if (!lastMessage) {
-          throw new AgentViewError("Messages array is empty", 400);
-        }
-        if (lastMessage?.role !== 'user') {
-          throw new AgentViewError("Last message is not a user message", 400);
-        }
-
-        // Technically we could omit previousRunId for submit-message but this behaviour is even more consistent. Very universal and minimalistic, like it.
-        let previousRunId : string | null | undefined = undefined; // null -> regenerate from root. undefined -> continue from last run.
-        if (trigger === 'regenerate-message') {
-          if (messages.length <= 1) {
-            previousRunId = null;
-          }
-          else {
-            previousRunId = (messages[messages.length - 2].metadata as any)?._agentview?.id;
-            if (!previousRunId) {
-              throw new AgentViewError("Previous run id is not found in messages history", 500);
-            }
-          }
-        }
-
-        return {
-          api: `${baseUrl}/api/sessions/${id}/runs`,
-          body: {
-            input: lastMessage,
-            previousRunId,
-            stream: true
-          },
-        }
-      },
-      prepareReconnectToStreamRequest: ({ id }) => ({
-        api: `${baseUrl}/api/sessions/${id}/stream`,
-      })
-    })
+  createTransport(options?: CreateTransportOptions): AgentViewChatTransport {
+    return new AgentViewChatTransport(this, options ?? {})
   }
 
   asUser(userIdentifier: UserIdentifier): AgentViewClient {
@@ -329,30 +265,9 @@ class SessionsResource {
       signal: requestOptions?.signal,
     })
 
-    if (response.status === 204) {
-      return null;
-    }
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || "Failed to fetch the stream response.");
-    }
-    if (!response.body) {
-      throw new Error("The response body is empty.");
-    }
-
-    return parseJsonEventStream({
-      stream: response.body,
-      schema: uiMessageChunkSchema,
-    }).pipeThrough(
-      new TransformStream({
-        async transform(chunk, controller) {
-          if (!chunk.success) {
-            throw chunk.error;
-          }
-          controller.enqueue(chunk.value);
-        }
-      })
-    )
+    if (response.status === 204) return null;
+    await throwIfNotOk(response);
+    return parseUIMessageStream(response);
   }
 
   async updateRun(sessionId: string, runId: string, options: RunUpdate) {

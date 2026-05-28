@@ -377,6 +377,14 @@ const session = await client.sessions.create({ userId, agent: "weather-agent", t
 const updatedSession = await client.sessions.update({ title: "Reasoning models capabilities" })
 ```
 
+#### List sessions
+
+You can list sessions:
+
+```tsx
+const { sessions, pagination } = await client.sessions.list()
+```
+
 ### Sending messages, aka Runs
 
 If you want to send a user message in a session, you must create a "Run". Run represents entire activity between sending the user message and finishing assistant message. Here's how to create a run:
@@ -478,34 +486,6 @@ Here's what happens under the hood:
 
 
 
-PROBU RUBU
--- 
-
-```tsx
-const { id, messages, sendMessage, regenerate } = useChat({
-    generateId: () => crypto.randomUUID(), // chat id must be compatible with session id format from AgentView
-    transport: publicClient.createTransport({
-      userToken
-      user: { ... } // user data (only if token not defined)
-      sessionId
-      
-    }),
-});
-
-/**
- * allowed pairs
- * - 
- */
-
-
-// on "Send" button click
-<button onClick={() => {
-  const session = session ?? await userClient.sessions.create({ id, agent: "weather-agent" }); // make sure session exists before 'sendMessage' is called
-  sendMessage(userMessage)
-}}>
-  Send
-</button>
-```
 
 
 
@@ -531,23 +511,27 @@ else {
 
 #### Creating session and run in a single transaction
 
+Creating empty sessions is not very useful and in most scenarios you'll want to create sessions & first run in "single transaction". If any operation fails, nothing changes in the backend state.
 
+You can do this this way:
 
-
-
-#### Stream Protocol
-
-
-
-
-
+```tsx
+const session = await client.sessions.create({ 
+  userId, 
+  agent: "weather-agent", 
+  input: { role: "user", parts: [ /*...*/]} 
+})
 ```
-// chunk validation
-// correctness validation 
-// beautful error
-// if run is cancelled (described later), { type: "abort" }
-// [done] requirement
-```
+
+#### Stream Protocol - Chunks correctness
+
+AgentView works a middleware between Agent Endpoint and external world. It consumes Stream Protocl chunks and passes them forward to connected clients.
+
+AgentView **validates the stream**. It means that if chunk is badly formatted, or it's semantically incorrect (i.e. tool result before tool call), AgentView will just send error chunk (`{ type: "error", errorText: "error reason" }`) and close the stream.
+
+If run is cancelled by user (see below), then AgentView will send `{ type: "abort" }` and also close the stream immediately.
+
+AgentView requires `[done]` to be sent at the end of the stream. If `[done]` is not sent, it will treat the stream as unfinished and it will also result in an error run.
 
 #### Cancellation
 
@@ -557,43 +541,76 @@ AgentView keeps your run alive even if you drop the connection. Here's how you c
 await client.sessions.cancel(session.id)
 ```
 
-Like Claude/ChatGPT this function doesn't immediately cancel the stream in the front-end. It sends the signal to the backend to cancel the stream and when it's acknowledged, the current streams will abort with `{ type: "abort" }` data part in the Stream.
+Like Claude/ChatGPT this function doesn't immediately cancel the stream in the front-end. It sends the signal to the backend to cancel the stream and when it's acknowledged, the current streams will abort with `{ type: "abort" }` data part in the Stream. It ensures the backend and frontend state are consistent.
 
+#### Displaying run status in chat history
+
+As mentioned above, each assistant message is extended with `_agentview` field in metadata:
+
+```
+- `id` - run id
+- `status` - `in_progress`, `cancelled`, `error`
+- `failReason` - available for `error` status
+- `createdAt`
+- `finishedAt`
+- `agent: { name, version }`
+- `metadata` - extra metadata set via API (not as a part of stream)
+```
+
+This is persisted, so you can easily show the exact status of each turn.
+
+#### Continuation of session with cancelled / error runs.
+
+Similar to ChatGPT/Claude AgentView allows to continue sessions even if the previous run had errors or was cancelled.
+
+AgentView makes sure that the `session.messages` state sent to your Agent Endpoint is awalys correct. So even if the run finished with unfinished tool calls, AgentView will clean it up so you can continue comfortably.
 
 #### Branching
 
+You can start a run starting from previous messages (`regenerate`):
 
-
-### Consuming stream
-
-```
-// get stream
-// create run and stream
-// TRANSPORT (!!!) / useChat
+```tsx
+await client.sessions.createRun(sessionId, { input, previousRunId: runId })
 ```
 
-
-
-// errors - run in progress, no agent, etc... 
-
-
-
+`runId` is `_agentview.id`.
 
 
 #### Versions
 
-#### Miscalaneous
+Each agent in the config must be version assigned. 
 
-- transactional `createSession`
-- list sessions
-- list users?
+```tsx
+export default defineConfig({
+  // ...
+  agents: [
+    {
+      name: "weather-agent",
+      version: "0.0.1",
+      url: "http://localhost:3000/api/weather-chat",
+    }
+  ]
+});
+```
+
+Every time you create a session or a run, agentview stores the agent and its version that was active at that moment:
+
+```tsx
+console.log(session.agent) // { name: "weather-agent", version: "0.0.1" }
+
+const lastAssistantMessage = session.messages[sessions.messages.length - 1];
+console.log(lastAssistantMessage.metadata._agentview.agent) // { name: "weather-agent", version: "0.0.2" }
+```
+
+Versions allows for better visibility, but also protects sessions from being continued with incompatible version. AgentView follows semantic versioning convention. You can't create a run in a session where previous run was higher version, or whether new version is a breaking change (major number increased).
 
 
 #### First-class email integration
 
 (channels, _channelMessages)
 
-
+TBD
 
 ### Studio
 
+TBD (configuration of visual builder via custom components)

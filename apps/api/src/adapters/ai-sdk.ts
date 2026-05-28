@@ -67,7 +67,10 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
                     failReason: run.failReason,
                     createdAt: run.createdAt,
                     finishedAt: run.finishedAt,
-                    agent: run.agent,
+                    agent: {
+                        name: run.agent.name,
+                        version: run.agent.version,
+                    },
                     metadata,
                 }
             },

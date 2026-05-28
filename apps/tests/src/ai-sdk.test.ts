@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { AgentViewError, type User } from 'agentview';
 
@@ -552,7 +552,7 @@ describe('ai-sdk', () => {
       }, TEST_TIMEOUT);
 
       test("Upstream server is down → 502 error", async () => {
-        await updateEnvironment(client, { config: buildConfig({ agentUrl: "http://localhost:10000/this-server-is-down" }) }); // 
+        await updateEnvironment(client, { config: buildConfig({ agentUrl: "http://localhost:10000/this-server-is-down" }) }); //
         const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
 
         const stream = sendMessageViaTransport(
@@ -561,7 +561,12 @@ describe('ai-sdk', () => {
           { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
         );
 
-        await expect(stream).rejects.toThrowError("CONNECTION_NETWORK_ERROR");
+        await expect(stream).rejects.toThrowError(expect.objectContaining({
+          statusCode: 502,
+          details: expect.objectContaining({
+            code: 'CONNECTION_NETWORK_ERROR',
+          }),
+        }));
 
       }, TEST_TIMEOUT);
 
@@ -1953,6 +1958,210 @@ describe('ai-sdk', () => {
       }, TEST_TIMEOUT);
     });
 
+    describe("createTransport with newSession", () => {
+      let client: typeof org.prodClient;
+      let user: User;
+
+      beforeAll(async () => {
+        client = org.prodClient;
+        const result = await client.users.create();
+        user = result.user;
+      });
+
+      test("creates session + run on first message when session doesn't exist", async () => {
+        await updateEnvironment(client, { config: buildConfig() });
+
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "Hello!" },
+            { type: "text-end", id: "t1" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        const sessionId = crypto.randomUUID();
+        const onSessionCreated = vi.fn();
+        const transport = client.createTransport({
+          newSession: { agent: "test-ai-sdk", userId: user.id },
+          onSessionCreated,
+        });
+
+        // Verify session doesn't exist beforehand
+        await expectToFail(client.sessions.get(sessionId), 404);
+
+        const stream = await sendMessageViaTransport(
+          transport,
+          sessionId,
+          { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
+        );
+
+        const chunks = await consumeChunksFromTransportStream(stream);
+        expect(chunks.map(c => c.type)).toContain("text-delta");
+
+        expect(onSessionCreated).toHaveBeenCalledTimes(1);
+        // Receives the full session object
+        const createdSession = onSessionCreated.mock.calls[0][0].session;
+        expect(createdSession.id).toBe(sessionId);
+        expect(createdSession.userId).toBe(user.id);
+        expect(createdSession.agent?.name).toBe("test-ai-sdk");
+
+        // Session now exists with both user + assistant messages
+        const session = await client.sessions.get(sessionId);
+        expect(session.id).toBe(sessionId);
+        expect(session.status).toBe("idle");
+        expect(session.messages.length).toBe(2);
+        expect(session.messages[0].role).toBe("user");
+        expect(session.messages[1].role).toBe("assistant");
+      }, TEST_TIMEOUT);
+
+      test("continuation: session already exists -> use /runs and don't call onSessionCreated", async () => {
+        await updateEnvironment(client, { config: buildConfig() });
+
+        // Pre-create the session so /runs will succeed on first call
+        const existingSession = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id });
+
+        const onSessionCreated = vi.fn();
+        const transport = client.createTransport({
+          newSession: { agent: "test-ai-sdk", userId: user.id },
+          onSessionCreated,
+        });
+
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "Continued" },
+            { type: "text-end", id: "t1" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        const stream = await sendMessageViaTransport(
+          transport,
+          existingSession.id,
+          { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
+        );
+        await consumeChunksFromTransportStream(stream);
+
+        expect(onSessionCreated).not.toHaveBeenCalled();
+
+        const finalSession = await client.sessions.get(existingSession.id);
+        expect(finalSession.messages.length).toBe(2);
+        expect((finalSession.messages[1].parts[0] as any).text).toBe("Continued");
+      }, TEST_TIMEOUT);
+
+      test("same transport creates session on first message, then continues on second", async () => {
+        await updateEnvironment(client, { config: buildConfig() });
+
+        const sessionId = crypto.randomUUID();
+        const onSessionCreated = vi.fn();
+        const transport = client.createTransport({
+          newSession: { agent: "test-ai-sdk", userId: user.id },
+          onSessionCreated,
+        });
+
+        // First message creates the session
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "text-start", id: "t1" },
+            { type: "text-delta", id: "t1", delta: "First response" },
+            { type: "text-end", id: "t1" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        const firstStream = await sendMessageViaTransport(
+          transport,
+          sessionId,
+          { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
+        );
+        await consumeChunksFromTransportStream(firstStream);
+
+        const sessionAfterFirst = await client.sessions.get(sessionId);
+        expect(sessionAfterFirst.messages.length).toBe(2);
+
+        // Build messages for the second turn (with metadata from assistant)
+        const secondTurnMessages: UIMessage[] = [
+          ...sessionAfterFirst.messages,
+          { id: "msg_2", role: "user", parts: [{ type: "text", text: "Follow up" }] }
+        ];
+
+        mockAISDKServer!.setHandler((_body, res) => {
+          writeAISDKSuccessHeaders(res);
+          writeAISDKChunks(res, [
+            { type: "start" },
+            { type: "text-start", id: "t2" },
+            { type: "text-delta", id: "t2", delta: "Second response" },
+            { type: "text-end", id: "t2" },
+            { type: "finish", finishReason: "stop" },
+          ]);
+          writeAISDKDone(res);
+          res.end();
+        });
+
+        // Second sendMessages call goes through the /runs flow (session exists)
+        const secondStream = await transport.sendMessages({
+          chatId: sessionId,
+          messages: secondTurnMessages,
+          trigger: "submit-message",
+          messageId: undefined,
+          abortSignal: undefined,
+        });
+        await consumeChunksFromTransportStream(secondStream);
+
+        // onSessionCreated only fires once - for the initial creation
+        expect(onSessionCreated).toHaveBeenCalledTimes(1);
+
+        const finalSession = await client.sessions.get(sessionId);
+        expect(finalSession.messages.length).toBe(4);
+        expect(finalSession.messages[3].role).toBe("assistant");
+        expect((finalSession.messages[3].parts[0] as any).text).toBe("Second response");
+      }, TEST_TIMEOUT);
+
+      test("throws when chat id is not a UUID and session doesn't exist", async () => {
+        const transport = client.createTransport({
+          newSession: { agent: "test-ai-sdk", userId: user.id },
+        });
+
+        await expect(sendMessageViaTransport(
+          transport,
+          "not-a-uuid",
+          { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] }
+        )).rejects.toThrowError(/UUID/);
+      });
+
+      test("throws when session doesn't exist and messages contains more than one message", async () => {
+        const transport = client.createTransport({
+          newSession: { agent: "test-ai-sdk", userId: user.id },
+        });
+
+        const sessionId = crypto.randomUUID();
+
+        await expect(transport.sendMessages({
+          chatId: sessionId,
+          messages: [
+            { id: "msg_1", role: "user", parts: [{ type: "text", text: "Hi" }] } as UIMessage,
+            { id: "msg_2", role: "assistant", parts: [{ type: "text", text: "Hello" }] } as UIMessage,
+            { id: "msg_3", role: "user", parts: [{ type: "text", text: "Again" }] } as UIMessage,
+          ],
+          trigger: "submit-message",
+          messageId: undefined,
+          abortSignal: undefined,
+        })).rejects.toThrowError(/exactly one user message/);
+      });
+    });
 
   });
 
