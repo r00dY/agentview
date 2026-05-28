@@ -448,23 +448,59 @@ const { messages, sendMessage, regenerate } = useChat({
     id: session.id,
     messages: session.messages,
     resume: session.isRunning,
-    transport: userClient.createTransport(), // it must be user client to allow for access to the session
+    transport: userClient.createTransport(), // it must be user client for user who has access to the session
 });
 ```
 
 You can now build any chat experience you want. Please keep in mind that chat id must be `session.id`, it's how ai-sdk `useChat` passes session identifier to transport under the hood.
 
-If your session do not exist yet and you want to create a new chat with `useChat`, here's the pattern:
+Given `id` constraint above, it's valuable to know what's the pattern to use `useChat` if the session doesn't exist yet:
 
 ```tsx
 const { id, messages, sendMessage, regenerate } = useChat({
-    generateId: () => crypto.randomUUID(),
+    generateId: () => crypto.randomUUID(), // chat id must be compatible with session id format from AgentView
     transport: userClient.createTransport(),
 });
 
 // on "Send" button click
 <button onClick={() => {
-  const session = session ?? await userClient.sessions.create({ id, agent: "weather-agent" });
+  const session = session ?? await userClient.sessions.create({ id, agent: "weather-agent" }); // make sure session exists before 'sendMessage' is called
+  sendMessage(userMessage)
+}}>
+  Send
+</button>
+```
+
+Here's what happens under the hood:
+1. `useChat` creates chat object with randomly generated UUID. No `Session` is created yet in AgentView.
+2. When you send first message, make sure to create a new session with the `id` you generated locally.
+3. When `sendMessage` is called the session with id equal to local chat id is already created, so everything works.
+
+
+
+PROBU RUBU
+-- 
+
+```tsx
+const { id, messages, sendMessage, regenerate } = useChat({
+    generateId: () => crypto.randomUUID(), // chat id must be compatible with session id format from AgentView
+    transport: publicClient.createTransport({
+      userToken
+      user: { ... } // user data (only if token not defined)
+      sessionId
+      
+    }),
+});
+
+/**
+ * allowed pairs
+ * - 
+ */
+
+
+// on "Send" button click
+<button onClick={() => {
+  const session = session ?? await userClient.sessions.create({ id, agent: "weather-agent" }); // make sure session exists before 'sendMessage' is called
   sendMessage(userMessage)
 }}>
   Send
@@ -472,13 +508,6 @@ const { id, messages, sendMessage, regenerate } = useChat({
 ```
 
 
-
-
-
-```
-// on title change
-// on session change
-```
 
 
 
@@ -499,6 +528,11 @@ else {
   console.log('no active stream')
 }
 ```
+
+#### Creating session and run in a single transaction
+
+
+
 
 
 #### Stream Protocol
