@@ -475,6 +475,7 @@ export const SessionSchema = SessionBaseSchema.extend({
 export type Session = z.infer<typeof SessionSchema>
 
 export const SessionCreateSchema = SessionCreateBaseSchema.extend({
+  id: z.uuid().optional(),
   input: UserUIMessageSchema.optional(),
   active: z.boolean().optional()
 })

@@ -475,6 +475,7 @@ export async function getSessions(tx: TenantTransaction, params: SessionsGetQuer
  */
 
 export type CreateSessionWithoutAgentBody = {
+  id?: string;
   userId?: string;
   title?: string | null;
   channel: ChannelRef
@@ -502,6 +503,7 @@ export async function createSession(tx: TenantTransaction, params: CreateSession
   authorize(tx.principal, { action: "end-user:update", user });
 
   const [newSessionRow] = await tx.insert(sessions).values({
+    ...(params.id ? { id: params.id } : {}),
     organizationId: tx.organizationId,
     handleNumber: 0,
     handleSuffix: randomBytes(32).toString('hex'),

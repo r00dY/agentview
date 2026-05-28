@@ -441,7 +441,7 @@ Given how error handling works, validation is trivial. in AgentView Endpoint you
 
 #### Connecting to Stream - `useChat`
 
-Since AgnetView is based on ai-sdk Stream Protocol the easiest way to consume the stream is to use `useChat`:
+Since AgentView is based on ai-sdk Stream Protocol the easiest way to consume the stream is to use `useChat`:
 
 ```tsx
 const { messages, sendMessage, regenerate } = useChat({
@@ -452,6 +452,33 @@ const { messages, sendMessage, regenerate } = useChat({
 });
 ```
 
+You can now build any chat experience you want. Please keep in mind that chat id must be `session.id`, it's how ai-sdk `useChat` passes session identifier to transport under the hood.
+
+If your session do not exist yet and you want to create a new chat with `useChat`, here's the pattern:
+
+```tsx
+const { id, messages, sendMessage, regenerate } = useChat({
+    generateId: () => crypto.randomUUID(),
+    transport: userClient.createTransport(),
+});
+
+// on "Send" button click
+<button onClick={() => {
+  const session = session ?? await userClient.sessions.create({ id, agent: "weather-agent" });
+  sendMessage(userMessage)
+}}>
+  Send
+</button>
+```
+
+
+
+
+
+```
+// on title change
+// on session change
+```
 
 
 

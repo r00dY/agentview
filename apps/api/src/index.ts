@@ -850,6 +850,7 @@ app.openapi(sessionsAISDKPOSTRoute, async (c) => {
     return await withTenant(principal, async (tx) => {
 
       const newSession = await createSession(tx, {
+        id: body.id,
         channel: { type: 'api', name: body.agent },
         userId: body.userId,
         title: body.title,
@@ -868,6 +869,7 @@ app.openapi(sessionsAISDKPOSTRoute, async (c) => {
   else {
     const newSession = await withTenant(principal, async (tx) => {
       const newSession = await createSession(tx, {
+        id: body.id,
         channel: { type: 'api', name: body.agent },
         userId: body.userId,
         title: body.title,

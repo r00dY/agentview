@@ -738,6 +738,26 @@ describe('API', () => {
       }))
     })
 
+    test("create with provided id (AI SDK)", async () => {
+      await updateEnvironment(av, { config: { agents: [{ name: "test", version: "1.0.0" }], channels: [{ type: 'api', name: "test", agent: "test" }] } })
+
+      const providedId = crypto.randomUUID()
+      const session = await org.admin.localClient.sessions.create({ id: providedId, agent: "test", userId: initUser1.id })
+      expect(session.id).toBe(providedId)
+
+      // fetchable by the same id
+      const fetched = await org.admin.localClient.sessions.get(providedId)
+      expect(fetched.id).toBe(providedId)
+
+      // creating again with the same id should fail
+      await expect(org.admin.localClient.sessions.create({ id: providedId, agent: "test", userId: initUser1.id })).rejects.toThrowError()
+
+      // invalid UUID → validation error
+      await expect(org.admin.localClient.sessions.create({ id: "not-a-uuid" as any, agent: "test", userId: initUser1.id })).rejects.toThrowError(expect.objectContaining({
+        statusCode: 422,
+      }))
+    })
+
 
 
 
