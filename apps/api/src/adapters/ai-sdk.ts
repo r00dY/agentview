@@ -7,10 +7,12 @@ import { type Adapter } from './adapters';
 export const aiSDKAdapter = {
     enrichSession: (session: StandardSession) => {
         const messages = sessionToUIMessages(session);
-        const statusFields = getSessionStatusFields(session);
+        const lastRun = session.runs[session.runs.length - 1];
+        // const statusFields = getSessionStatusFields(session);
         return {
             messages,
-            ...statusFields
+            isRunning: lastRun?.status === 'in_progress',
+            // ...statusFields
         }
     },
     createDefaultInputForChannelMessages: (incomingMessages: any[]) => {
@@ -21,7 +23,6 @@ export const aiSDKAdapter = {
         };
     }
 } satisfies Adapter;
-
 
 
 function sessionToUIMessages(session: StandardSession): UIMessage[] {

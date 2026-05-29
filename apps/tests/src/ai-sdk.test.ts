@@ -185,7 +185,7 @@ describe('ai-sdk', () => {
 
         const finalSession = await client.sessions.get(session.id);
 
-        expect(finalSession.status).toBe("idle");
+        expect(finalSession.isRunning).toBe(false);
         expect(finalSession.messages.length).toBe(2);
         expect(finalSession.messages[0].role).toBe("user");
         expect(finalSession.messages[1].role).toBe("assistant");
@@ -240,7 +240,7 @@ describe('ai-sdk', () => {
         const finalSession = await client.sessions.get(session.id);
 
 
-        expect(finalSession.status).toBe("idle");
+        expect(finalSession.isRunning).toBe(false);
         expect(finalSession.messages.length).toBe(2);
         expect(finalSession.messages[0].role).toBe("user");
         expect(finalSession.messages[1].role).toBe("assistant");
@@ -314,7 +314,7 @@ describe('ai-sdk', () => {
         const finalSession = await client.sessions.get(session.id);
 
 
-        expect(finalSession.status).toBe("idle");
+        expect(finalSession.isRunning).toBe(false);
         expect(finalSession.messages.length).toBe(2);
         expect(finalSession.messages[0].role).toBe("user");
         expect(finalSession.messages[1].role).toBe("assistant");
@@ -352,8 +352,12 @@ describe('ai-sdk', () => {
         expect(chunks.some(c => c.type === "error")).toBe(true);
 
         const updatedSession = await client.sessions.get(session.id);
-        expect(updatedSession.status).toBe("failed");
-        expect(updatedSession.reason).toBeDefined();
+
+        expect(updatedSession.messages[updatedSession.messages.length - 1].metadata?._agentview?.status).toBe("failed");
+        expect(updatedSession.messages[updatedSession.messages.length - 1].metadata?._agentview?.reason).toBeDefined();
+
+        // expect(updatedSession.status).toBe("failed");
+        // expect(updatedSession.reason).toBeDefined();
       }, TEST_TIMEOUT);
 
       test("error → invalid chunk", async () => {
@@ -390,8 +394,9 @@ describe('ai-sdk', () => {
         expect(updatedSession.messages[1].parts[0].type).toBe("text");
         expect(updatedSession.messages[1].parts[0].text).toBe("Hello world!");
 
-        expect(updatedSession.status).toBe("failed");
-        expect(updatedSession.reason).toBeDefined();
+        expect(updatedSession.isRunning).toBe(false);
+        expect(updatedSession.messages[updatedSession.messages.length - 1].metadata?._agentview?.status).toBe("failed");
+        expect(updatedSession.messages[updatedSession.messages.length - 1].metadata?._agentview?.reason).toBeDefined();
 
       }, TEST_TIMEOUT);
 
@@ -419,7 +424,7 @@ describe('ai-sdk', () => {
         });
 
         const session = await client.sessions.create({ agent: "test-ai-sdk", userId: user.id, input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] } });
-        expect(session.status).toBe("in_progress");
+        expect(session.isRunning).toBe(true);
         expect(session.messages.length).toBe(1);
         expect(session.messages[0]).toMatchObject({
           role: "user",
@@ -442,7 +447,7 @@ describe('ai-sdk', () => {
         expect(chunkTypes).toContain("finish");
 
         const updatedSession = await client.sessions.get(session.id);
-        expect(updatedSession.status).toBe("idle");
+        expect(updatedSession.isRunning).toBe(false);
         expect(updatedSession.messages.length).toBe(2);
         expect(updatedSession.messages[1].parts.length).toBe(1);
         expect(updatedSession.messages[1].parts[0]).toMatchObject({
@@ -482,7 +487,7 @@ describe('ai-sdk', () => {
           userId: user.id,
           input: { id: "msg_1", role: "user", parts: [{ type: "text", text: "What is the answer?" }] }
         });
-        expect(session.status).toBe("in_progress");
+        expect(session.isRunning).toBe(true);
 
         const stream = await client.sessions.stream(session.id);
         if (!stream) {
@@ -502,7 +507,7 @@ describe('ai-sdk', () => {
         expect(textDeltas.map(d => d.delta).join("")).toBe("Hello world!");
 
         const updatedSession = await client.sessions.get(session.id);
-        expect(updatedSession.status).toBe("idle");
+        expect(updatedSession.isRunning).toBe(false);
         expect(updatedSession.messages.length).toBe(2);
         expect(updatedSession.messages[1].parts[0]).toMatchObject({
           type: "text",
@@ -545,7 +550,7 @@ describe('ai-sdk', () => {
         }
 
         const idleSession = await client.sessions.get(finishedSession.id);
-        expect(idleSession.status).toBe("idle");
+        expect(idleSession.isRunning).toBe(false);
 
         const afterFinishedStream = await client.sessions.stream(finishedSession.id);
         expect(afterFinishedStream).toBeNull();
@@ -702,8 +707,10 @@ describe('ai-sdk', () => {
         expect(JSON.parse(errorChunk!.errorText)).toMatchObject({ source: "agentview", code: "STREAM_INCOMPLETE", message: "Stream ended incomplete" });
 
         const updatedSession = await client.sessions.get(session.id);
-        expect(updatedSession.status).toBe("failed");
-        expect(updatedSession.reason.message).toContain("Stream ended incomplete");
+
+        expect(updatedSession.isRunning).toBe(false);
+        expect(updatedSession.messages[updatedSession.messages.length - 1].metadata?._agentview?.status).toBe("failed");
+        expect(updatedSession.messages[updatedSession.messages.length - 1].metadata?._agentview?.reason.message).toContain("Stream ended incomplete");
       }, TEST_TIMEOUT);
 
       test("invalid chunk → run marked failed (validated via ai-sdk stream)", async () => {
@@ -738,8 +745,9 @@ describe('ai-sdk', () => {
         expect(JSON.parse(errorChunk!.errorText)).toMatchObject({ source: "agentview", code: "STREAM_INVALID_CHUNK", message: expect.any(String), data: "{\"type\":\"bad-chunk\"}" });
 
         const updatedSession = await client.sessions.get(session.id);
-        expect(updatedSession.status).toBe("failed");
-        expect(updatedSession.reason.message).toContain("Unknown chunk type");
+        expect(updatedSession.isRunning).toBe(false);
+        expect(updatedSession.messages[updatedSession.messages.length - 1].metadata?._agentview?.status).toBe("failed");
+        expect(updatedSession.messages[updatedSession.messages.length - 1].metadata?._agentview?.reason.message).toContain("Unknown chunk type");
       }, TEST_TIMEOUT);
 
 
@@ -886,11 +894,13 @@ describe('ai-sdk', () => {
         await new Promise(r => setTimeout(r, 1000));
 
         const cancelled = await client.sessions.cancelRun(session.id);
-        expect(cancelled.status).toBe("cancelled");
+        expect(cancelled.isRunning).toBe(false);
+        expect(cancelled.messages[cancelled.messages.length - 1].metadata?._agentview?.status).toBe("cancelled");
         // expect(cancelled.finishedAt).toBeDefined();
 
         const updatedSession = await client.sessions.get(session.id);
-        expect(updatedSession.status).toBe("cancelled");
+        expect(updatedSession.isRunning).toBe(false);
+        expect(updatedSession.messages[updatedSession.messages.length - 1].metadata?._agentview?.status).toBe("cancelled");
         // expect(updatedSession.lastRun?.finishedAt).toBeDefined();
 
         expect(updatedSession.messages.length).toBe(2);
@@ -967,7 +977,7 @@ describe('ai-sdk', () => {
 
         // The run was discarded — session looks like nothing happened.
         const updatedSession = await client.sessions.get(session.id);
-        expect(updatedSession.status).toBe("idle");
+        expect(updatedSession.isRunning).toBe(false);
         expect(updatedSession.messages.length).toBe(0);
 
         /**
@@ -994,7 +1004,7 @@ describe('ai-sdk', () => {
         await consumeChunksFromTransportStream(stream);
 
         const updatedSession2 = await client.sessions.get(session.id);
-        expect(updatedSession2.status).toBe("idle");
+        expect(updatedSession2.isRunning).toBe(false);
         expect(updatedSession2.messages.length).toBe(2);
         expect(updatedSession2.messages[0].parts[0].text).toBe("Hello 3");
         expect(updatedSession2.messages[1].parts[0].text).toBe("After disconnect");
@@ -1037,7 +1047,7 @@ describe('ai-sdk', () => {
         }));
 
         const cancelled = await client.sessions.cancelRun(session.id);
-        expect(cancelled.status).toBe("idle");
+        expect(cancelled.isRunning).toBe(false);
 
         // Upstream connection must be torn down.
         await new Promise(r => setTimeout(r, 500));
@@ -1045,7 +1055,7 @@ describe('ai-sdk', () => {
         expect(upstreamWroteHeaders).toBe(false);
 
         const updatedSession = await client.sessions.get(session.id);
-        expect(updatedSession.status).toBe("idle");
+        expect(updatedSession.isRunning).toBe(false);
         expect(updatedSession.messages.length).toBe(0);
 
         await runPromiseExpect;
@@ -1077,7 +1087,7 @@ describe('ai-sdk', () => {
         await consumeChunksFromTransportStream(stream);
 
         const updatedSession2 = await client.sessions.get(session.id);
-        expect(updatedSession2.status).toBe("idle");
+        expect(updatedSession2.isRunning).toBe(false);
         expect(updatedSession2.messages.length).toBe(2);
         expect(updatedSession2.messages[0].parts[0].text).toBe("Hello 3");
         expect(updatedSession2.messages[1].parts[0].text).toBe("After cancel");
@@ -1370,7 +1380,8 @@ describe('ai-sdk', () => {
             });
 
             const s = await client.sessions.get(session.id);
-            expect(s.status).toBe("failed");
+            expect(s.isRunning).toBe(false);
+            expect(s.messages[s.messages.length - 1].metadata?._agentview?.status).toBe("failed");
             expect(s.messages.length).toBe(2);
 
             await verifyNextTurnTrimsIncompleteTools(session.id);
@@ -1383,7 +1394,8 @@ describe('ai-sdk', () => {
             await runWithError(session.id, toolVariants[toolState]);
 
             const s = await client.sessions.get(session.id);
-            expect(s.status).toBe("failed");
+            expect(s.isRunning).toBe(false);
+            expect(s.messages[s.messages.length - 1].metadata?._agentview?.status).toBe("failed");
             expect(s.messages.length).toBe(2);
 
             await verifyNextTurnTrimsIncompleteTools(session.id);
@@ -1396,7 +1408,8 @@ describe('ai-sdk', () => {
             await runWithCancel(session.id, toolVariants[toolState]);
 
             const s = await client.sessions.get(session.id);
-            expect(s.status).toBe("cancelled");
+            expect(s.isRunning).toBe(false);
+            expect(s.messages[s.messages.length - 1].metadata?._agentview?.status).toBe("cancelled");
             expect(s.messages.length).toBe(2);
 
             await verifyNextTurnTrimsIncompleteTools(session.id);
@@ -1427,7 +1440,8 @@ describe('ai-sdk', () => {
           await consumeChunksFromTransportStream(stream);
 
           const s = await client.sessions.get(session.id);
-          expect(s.status).toBe("failed");
+          expect(s.isRunning).toBe(false);
+          expect(s.messages[s.messages.length - 1].metadata?._agentview?.status).toBe("failed");
           expect(s.messages[1].parts[0]).toMatchObject({ type: "tool-getTime", state: "output-available" });
           expect(s.messages[1].parts[1]).toMatchObject({ type: "tool-getWeather", state: "input-available" });
 
@@ -1519,7 +1533,7 @@ describe('ai-sdk', () => {
 
         // Verify: same 4 messages, last one regenerated
         sessionState = await client.sessions.get(session.id);
-        expect(sessionState.status).toBe("idle");
+        expect(sessionState.isRunning).toBe(false);
         expect(sessionState.messages.length).toBe(4);
         expect(sessionState.messages[0].parts[0].text).toBe("hello");
         expect(sessionState.messages[1].parts[0].text).toBe("copy: hello");
@@ -1556,7 +1570,7 @@ describe('ai-sdk', () => {
 
         // Verify: only 4 messages remain (msg3 turn is gone)
         sessionState = await client.sessions.get(session.id);
-        expect(sessionState.status).toBe("idle");
+        expect(sessionState.isRunning).toBe(false);
         expect(sessionState.messages.length).toBe(4);
         expect(sessionState.messages[0].parts[0].text).toBe("msg1");
         expect(sessionState.messages[1].parts[0].text).toBe("copy: msg1");
@@ -1591,7 +1605,7 @@ describe('ai-sdk', () => {
 
         // Verify: only 2 messages remain (the first turn, regenerated)
         sessionState = await client.sessions.get(session.id);
-        expect(sessionState.status).toBe("idle");
+        expect(sessionState.isRunning).toBe(false);
         expect(sessionState.messages.length).toBe(2);
         expect(sessionState.messages[0].parts[0].text).toBe("first");
         expect(sessionState.messages[1].parts[0].text).toBe("regen: first");
@@ -1652,7 +1666,7 @@ describe('ai-sdk', () => {
         expect(sessionState.messages.length).toBe(4);
         expect(sessionState.messages[1].parts[0].text).toBe("v1: a");
         expect(sessionState.messages[3].parts[0].text).toBe("v4: b");
-        expect(sessionState.status).toBe("idle");
+        expect(sessionState.isRunning).toBe(false);
       }, TEST_TIMEOUT);
 
       // ---------------------------------------------------------------
@@ -1685,7 +1699,7 @@ describe('ai-sdk', () => {
         await consumeChunksFromTransportStream(stream);
 
         const finalSession = await client.sessions.get(session.id);
-        expect(finalSession.status).toBe("idle");
+        expect(finalSession.isRunning).toBe(false);
         expect(finalSession.state).toEqual({ counter: 1, notes: "hello" });
         // data-agentview-state should NOT appear in message parts
         expect(finalSession.messages[1].parts.length).toBe(1);
@@ -1719,7 +1733,7 @@ describe('ai-sdk', () => {
         await consumeChunksFromTransportStream(stream);
 
         const finalSession = await client.sessions.get(session.id);
-        expect(finalSession.status).toBe("idle");
+        expect(finalSession.isRunning).toBe(false);
         // fetchSessionState orders by createdAt desc, so the last inserted state wins
         expect(finalSession.state).toEqual({ step: 2 });
       }, TEST_TIMEOUT);
@@ -1919,7 +1933,7 @@ describe('ai-sdk', () => {
         await consumeChunksFromTransportStream(stream);
 
         sessionState = await client.sessions.get(session.id);
-        expect(sessionState.status).toBe("idle");
+        expect(sessionState.isRunning).toBe(false);
         expect(sessionState.messages.length).toBe(4);
         expect(sessionState.messages[3].parts[0].text).toBe("Regenerated");
         // State should revert to run 1's state since the regenerated run didn't set state
@@ -2013,7 +2027,7 @@ describe('ai-sdk', () => {
         // Session now exists with both user + assistant messages
         const session = await client.sessions.get(sessionId);
         expect(session.id).toBe(sessionId);
-        expect(session.status).toBe("idle");
+        expect(session.isRunning).toBe(false);
         expect(session.messages.length).toBe(2);
         expect(session.messages[0].role).toBe("user");
         expect(session.messages[1].role).toBe("assistant");

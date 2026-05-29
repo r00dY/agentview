@@ -464,9 +464,8 @@ export type SessionStatus = z.infer<typeof SessionStatusSchema>
 
 export const SessionSchema = SessionBaseSchema.extend({
   messages: z.array(UIMessageSchema),
-  status: SessionStatusSchema,
   state: z.any().nullable().optional(),
-  reason: z.any().nullable().optional(),
+  isRunning: z.boolean(),
 });
 
 export type Session = z.infer<typeof SessionSchema>
