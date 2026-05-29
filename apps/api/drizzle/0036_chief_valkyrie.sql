@@ -1,0 +1,1 @@
+ALTER TABLE "runs" RENAME COLUMN "fail_reason" TO "reason";

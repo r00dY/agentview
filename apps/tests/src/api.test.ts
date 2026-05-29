@@ -1475,26 +1475,26 @@ describe('API', () => {
 
       })
 
-      test("failReason can be set only on failed runs", async () => {
+      test("reason can be set only on failed runs", async () => {
         await updateConfig()
         const session = await createSession()
 
         const run = await av.createManualRun({ sessionId: session.id, items: [baseInput] })
 
-        const failReason = { message: "oops" }
+        const reason = { message: "oops" }
 
-        await expect(av.updateManualRun({ id: run.id, items: [baseStep], failReason })).rejects.toThrowError(expect.objectContaining({
+        await expect(av.updateManualRun({ id: run.id, items: [baseStep], reason })).rejects.toThrowError(expect.objectContaining({
           statusCode: 422,
           message: expect.any(String),
         }))
 
-        await expect(av.updateManualRun({ id: run.id, items: [baseOutput], failReason, status: "completed" })).rejects.toThrowError(expect.objectContaining({
+        await expect(av.updateManualRun({ id: run.id, items: [baseOutput], reason, status: "completed" })).rejects.toThrowError(expect.objectContaining({
           statusCode: 422,
           message: expect.any(String),
         }))
 
-        const updated = await av.updateManualRun({ id: run.id, items: [baseOutput], status: "failed", failReason })
-        expect(updated.failReason).toEqual(failReason)
+        const updated = await av.updateManualRun({ id: run.id, items: [baseOutput], status: "failed", reason })
+        expect(updated.reason).toEqual(reason)
       })
 
 
@@ -1873,7 +1873,7 @@ describe('API', () => {
 
         const run = await av.createManualRun({ sessionId: session.id, items: [baseInput] })
         await av.updateManualRun({ id: run.id, items: [baseStep] })
-        const failed = await av.updateManualRun({ id: run.id, status: "failed", failReason: { message: "error" } })
+        const failed = await av.updateManualRun({ id: run.id, status: "failed", reason: { message: "error" } })
 
         // Input should be 'input'
         expect(failed.sessionItems[0].type).toBe('input')
@@ -1901,7 +1901,7 @@ describe('API', () => {
         await av.updateManualRun({ id: run.id, items: [baseStep] })
 
         await expectToFail(av.updateManualRun({ id: run.id, items: [baseOutput], outputItemCount: 1 }), 422)
-        await expectToFail(av.updateManualRun({ id: run.id, status: "failed", failReason: { message: "error" }, outputItemCount: 1 }), 422)
+        await expectToFail(av.updateManualRun({ id: run.id, status: "failed", reason: { message: "error" }, outputItemCount: 1 }), 422)
       })
 
       test("run created with status: 'completed' has output items marked", async () => {
@@ -1991,7 +1991,7 @@ describe('API', () => {
 
         expect(updatedSession.lastRun).toBeDefined()
         expect(updatedSession.lastRun!.status).toBe("failed")
-        expect(updatedSession.lastRun!.failReason).toMatchObject({ message: "Timeout" })
+        expect(updatedSession.lastRun!.reason).toMatchObject({ message: "Timeout" })
       }, 10000) // 10s timeout for this test
 
       test("keep-alive prevents expiration", async () => {
@@ -2804,7 +2804,7 @@ describe('API', () => {
 
   //     const { finalRun } = await collectSessionStream(stream)
   //     expect(finalRun.status).toBe("failed");
-  //     expect(finalRun.failReason).toBeDefined();
+  //     expect(finalRun.reason).toBeDefined();
   //   }, 10000);
 
   //   test("bad HTTP response: agent returns 500 → run marked failed", async () => {
@@ -2826,7 +2826,7 @@ describe('API', () => {
   //     const { finalRun } = await collectSessionStream(stream)
 
   //     expect(finalRun.status).toBe("failed");
-  //     expect(finalRun.failReason).toBeDefined();
+  //     expect(finalRun.reason).toBeDefined();
   //   }, 10000);
 
   //   test("stream ends without completion → run fails", async () => {
@@ -2850,7 +2850,7 @@ describe('API', () => {
   //     const { finalRun } = await collectSessionStream(stream)
 
   //     expect(finalRun.status).toBe("failed");
-  //     expect(finalRun.failReason.message).toContain("Agent stream ended without completing");
+  //     expect(finalRun.reason.message).toContain("Agent stream ended without completing");
   //   }, 10000);
 
   //   test("multiple incremental patches: items accumulate correctly (validated via session stream)", async () => {

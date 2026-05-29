@@ -37,7 +37,7 @@ async function onRunFinished(tx: OrgTransaction, params: {
   sessionId: string;
   status: string;
   channelReply?: { text: string };
-  failReason?: any;
+  reason?: any;
 }) {
   const organizationId = tx.organizationId;
   tx.afterCommit(async () => {
@@ -190,7 +190,7 @@ async function createRunCore(
     parsedInput: any
     parsedNonInputItems: any[];
     status: string;
-    failReason: any | null;
+    reason: any | null;
     expiresAt: string | null;
     finishedAt: string | null;
     metadata: Record<string, any> | undefined;
@@ -202,14 +202,14 @@ async function createRunCore(
     active: boolean
   }
 ): Promise<typeof runs.$inferSelect> {
-  const { parsedInput, parsedNonInputItems, status, failReason, expiresAt, finishedAt, metadata, agentRefId, manual, state, active, previousRun, id } = params;
+  const { parsedInput, parsedNonInputItems, status, reason, expiresAt, finishedAt, metadata, agentRefId, manual, state, active, previousRun, id } = params;
 
   const [insertedRun] = await tx.insert(runs).values({
     id,
     organizationId: tx.organizationId,
     sessionId,
     status,
-    failReason,
+    reason,
     manual,
     expiresAt,
     finishedAt,
@@ -348,16 +348,16 @@ async function processInput(agentConfig: BaseAgentConfig, input: any) {
 
 
 
-export type RunTerminationReason = { status: 'cancelled' } | { status: 'failed', failReason: any } | { status: 'discarded', failReason: any };
+export type RunTerminationReason = { status: 'cancelled' } | { status: 'failed', reason: any } | { status: 'discarded', reason: any };
 
 export function terminationReasonText(body: RunTerminationReason) {
   switch (body.status) {
     case 'cancelled':
       return 'cancelled';
     case 'failed':
-      return `failed${body.failReason ? ` (${body.failReason.message})` : ''}`;
+      return `failed${body.reason ? ` (${body.reason.message})` : ''}`;
     case 'discarded':
-      return `discarded${body.failReason ? ` (${body.failReason.message})` : ''}`;
+      return `discarded${body.reason ? ` (${body.reason.message})` : ''}`;
   }
 }
 
@@ -396,7 +396,7 @@ export class RunTerminationError extends Error {
 //   const run = await requireRunBase(tx, runId);
 
 //   if (run.status === 'discarded') { // important for auto-fetch. When resource is discarded all "patch" operations should trigger this error to handle race conditions gracefully.
-//     throw new RunTerminationError({ status: run.status, failReason: run.failReason });
+//     throw new RunTerminationError({ status: run.status, reason: run.reason });
 //   }
 
 //   if (run.status !== 'in_progress') {
@@ -434,7 +434,7 @@ export class RunTerminationError extends Error {
 //   metadata: z.record(z.string(), z.any()).optional(),
 //   status: z.enum(['in_progress', 'completed', 'cancelled', 'failed']).optional(),
 //   state: z.any().optional(),
-//   failReason: z.any().nullable().optional(),
+//   reason: z.any().nullable().optional(),
 //   outputItemCount: z.number().int().min(0).optional(),
 //   channelReply: z.object({ text: z.string() }).optional(),
 // });
@@ -461,7 +461,7 @@ export type FastPatchCancelOp = {
 
 export type FastPatchFailOp = {
   type: "fail",
-  failReason: { message: string, [key: string]: any }
+  reason: { message: string, [key: string]: any }
 }
 
 export type FastPatchCompleteOp = {
@@ -493,7 +493,7 @@ export async function fastApplyRunPatch(
   }
 
   if (run.status !== 'in_progress') { // important for auto-fetch. When resource is discarded all "patch" operations should trigger this error to handle race conditions gracefully.
-    throw new RunTerminationError({ status: run.status as 'cancelled' | 'failed' | 'discarded', failReason: run.failReason });
+    throw new RunTerminationError({ status: run.status as 'cancelled' | 'failed' | 'discarded', reason: run.reason });
   }
 
   // if (run.status !== 'in_progress') {
@@ -513,7 +513,7 @@ export async function fastApplyRunPatch(
     return;
   }
 
-  const updatedRun: { updatedAt: string, expiresAt: string, metadata?: Record<string, any>, status?: string, finishedAt?: string, failReason?: any } = {
+  const updatedRun: { updatedAt: string, expiresAt: string, metadata?: Record<string, any>, status?: string, finishedAt?: string, reason?: any } = {
     updatedAt: nowIso,
     expiresAt: new Date(now + idleTimeout).toISOString(),
   };
@@ -553,11 +553,11 @@ export async function fastApplyRunPatch(
 
   } else if (op.type === 'fail') {
     updatedRun.status = 'failed';
-    updatedRun.failReason = op.failReason;
+    updatedRun.reason = op.reason;
     updatedRun.finishedAt = nowIso;
 
     dbOps.push(
-      onRunFinished(tx, { runId: run.id, sessionId: run.sessionId, status: 'failed', failReason: op.failReason }),
+      onRunFinished(tx, { runId: run.id, sessionId: run.sessionId, status: 'failed', reason: op.reason }),
     );
 
   } else if (op.type === 'complete') {
@@ -629,7 +629,7 @@ export async function applyRunPatch(
   authorize(tx.principal, { action: "end-user:update", user: session.user });
 
   if (run.status === 'discarded') { // important for auto-fetch. When resource is discarded all "patch" operations should trigger this error to handle race conditions gracefully.
-    throw new RunTerminationError({ status: run.status, failReason: run.failReason });
+    throw new RunTerminationError({ status: run.status, reason: run.reason });
   }
 
   // Guard: API can only cancel auto-fetch runs which are being auto-fetched
@@ -690,20 +690,20 @@ export async function applyRunPatch(
     idleTimeout = runConfig.idleTimeout ?? DEFAULT_IDLE_TIME;
   }
 
-  /** Status, finished at, failReason */
+  /** Status, finished at, reason */
   if (isRunFinished(run) && body.status && body.status !== run.status) {
     throw new AgentViewError("Run already finished (status: " + run.status + "). Cannot change status.", 422);
   }
 
   const status = body.status ?? 'in_progress';
-  const failReason = body.failReason ?? null;
+  const reason = body.reason ?? null;
 
-  if (failReason) {
+  if (reason) {
     if (isRunFinished(run)) {
-      throw new AgentViewError("Run already finished. failReason cannot be set.", 422);
+      throw new AgentViewError("Run already finished. reason cannot be set.", 422);
     }
     else if (status !== 'failed') {
-      throw new AgentViewError("failReason can only be set when changing status to 'failed'.", 422);
+      throw new AgentViewError("reason can only be set when changing status to 'failed'.", 422);
     }
   }
 
@@ -739,7 +739,7 @@ export async function applyRunPatch(
   const [updatedRun] = await tx.update(runs).set({
     status,
     metadata,
-    failReason,
+    reason,
     finishedAt,
     expiresAt,
     updatedAt: nowIso,
@@ -763,7 +763,7 @@ export async function applyRunPatch(
 
   /** Notify on terminal status change */
   if (isFinished && !isRunFinished(run)) {
-    await onRunFinished(tx, { runId: run.id, sessionId: run.sessionId, status, channelReply: body.channelReply, failReason: body.failReason });
+    await onRunFinished(tx, { runId: run.id, sessionId: run.sessionId, status, channelReply: body.channelReply, reason: body.reason });
   }
 
   // Publish to Redis stream only after transaction finished successfully in DB
@@ -838,7 +838,7 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
     // Discarded runs were never visible to users — treat them as "no run happened",
     // so no finish handler fires.
     if (reason.status !== 'discarded') {
-      await onRunFinished(tx, { runId, sessionId, status: reason.status, failReason: reason.failReason });
+      await onRunFinished(tx, { runId, sessionId, status: reason.status, reason: reason.reason });
     }
 
     // this is important, we must send the last run patch event to the stream
@@ -898,7 +898,7 @@ export async function createAutoRunInTx(
     parsedInput,
     parsedNonInputItems: [],
     status: 'in_progress',
-    failReason: null,
+    reason: null,
     expiresAt: new Date(Date.now() + idleTimeout).toISOString(),
     finishedAt: null,
     metadata: undefined,
@@ -983,7 +983,7 @@ export async function executeAutoRun(
           id: runBase.id,
           agentRef: runBase.agentRef,
           status: runBase.status,
-          failReason: runBase.failReason,
+          reason: runBase.reason,
           createdAt: runBase.createdAt,
           finishedAt: runBase.finishedAt,
           metadata: runBase.metadata,
@@ -1011,7 +1011,7 @@ export async function executeAutoRun(
       await withTenant(principal, async (tx) => {
         await terminateRun(tx, sessionId, runId, {
           status: 'discarded',
-          failReason: {
+          reason: {
             source: 'agentview',
             message: "Error response from AI Endpoint",
             statusCode: response.status
@@ -1050,7 +1050,7 @@ export async function executeAutoRun(
     await withTenant(principal, async (tx) => {
       await terminateRun(tx, sessionId, runId, {
         status: 'discarded',
-        failReason: {
+        reason: {
           message
         },
       });
@@ -1085,7 +1085,7 @@ export async function createAutoRun2(
 
 /**
  * Manual run creation. Used by POST /api/sessions/{id}/runs/manual.
- * Full control: items, status, state, failReason, metadata.
+ * Full control: items, status, state, reason, metadata.
  * API channels only.
  */
 export async function createManualRun(
@@ -1125,10 +1125,10 @@ export async function createManualRun(
   const metadata = parseMetadata(runConfig.metadata, runConfig.allowUnknownMetadata ?? true, body.metadata ?? {}, {});
 
   const status = body.status ?? 'in_progress';
-  const failReason = body.failReason ?? null;
+  const reason = body.reason ?? null;
 
-  if (failReason && status !== 'failed') {
-    throw new AgentViewError("failReason can only be set when status is 'failed'.", 422);
+  if (reason && status !== 'failed') {
+    throw new AgentViewError("reason can only be set when status is 'failed'.", 422);
   }
 
   const isFinished = status === 'completed' || status === 'cancelled' || status === 'failed';
@@ -1139,7 +1139,7 @@ export async function createManualRun(
     parsedInput,
     parsedNonInputItems,
     status,
-    failReason,
+    reason,
     expiresAt,
     finishedAt,
     metadata,

@@ -112,7 +112,7 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
           finishedAt: true,
           updatedAt: true,
           status: true,
-          failReason: true,
+          reason: true,
           metadata: true,
           sessionId: true,
           // agentRefId: true,
@@ -256,13 +256,13 @@ async function fetchSessionState(tx: Transaction, session_id: string, activeRunI
   return result[0]?.content as any ?? null;
 }
 
-export function getSessionStatusFields(session: StandardSession): { status: SessionStatus, failReason: any | null } {
+export function getSessionStatusFields(session: StandardSession): { status: SessionStatus, reason: any | null } {
   const lastRun = session.runs[session.runs.length - 1];
-  const failReason = lastRun?.failReason;
+  const reason = lastRun?.reason;
 
   return {
     status: (!lastRun || lastRun.status === 'completed') ? 'idle' : (lastRun.status as SessionStatus),
-    failReason
+    reason
   }
 }
 

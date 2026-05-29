@@ -78,11 +78,11 @@ export async function saveData(
     });
 
     if (streamFinishReason.type === 'error') {
-      const { type, ...failReason } = streamFinishReason;
+      const { type, ...reason } = streamFinishReason;
 
       await saveData(conn, {
         type: 'fail',
-        failReason,
+        reason,
       });
     }
     else if (streamFinishReason.type === 'abort') {

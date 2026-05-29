@@ -253,6 +253,13 @@
       "when": 1780039024222,
       "tag": "0035_lowly_captain_flint",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1780040911959,
+      "tag": "0036_chief_valkyrie",
+      "breakpoints": true
     }
   ]
 }

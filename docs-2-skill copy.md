@@ -286,7 +286,7 @@ Here are the core fields of a `Session` object:
   resume: z.boolean(),
   status: SessionStatusSchema,
   state: z.any().nullable().optional(),
-  failReason: z.any().nullable().optional(),
+  reason: z.any().nullable().optional(),
 ```
 
 #### `session.messages`
@@ -300,7 +300,7 @@ Sending `user` message triggers a "Run", which ends with assistant message.
 Each assistant message contains special metadata property called `_agentview` that contains the additional info about the run that comes from AgentView:
 - `id` - run id
 - `status` - `in_progress`, `cancelled`, `error`
-- `failReason` - available for `error` status
+- `reason` - available for `error` status
 - `createdAt`
 - `finishedAt`
 - `agent: { name, version }`
@@ -465,7 +465,7 @@ export async function POST(req: Request) {
 | **messages**   | UIMessage[]                            | Array of all messages in the session, including user inputs and agent replies                     |
 | resume      | boolean                                | Indicates if the session can be resumed                                                           |
 | state       | any (nullable, optional)               | Agent specific state or context object (if any, can be null)                                      |
-| failReason  | any (nullable, optional)               | Failure reason if the session/run failed                                                          |
+| reason  | any (nullable, optional)               | Failure reason if the session/run failed                                                          |
 | createdAt   | string (ISO timestamp)                 | When the session was created                                                                      |
 | updatedAt   | string (ISO timestamp)                 | When the session was last updated                                                                 |
 | [metadata]  | object (optional)                      | Any additional agent/session metadata (custom or system injected)                                 |
@@ -539,7 +539,7 @@ Each User belongs to a space, there are 3 spaces: `production`, `playground` and
 Create an agent session and start a run.
 
 // TODO: describe session shape. Tell about UIMessage[] array.
-// Tell about how it *injects* our internal metadata (like status, failReason etc)
+// Tell about how it *injects* our internal metadata (like status, reason etc)
 
 ```tsx
 const bob = await client.users.create({ email: "bob@acme.com", name: "Bob" })

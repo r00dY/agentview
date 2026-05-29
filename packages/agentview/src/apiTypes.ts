@@ -214,7 +214,7 @@ export const RunBaseSchema = z.object({
   updatedAt: z.iso.date(),
   finishedAt: z.iso.date().nullable(),
   status: z.string(),
-  failReason: z.any().nullable(),
+  reason: z.any().nullable(),
   agent: AgentRefSchema.nullable(),
   metadata: z.record(z.string(), z.any()).nullable(),
   manual: z.boolean(),
@@ -241,7 +241,7 @@ export const ManualRunCreateSchema = z.object({
   metadata: z.record(z.string(), z.any()).optional(),
   status: z.enum(['in_progress', 'completed', 'cancelled', 'failed']).optional(),
   state: z.any().optional(),
-  failReason: z.any().nullable().optional(),
+  reason: z.any().nullable().optional(),
 });
 
 export type ManualRunCreate = z.infer<typeof ManualRunCreateSchema>
@@ -252,7 +252,7 @@ export const ManualRunUpdateSchema = z.object({
   metadata: z.record(z.string(), z.any()).optional(),
   status: z.enum(['in_progress', 'completed', 'cancelled', 'failed']).optional(),
   state: z.any().optional(),
-  failReason: z.any().nullable().optional(),
+  reason: z.any().nullable().optional(),
   outputItemCount: z.number().int().min(0).optional(),
   channelReply: z.object({ text: z.string() }).optional(),
 });
@@ -467,7 +467,7 @@ export const SessionSchema = SessionBaseSchema.extend({
   resume: z.boolean(),
   status: SessionStatusSchema,
   state: z.any().nullable().optional(),
-  failReason: z.any().nullable().optional(),
+  reason: z.any().nullable().optional(),
 });
 
 export type Session = z.infer<typeof SessionSchema>

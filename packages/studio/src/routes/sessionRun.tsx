@@ -75,11 +75,11 @@ function Component() {
                         </PropertyListTextValue>
                     </PropertyListItem>
 
-                    {run.failReason && (
+                    {run.reason && (
                         <PropertyListItem>
                             <PropertyListTitle>Fail reason</PropertyListTitle>
                             <PropertyListTextValue className="text-red-500">
-                                {run.failReason.message ?? "Unknown reason"}
+                                {run.reason.message ?? "Unknown reason"}
                             </PropertyListTextValue>
                         </PropertyListItem>
                     )}
@@ -146,7 +146,7 @@ function Component() {
                         request: run.responseData?.request,
                         response: run.responseData?.response,
                         metadata: run.metadata,
-                        error: run.failReason,
+                        error: run.reason,
                     })
                 }}><TerminalIcon className="size-4" />Print all details to console</Button>
                 <p className="text-sm text-muted-foreground">See request / response of your Agent API call, full error details or metadata click the button below.</p>

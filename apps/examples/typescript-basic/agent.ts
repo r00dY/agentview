@@ -57,7 +57,7 @@ app.post('/simple_chat', async (c) => {
     await av.updateRun({
       id: run.id,
       status: "failed",
-      failReason: {
+      reason: {
         message: (error as Error).message,
       }
     });

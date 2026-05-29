@@ -143,7 +143,7 @@ type WallItem = {
     run?: {
         id: string,
         status: string,
-        failReason: any,
+        reason: any,
     }
 
     messageId?: string,
@@ -315,7 +315,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         const run = runMetadata?.id ? {
             id: runMetadata.id,
             status: runMetadata.status,
-            failReason: runMetadata.failReason,
+            reason: runMetadata.reason,
         } : undefined;
 
         if (message.role === "user") {
@@ -374,7 +374,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
             const isLast = index === messages.length - 1;
 
             const status = message.metadata?._agentview?.status;
-            const failReason = message.metadata?._agentview?.failReason;
+            const reason = message.metadata?._agentview?.reason;
 
             /**
              * OUTPUT PARTS HEURISTICS 
@@ -532,7 +532,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 
                 if (status === "failed") {
                     element = <div className="text-md text-red-500">
-                        <span className="">{failReason?.message ?? "Failed for unknown reason"}</span>
+                        <span className="">{reason?.message ?? "Failed for unknown reason"}</span>
                     </div>;
                 }
                 else if (status === "cancelled") {
@@ -1002,7 +1002,7 @@ function RunFooter(props: RunFooterProps) {
     // // Error
     // if (run.status === "failed") {
     //     blocks.push(<div className="text-md mt-6 mb-3 text-red-500">
-    //         <span className="">{run.failReason?.message ?? "Failed for unknown reason"}</span>
+    //         <span className="">{run.reason?.message ?? "Failed for unknown reason"}</span>
     //     </div>);
     // }
     // else if (run.status === "cancelled") {
@@ -1104,7 +1104,7 @@ function RunFooter(props: RunFooterProps) {
 //     // Error
 //     if (isLastRunItem && (run.status === "failed" || run.status === "cancelled")) {
 //         const errorMessage = run.status === "failed" ?
-//             (run.failReason?.message ?? "Failed for unknown reason") :
+//             (run.reason?.message ?? "Failed for unknown reason") :
 //             "Cancelled by user";
 
 //         blocks.push(<div className="text-md mt-6 mb-3 text-red-500">

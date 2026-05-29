@@ -64,7 +64,7 @@ function sessionToUIMessages(session: StandardSession): UIMessage[] {
                 _agentview: {
                     id: run.id,
                     status: run.status,
-                    failReason: run.failReason,
+                    reason: run.reason,
                     createdAt: run.createdAt,
                     finishedAt: run.finishedAt,
                     agent: {

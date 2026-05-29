@@ -144,7 +144,7 @@ export class StandardAgentViewClient extends AgentViewBase {
                                     ...run,
                                     ...(rawEvent.data.status && { status: rawEvent.data.status }),
                                     ...(rawEvent.data.metadata && { metadata: rawEvent.data.metadata }),
-                                    ...(rawEvent.data.failReason !== undefined && { failReason: rawEvent.data.failReason }),
+                                    ...(rawEvent.data.reason !== undefined && { reason: rawEvent.data.reason }),
                                     updatedAt: rawEvent.data.updatedAt,
                                     sessionItems: [
                                         ...run.sessionItems,

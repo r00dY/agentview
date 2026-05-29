@@ -150,7 +150,7 @@ class Run(BaseModel):
     created_at: DateTime = Field(alias="createdAt")
     finished_at: DateTime | None = Field(default=None, alias="finishedAt")
     status: str
-    fail_reason: Any = Field(default=None, alias="failReason")
+    fail_reason: Any = Field(default=None, alias="reason")
     version: Version
     metadata: dict[str, Any] | None = None
     session_items: list[SessionItem] = Field(alias="sessionItems")
@@ -167,7 +167,7 @@ class RunCreate(BaseModel):
     metadata: dict[str, Any] | None = None
     status: Status | None = None
     state: Any | None = None
-    fail_reason: Any = Field(default=None, alias="failReason")
+    fail_reason: Any = Field(default=None, alias="reason")
 
 
 class RunUpdate(BaseModel):
@@ -177,7 +177,7 @@ class RunUpdate(BaseModel):
     metadata: dict[str, Any] | None = None
     status: Status | None = None
     state: Any | None = None
-    fail_reason: Any = Field(default=None, alias="failReason")
+    fail_reason: Any = Field(default=None, alias="reason")
 
 
 class RunWithCollaboration(BaseModel):
@@ -187,7 +187,7 @@ class RunWithCollaboration(BaseModel):
     created_at: DateTime = Field(alias="createdAt")
     finished_at: DateTime | None = Field(default=None, alias="finishedAt")
     status: str
-    fail_reason: Any = Field(default=None, alias="failReason")
+    fail_reason: Any = Field(default=None, alias="reason")
     version: Version
     metadata: dict[str, Any] | None = None
     session_items: list[SessionItemWithCollaboration] = Field(alias="sessionItems")

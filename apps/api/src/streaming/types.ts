@@ -23,7 +23,7 @@ export interface LiveConnectionStreaming {
       adapter: string;
     };
     status: string;
-    failReason: any | null;
+    reason: any | null;
     createdAt: string;
     finishedAt: string | null;
     metadata: Record<string, any> | null;

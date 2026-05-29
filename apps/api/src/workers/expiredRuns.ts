@@ -8,7 +8,7 @@ import { withOrg } from '../withOrg';
 type Run = typeof runs.$inferSelect;
 
 const TERMINATION_DELAY_MS = 5000;
-const TERMINATION_REASON: RunTerminationReason = { status: 'failed', failReason: { message: 'Timeout' } };
+const TERMINATION_REASON: RunTerminationReason = { status: 'failed', reason: { message: 'Timeout' } };
 
 /**
  * Expired runs are a periodic scan, not a job queue.

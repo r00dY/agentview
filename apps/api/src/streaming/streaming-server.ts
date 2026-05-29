@@ -336,7 +336,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
         sendInternalMetadata({
           ...run,
           status: 'completed',
-          failReason: null,
+          reason: null,
           finishedAt,
         })
       }
@@ -344,16 +344,16 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
         sendInternalMetadata({
           ...run,
           status: 'cancelled',
-          failReason: null,
+          reason: null,
           finishedAt,
         })
       }
       else {
-        const { type, ...failReason } = streamFinishReason;
+        const { type, ...reason } = streamFinishReason;
         sendInternalMetadata({
           ...run,
           status: 'failed',
-          failReason,
+          reason,
           finishedAt,
         })
       }

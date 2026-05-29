@@ -286,12 +286,13 @@ Here are the core fields of a `Session` object:
   userId: z.string(), // potential bloat, but it's actually ok
 
   active: z.boolean(),
-  
+
   channelThreadId: z.string().nullable(),
-    channel: ChannelRefSchema,
+  channel: ChannelRefSchema,
+
   resume: z.boolean(),
   status: SessionStatusSchema,
-  failReason: z.any().nullable().optional(),
+  reason: z.any().nullable().optional(),
 ```
 
 #### `session.messages`
@@ -318,7 +319,7 @@ Each assistant message contains special metadata property called `_agentview` th
       _agentview: {
         id,
         status,
-        failReason,
+        reason,
         createdAt,
         finishedAt,
         agent: { name, version },
@@ -331,7 +332,7 @@ Each assistant message contains special metadata property called `_agentview` th
 
 - `id` - run id
 - `status` - `in_progress`, `cancelled`, `error`
-- `failReason` - available for `error` status
+- `reason` - available for `error` status
 - `createdAt`
 - `finishedAt`
 - `agent: { name, version }`
@@ -579,7 +580,7 @@ As mentioned above, each assistant message is extended with `_agentview` field i
 ```
 - `id` - run id
 - `status` - `in_progress`, `cancelled`, `error`
-- `failReason` - available for `error` status
+- `reason` - available for `error` status
 - `createdAt`
 - `finishedAt`
 - `agent: { name, version }`

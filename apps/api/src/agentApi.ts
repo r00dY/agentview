@@ -162,7 +162,7 @@ export async function* callAgentAPI(body: RunBody, url: string, signal?: AbortSi
       name: "run.patch",
       data: {
         status: "failed",
-        failReason: errorObject,
+        reason: errorObject,
       },
     }
   }

@@ -353,7 +353,7 @@ describe('ai-sdk', () => {
 
         const updatedSession = await client.sessions.get(session.id);
         expect(updatedSession.status).toBe("failed");
-        expect(updatedSession.failReason).toBeDefined();
+        expect(updatedSession.reason).toBeDefined();
       }, TEST_TIMEOUT);
 
       test("error → invalid chunk", async () => {
@@ -391,7 +391,7 @@ describe('ai-sdk', () => {
         expect(updatedSession.messages[1].parts[0].text).toBe("Hello world!");
 
         expect(updatedSession.status).toBe("failed");
-        expect(updatedSession.failReason).toBeDefined();
+        expect(updatedSession.reason).toBeDefined();
 
       }, TEST_TIMEOUT);
 
@@ -703,7 +703,7 @@ describe('ai-sdk', () => {
 
         const updatedSession = await client.sessions.get(session.id);
         expect(updatedSession.status).toBe("failed");
-        expect(updatedSession.failReason.message).toContain("Stream ended incomplete");
+        expect(updatedSession.reason.message).toContain("Stream ended incomplete");
       }, TEST_TIMEOUT);
 
       test("invalid chunk → run marked failed (validated via ai-sdk stream)", async () => {
@@ -739,7 +739,7 @@ describe('ai-sdk', () => {
 
         const updatedSession = await client.sessions.get(session.id);
         expect(updatedSession.status).toBe("failed");
-        expect(updatedSession.failReason.message).toContain("Unknown chunk type");
+        expect(updatedSession.reason.message).toContain("Unknown chunk type");
       }, TEST_TIMEOUT);
 
 

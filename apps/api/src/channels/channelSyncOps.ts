@@ -228,7 +228,7 @@ export async function checkInbox(organizationId: string, channelThreadId: string
         log.info({ sessionId: session.id, runId: activeRun.id }, 'terminating active run before creating new channel run');
         await terminateRun(tx, session.id, activeRun.id as string, {
           status: 'discarded',
-          failReason: { message: 'New message ingested, discarding active run' },
+          reason: { message: 'New message ingested, discarding active run' },
         });
       }
 
@@ -386,7 +386,7 @@ export async function channelOnRunFinishHandler(params: {
   sessionId: string;
   status: string;
   channelReply?: { text: string };
-  failReason?: any;
+  reason?: any;
 }) {
   const channelThreadId = await withOrg(params.organizationId, async (tx) => {
     const session = await requireSessionBase(tx, params.sessionId);
@@ -432,7 +432,7 @@ export async function channelOnRunFinishHandler(params: {
       });
 
     } else if (params.status === 'failed') {
-      const text = formatChannelErrorBody(params.failReason ?? new Error('Run failed'));
+      const text = formatChannelErrorBody(params.reason ?? new Error('Run failed'));
 
       await tx.update(channelMessages)
         .set({ status: 'error' })
@@ -562,7 +562,7 @@ export async function sendOutgoingChannelMessage(messageId: string, organization
         // no automatic retrigger exists from this file. The only way back into the queue today
         // is deleting the row and re-inserting it.
         status: 'error',
-        failReason: { message: errorMessage },
+        reason: { message: errorMessage },
         updatedAt: new Date().toISOString(),
       }).where(eq(channelMessages.id, messageId));
     });

@@ -216,14 +216,14 @@ describe('ai-sdk timeouts', () => {
     // session reports the terminal status from the worker.
     //
     // Note: the streaming-server intercepts the graceful termination signal
-    // and writes its own failReason via the fast-patch 'fail' op (which runs
+    // and writes its own reason via the fast-patch 'fail' op (which runs
     // before the worker's terminateRun, because sendRunTerminationSignal
-    // waits for streamDone). So the recorded failReason is
+    // waits for streamDone). So the recorded reason is
     // { code: 'STREAM_TERMINATED', message: 'failed (Timeout)' }, not the
     // raw { message: 'Timeout' } from the worker.
     const finalSession = await client.sessions.get(session.id);
     expect(finalSession.status).toBe('failed');
-    expect(finalSession.failReason?.code).toBe('STREAM_TERMINATED');
-    expect(finalSession.failReason?.message).toContain('Timeout');
+    expect(finalSession.reason?.code).toBe('STREAM_TERMINATED');
+    expect(finalSession.reason?.message).toContain('Timeout');
   }, TEST_TIMEOUT);
 });
