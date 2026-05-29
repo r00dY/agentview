@@ -187,7 +187,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         )?.unseenEvents;
     };
 
-    const [initialResume] = useState(initialSession.resume);
+    const [initialResume] = useState(initialSession.status === 'in_progress');
 
     const { messages, sendMessage: sendMessage_, status, error, regenerate, setMessages } = useChat({
         id: initialSession.id,

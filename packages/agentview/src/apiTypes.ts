@@ -278,7 +278,7 @@ export const SessionBaseSchema = z.object({
   userId: z.string(), // potential bloat
   title: z.string().nullable(),
   agent: AgentRefSchema.nullable(),
-active: z.boolean(),
+  active: z.boolean(),
   channelThreadId: z.string().nullable(),
 })
 
@@ -464,7 +464,6 @@ export type SessionStatus = z.infer<typeof SessionStatusSchema>
 
 export const SessionSchema = SessionBaseSchema.extend({
   messages: z.array(UIMessageSchema),
-  resume: z.boolean(),
   status: SessionStatusSchema,
   state: z.any().nullable().optional(),
   reason: z.any().nullable().optional(),

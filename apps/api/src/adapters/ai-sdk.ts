@@ -10,8 +10,7 @@ export const aiSDKAdapter = {
         const statusFields = getSessionStatusFields(session);
         return {
             messages,
-            ...statusFields,
-            resume: statusFields.status === 'in_progress',
+            ...statusFields
         }
     },
     createDefaultInputForChannelMessages: (incomingMessages: any[]) => {

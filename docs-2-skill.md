@@ -290,7 +290,6 @@ Here are the core fields of a `Session` object:
   channelThreadId: z.string().nullable(),
   channel: ChannelRefSchema,
 
-  resume: z.boolean(),
   status: SessionStatusSchema,
   reason: z.any().nullable().optional(),
 ```

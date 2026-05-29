@@ -24,7 +24,7 @@ export function ChatUI(props: {
     id: session.id,
     generateId: () => crypto.randomUUID(),
     messages: session.messages,
-    resume: session.resume,
+    resume: session.status === 'in_progress',
     transport: client.asUser({ token: userToken }).createTransport()
   });
 
