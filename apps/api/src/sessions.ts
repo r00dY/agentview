@@ -8,7 +8,7 @@ import { authorize } from "./authMiddleware";
 import { getConfigFromEnvironment, requireConfig, requireEnvironment } from "./environments";
 import { isUUID, requireUUID } from "./isUUID";
 import { parseMetadata } from "./parseMetadata";
-import { agentRefs, channelMessages, endUsers, events, runs, sessionItems, sessions } from "./schemas/schema";
+import { agentRefs, channelMessages, channels, channelThreads, endUsers, events, runs, sessionItems, sessions } from "./schemas/schema";
 import type { Transaction } from "./types";
 import { updateInboxes } from "./updateInboxes";
 import { createUser, requireUser } from "./users";
@@ -250,6 +250,7 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
         }
       }),
     state: state ?? row.initialState ?? null,
+    channelMessages: sessionChannelMessages,
     channelThread,
     channel,
   } as StandardSession;
@@ -397,16 +398,19 @@ function buildPaginationMetadata(totalCount: number, page: number, limit: number
   };
 }
 
-function mapSessionRow(row: { sessions: typeof sessions.$inferSelect; end_users: typeof endUsers.$inferSelect | null, agent_refs: typeof agentRefs.$inferSelect | null }) {
+function mapSessionRow(row: {
+  sessions: typeof sessions.$inferSelect;
+  end_users: typeof endUsers.$inferSelect | null;
+  agent_refs: typeof agentRefs.$inferSelect | null;
+  channel_threads: typeof channelThreads.$inferSelect | null;
+  channels: typeof channels.$inferSelect | null;
+}) {
   return {
     id: row.sessions.id,
     createdAt: row.sessions.createdAt,
     updatedAt: row.sessions.updatedAt,
     metadata: row.sessions.metadata as Record<string, any>,
     title: row.sessions.title,
-    channel: row.sessions.channelType === 'api'
-      ? { type: 'api' as const, name: row.sessions.channelAddress }
-      : { type: row.sessions.channelType as "gmail" | "mock", address: row.sessions.channelAddress },
     user: row.end_users!,
     userId: row.end_users!.id,
     agent: row.agent_refs ? {
@@ -415,9 +419,15 @@ function mapSessionRow(row: { sessions: typeof sessions.$inferSelect; end_users:
       adapter: row.agent_refs.adapter,
     } : null,
     active: row.sessions.active,
-    channelThreadId: row.sessions.channelThreadId,
-    // agentRef: row.agent_refs ?? null,
-    // agentRefs: row.sessions.agentRefs ?? []
+    channelThread: row.channel_threads ? {
+      id: row.channel_threads.id,
+      sourceThreadId: row.channel_threads.sourceThreadId,
+    } : null,
+    channel: row.channels ? {
+      id: row.channels.id,
+      type: row.channels.type,
+      address: row.channels.address,
+    } : null,
   };
 }
 
@@ -447,13 +457,15 @@ export async function getSessions(tx: TenantTransaction, params: SessionsGetQuer
 
   // Build sessions query
   const sessionsQuery = tx
-    .select({ sessions, end_users: endUsers, agent_refs: agentRefs })
+    .select({ sessions, end_users: endUsers, agent_refs: agentRefs, channel_threads: channelThreads, channels })
     .from(sessions)
     .$dynamic();
 
   const result = await sessionsQuery
     .leftJoin(endUsers, eq(sessions.userId, endUsers.id))
     .leftJoin(agentRefs, eq(sessions.agentRefId, agentRefs.id))
+    .leftJoin(channelThreads, eq(sessions.channelThreadId, channelThreads.id))
+    .leftJoin(channels, eq(channelThreads.channelId, channels.id))
     .where(baseFilter)
     .orderBy(desc(sessions.updatedAt))
     .limit(limit)
@@ -491,7 +503,6 @@ export type CreateSessionWithoutAgentBody = {
   id?: string;
   userId?: string;
   title?: string | null;
-  channel: ChannelRef
   channelThreadId?: string | null;
 }
 
@@ -518,8 +529,6 @@ export async function createSession(tx: TenantTransaction, params: CreateSession
   const [newSessionRow] = await tx.insert(sessions).values({
     ...(params.id ? { id: params.id } : {}),
     organizationId: tx.organizationId,
-    channelType: params.channel.type,
-    channelAddress: params.channel.type === 'api' ? params.channel.name : params.channel.address,
     userId: user.id,
     title: params.title ?? null,
     channelThreadId: params.channelThreadId ?? null,

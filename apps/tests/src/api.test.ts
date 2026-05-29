@@ -607,12 +607,12 @@ describe('API', () => {
       // Bob can create sessions for his channel
       const { user: bobUser } = await avBob.users.create({ externalId: "bob-test-user" });
       const bobSession = await avBob.createSession({ agent: "bob-agent", userId: bobUser.id });
-      expect(bobSession.channel).toEqual({ type: 'api', name: 'bob-agent' });
+      expect(bobSession.channel).toBeUndefined();
 
       // Alice can create sessions for her channel
       const { user: aliceUser } = await avAlice.users.create({ externalId: "alice-test-user" });
       const aliceSession = await avAlice.createSession({ agent: "alice-agent", userId: aliceUser.id });
-      expect(aliceSession.channel).toEqual({ type: 'api', name: 'alice-agent' });
+      expect(aliceSession.channel).toBeUndefined();
 
       // Bob cannot create sessions for Alice's channel (not in his config)
       await expect(avBob.createSession({ agent: "alice-agent", userId: bobUser.id }))

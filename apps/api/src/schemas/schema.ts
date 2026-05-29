@@ -63,7 +63,6 @@ export const sessions = pgTable("sessions", {
   active: boolean("active").notNull().default(true),
 }, (table) => [
   index('sessions_channel_thread_idx').on(table.channelThreadId),
-  check('channel_thread_consistency', sql`(channel_type = 'api' AND channel_thread_id IS NULL) OR (channel_type != 'api' AND channel_thread_id IS NOT NULL)`),
   createTenantPolicy('sessions'),
 ]);
 

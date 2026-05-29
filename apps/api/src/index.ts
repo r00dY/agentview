@@ -804,13 +804,12 @@ app.openapi(sessionsPOSTRoute, async (c) => {
 
   return withTenant(principal, async (tx) => {
     const newSession = await createSession(tx, {
-      channel: { type: 'api', name: body.agent },
       userId: body.userId,
       title: body.title,
     });
     await setAgentForSession(tx, newSession.id, { agent: body.agent, metadata: body.metadata, initialState: body.initialState });
     await activateSession(tx, newSession.id, principal.type === 'member' ? principal.session.user.id : undefined);
-    
+
     const fullSession = await requireSession(tx, newSession.id);
     return c.json(fullSession, 201);
   })
@@ -851,7 +850,6 @@ app.openapi(sessionsAISDKPOSTRoute, async (c) => {
 
       const newSession = await createSession(tx, {
         id: body.id,
-        channel: { type: 'api', name: body.agent },
         userId: body.userId,
         title: body.title,
       });
@@ -870,7 +868,6 @@ app.openapi(sessionsAISDKPOSTRoute, async (c) => {
     const newSession = await withTenant(principal, async (tx) => {
       const newSession = await createSession(tx, {
         id: body.id,
-        channel: { type: 'api', name: body.agent },
         userId: body.userId,
         title: body.title,
       });
@@ -1136,7 +1133,7 @@ app.openapi(runsAISDKPOSTRoute, async (c) => {
     return await requireSessionBase(tx, params.session_id);
   })
 
-  if (sessionBase.channel.type !== 'api') {
+  if (sessionBase.channelThread) {
     throw new AgentViewError("This endpoint is not allowed for sessions created from non-api channels (like email, etc.)", 400);
   }
 

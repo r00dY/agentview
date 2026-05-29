@@ -390,7 +390,7 @@ export async function channelOnRunFinishHandler(params: {
 }) {
   const channelThreadId = await withOrg(params.organizationId, async (tx) => {
     const session = await requireSessionBase(tx, params.sessionId);
-    return session.channelThreadId;
+    return session.channelThread?.id ?? null;
   });
   if (!channelThreadId) { // not a channel thread -> ignore
     return;

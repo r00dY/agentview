@@ -1,5 +1,4 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
-import type { ChannelRef } from 'agentview/apiTypes';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { ServicePrincipal } from 'src/authMiddleware';
 import { log } from '../logger';
@@ -211,8 +210,6 @@ export function channelProvider(type: string) {
       env: envHandle,
     } as ServicePrincipal;
 
-    const channelRef: ChannelRef = { type: channel.type as 'gmail' | 'mock', address: channel.address }
-
     const result = await withTenant(principal, async (tx) => {
       await tx.acquireLock({ type: "create_resource" });
 
@@ -275,7 +272,6 @@ export function channelProvider(type: string) {
       if (!session) {
         log.info({ sourceId: params.sourceId }, 'creating new session');
         session = await createSession(tx, {
-          channel: channelRef,
           channelThreadId: thread.id,
           userId,
           title: params.title,
