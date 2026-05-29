@@ -276,6 +276,7 @@ Here are the core fields of a `Session` object:
   agent: AgentRefSchema.nullable(),
 
   messages: z.array(UIMessageSchema),
+  isRunning: z.boolean() // is currently a run in progress
 
   metadata: z.record(z.string(), z.any()).nullable(),
   state: z.any().nullable().optional(),
@@ -290,8 +291,6 @@ Here are the core fields of a `Session` object:
   channelThreadId: z.string().nullable(),
   channel: ChannelRefSchema,
 
-  status: SessionStatusSchema,
-  reason: z.any().nullable().optional(),
 ```
 
 #### `session.messages`
