@@ -152,6 +152,14 @@ export type EnvironmentCreate = z.infer<typeof EnvironmentCreateSchema>
 
 // Channels
 
+export const ChannelBaseSchema = z.object({
+  id: z.string(),
+  type: z.string(),
+  address: z.string(),
+})
+
+export type ChannelBase = z.infer<typeof ChannelBaseSchema>
+
 export const ChannelSchema = z.object({
   id: z.string(),
   type: z.string(),
@@ -183,6 +191,13 @@ export const ChannelMessageSchema = z.object({
 })
 
 export type ChannelMessage = z.infer<typeof ChannelMessageSchema>
+
+export const ChannelThreadSchema = z.object({
+  id: z.string(),
+  sourceThreadId: z.string(),
+})
+
+export type ChannelThread = z.infer<typeof ChannelThreadSchema>
 
 // Session
 
@@ -261,16 +276,9 @@ export type ManualRunUpdate = z.infer<typeof ManualRunUpdateSchema>
 
 export type StandardRun = z.infer<typeof StandardRunSchema>
 
-export const ChannelRefSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('api'), name: z.string() }),
-  z.object({ type: z.enum(['gmail', 'mock']), address: z.string() }),
-]);
-
-export type ChannelRef = z.infer<typeof ChannelRefSchema>
 
 export const SessionBaseSchema = z.object({
   id: z.string(),
-  channel: ChannelRefSchema,
   createdAt: z.iso.date(),
   updatedAt: z.iso.date(),
   metadata: z.record(z.string(), z.any()).nullable(),
@@ -279,7 +287,9 @@ export const SessionBaseSchema = z.object({
   title: z.string().nullable(),
   agent: AgentRefSchema.nullable(),
   active: z.boolean(),
-  channelThreadId: z.string().nullable(),
+  
+  channel: ChannelBaseSchema.nullable(),
+  channelThread: ChannelThreadSchema.nullable(),
 })
 
 export type SessionBase = z.infer<typeof SessionBaseSchema>

@@ -1,5 +1,5 @@
 import { AgentViewError } from "agentview";
-import type { ChannelMessage, ChannelRef, Environment, SessionBase, SessionsGetQueryParams, SessionsGetQueryParamsSchema, SessionsPaginatedResponse, SessionStatus, SessionUpdate, StandardSession, StandardSessionCreate } from "agentview/apiTypes";
+import type { ChannelMessage, Environment, SessionBase, SessionsGetQueryParams, SessionsGetQueryParamsSchema, SessionsPaginatedResponse, SessionStatus, SessionUpdate, StandardSession, StandardSessionCreate } from "agentview/apiTypes";
 import { randomBytes } from "crypto";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type z from "zod";
@@ -60,6 +60,22 @@ export async function fetchSessionBase(tx: Transaction, session_id: string): Pro
     with: {
       user: true,
       agentRef: true,
+      channelThread: {
+        columns: {
+          id: true,
+          sourceThreadId: true,
+          channelId: true,
+        },
+        with: {
+          channel: {
+            columns: {
+              id: true,
+              type: true,
+              address: true,
+            },
+          },
+        }
+      }
     }
   });
 
@@ -67,14 +83,22 @@ export async function fetchSessionBase(tx: Transaction, session_id: string): Pro
     return undefined;
   }
 
+  const channelThread = row.channelThread ? {
+    id: row.channelThread.id,
+    sourceThreadId: row.channelThread.sourceThreadId,
+  } : undefined;
+
+  const channel = row.channelThread?.channel ? {
+    id: row.channelThread.channel.id,
+    type: row.channelThread.channel.type,
+    address: row.channelThread.channel.address,
+  } : undefined;
+
   return {
     id: row.id,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     metadata: row.metadata,
-    channel: row.channelType === 'api'
-      ? { type: 'api' as const, name: row.channelAddress }
-      : { type: row.channelType, address: row.channelAddress },
     user: row.user,
     userId: row.user.id,
     title: row.title,
@@ -84,7 +108,8 @@ export async function fetchSessionBase(tx: Transaction, session_id: string): Pro
       adapter: row.agentRef.adapter,
     } : null,
     active: row.active,
-    channelThreadId: row.channelThreadId,
+    channelThread,
+    channel
   } as SessionBase
 }
 
@@ -115,7 +140,6 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
           reason: true,
           metadata: true,
           sessionId: true,
-          // agentRefId: true,
           manual: true,
           active: true,
           previousRunId: true,
@@ -128,7 +152,12 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
             where: (sessionItem, { eq }) => eq(sessionItem.isState, false),
           },
         }
-      }
+      },
+      channelThread: {
+        with: {
+          channel: true,
+        },
+      },
     }
   });
 
@@ -138,9 +167,9 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
 
   // channel messages at session level (all messages in the thread)
   let sessionChannelMessages: ChannelMessage[] | undefined = undefined;
-  if (row.channelType !== 'api' && row.channelThreadId) {
+  if (row.channelThread) {
     sessionChannelMessages = await tx.query.channelMessages.findMany({
-      where: eq(channelMessages.channelThreadId, row.channelThreadId),
+      where: eq(channelMessages.channelThreadId, row.channelThread.id),
       orderBy: (channelMessage, { asc }) => [asc(channelMessage.date)],
     });
   }
@@ -169,16 +198,22 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
 
   const state = await fetchSessionState(tx, row.id, activeRuns.map(r => r.id));
 
+  const channelThread = row.channelThread ? {
+    id: row.channelThread.id,
+    sourceThreadId: row.channelThread.sourceThreadId,
+  } : undefined;
 
+  const channel = row.channelThread?.channel ? {
+    id: row.channelThread.channel.id,
+    type: row.channelThread.channel.type,
+    address: row.channelThread.channel.address,
+  } : undefined;
 
   return {
     id: row.id,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     metadata: row.metadata,
-    channel: row.channelType === 'api'
-      ? { type: 'api' as const, name: row.channelAddress }
-      : { type: row.channelType, address: row.channelAddress },
     user: row.user,
     userId: row.user.id,
     title: row.title,
@@ -204,7 +239,7 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
         return false;
       }) // we always send last run unless it's pending/init
       .map(run => {
-        const {previousRunId, agentRef, ...rest} = run;
+        const { previousRunId, agentRef, ...rest } = run;
         return {
           ...rest,
           agent: agentRef ? {
@@ -215,8 +250,8 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
         }
       }),
     state: state ?? row.initialState ?? null,
-    channelMessages: sessionChannelMessages,
-    channelThreadId: row.channelThreadId,
+    channelThread,
+    channel,
   } as StandardSession;
 }
 
@@ -386,7 +421,7 @@ function mapSessionRow(row: { sessions: typeof sessions.$inferSelect; end_users:
   };
 }
 
-export async function getSessions(tx: TenantTransaction, params: SessionsGetQueryParams) : Promise<SessionsPaginatedResponse> {
+export async function getSessions(tx: TenantTransaction, params: SessionsGetQueryParams): Promise<SessionsPaginatedResponse> {
   const limit = normalizeNumberParam(params.limit, DEFAULT_LIMIT);
   const page = normalizeNumberParam(params.page, DEFAULT_PAGE);
 

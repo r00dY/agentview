@@ -56,8 +56,6 @@ export const sessions = pgTable("sessions", {
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   metadata: jsonb("metadata"),
   userId: uuid("end_user_id").notNull().references(() => endUsers.id, { onDelete: 'cascade' }),
-  channelType: varchar("channel_type", { length: 64 }).notNull(),
-  channelAddress: varchar("channel_address", { length: 255 }).notNull(),
   title: text("title"),
   agentRefId: uuid("agent_ref_id").references(() => agentRefs.id),
   initialState: jsonb("initial_state"),

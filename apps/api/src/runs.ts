@@ -1102,7 +1102,7 @@ export async function createManualRun(
 
   authorize(tx.principal, { action: "end-user:update", user: sessionBase.user });
 
-  if (sessionBase.channel.type !== 'api') {
+  if (sessionBase.channelThread) {
     throw new AgentViewError("For non-api channels manual mode is not supported.", 422);
   }
 
