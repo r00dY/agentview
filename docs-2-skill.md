@@ -268,24 +268,29 @@ Here are the core fields of a `Session` object:
 - `metadata`
 
 ```
-// TODO, cleanup:
   id: z.string(),
-  channel: ChannelRefSchema,
-  handle: z.string(),
+
   createdAt: z.iso.date(),
   updatedAt: z.iso.date(),
-  metadata: z.record(z.string(), z.any()).nullable(),
-  user: UserSchema,
-  userId: z.string(), // potential bloat
-  space: SpaceSchema, // this is actually user.space, but allows to "think user-less"
-  title: z.string().nullable(),
+
   agent: AgentRefSchema.nullable(),
-  active: z.boolean(),
-  channelThreadId: z.string().nullable(),
+
   messages: z.array(UIMessageSchema),
+
+  metadata: z.record(z.string(), z.any()).nullable(),
+  state: z.any().nullable().optional(),
+
+  title: z.string().nullable(),
+
+  user: UserSchema,
+  userId: z.string(), // potential bloat, but it's actually ok
+
+  active: z.boolean(),
+  
+  channelThreadId: z.string().nullable(),
+    channel: ChannelRefSchema,
   resume: z.boolean(),
   status: SessionStatusSchema,
-  state: z.any().nullable().optional(),
   failReason: z.any().nullable().optional(),
 ```
 

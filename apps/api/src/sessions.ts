@@ -77,7 +77,6 @@ export async function fetchSessionBase(tx: Transaction, session_id: string): Pro
       : { type: row.channelType, address: row.channelAddress },
     user: row.user,
     userId: row.user.id,
-    space: row.user.space,
     title: row.title,
     agent: row.agentRef ? {
       name: row.agentRef.agent,
@@ -182,7 +181,6 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
       : { type: row.channelType, address: row.channelAddress },
     user: row.user,
     userId: row.user.id,
-    space: row.user.space,
     title: row.title,
     active: row.active,
     agent: row.agentRef ? {
@@ -375,7 +373,6 @@ function mapSessionRow(row: { sessions: typeof sessions.$inferSelect; end_users:
       ? { type: 'api' as const, name: row.sessions.channelAddress }
       : { type: row.sessions.channelType as "gmail" | "mock", address: row.sessions.channelAddress },
     user: row.end_users!,
-    space: row.end_users!.space,
     userId: row.end_users!.id,
     agent: row.agent_refs ? {
       name: row.agent_refs.agent,

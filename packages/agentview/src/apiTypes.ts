@@ -276,10 +276,9 @@ export const SessionBaseSchema = z.object({
   metadata: z.record(z.string(), z.any()).nullable(),
   user: UserSchema,
   userId: z.string(), // potential bloat
-  space: SpaceSchema, // this is actually user.space, but allows to "think user-less"
   title: z.string().nullable(),
   agent: AgentRefSchema.nullable(),
-  active: z.boolean(),
+active: z.boolean(),
   channelThreadId: z.string().nullable(),
 })
 
