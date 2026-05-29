@@ -288,8 +288,8 @@ Here are the core fields of a `Session` object:
 
   active: z.boolean(),
 
-  channelThreadId: z.string().nullable(),
-  channel: ChannelRefSchema,
+  channelThread
+  channel
 
 ```
 
