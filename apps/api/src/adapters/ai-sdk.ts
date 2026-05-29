@@ -1,8 +1,11 @@
-import type { ChannelMessage, SessionItem, StandardRun, StandardSession, UIMessage } from 'agentview/apiTypes';
+import type { StandardSession, UIMessage } from 'agentview/apiTypes';
 import { isRunFinished } from '../runs';
-import { getSessionStatusFields } from '../sessions';
 import { type Adapter } from './adapters';
+import { channelMessages } from 'src/schemas/schema';
 
+type ChannelMessage = typeof channelMessages.$inferSelect;
+
+type StrippedChannelMessage = Pick<ChannelMessage, 'text' | 'authorEmail' | 'authorName' | 'authorHeadline' | 'authorDetails' | 'providerData' | 'date'>;
 
 export const aiSDKAdapter = {
     enrichSession: (session: StandardSession) => {
@@ -15,11 +18,48 @@ export const aiSDKAdapter = {
             // ...statusFields
         }
     },
-    createDefaultInputForChannelMessages: (incomingMessages: any[]) => {
+    createDefaultInputForChannelMessages: (incomingMessages: ChannelMessage[]) => {
+
+        const _channelMessages : StrippedChannelMessage[] = incomingMessages.map(cm => ({
+            text: cm.text,
+            authorEmail: cm.authorEmail,
+            authorName: cm.authorName,
+            authorHeadline: cm.authorHeadline,
+            authorDetails: cm.authorDetails,
+            providerData: cm.providerData,
+            date: cm.date,
+        }));
+
+        const fullMessageText = _channelMessages.map(cm => {
+            let messageText = '---\n'
+            messageText += `date: ${cm.date}\n`
+            if (cm.authorName) {
+                messageText += `author_name: ${cm.authorName}\n`
+            }
+            if (cm.authorEmail) {
+                messageText += `author_email: ${cm.authorEmail}\n`
+            }
+            if (cm.authorHeadline) {
+                messageText += `author_headline: ${cm.authorHeadline}\n`
+            }
+            if (cm.authorDetails) {
+                messageText += `author_details: |\n`
+                messageText += `${cm.authorDetails}\n`;
+            }
+            messageText += '---\n\n'
+            messageText += `${cm.text}`
+            return messageText;
+        }).join('\n\n\n');
+
         return {
             id: crypto.randomUUID(),
             role: 'user',
-            parts: incomingMessages.map(cm => ({ type: 'text', text: cm.text ?? '' })),
+            parts: [
+                { type: 'text', text: fullMessageText }
+            ],
+            metadata: {
+                _channelMessages
+            }
         };
     }
 } satisfies Adapter;
@@ -27,7 +67,6 @@ export const aiSDKAdapter = {
 
 function sessionToUIMessages(session: StandardSession): UIMessage[] {
     const messages: UIMessage[] = [];
-    const allChannelMessages = session.channelMessages ?? [];
 
     for (const run of session.runs) {
         if (run.agent?.adapter !== "ai-sdk") {
