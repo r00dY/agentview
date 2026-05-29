@@ -146,7 +146,7 @@ export function SessionCard({ session, listParams, sessionStats }: { session: Se
   const itemsMentionsCount = allItemEvents.filter((event: any) => Array.isArray(event?.payload?.user_mentions) && (event.payload.user_mentions as any[]).includes(me.id)).length;
   const hasUnreads = hasSessionUnreads || hasUnreadItems;
 
-  const playgroundOwner = session.space !== 'production'
+  const playgroundOwner = session.user.space !== 'production'
     ? members.find((member) => member.userId === session.user.ownerId)
     : undefined;
 
