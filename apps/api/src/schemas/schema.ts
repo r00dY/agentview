@@ -52,8 +52,6 @@ export const endUserTokens = pgTable("end_user_tokens", {
 export const sessions = pgTable("sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
   organizationId: text("organization_id").notNull().references(() => organizations.id),
-  handleNumber: integer("handle_number").notNull(),
-  handleSuffix: varchar("handle_suffix", { length: 255 }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   metadata: jsonb("metadata"),
@@ -66,7 +64,6 @@ export const sessions = pgTable("sessions", {
   channelThreadId: uuid("channel_thread_id").references(() => channelThreads.id, { onDelete: 'set null' }),
   active: boolean("active").notNull().default(true),
 }, (table) => [
-  uniqueIndex('sessions_handle_org_unique').on(table.handleNumber, table.handleSuffix, table.organizationId),
   index('sessions_channel_thread_idx').on(table.channelThreadId),
   check('channel_thread_consistency', sql`(channel_type = 'api' AND channel_thread_id IS NULL) OR (channel_type != 'api' AND channel_thread_id IS NOT NULL)`),
   createTenantPolicy('sessions'),

@@ -43,25 +43,7 @@ export async function fetchLastRunStatus(
 }
 
 function sessionWhere(session_id: string) {
-  let where: ReturnType<typeof eq> | undefined;
-
-  if (isUUID(session_id)) { // id
-    where = eq(sessions.id, session_id);
-  }
-  else { // handle
-    const match = session_id.match(/^(\d+)(.*)$/);
-    if (match) {
-      const handleNumber = parseInt(match[1], 10);
-      const handleSuffix = match[2] || "";
-
-      where = and(eq(sessions.handleNumber, handleNumber), eq(sessions.handleSuffix, handleSuffix));
-    }
-    else {
-      return undefined;
-    }
-  }
-
-  return where;
+  return eq(sessions.id, session_id);
 }
 
 
@@ -87,7 +69,6 @@ export async function fetchSessionBase(tx: Transaction, session_id: string): Pro
 
   return {
     id: row.id,
-    handle: row.handleNumber.toString() + (row.handleSuffix ?? ""),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     metadata: row.metadata,
@@ -113,6 +94,8 @@ export type FetchSessionOptions = {
 }
 
 export async function fetchSession(tx: Transaction, session_id: string, options?: FetchSessionOptions): Promise<StandardSession | undefined> {
+  requireUUID(session_id);
+
   const where = sessionWhere(session_id);
   if (!where) {
     return undefined;
@@ -191,7 +174,6 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
 
   return {
     id: row.id,
-    handle: row.handleNumber.toString() + (row.handleSuffix ?? ""),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     metadata: row.metadata,
@@ -385,7 +367,6 @@ function buildPaginationMetadata(totalCount: number, page: number, limit: number
 function mapSessionRow(row: { sessions: typeof sessions.$inferSelect; end_users: typeof endUsers.$inferSelect | null, agent_refs: typeof agentRefs.$inferSelect | null }) {
   return {
     id: row.sessions.id,
-    handle: row.sessions.handleNumber.toString() + (row.sessions.handleSuffix ?? ""),
     createdAt: row.sessions.createdAt,
     updatedAt: row.sessions.updatedAt,
     metadata: row.sessions.metadata as Record<string, any>,
@@ -505,8 +486,6 @@ export async function createSession(tx: TenantTransaction, params: CreateSession
   const [newSessionRow] = await tx.insert(sessions).values({
     ...(params.id ? { id: params.id } : {}),
     organizationId: tx.organizationId,
-    handleNumber: 0,
-    handleSuffix: randomBytes(32).toString('hex'),
     channelType: params.channel.type,
     channelAddress: params.channel.type === 'api' ? params.channel.name : params.channel.address,
     userId: user.id,
@@ -570,20 +549,8 @@ export async function activateSession(tx: OrgTransaction, sessionId: string, aut
     return;
   }
 
-  // handle!
-  // const handleSuffix = session.user.createdBy ? "s" : "";
-
-  // const sessionWithHighestHandleNumber = await tx.query.sessions.findFirst({
-  //   orderBy: (sessions, { desc }) => [desc(sessions.handleNumber)],
-  //   where: and(eq(sessions.handleSuffix, handleSuffix), eq(sessions.active, true)),
-  // });
-
-  // const newHandleNumber = sessionWithHighestHandleNumber ? sessionWithHighestHandleNumber.handleNumber + 1 : 1;
-
   await tx.update(sessions).set({
     active: true,
-    // handleNumber: newHandleNumber,
-    // handleSuffix: handleSuffix,
   }).where(eq(sessions.id, session.id));
 
   const [event] = await tx.insert(events).values({

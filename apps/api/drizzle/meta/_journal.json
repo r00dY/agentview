@@ -246,6 +246,13 @@
       "when": 1779878144639,
       "tag": "0034_blue_the_call",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1780039024222,
+      "tag": "0035_lowly_captain_flint",
+      "breakpoints": true
     }
   ]
 }

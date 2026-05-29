@@ -230,7 +230,7 @@ There's often a need for createing agent sessions by anonymous users (not logged
 ```tsx
 // browser
 const { user, token } = await publicClient.users.createAnon()
-const userClient = publicClient.as({ token });
+const userClient = publicClient.asUser({ token });
 const session = await userClient.sessions.create({ agent: "weather-agent" }) // session of anonymous user
 ```
 
@@ -298,6 +298,32 @@ The main property is `session.messages`. AgentView uses AI-SDK `UIMessage[]` for
 Sending `user` message triggers a "Run", which ends with assistant message.
 
 Each assistant message contains special metadata property called `_agentview` that contains the additional info about the run that comes from AgentView:
+
+```ts
+[
+  // ...previous session.messages
+  {
+    id,
+    role: "assistant",
+    parts: [
+      /* ... */
+    ],
+    metadata: {
+      // ... your metadata
+      _agentview: {
+        id,
+        status,
+        failReason,
+        createdAt,
+        finishedAt,
+        agent: { name, version },
+        metadata
+      }
+    }
+  }
+]
+```
+
 - `id` - run id
 - `status` - `in_progress`, `cancelled`, `error`
 - `failReason` - available for `error` status
@@ -529,7 +555,7 @@ AgentView **validates the stream**. It means that if chunk is badly formatted, o
 
 If run is cancelled by user (see below), then AgentView will send `{ type: "abort" }` and also close the stream immediately.
 
-AgentView requires `[done]` to be sent at the end of the stream. If `[done]` is not sent, it will treat the stream as unfinished and it will also result in an error run.
+AgentView requires `[DONE]` to be sent at the end of the stream. If `[DONE]` is not sent, it will treat the stream as unfinished and leave it in the error state.
 
 #### Cancellation
 
@@ -618,5 +644,6 @@ TBD (configuration of visual builder via custom components)
 # -- to do --
 
 1. Channels (`_channelMessages` and channel info in Session object)
-2. Clean up Session object!! isRunning / status etc. 
+2. Clean up Session object!! isRunning / status etc.
 3. Studio -> make it quick god damn it
+4. Missing properties of client (easy, like list sessions, list users, get user etc)

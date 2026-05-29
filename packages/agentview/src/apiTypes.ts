@@ -271,7 +271,6 @@ export type ChannelRef = z.infer<typeof ChannelRefSchema>
 export const SessionBaseSchema = z.object({
   id: z.string(),
   channel: ChannelRefSchema,
-  handle: z.string(),
   createdAt: z.iso.date(),
   updatedAt: z.iso.date(),
   metadata: z.record(z.string(), z.any()).nullable(),
