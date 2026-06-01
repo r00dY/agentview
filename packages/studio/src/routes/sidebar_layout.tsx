@@ -13,7 +13,7 @@ import {
 } from "react-router";
 import { use, Suspense, useEffect } from "react";
 
-import { ArrowLeft, Building2Icon, ChevronDown, ChevronUp, Database, LogOut, MessageCircle, PlusIcon, UserIcon, WrenchIcon } from "lucide-react";
+import { ArrowLeft, Box, Building2Icon, ChevronDown, ChevronUp, Database, LogOut, MessageCircle, PlusIcon, UserIcon, WrenchIcon } from "lucide-react";
 import { NotificationBadge } from "../components/internal/NotificationBadge";
 import {
   Sidebar,
@@ -418,6 +418,15 @@ function Component() {
                         <span>Organization</span>
                       </Link>
                     </DropdownMenuItem>
+
+                    <DropdownMenuItem asChild>
+                      <Link to={"/env"}>
+                        <Box className="h-4 w-4" />
+                        <span>Environment</span>
+                      </Link>
+                    </DropdownMenuItem>
+
+
                     <DropdownMenuSeparator />
 
                     <DropdownMenuItem asChild>
