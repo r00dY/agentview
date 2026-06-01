@@ -71,6 +71,9 @@ function Component() {
     const sessionBase = sessions?.find((s) => s.id === sessionId);
     const sessionStats = allStats?.sessions?.[sessionId];
 
+    console.log('session base', sessionBase);
+    console.log('session', session);
+
     // Stage 1: No data at all - show loader
     if (!sessionBase && !session) {
         return <div className="pt-6"><LoadingIndicator /></div>;
@@ -186,6 +189,9 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
             i.channelMessageId === (target.channelMessageId ?? null)
         )?.unseenEvents;
     };
+
+    console.log('initial session', initialSession);
+    return <div>session</div>
 
     const [initialResume] = useState(initialSession.status === 'in_progress');
 
@@ -997,7 +1003,7 @@ function RunFooter(props: RunFooterProps) {
         throw new Error("Run is required in RunFooter");
     }
 
-    let blocks: React.ReactNode[] = [];
+    let verticalBlocks: React.ReactNode[] = [];
 
     // // Error
     // if (run.status === "failed") {
@@ -1012,17 +1018,17 @@ function RunFooter(props: RunFooterProps) {
     // }
 
     // Toolbar
-    const toolbarBlocks: React.ReactNode[] = [];
+    const runFooterBlocks: React.ReactNode[] = [];
 
     if (commentsAndScores) {
         const { target, comments, scores = [], scoreConfigs = [] } = commentsAndScores;
 
-        const actionBarScores = scoreConfigs.filter(scoreConfig => scoreConfig.actionBarComponent);
-        const remainingScores = scoreConfigs.filter(scoreConfig => !scoreConfig.actionBarComponent);
+        const runFooterScores = scoreConfigs.filter(scoreConfig => scoreConfig.runFooterComponent);
+        const remainingScores = scoreConfigs.filter(scoreConfig => !scoreConfig.runFooterComponent);
 
-        if (actionBarScores.length > 0) {
-            toolbarBlocks.push(...actionBarScores.map((scoreConfig) => (
-                <ActionBarScoreForm
+        if (runFooterScores.length > 0) {
+            runFooterBlocks.push(...runFooterScores.map((scoreConfig) => (
+                <RunFooterScore
                     scores={scores}
                     key={scoreConfig.name}
                     target={target}
@@ -1032,7 +1038,7 @@ function RunFooter(props: RunFooterProps) {
         }
 
         if (remainingScores.length > 0) {
-            toolbarBlocks.push(<ScoreDialog
+            runFooterBlocks.push(<ScoresDialog
                 key="score-dialog"
                 scores={scores}
                 target={target}
@@ -1042,18 +1048,18 @@ function RunFooter(props: RunFooterProps) {
             />);
         }
 
-        toolbarBlocks.push(<Button key="regenerate" variant="ghost" size="icon_sm" onClick={props.regenerate}><RotateCcw className="size-4" /></Button>);
+        runFooterBlocks.push(<Button key="regenerate" variant="ghost" size="icon_sm" onClick={props.regenerate}><RotateCcw className="size-4" /></Button>);
     }
 
-    toolbarBlocks.push(<Button key="run-info" variant="ghost" size="sm" asChild>
+    runFooterBlocks.push(<Button key="run-info" variant="ghost" size="sm" asChild>
         <Link to={`/sessions/${session.id}/runs/${run.id}?${toQueryParams(listParams)}`}><InfoIcon className="size-4" />Run</Link>
     </Button>);
 
-    if (toolbarBlocks.length > 0) {
-        blocks.push(<div key="toolbar">
+    if (runFooterBlocks.length > 0) {
+        verticalBlocks.push(<div key="toolbar">
             <div className="text-xs flex justify-between gap-2 items-start">
                 <div className="flex flex-row flex-wrap gap-1 items-center -ml-2">
-                    {toolbarBlocks}
+                    {runFooterBlocks}
                 </div>
             </div>
         </div>)
@@ -1078,9 +1084,9 @@ function RunFooter(props: RunFooterProps) {
     //     </div>)
     // }
 
-    if (blocks.length > 0) {
+    if (verticalBlocks.length > 0) {
         return <div className="mt-3 mb-8">
-            {blocks}
+            {verticalBlocks}
         </div>
     }
 
@@ -1092,8 +1098,8 @@ function RunFooter(props: RunFooterProps) {
 //     const { session, target, run, listParams, comments, scores, scoreConfigs, onSelect, isSelected, isSmallSize, isLastRunItem, unseenEvents } = props;
 //     const [scoreDialogOpen, setScoreDialogOpen] = useState(false);
 
-//     const actionBarScores = scoreConfigs.filter(scoreConfig => scoreConfig.actionBarComponent);
-//     const remainingScores = scoreConfigs.filter(scoreConfig => !scoreConfig.actionBarComponent);
+//     const actionBarScores = scoreConfigs.filter(scoreConfig => scoreConfig.runFooterComponent);
+//     const remainingScores = scoreConfigs.filter(scoreConfig => !scoreConfig.runFooterComponent);
 
 //     if (actionBarScores.length === 0 && remainingScores.length === 0 && !isSmallSize && !isLastRunItem) {
 //         return null;
@@ -1117,7 +1123,7 @@ function RunFooter(props: RunFooterProps) {
 
 //     if (actionBarScores.length > 0) {
 //         toolbarBlocks.push(...actionBarScores.map((scoreConfig) => (
-//             <ActionBarScoreForm
+//             <RunFooterScore
 //                 scores={scores}
 //                 key={scoreConfig.name}
 //                 target={target}
@@ -1178,7 +1184,7 @@ function RunFooter(props: RunFooterProps) {
 // }
 
 
-function ScoreDialog({ target, open, onOpenChange, scoreConfigs, scores }: { target: InputTarget, open: boolean, onOpenChange: (open: boolean) => void, scoreConfigs: ScoreConfig[], scores: Score[] }) {
+function ScoresDialog({ target, open, onOpenChange, scoreConfigs, scores }: { target: InputTarget, open: boolean, onOpenChange: (open: boolean) => void, scoreConfigs: ScoreConfig[], scores: Score[] }) {
     const { me } = useSessionContext();
     const fetcher = useFetcher();
 
@@ -1282,7 +1288,7 @@ function ScoreDialog({ target, open, onOpenChange, scoreConfigs, scores }: { tar
 }
 
 
-function ActionBarScoreForm({ target, scoreConfig, scores }: { target: InputTarget, scoreConfig: ScoreConfig, scores: Score[] }) {
+function RunFooterScore({ target, scoreConfig, scores }: { target: InputTarget, scoreConfig: ScoreConfig, scores: Score[] }) {
     const { me } = useSessionContext();
     const fetcher = useFetcher();
     const revalidator = useRevalidator();
@@ -1301,9 +1307,9 @@ function ActionBarScoreForm({ target, scoreConfig, scores }: { target: InputTarg
         setValue(score?.value ?? null);
     }, [score?.value]);
 
-    const ActionBarComponent = scoreConfig.actionBarComponent;
+    const RunFooterComponent = scoreConfig.runFooterComponent;
 
-    if (!ActionBarComponent) {
+    if (!RunFooterComponent) {
         return null;
     }
 
@@ -1328,7 +1334,7 @@ function ActionBarScoreForm({ target, scoreConfig, scores }: { target: InputTarg
     }, [fetcher.state, fetcher.data]);
 
     return (<form method="post" onSubmit={(e) => { e.preventDefault(); submit(value); }}>
-        <ActionBarComponent
+        <RunFooterComponent
             value={value}
             onChange={submit}
             name={scoreConfig.name}

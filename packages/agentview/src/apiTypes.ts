@@ -180,6 +180,7 @@ export const ChannelMessageSchema = z.object({
   providerData: z.any().nullable(),
   date: z.string(),
   status: z.string(),
+  reason: z.any().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
   authorEmail: z.string().nullable(),

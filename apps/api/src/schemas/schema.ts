@@ -570,6 +570,7 @@ export const channelMessages = pgTable('channel_messages', {
 
   direction: varchar('direction', { length: 16 }).notNull().$type<'incoming' | 'outgoing'>(), // 'incoming' | 'outgoing'
   status: varchar('status', { length: 32 }).notNull().$type<'pending' | 'done' | 'error' | /* in progress incoming */ 'run_connecting' | 'run_streaming' | /* in progress outgoing */ 'sending'>(),
+  reason: jsonb('reason'),
 
   sourceId: varchar('source_id', { length: 255 }),
   text: text('text'),
@@ -577,14 +578,17 @@ export const channelMessages = pgTable('channel_messages', {
   authorName: varchar('author_name', { length: 255 }),
   authorHeadline: varchar('author_headline', { length: 255 }),
   authorDetails: text('author_details'),
+
   attachments: jsonb('attachments'),
   providerData: jsonb('provider_data'),
   date: timestamp('date', { withTimezone: true, mode: 'string' }).notNull(),
-  reason: jsonb('fail_reason'),
+
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   runId: uuid('run_id').references(() => runs.id, { onDelete: 'set null' }),
+  
   internal: boolean('internal').notNull().default(false),
+
 }, (table) => [
   uniqueIndex('channel_messages_thread_source_unique').on(table.channelThreadId, table.sourceId),
   index('channel_messages_thread_id_idx').on(table.channelThreadId),

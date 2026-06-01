@@ -632,22 +632,356 @@ console.log(lastAssistantMessage.metadata._agentview.agent) // { name: "weather-
 
 Versions allows for better visibility, but also protects sessions from being continued with incompatible version. AgentView follows semantic versioning convention. You can't create a run in a session where previous run was higher version, or whether new version is a breaking change (major number increased).
 
+### First-class email integration
 
-#### First-class email integration (CHANNELS)
+AgentView comes with a built-in seamless email integration (other channels will come soon).
 
-(channels, _channelMessages)
+After you run `npx agentview dev` **you can email your agent without any extra work**. Just write an email to `{org-slug}.{env-slug}.{agent-name}@agent.agnetview.app`.
 
-TBD
+You can check your email address by calling CLI:
 
-### Studio
+```bash
+% npx agentview env
 
-TBD (configuration of visual builder via custom components)
+   AgentView 0.1.13
+   - Organization: acme
+   - Environment: local-admin
+   - E-mail: acme.local-admin.[agent-name]@agent.agentview.app
+```
+
+Here's what AgentView does under the hood when you send an email:
+1. Extracts user info from the footer, adds or updates `User` if necessary.
+2. Transforms email content (HTML & text) into markdown.
+3. For new email thread creates a new Session with `title` being email subject. For existing threads, just locates existing `Session`.
+4. If there's any run being active (agent is responding to previous message), it's killed. If there's any outgoing message delivery in progress, it waits until we know whether outgoing message was correctly dispatched.
+5. New run is created with all the messages that were unanswered by agent.
+6. The `input` of the new run is a single `text` part with all the unanswered messages concatenated, with metadata about authors.
+7. The `input` provides `metadata._channelMessages` with an array of channel messages so you can override the default concatenation algorithm in your Agent Endpoint.
+8. AgentView analyses output parts and extracts all the `text` parts that go after the last step (tool call, reasoning, etc).
+
+In most cases you can just use default and never think of the details.
+
+If you want to override input with your own custom message, just make a transformation and send different input to the model. Here's `user`message you get from AgentView:
+
+```ts
+{
+  id: "...",
+  role: "user",
+  parts: [
+    {
+      type: "text",
+      text: "(all unanswered messages concatenated with metadata about authors)"
+    }
+  ],
+  metadata: {
+    _channelMessages: [
+      {
+        text: "hello how are you?"
+        authorEmail: "bob@acme.com"
+        authorName: "Bob"
+        authorHeadline: "CEO of Acme"
+        authorDetails: null
+        providerData: { email: { /** email data **/ } }
+        date: "2026-05-29T12:14:51.07766+00:00"
+      },
+      // ...
+    ]
+  }
+}
+```
+
+It's also possible to override output. Just send `data-agentview-output` data part to the stream:
+
+```ts
+writer.write({
+  type: 'data-agentview-output',
+  data: "Here's my custom reply"
+});
+```
+
+This whole system fully synchronises channel state with AI session state, which allows you for **full utilization of prompt caching**.
+
+
+
+## Studio
+
+AgentView comes with a Studio, a full-featured UI for displaying agent data. It's comes as a React package, to provide maximum customisation. `agentview.config.tsx` provides entry points which allows you customise how agent session items are displayed, session cards, input components, custom pages, scores etc.
+
+How you "look at the data" is super important. AgentView doesn't fight observability tools, it's a admin panel for non technical users focused on beautiful easy to digest data entry.
+
+[TODO: describe UI]
+
+### Session - Display Properties
+
+The most important view in the system is the view of the AI Session. Similar to Notion document, each Session dislays a list of property - value entries at the top of the session view. By default, AgentView displays generic fields: created at, space, channel, user, agent, etc.
+
+We call them "display properties" and you can set your own with `displayProperties`:
+
+```tsx
+export default defineConfig({
+  agents: [
+    {
+      name: "weather-chat",
+      // ... 
+
+      displayProperties: [
+        {
+          title: "User Location",
+          value: ({ session }) => <span className="bg-gray-900">{ session.metadata?.userLocation }</span>
+        }
+      ],
+    }
+  ]
+});
+```
+
+`value` is just a React component which provides `session` property which is `Session` object.
+
+Display properties are the main engine for displaying custom, domain-specific information about the session, usually dispalyed based on `session.metadata` or `session.state`.
+
+### Session Items
+
+Below the display properties goes the main canvas where we display Session items - user messages, assistant messages etc. They're displayed in the vertical stack (similar to document blocks in Notion).
+
+The user message is always displayed as one item. For the assistant message, each `part` is displayed as a separate block.
+
+**Imporatnt**. Each block is **commentable** in the sidebar (again, like in Notion). Members of the organization can leave comments in the sidebar, mention each other and collaborate whether agent output is good or not.
+
+You can easily provide custom component for each block:
+
+```tsx
+export default defineConfig({
+  agents: [
+    {
+      name: "weather-chat",
+      // ... 
+
+      run: {
+        userMessage: {
+          displayComponent: ({ value }) => {
+            return <span>CUSTOM: {value.parts?.map((part: any) => part.text).join("\n\n")}</span>;
+          },
+        },
+        assistantMessage: {
+          parts: [
+            {
+              type: "tool-weather",
+              displayComponent: ({ value }) => <CustomWeatherWidget value={value} />
+            }
+          ]
+        },
+      }
+    }
+  ]
+});
+```
+
+You customise assistant message part by providing 
+
+#### Channel Sessions
+
+If a Session was created by channel (for example email), then the input can be the result of one or more input channel messages. In that case AgentView displays Channel messages instead of input, each as a separate block.
+
+### Input Component
+
+Playground is first-class citizen in AgentView. Members of the organization can create playground sessions to play around with an agent (playground sessions are assigned to `playground` or `shared-playground` Spaces).
+
+In order to send message in a playground session, we obviously need an input component. AgentView ships with default one, but you can customise with `inputComponent` in your agent config:
+
+```tsx
+export default defineConfig({
+  agents: [
+    {
+      name: "weather-chat",
+      // ...
+
+      inputComponent: ({ sendMessage, cancel, isRunning, session }) => <MyCustomInputComponent
+        onSubmit={(val) => {
+          sendMessage({
+            parts: [
+              {
+                type: "text",
+                text: val,
+              }
+            ]
+          })
+        }}
+        onCancel={cancel}
+        isRunning={isRunning}
+      />,
+    }
+  ]
+});
+```
+
+### New Session Page
+
+When you create a Playground session, AgentView by default creates anonymous user and creates a session with empty `metadata` and `initialState`.
+
+Sometimes it might not be enough, you might want to set metadata/intialState, or pick an existing user, or create user in a specific ways. All those things can be customised with `newSessionComponent` proeprty in agent config.
+
+```tsx
+export default defineConfig({
+  agents: [
+    {
+      name: "weather-chat",
+      // ... 
+
+      newSessionComponent: NewSessionComponent
+  ]
+});
+
+function NewSessionComponent({ client, agent, redirectToSession }: NewSessionComponentProps) {
+  const [selectedCity, setSelectedCity] = React.useState<string>("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const { user } = await client.users.createAnon();
+      const session = await client.sessions.create({
+        agent,
+        active: false,
+        metadata: { userLocation: selectedCity },
+        userId: user.id
+      });
+
+      redirectToSession(session.id);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <Select value={selectedCity} onValueChange={setSelectedCity}>
+        <SelectTrigger>
+          <SelectValue placeholder="Select a city" />
+        </SelectTrigger>
+        <SelectContent>
+          {cities.map((city) => (
+            <SelectItem key={city} value={city}>
+              {city}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Button type="submit">Create Session</Button>
+    </form>
+  );
+}
+```
+
+`newSessionComponent` is basically a React component that will display as a separate *page* after clicking "New Session" button. The job is to use `client` to create user and session and call `redirectToSession` when action is completed sucessfully.
+
+### Run Footer
+
+Each Run (user / assistant messages pair) comes with a Run Footer under the assistant message with extra info and actions.
+
+#### Run details button - display properties
+
+ There's a built-in `Run` button that displays popup with run details. It comes with its own set of Display Properties that can also be extended easily:
+
+```tsx
+export default defineConfig({
+  agents: [
+    {
+      name: "weather-chat",
+      // ... 
+
+      run: {
+        displayProperties: [
+          {
+            title: "Cost",
+            value: ({ assistantMessage, userMessage }) => assistantMessage?.metadata?.cost ?? "unknown"
+          }
+        ]
+      }
+    }
+  ]
+});
+```
+
+You can extend this with any info you want.
+
+### Scores
+
+Each member of the organization can comment and collaborate on agent outputs. Sometimes it's nice to provide a structured feedback, aka scores.
+
+Here's how you can add scores:
+
+```tsx
+import { multiSelect, select, Colors } from "@agentview/studio";
+
+export default defineConfig({
+  agents: [
+    {
+      name: "weather-chat",
+      // ... 
+
+      run: {
+        scores: [
+          select({
+            name: "forecast_accuracy",
+            title: "Forecast Accuracy",
+            options: [
+              { value: "accurate", label: "Accurate", color: Colors.green },
+              { value: "partially_accurate", label: "Partially Accurate", color: Colors.yellow },
+              { value: "inaccurate", label: "Inaccurate", color: Colors.red },
+            ]
+          }),
+          multiSelect({
+            name: "style",
+            title: "Style",
+            options: [
+              { value: "too-long", label: "Too long" },
+              { value: "too-brief", label: "Too brief" },
+              { value: "confusing", label: "Confusing" },
+              { value: "overly-technical", label: "Overly technical" },
+            ]
+          })
+        ],
+      }
+    }
+  ]
+});
+```
+
+`select` and `multiSelect` are handy helpers to build basic scores faster.
+
+You can build your own scores with custom schemas and custom components. Each score is actually just an object with following properties:
+
+| Prop | Description | Type |
+|------|-------------|------|
+| `name` | The name of the score | `string` |
+| `schema` | The schema of the score | `z.ZodSchema` |
+| `inputComponent` | The component to render the input in Scores dialog | `ControlComponent` |
+| `displayComponent` | The component to render the display in Comments section | `React.Component<{ value: any }>` |
+| `runFooterComponent` | The component to render the action bar below the item display component | `ControlComponent` |
+
+Here's how scores are displayed in the Studio:
+1. There's "Scores" button in the Run Footer. It opens a popup where we display a list of scores, using `name` and `inputComponent`.
+2. You can add score directly in the Run Footer by using `runFooterComponent`. 
+3. Score `displayCompoennt` is a tiny widget displayed in the comments section. It allows easy display of what scores did members of org applied and react to them with mentions, comments etc.
+
+#### Like score
+
+By default, AgentView comes with "Like" component that's the quickest possible feedback of agent session. It's just a score, just built-in.
+
+You can disabled default like with:
+
+```tsx
+export default defineConfig({
+  agents: [
+    {
+      // ... 
+      run: {
+        disableLike: true
+      }
+    }
+  ]
+});
+```
 
 
 
 # -- to do --
 
-1. Channels (`_channelMessages` and channel info in Session object)
-2. Clean up Session object!! isRunning / status etc.
-3. Studio -> make it quick god damn it
 4. Missing properties of client (easy, like list sessions, list users, get user etc)
+

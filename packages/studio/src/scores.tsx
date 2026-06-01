@@ -28,7 +28,7 @@ export function like(options?: LikeScoreProps): ScoreConfig {
         title: title ?? "Like / Dislike",
         inputComponent: (props) => <ToggleGroupControl {...props} options={likeOptions} hideOptionsOnSelect showLabels={showLabels ?? "on-select"} optimistic />,
         displayComponent: (props) => <OptionDisplay {...props} options={likeOptions} />,
-        actionBarComponent: (props) => <ToggleGroupControl {...props} options={likeOptions} hideOptionsOnSelect showLabels={showLabels ?? "on-select"} optimistic />
+        runFooterComponent: (props) => <ToggleGroupControl {...props} options={likeOptions} hideOptionsOnSelect showLabels={showLabels ?? "on-select"} optimistic />
     }
 }
 

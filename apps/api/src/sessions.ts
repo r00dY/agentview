@@ -86,13 +86,13 @@ export async function fetchSessionBase(tx: Transaction, session_id: string): Pro
   const channelThread = row.channelThread ? {
     id: row.channelThread.id,
     sourceThreadId: row.channelThread.sourceThreadId,
-  } : undefined;
+  } : null;
 
   const channel = row.channelThread?.channel ? {
     id: row.channelThread.channel.id,
     type: row.channelThread.channel.type,
     address: row.channelThread.channel.address,
-  } : undefined;
+  } : null;
 
   return {
     id: row.id,
@@ -201,13 +201,13 @@ export async function fetchSession(tx: Transaction, session_id: string, options?
   const channelThread = row.channelThread ? {
     id: row.channelThread.id,
     sourceThreadId: row.channelThread.sourceThreadId,
-  } : undefined;
+  } : null;
 
   const channel = row.channelThread?.channel ? {
     id: row.channelThread.channel.id,
     type: row.channelThread.channel.type,
     address: row.channelThread.channel.address,
-  } : undefined;
+  } : null;
 
   return {
     id: row.id,

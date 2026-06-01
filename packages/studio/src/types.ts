@@ -37,7 +37,7 @@ export type ScoreConfig<TValue = any> = BaseScoreConfig & {
   title?: string;
   inputComponent: ControlComponent<TValue>;
   displayComponent?: React.ComponentType<{ value: TValue }>;
-  actionBarComponent?: ControlComponent<TValue>;
+  runFooterComponent?: ControlComponent<TValue>;
 }
 
 export type InputUIMessage = string | (Omit<UIMessage, 'id' | 'role'> & { role?: 'user', id?: string });

@@ -126,18 +126,21 @@ export default defineConfig({
 });
 
 
+const cities = [
+  "New York",
+  "London",
+  "Tokyo",
+  "Paris",
+  "Warsaw"
+];
+
 function WeatherChatNewSessionComponent({ client, agent, redirectToSession }: NewSessionComponentProps) {
   const [selectedCity, setSelectedCity] = React.useState<string>("");
-  const [error, setError] = React.useState<string | null>(null);
-  const [isRunning, setIsRunning] = React.useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-    setIsRunning(true);
 
-    try {
-      const { user } = await client.users.createAnon();
+    const { user } = await client.users.createAnon();
       const session = await client.sessions.create({
         agent,
         active: false,
@@ -146,20 +149,7 @@ function WeatherChatNewSessionComponent({ client, agent, redirectToSession }: Ne
       });
 
       redirectToSession(session.id);
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "An unknown error occurred");
-    } finally {
-      setIsRunning(false);
-    }
   };
-
-  const cities = [
-    "New York",
-    "London",
-    "Tokyo",
-    "Paris",
-    "Warsaw"
-  ];
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -175,13 +165,7 @@ function WeatherChatNewSessionComponent({ client, agent, redirectToSession }: Ne
           ))}
         </SelectContent>
       </Select>
-      <Button
-        type="submit"
-        disabled={!selectedCity || isRunning}
-      >
-        {isRunning ? "Creating session..." : "Create Session"}
-      </Button>
+      <Button type="submit">Create Session</Button>
     </form>
   );
 }
-

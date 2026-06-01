@@ -54,10 +54,12 @@ const VERSION: string = (() => {
   }
 })();
 
-function printBanner(env: string) {
+function printBanner(lines: Array<[label: string, value: string]>) {
   console.log();
   console.log(`   ${ansi.bold}AgentView${ansi.reset} ${ansi.dim}${VERSION}${ansi.reset}`);
-  console.log(`   ${ansi.dim}- Environment:${ansi.reset} ${env}`);
+  for (const [label, value] of lines) {
+    console.log(`   ${ansi.dim}- ${label}:${ansi.reset} ${value}`);
+  }
   console.log();
 }
 
@@ -97,6 +99,7 @@ function handleError(error: unknown): never {
 
 let client: StandardAgentViewClient;
 let currentEnv: string | undefined;
+let currentOrg: { name: string; slug: string | null } | undefined;
 let verbose = false;
 let configPathFromArg: string | undefined; // config path from command (usually undefined)
 
@@ -110,7 +113,7 @@ export async function runCli() {
     .option("--api-key <key>", "AgentView API key (overrides AGENTVIEW_API_KEY env var)")
     .option("--env <env>", "Environment name (overrides env from config)")
     .option("-v, --verbose", "Show implementation details (proxy URL, tunnel URL)")
-    .hook('preAction', async (thisCommand) => {
+    .hook('preAction', async (thisCommand, actionCommand) => {
       const opts = thisCommand.opts();
       const apiKey = opts.apiKey ?? getAPIKey();
       const env = opts.env ?? (await loadConfig()).env;
@@ -121,8 +124,15 @@ export async function runCli() {
       // configPathFromArg = opts.config; // required to resolve path later
 
       client = createStandardClient({ apiKey, env });
+      currentOrg = await client.organization.get();
 
-      printBanner(env);
+      // env command prints its own extended banner
+      if (actionCommand.name() === 'env') return;
+
+      printBanner([
+        ["Organization", currentOrg.name],
+        ["Environment", env],
+      ]);
     });
 
 
@@ -161,6 +171,20 @@ export async function runCli() {
     .description("Start the proxy server and Cloudflare tunnel")
     .action(async () => {
       await runProxyServer(client);
+    });
+
+  program
+    .command("env")
+    .description("Show current environment details")
+    .action(async () => {
+      const environment = await client.environments.getActive();
+      const slug = currentOrg!.slug ?? "[org-slug]";
+      printBanner([
+        ["Organization", currentOrg!.name],
+        ["Environment", currentEnv!],
+        ["E-mail", `${slug}.${environment.handle}.[agent-name]@agent.agentview.app`],
+        ["Tunnel URL", environment.tunnelUrl ?? `${ansi.dim}(not set)${ansi.reset}`],
+      ]);
     });
 
   try {
