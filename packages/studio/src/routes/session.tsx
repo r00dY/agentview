@@ -4,7 +4,7 @@ import { findAgentConfig, findAgentConfigBySession, findItemConfigById, findRunC
 import { enhanceSession, getActiveRuns, getAllSessionItems, getLastRun } from "agentview/sessionUtils";
 import { unwrapError } from "agentview";
 import type { AgentConfig, AgentInputComponent, InputUIMessage, ScoreConfig, UserMessageDisplayComponent } from "../types";
-import { AlertCircleIcon, Brain, ChevronDown, CircleGauge, Ellipsis, InfoIcon, Loader2, Lock, Mail, MessageCirclePlus, RotateCcw, UserIcon, UsersIcon, Wrench } from "lucide-react";
+import { AlertCircleIcon, Brain, ChevronDown, CircleGauge, Ellipsis, Globe, InfoIcon, Loader2, Lock, Mail, MessageCirclePlus, RotateCcw, UserIcon, UsersIcon, Wrench } from "lucide-react";
 import { useEffect, useLayoutEffect, useOptimistic, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import type { LoaderFunctionArgs, RouteObject } from "react-router";
@@ -108,7 +108,7 @@ function SessionShell({
             </Header>
             <div className="flex-1 overflow-y-auto">
                 <div className="p-6 border-b">
-                    <SessionDetails sessionBase={sessionBase} agentConfig={agentConfig} />
+                    <SessionDisplayProperties sessionBase={sessionBase} agentConfig={agentConfig} />
                 </div>
                 {children}
             </div>
@@ -771,67 +771,69 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 }
 
 
-function SessionDetails({ sessionBase, agentConfig }: { sessionBase: SessionBase, agentConfig?: AgentConfig }) {
+function SessionDisplayProperties({ sessionBase, agentConfig }: { sessionBase: SessionBase, agentConfig?: AgentConfig }) {
     const { organization: { members } } = useSessionContext();
     const owner = members.find((member) => member.userId === sessionBase.user.ownerId);
 
     return (
-        <div className="w-full">
-            <PropertyList>
-                {/* <PropertyListItem>
-                    <PropertyListTitle>Agent</PropertyListTitle>
-                    <PropertyListTextValue>{sessionBase.agent}</PropertyListTextValue>
-                </PropertyListItem> */}
-                <PropertyListItem>
-                    <PropertyListTitle>Created</PropertyListTitle>
-                    <PropertyListTextValue>
-                        {new Date(sessionBase.createdAt).toLocaleDateString('en-US', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                        })}
-                    </PropertyListTextValue>
-                </PropertyListItem>
-                <PropertyListItem>
-                    <PropertyListTitle>Space</PropertyListTitle>
-                    <PropertyListTextValue>
-                        {owner ? <>Playground of <span className="text-cyan-700">{owner.user.name}</span></> : "Production"}
-                    </PropertyListTextValue>
-                </PropertyListItem>
-                <PropertyListItem>
-                    <PropertyListTitle>Channel</PropertyListTitle>
-                    <PropertyListTextValue>
-                        { sessionBase.channel ? <div className="flex flex-row gap-1 items-center">{sessionBase.channel.address} <Mail className="size-3 flex-shrink-0 text-neutral-400" /> </div> : <span>Web</span>}
-                    </PropertyListTextValue>
-                </PropertyListItem>
-                <PropertyListItem>
-                    <PropertyListTitle>User</PropertyListTitle>
-                    <PropertyListTextValue>
-                        {(() => {
-                            const user = sessionBase.user;
-                            const displayName = user.name || user.email;
-                            if (!displayName) return <span className="text-muted-foreground">Anonymous</span>;
-                            return <a href="#" className="text-cyan-700 hover:underline">
-                                {displayName}{user.headline && <span className="text-muted-foreground"> · {user.headline}</span>}
-                            </a>;
-                        })()}
-                    </PropertyListTextValue>
-                </PropertyListItem>
-                <PropertyListItem>
-                    <PropertyListTitle>
-                        Agent
-                    </PropertyListTitle>
-                    <PropertyListTextValue>
-                        {!sessionBase.agent && <span className="text-muted-foreground">-</span>}
-                        {sessionBase.agent && <Pill>{sessionBase.agent.name}@{sessionBase.agent.version}</Pill>}
-                    </PropertyListTextValue>
-                </PropertyListItem>
+        <PropertyList>
+            <PropertyListItem>
+                <PropertyListTitle>Created</PropertyListTitle>
+                <PropertyListTextValue>
+                    {new Date(sessionBase.createdAt).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    })}
+                </PropertyListTextValue>
+            </PropertyListItem>
+            <PropertyListItem>
+                <PropertyListTitle>Space</PropertyListTitle>
+                <PropertyListTextValue>
+                    {owner ? <>Playground of <span className="text-cyan-700">{owner.user.name}</span></> : "Production"}
+                </PropertyListTextValue>
+            </PropertyListItem>
+            <PropertyListItem>
+                <PropertyListTitle>Channel</PropertyListTitle>
+                <PropertyListTextValue>
+                    <div className="flex flex-row gap-1 items-center">
+                        {sessionBase.channel ? (
+                            <Mail className="size-3 flex-shrink-0 text-neutral-400" />
+                        ) : (
+                            <Globe className="size-3 flex-shrink-0 text-neutral-400" />
+                        )}
+                        <span>{sessionBase.channel ? sessionBase.channel.address : "Web"}</span>
+                    </div>
+                </PropertyListTextValue>
+           
+            </PropertyListItem>
+            <PropertyListItem>
+                <PropertyListTitle>User</PropertyListTitle>
+                <PropertyListTextValue>
+                    {(() => {
+                        const user = sessionBase.user;
+                        const displayName = user.name || user.email;
+                        if (!displayName) return <span className="text-muted-foreground">Anonymous</span>;
+                        return <a href="#" className="text-cyan-700 hover:underline">
+                            {displayName}{user.headline && <span className="text-muted-foreground"> · {user.headline}</span>}
+                        </a>;
+                    })()}
+                </PropertyListTextValue>
+            </PropertyListItem>
+            <PropertyListItem>
+                <PropertyListTitle>
+                    Agent
+                </PropertyListTitle>
+                <PropertyListTextValue>
+                    {!sessionBase.agent && <span className="text-muted-foreground">-</span>}
+                    {sessionBase.agent && <Pill>{sessionBase.agent.name}@{sessionBase.agent.version}</Pill>}
+                </PropertyListTextValue>
+            </PropertyListItem>
 
-                {agentConfig?.displayProperties && <DisplayProperties displayProperties={agentConfig.displayProperties} inputArgs={{ session: sessionBase }} />}
-            </PropertyList>
-        </div>
+            {agentConfig?.displayProperties && <DisplayProperties displayProperties={agentConfig.displayProperties} inputArgs={{ session: sessionBase }} />}
+        </PropertyList>
     );
 }
 
