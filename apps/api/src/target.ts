@@ -254,7 +254,7 @@ export async function resolveTargetWithObjects(tx: Transaction, inputTarget: Inp
     }
 
     if (target.type === 'channelMessage') {
-        const channelMessage = session.channelMessages?.find(c => c.id === target.ids.channelMessageId);
+        const channelMessage = session.channelThread?.messages?.find(c => c.id === target.ids.channelMessageId);
         if (!channelMessage) {
             throw new AgentViewError("Channel message not found", 404);
         }

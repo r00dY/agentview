@@ -4,7 +4,7 @@ import { findAgentConfig, findAgentConfigBySession, findItemConfigById, findRunC
 import { enhanceSession, getActiveRuns, getAllSessionItems, getLastRun } from "agentview/sessionUtils";
 import { unwrapError } from "agentview";
 import type { AgentConfig, AgentInputComponent, InputUIMessage, ScoreConfig, UserMessageDisplayComponent } from "../types";
-import { AlertCircleIcon, Brain, ChevronDown, CircleGauge, Ellipsis, InfoIcon, Loader2, Lock, MessageCirclePlus, RotateCcw, UserIcon, UsersIcon, Wrench } from "lucide-react";
+import { AlertCircleIcon, Brain, ChevronDown, CircleGauge, Ellipsis, InfoIcon, Loader2, Lock, Mail, MessageCirclePlus, RotateCcw, UserIcon, UsersIcon, Wrench } from "lucide-react";
 import { useEffect, useLayoutEffect, useOptimistic, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import type { LoaderFunctionArgs, RouteObject } from "react-router";
@@ -70,9 +70,6 @@ function Component() {
     const { sessions, allStats } = useOutletContext<{ sessions?: SessionBase[], allStats?: SessionsStats }>() ?? {};
     const sessionBase = sessions?.find((s) => s.id === sessionId);
     const sessionStats = allStats?.sessions?.[sessionId];
-
-    console.log('session base', sessionBase);
-    console.log('session', session);
 
     // Stage 1: No data at all - show loader
     if (!sessionBase && !session) {
@@ -162,7 +159,7 @@ type WallItem = {
  * Without runId: returns incoming messages not assigned to any run.
  */
 function getIncomingChannelMessages(session: Session, runId?: string): ChannelMessage[] {
-    const channelMessages = session.channelMessages ?? [];
+    const channelMessages = session.channelThread?.messages ?? [];
     const incoming = channelMessages.filter(m => m.direction === 'incoming' && !m.internal);
 
     if (runId) {
@@ -190,10 +187,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         )?.unseenEvents;
     };
 
-    console.log('initial session', initialSession);
-    return <div>session</div>
-
-    const [initialResume] = useState(initialSession.status === 'in_progress');
+    const [initialResume] = useState(initialSession.isRunning); // it's state, because useChat doesn't handle well when it changes live
 
     const { messages, sendMessage: sendMessage_, status, error, regenerate, setMessages } = useChat({
         id: initialSession.id,
@@ -259,7 +253,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
     const wallItems: WallItem[] = [];
 
     // Check if all incoming channel messages belong to the session user (single talker)
-    const allIncoming = (session.channelMessages ?? []).filter(m => m.direction === 'incoming');
+    const allIncoming = (session.channelThread?.messages ?? []).filter(m => m.direction === 'incoming');
     const isSingleTalker = allIncoming.length > 0 && allIncoming.every(m =>
         (m.authorEmail && m.authorEmail === session.user.email) ||
         (!m.authorEmail && m.authorName && m.authorName === session.user.name)
@@ -325,7 +319,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
         } : undefined;
 
         if (message.role === "user") {
-            if (session.channel.type === 'api') {
+            if (!session.channel) {
 
                 if (agentConfig?.run?.userMessage?.displayComponent === null) {
                     return;
@@ -564,7 +558,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
 
 
     // Pending channel messages: incoming messages not yet consumed by any run
-    if (session.channel.type !== 'api') {
+    if (session.channel) {
         const pendingMessages = getIncomingChannelMessages(session);
 
         addChannelMessages(pendingMessages);
@@ -690,7 +684,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
             sessionBase={session}
             agentConfig={agentConfig}
             headerExtra={<SessionHeaderActions session={session} isMine={session.user.ownerId === me.id} />}
-            footer={session.user.ownerId === me.id && session.channel.type === 'api' ? <InputForm session={session} agentConfig={agentConfig} styles={styles} sendMessage={sendMessage} cancelRun={cancelRun} isRunning={isRunning} /> : undefined}
+            footer={session.user.ownerId === me.id && !session.channel ? <InputForm session={session} agentConfig={agentConfig} styles={styles} sendMessage={sendMessage} cancelRun={cancelRun} isRunning={isRunning} /> : undefined}
             outletContext={{ session }}
         >
             <div ref={bodyRef}>
@@ -809,7 +803,7 @@ function SessionDetails({ sessionBase, agentConfig }: { sessionBase: SessionBase
                 <PropertyListItem>
                     <PropertyListTitle>Channel</PropertyListTitle>
                     <PropertyListTextValue>
-                        {sessionBase.channel.type} {sessionBase.channel.type === 'api' ? `(${sessionBase.channel.name})` : `(${sessionBase.channel.address})`}
+                        { sessionBase.channel ? <div className="flex flex-row gap-1 items-center">{sessionBase.channel.address} <Mail className="size-3 flex-shrink-0 text-neutral-400" /> </div> : <span>Web</span>}
                     </PropertyListTextValue>
                 </PropertyListItem>
                 <PropertyListItem>

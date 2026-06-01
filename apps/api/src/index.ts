@@ -1133,7 +1133,7 @@ app.openapi(runsAISDKPOSTRoute, async (c) => {
     return await requireSessionBase(tx, params.session_id);
   })
 
-  if (sessionBase.channelThread) {
+  if (sessionBase.channelThreadId) {
     throw new AgentViewError("This endpoint is not allowed for sessions created from non-api channels (like email, etc.)", 400);
   }
 

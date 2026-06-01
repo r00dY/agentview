@@ -151,9 +151,7 @@ export function SessionCard({ session, listParams, sessionStats }: { session: Se
     : undefined;
 
   const userName = session.user.name || session.user.email || "Anonymous";
-  const channelLabel = session.channel.type === 'api'
-    ? session.channel.name
-    : session.channel.address;
+  const channelLabel = session.channel ? session.channel.address : "Web";
 
   return <div key={session.id}>
     <NavLink to={`/sessions/${session.id}?${toQueryParams(listParams)}`}>
@@ -164,9 +162,9 @@ export function SessionCard({ session, listParams, sessionStats }: { session: Se
             {/* Row 1: User + Time/Notifications */}
             <div className="flex flex-row gap-1 justify-between mb-1">
               <div className="flex flex-row gap-1.5 items-center min-w-0">
-                {session.channel.type === 'api'
-                  ? <Globe className="size-3 flex-shrink-0 text-neutral-400" />
-                  : <Mail className="size-3 flex-shrink-0 text-neutral-400" />
+                {session.channel
+                  ? <Mail className="size-3 flex-shrink-0 text-neutral-400" />
+                  : <Globe className="size-3 flex-shrink-0 text-neutral-400" />
                 }
                 <span className={`truncate ${hasUnreads ? 'font-semibold' : 'font-medium'} text-sm`}>{userName}</span>
               </div>

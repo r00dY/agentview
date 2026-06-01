@@ -196,6 +196,7 @@ export type ChannelMessage = z.infer<typeof ChannelMessageSchema>
 export const ChannelThreadSchema = z.object({
   id: z.string(),
   sourceThreadId: z.string(),
+  messages: z.array(ChannelMessageSchema),
 })
 
 export type ChannelThread = z.infer<typeof ChannelThreadSchema>
@@ -288,9 +289,9 @@ export const SessionBaseSchema = z.object({
   title: z.string().nullable(),
   agent: AgentRefSchema.nullable(),
   active: z.boolean(),
-  
+
   channel: ChannelBaseSchema.nullable(),
-  channelThread: ChannelThreadSchema.nullable(),
+  channelThreadId: z.string().nullable(),
 })
 
 export type SessionBase = z.infer<typeof SessionBaseSchema>
@@ -298,7 +299,7 @@ export type SessionBase = z.infer<typeof SessionBaseSchema>
 export const StandardSessionSchema = SessionBaseSchema.extend({
   runs: z.array(StandardRunSchema),
   state: z.any().nullable().optional(),
-  channelMessages: z.array(ChannelMessageSchema).optional(),
+  channelThread: ChannelThreadSchema.nullable(),
 })
 
 export type StandardSession = z.infer<typeof StandardSessionSchema>
@@ -477,6 +478,7 @@ export const SessionSchema = SessionBaseSchema.extend({
   messages: z.array(UIMessageSchema),
   state: z.any().nullable().optional(),
   isRunning: z.boolean(),
+  channelThread: ChannelThreadSchema.nullable(),
 });
 
 export type Session = z.infer<typeof SessionSchema>
