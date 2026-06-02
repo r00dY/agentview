@@ -31,7 +31,7 @@ export function Studio({ config, basename }: StudioProps) {
   if (!router) return null;
 
   return (
-    <div className="agentview-root">
+    <div id="agentview-root">
       <RouterProvider router={router} unstable_useTransitions={true} />
     </div>
   );
