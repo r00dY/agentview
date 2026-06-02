@@ -80,7 +80,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (config.agents) {
     const views = [
       { key: 'production', options: { space: 'production' as const } },
-      { key: 'playground', options: { space: 'playground' as const, shared: false } },
+      { key: 'playground', options: { space: 'playground' as const, ownerId: 'me' } },
       { key: 'shared', options: { space: 'playground' as const, shared: true } },
     ];
 
@@ -148,8 +148,9 @@ function Component() {
       const currentParams = new URLSearchParams(location.search)
       const spaceMatch = pathParams.get('space') === currentParams.get('space')
       const sharedMatch = pathParams.get('shared') === currentParams.get('shared')
+      const ownerIdMatch = pathParams.get('ownerId') === currentParams.get('ownerId')
       const agentMatch = pathParams.get('agent') === currentParams.get('agent')
-      return spaceMatch && sharedMatch && agentMatch
+      return spaceMatch && sharedMatch && ownerIdMatch && agentMatch
     }
 
     return true
@@ -247,8 +248,8 @@ function Component() {
                       <SidebarMenuButton><WrenchIcon className="h-4 w-4" />Playground</SidebarMenuButton>
                       <SidebarMenuSub className="mr-0 pr-0">
                         <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={isMenuLinkActive(`/sessions?agent=${agent}&space=playground&shared=false`)} className={"justify-between"}>
-                            <Link to={`/sessions?agent=${agent}&space=playground&shared=false`}>
+                          <SidebarMenuSubButton asChild isActive={isMenuLinkActive(`/sessions?agent=${agent}&space=playground&ownerId=me`)} className={"justify-between"}>
+                            <Link to={`/sessions?agent=${agent}&space=playground&ownerId=me`}>
                               <div>Private</div>
                               {playgroundUnseenCount > 0 && <NotificationBadge>{playgroundUnseenCount}</NotificationBadge>}
                             </Link>

@@ -39,8 +39,9 @@ export function getListParamsAndCheckForRedirect(request: Request) {
     const page = url.searchParams.get('page') ?? undefined
     const limit = url.searchParams.get('limit') ?? undefined
     const shared = url.searchParams.get('shared') ?? undefined
+    const ownerId = url.searchParams.get('ownerId') ?? undefined
 
-    const listParams = { space, userId, page, limit, shared };
+    const listParams = { space, userId, page, limit, shared, ownerId };
 
     return {
         listParams,

@@ -311,12 +311,26 @@ const DEFAULT_LIMIT = 50
 const DEFAULT_PAGE = 1
 
 export function getSessionListFilter(tx: TenantTransaction, params: z.infer<typeof SessionsGetQueryParamsSchema>) {
-  const { space, userId, shared } = params;
+  const { space, userId, shared, ownerId } = params;
   const principal = tx.principal;
 
   const filters: any[] = [
     eq(sessions.active, true),
   ]
+
+  // Resolve ownerId once for all principal branches
+  let resolvedOwnerId: string | undefined = ownerId;
+  if (ownerId !== undefined) {
+    if (space !== 'playground') {
+      throw new AgentViewError("`ownerId` filter is only allowed when `space` is 'playground'.", 422);
+    }
+    if (ownerId === 'me') {
+      if (principal.type !== 'member') {
+        throw new AgentViewError("`ownerId=me` is only allowed for member principals.", 422);
+      }
+      resolvedOwnerId = principal.session.user.id;
+    }
+  }
 
   if (principal.type === 'member' || principal.type === 'apiKey') {
 
@@ -337,6 +351,10 @@ export function getSessionListFilter(tx: TenantTransaction, params: z.infer<type
 
     if (shared !== undefined) {
       filters.push(eq(endUsers.shared, shared));
+    }
+
+    if (resolvedOwnerId !== undefined) {
+      filters.push(eq(endUsers.ownerId, resolvedOwnerId));
     }
 
     // Members can only see playground users they own or that are shared. Combined with

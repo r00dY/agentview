@@ -355,6 +355,7 @@ export const SessionsGetQueryParamsSchema = PublicSessionsGetQueryParamsSchema.e
   userId: z.string().optional(),
   space: SpaceSchema.optional(), // necessary if userId is not provided
   shared: z.union([z.boolean(), z.enum(['true', 'false'])]).optional().transform(v => v === undefined ? undefined : (v === true || v === 'true')),
+  ownerId: z.string().optional(), // only valid when space='playground'; "me" expands to current member
 })
 
 export type PublicSessionsGetQueryParams = z.infer<typeof PublicSessionsGetQueryParamsSchema>

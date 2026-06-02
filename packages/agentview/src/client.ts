@@ -284,6 +284,7 @@ class SessionsResource {
     if (options?.userId) params.append('userId', options.userId);
     if (options?.space) params.append('space', options.space);
     if (options?.shared !== undefined) params.append('shared', String(options.shared));
+    if (options?.ownerId) params.append('ownerId', options.ownerId);
 
     const queryString = params.toString();
     if (queryString) {
@@ -299,6 +300,7 @@ class SessionsResource {
 
     if (options?.space) params.append('space', options.space)
     if (options?.shared !== undefined) params.append('shared', String(options.shared))
+    if (options?.ownerId) params.append('ownerId', options.ownerId)
     if (options?.page) params.append('page', options.page.toString())
     if (options?.limit) params.append('limit', options.limit.toString())
     if (options?.userId) params.append('userId', options.userId)

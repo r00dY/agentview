@@ -27,12 +27,13 @@ async function loader({ request }: LoaderFunctionArgs) {
     // userId and space are mutually exclusive at the API level
     const listOptions = listParams.userId
       ? { userId: listParams.userId, page: listParams.page }
-      : { space: listParams.space, shared: listParams.shared, page: listParams.page };
+      : { space: listParams.space, shared: listParams.shared, ownerId: listParams.ownerId, page: listParams.page };
 
     const currentParams = new URLSearchParams(window.location.search);
     const isSamePage =
       currentParams.get('space') === (listParams.space ?? null) &&
       currentParams.get('shared') === (listParams.shared === undefined ? null : String(listParams.shared)) &&
+      currentParams.get('ownerId') === (listParams.ownerId ?? null) &&
       currentParams.get('userId') === (listParams.userId ?? null) &&
       currentParams.get('page') === (listParams.page?.toString() ?? null);
     const shouldLoadImmediately = !isSamePage;
@@ -76,9 +77,9 @@ function Component() {
 
   const title = listParams.space === "production"
     ? "Sessions"
-    : listParams.shared === true
+    : listParams.shared === "true"
       ? "Shared Playground"
-      : listParams.shared === false
+      : listParams.ownerId === "me"
         ? "Private Playground"
         : "Playground";
 

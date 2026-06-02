@@ -1112,6 +1112,36 @@ describe('API', () => {
         expect(user2FetchedSessions.pagination.totalCount).toBe(USER_2_SESSIONS_COUNT)
       })
 
+      describe("ownerId filter", () => {
+        test("ownerId requires space=playground", async () => {
+          await expectToFail(
+            org.prodStandardClient.getSessions({ space: "production", ownerId: initUser1.ownerId ?? "x" }),
+            422
+          )
+          await expectToFail(
+            org.prodStandardClient.getSessions({ userId: initUser1.id, ownerId: initUser1.ownerId ?? "x" } as any),
+            422
+          )
+        })
+
+        test("ownerId=me errors for non-member principals (api key)", async () => {
+          await expectToFail(
+            org.prodStandardClient.getSessions({ space: "playground", ownerId: "me" }),
+            422
+          )
+        })
+
+        test("ownerId filters by literal owner id (api key principal)", async () => {
+          const ownerId = initUser1.ownerId
+          expect(ownerId).toBeTruthy()
+
+          const result = await org.prodStandardClient.getSessions({ space: "playground", ownerId: ownerId!, limit: 100 })
+
+          expect(result.sessions.length).toBeGreaterThan(0)
+          expect(result.sessions.every(s => s.user.ownerId === ownerId)).toBe(true)
+        })
+      })
+
     })
 
 
