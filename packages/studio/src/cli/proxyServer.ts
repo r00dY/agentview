@@ -41,7 +41,15 @@ function sendError(res: http.ServerResponse, args: { statusCode: number, code: s
   res.end(JSON.stringify({source: "agentview", ...body, localhost: true }));
 }
 
+export const HEALTH_PATH = "/__agentview/health";
+
 function handleRequest(req: http.IncomingMessage, res: http.ServerResponse) {
+  if (req.method === "GET" && req.url === HEALTH_PATH) {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ source: "agentview", ok: true }));
+    return;
+  }
+
   const targetUrlRaw = req.headers["x-target-url"];
   const targetUrl = Array.isArray(targetUrlRaw) ? targetUrlRaw[0] : targetUrlRaw;
 
