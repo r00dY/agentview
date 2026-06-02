@@ -119,13 +119,9 @@ export default defineConfig({
   ],
   customRoutes: [
     {
-      type: "agent",
-      agent: "weather-chat",
       title: <><Book className="size-4" /> <span>Custom Page</span></>,
-      route: {
-        path: "/custom-page",
-        Component: CustomPage
-      }
+      path: "/custom-page",
+      Component: CustomPage
     }
   ]
 });

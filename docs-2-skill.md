@@ -979,7 +979,32 @@ export default defineConfig({
 });
 ```
 
+### Custom Routes
 
+Studio is a React app and you can extend it with your own pages. Each custom route renders inside the standard Studio shell (sidebar + content), and is automatically added as a link in the sidebar under a "Pages" group.
+
+```tsx
+import { Book } from "lucide-react";
+import { CustomPage } from "./components/CustomPage";
+
+export default defineConfig({
+  // ...
+  customRoutes: [
+    {
+      title: <><Book className="size-4" /> <span>Custom Page</span></>,
+      path: "/custom-page",
+      Component: CustomPage
+    }
+  ]
+});
+```
+
+Each custom route has three fields:
+- `title` - React node displayed in the sidebar link (use icons + text as needed)
+- `path` - URL path under Studio's `basename` (e.g. `/custom-page` renders at `/studio/custom-page` if `basename="/studio"`)
+- `Component` - React component rendered when the route is active
+
+Custom routes are not bound to a specific agent and are always visible in the sidebar. Inside the component you have access to the same Studio context (auth, organization, AgentView client via `agentview()`, etc.) as built-in pages.
 
 # -- to do --
 

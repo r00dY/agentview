@@ -36,7 +36,7 @@ import {
 
 // Removed Framework Mode type import
 import { spaceAllowedValues, type Space } from "agentview/apiTypes";
-import type { AgentCustomRoute } from "../types";
+import type { CustomRoute } from "../types";
 import { getWebAppUrl } from "agentview/urls";
 import { matchPath } from "react-router";
 import { UserAvatar } from "../components/internal/UserAvatar";
@@ -160,12 +160,7 @@ function Component() {
   const playgroundUnseenCount = getUnseenCount("playground")
   const sharedPlaygroundUnseenCount = getUnseenCount("shared-playground")
 
-  const agentCustomRoutes: AgentCustomRoute[] = [];
-  for (const route of config.customRoutes ?? []) {
-    if (route.type === "agent" && route.agent === agent) {
-      agentCustomRoutes.push(route);
-    }
-  }
+  const customRoutes: CustomRoute[] = config.customRoutes ?? [];
 
   const agents = config.agents ?? [];
 
@@ -279,23 +274,19 @@ function Component() {
                 </SidebarGroupContent>
               </SidebarGroup>
 
-              {agentCustomRoutes.length > 0 && <SidebarGroup>
+              {customRoutes.length > 0 && <SidebarGroup>
                 <SidebarGroupLabel>Pages</SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu>
-                    {agentCustomRoutes.map((route) => {
-                      if (!route.route.path) {
-                        throw new Error("Custom route path is required")
-                      }
-
-                      return <SidebarMenuItem key={route.route.path}>
-                        <SidebarMenuButton asChild isActive={isMenuLinkActive(route.route.path)}>
-                          <Link to={route.route.path}>
+                    {customRoutes.map((route) => (
+                      <SidebarMenuItem key={route.path}>
+                        <SidebarMenuButton asChild isActive={isMenuLinkActive(route.path)}>
+                          <Link to={route.path}>
                             {route.title}
                           </Link>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
-                    })}
+                    ))}
                   </SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>}

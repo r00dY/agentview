@@ -1,4 +1,4 @@
-import { createBrowserRouter, type NonIndexRouteObject, type RouteObject } from "react-router";
+import { type NonIndexRouteObject, type RouteObject } from "react-router";
 import { sidebarLayoutRoute } from "./routes/sidebar_layout";
 import { homeRoute } from "./routes/home";
 import { userUpdateRoute } from "./routes/userUpdate";
@@ -19,8 +19,10 @@ import type { AgentViewConfig } from "./types";
 import { uiRoute } from "./routes/ui";
 
 export function routes(customRoutes: AgentViewConfig["customRoutes"]): RouteObject[] {
-  const rootCustomRoutes = (customRoutes?.filter(route => route.type === "root") || []).map(route => route.route);
-  const agentCustomRoutes = (customRoutes?.filter(route => route.type === "agent") || []).map(route => route.route);
+  const customRouteObjects = (customRoutes ?? []).map(route => ({
+    path: route.path,
+    Component: route.Component,
+  }));
 
   return [
     {
@@ -83,7 +85,7 @@ export function routes(customRoutes: AgentViewConfig["customRoutes"]): RouteObje
               path: "logout",
               ...logoutRoute
             },
-            ...agentCustomRoutes
+            ...customRouteObjects
           ],
         },
         {
@@ -94,7 +96,6 @@ export function routes(customRoutes: AgentViewConfig["customRoutes"]): RouteObje
           path: "ui",
           ...uiRoute
         },
-        ...rootCustomRoutes
       ],
     } as NonIndexRouteObject
   ]

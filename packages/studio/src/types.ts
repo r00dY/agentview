@@ -1,21 +1,12 @@
-import type { RouteObject } from "react-router";
 import type { BaseScoreConfig, BaseAgentViewConfig, SharedAgentConfig } from "agentview/baseConfigTypes";
 import type { AgentViewClient, Session, SessionBase } from "agentview";
 import type { UIMessage } from "ai";
 
-export type RootCustomRoute = {
-  type: "root",
-  route: RouteObject;
+export type CustomRoute = {
+  title: React.ReactNode;
+  path: string;
+  Component: React.ComponentType;
 }
-
-export type AgentCustomRoute = {
-  type: "agent",
-  agent: string,
-  title: React.ReactNode,
-  route: RouteObject;
-}
-
-export type CustomRoute = RootCustomRoute | AgentCustomRoute;
 
 
 export type DisplayProperty<TInputArgs = any> = {
