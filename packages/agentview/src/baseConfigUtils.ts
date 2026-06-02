@@ -25,7 +25,7 @@ export function findAgentConfig<T extends BaseAgentViewConfig>(config: T, agentN
 export function requireAgentConfigByName<T extends BaseAgentViewConfig>(config: T, agentName: string): NonNullable<T["agents"]>[number] {
     const agentConfig = findAgentConfig(config, agentName);
     if (!agentConfig) {
-        throw new AgentViewError(`Agent config not found for agent '${agentName}'`, 404);
+        throw new AgentViewError(`Agent config not found for agent '${agentName}'. Use cli to push config to the server ('npx agentview config push' or 'npx agentview dev').`, 404);
     }
     return agentConfig;
 }

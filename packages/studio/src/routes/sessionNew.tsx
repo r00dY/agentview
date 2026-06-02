@@ -116,41 +116,15 @@ function Component() {
           redirectToSession={(sessionId) => {
             navigate(`/sessions/${sessionId}?${toQueryParams(listParams)}`);
           }}
-
-          // createSession={async (values) => {
-
-          //   fetcher.submit(values ?? {}, { method: 'post', encType: 'application/json' }) 
-
-          //   // try {
-          //   //   const userId = values.userId ?? (await agentview().users.createAnon()).user.id;
-          //   //   const session = await agentview().sessions.create({
-          //   //     agent: agentConfig.name,
-          //   //     userId,
-          //   //     active: false,
-          //   //     ...values
-          //   //   });
-
-          //   //   alert('YESSSSS!!!');
-
-          //   // } catch (error) {
-          //   //   throw error;
-          //   // }
-
-          //   // fetcher.submit(values ?? {}, { method: 'post', encType: 'application/json' }) 
-          // }}
-          // submit={(values) => { 
-          //   fetcher.submit(values ?? {}, { method: 'post', encType: 'application/json' }) 
-          // }}
-          // isRunning={fetcher.state === "submitting"}
         />}
 
-        {!agentConfig.newSessionComponent && !error && <Alert variant="default">
+        {/* {!agentConfig.newSessionComponent && !error && <Alert variant="default">
           <AlertCircleIcon className="h-4 w-4" />
           <AlertTitle>No New Session Form</AlertTitle>
           <AlertDescription>
             This agent does not have a New Session Form.
           </AlertDescription>
-        </Alert>}
+        </Alert>} */}
 
       </div>
     </div>
