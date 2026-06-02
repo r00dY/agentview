@@ -1,18 +1,20 @@
-import { useLoaderData, Outlet, Link, Form, data, NavLink, redirect, Await } from "react-router";
+import { useLoaderData, Outlet, Link, Form, data, NavLink, redirect, Await, useLocation } from "react-router";
 import type { LoaderFunctionArgs, RouteObject } from "react-router";
 import { Suspense, useEffect } from "react";
 
 import { Button } from "../components/ui/button";
-import { ChevronLeftIcon, ChevronRightIcon, Globe, Loader2, Mail, MessageCircle, PlusIcon, UserIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon, Globe, Loader2, Mail, MessageCircle, PlusIcon, UserIcon, X } from "lucide-react";
 import { Header, HeaderTitle } from "../components/header";
 import { getListParams, getListParamsAndCheckForRedirect, toQueryParams } from "../lib/listParams";
 import { agentview, AgentViewError } from "../lib/agentview";
-import type { Pagination, SessionBase, SessionsPaginatedResponse, SessionStats, Space } from "agentview/apiTypes";
+import type { Pagination, SessionBase, SessionsPaginatedResponse, SessionStats, Space, User } from "agentview/apiTypes";
 import { timeAgoShort } from "../lib/timeAgo";
 import { useSessionContext } from "../lib/SessionContext";
 import { NotificationBadge, NotificationDot } from "../components/internal/NotificationBadge";
 import { UserAvatar } from "../components/internal/UserAvatar";
 import { LoadingIndicator } from "../components/internal/LoadingIndicator";
+
+type ListParams = ReturnType<typeof getListParams>;
 
 async function loader({ request }: LoaderFunctionArgs) {
   const { listParams, redirectUrl } = getListParamsAndCheckForRedirect(request);
@@ -22,35 +24,42 @@ async function loader({ request }: LoaderFunctionArgs) {
   }
 
   try {
+    // userId and space are mutually exclusive at the API level
+    const listOptions = listParams.userId
+      ? { userId: listParams.userId, page: listParams.page }
+      : { space: listParams.space, page: listParams.page };
+
     const currentParams = new URLSearchParams(window.location.search);
     const isSamePage =
       currentParams.get('space') === (listParams.space ?? null) &&
+      currentParams.get('userId') === (listParams.userId ?? null) &&
       currentParams.get('page') === (listParams.page?.toString() ?? null);
     const shouldLoadImmediately = !isSamePage;
 
-    // Sessions: sync on first load, async on revalidation
     const sessionsResult = shouldLoadImmediately
-      ? agentview().sessions.listCached({
-          space: listParams.space as Space,
-          page: listParams.page,
-        })
-      : await agentview().sessions.list({
-          space: listParams.space as Space,
-          page: listParams.page,
-        });
+      ? agentview().sessions.listCached(listOptions)
+      : await agentview().sessions.list(listOptions);
 
-    // Stats: always cached (immediate, non-blocking)
     const allStats = agentview().sessions.getStatsCached({
-      space: listParams.space as Space,
-      page: listParams.page,
+      ...listOptions,
       granular: true,
     });
+
+    const user = listParams.userId
+      ? (shouldLoadImmediately
+        ? agentview().users.getCached(listParams.userId)
+        : await agentview().users.get(listParams.userId))
+      : undefined;
+
+    const isLoading = !sessionsResult || (listParams.userId && !user);
 
     return {
       sessions: sessionsResult?.sessions,
       pagination: sessionsResult?.pagination,
       allStats,
-      listParams
+      listParams,
+      user,
+      isLoading
     };
   } catch (error) {
     if (error instanceof AgentViewError) {
@@ -61,38 +70,76 @@ async function loader({ request }: LoaderFunctionArgs) {
 }
 
 function Component() {
-  const { sessions, pagination, listParams, allStats } = useLoaderData<typeof loader>();
+  const { sessions, pagination, listParams, allStats, user, isLoading } = useLoaderData<typeof loader>();
+  const location = useLocation();
+
+  const title = listParams.space === "production" ? "Sessions" : listParams.space === "playground" ? "Private Playground" : "Shared Playground";
+
+  // For the chip: clicking the name drops /:id (and /runs/...) to show user props; X removes the user filter
+  const userPageUrl = `/sessions${location.search}`;
+  const removeFilterUrl = (() => {
+    const params = new URLSearchParams(location.search);
+    params.delete('userId');
+    return `/sessions?${params.toString()}`;
+  })();
+
 
   return <div className="flex flex-row items-stretch h-full">
 
     <div className="basis-[300px] flex-shrink-0 flex-grow-0 min-w-0 border-r flex flex-col ">
 
       <Header className="px-3">
-        <HeaderTitle title={`${listParams.space === "production" ? "Sessions" : listParams.space === "playground" ? "Private Playground" : "Shared Playground"}`} />
+        <HeaderTitle title={title} />
       </Header>
+
+
+      {!isLoading && user && (
+            <div className="flex items-center gap-1.5 text-sm px-3 py-2 border-b">
+              <Link
+                to={userPageUrl}
+                className="text-cyan-700 hover:underline truncate"
+              >
+                {user.name || user.email || "Anonymous"}
+              </Link>
+              <Link
+                to={removeFilterUrl}
+                className="text-muted-foreground hover:text-foreground flex-shrink-0"
+                aria-label="Remove user filter"
+              >
+                <X className="size-3.5" />
+              </Link>
+            </div>
+          )}
 
       <div className="flex-1 overflow-y-auto pb-12">
 
-        {!sessions && <div className="px-3 py-4 text-muted-foreground"><LoadingIndicator /></div>}
+        {isLoading && <div className="px-3 py-4 text-muted-foreground"><LoadingIndicator /></div>}
 
-        {sessions && sessions.length === 0 && <div className="px-3 py-4 text-muted-foreground">No sessions available.</div>}
-        {sessions && sessions.length > 0 && <SessionList sessions={sessions} listParams={listParams} allStats={allStats} /> }
+        {!isLoading && <>
+          {sessions!.length === 0 && <div className="px-3 py-4 text-muted-foreground">No sessions available.</div>}
+          {sessions!.length > 0 && (
+            <>{sessions!.map(session => (
+              <SessionCard
+                key={session.id}
+                session={session}
+                listParams={listParams}
+                sessionStats={allStats?.sessions?.[session.id]}
+              />
+            ))}</>
+          )}
 
-        { pagination && sessions && sessions.length > 0&& <PaginationControls pagination={pagination} listParams={listParams} /> }
+          {pagination && sessions!.length > 0 && <PaginationControls pagination={pagination} listParams={listParams} />}
+        </>}
+
       </div>
 
     </div>
 
-    <Outlet context={{ allStats: allStats ?? undefined, sessions }} />
+    <Outlet context={{ allStats: allStats ?? undefined, sessions, user }} />
   </div>
 }
 
-function SessionList({ sessions, listParams, allStats }: { sessions: SessionBase[], listParams: ReturnType<typeof getListParams>, allStats: any }) {
-  if (sessions.length === 0) return null;
-  return <>{sessions.map(session => <SessionCard key={session.id} session={session} listParams={listParams} sessionStats={allStats?.sessions?.[session.id]} />)}</>;
-}
-
-function PaginationControls({ pagination, listParams }: { pagination: Pagination, listParams: ReturnType<typeof getListParams> }) {
+function PaginationControls({ pagination, listParams }: { pagination: Pagination, listParams: ListParams }) {
   const { hasNextPage, hasPreviousPage, totalCount, currentPageStart, currentPageEnd, page } = pagination;
 
   return (<div className="flex flex-row justify-center">
@@ -126,7 +173,7 @@ function PaginationControls({ pagination, listParams }: { pagination: Pagination
 
 
 
-export function SessionCard({ session, listParams, sessionStats }: { session: SessionBase, listParams: ReturnType<typeof getListParams>, sessionStats: SessionStats | undefined }) {
+export function SessionCard({ session, listParams, sessionStats }: { session: SessionBase, listParams: ListParams, sessionStats: SessionStats | undefined }) {
   const { organization: { members }, me } = useSessionContext();
   const date = session.createdAt;
 

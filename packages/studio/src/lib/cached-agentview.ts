@@ -64,6 +64,7 @@ export class CachedAgentViewClient {
     createAnon: AgentViewClient['users']['createAnon']
     me: AgentViewClient['users']['me']
     get: AgentViewClient['users']['get']
+    getCached: Cached<AgentViewClient['users']['get']>
     getByExternalId: AgentViewClient['users']['getByExternalId']
     update: AgentViewClient['users']['update']
   }
@@ -206,10 +207,12 @@ export class CachedAgentViewClient {
       create: (options?) => users.create(options),
       createAnon: () => users.createAnon(),
       me: () => users.me(),
-      get: (id) => users.get(id),
+      get: (id) => swr(cacheKeys.user(id), () => users.get(id)),
+      getCached: (id) => swrCached(cacheKeys.user(id), () => users.get(id)),
       getByExternalId: (externalId) => users.getByExternalId(externalId),
       update: async (id, options) => {
         const result = await users.update(id, options)
+        invalidateCache(cacheKeys.user(id))
         // .user is part of session list and single session object — nuke cache
         invalidateByPrefix('session')
         invalidateByPrefix('sessions')

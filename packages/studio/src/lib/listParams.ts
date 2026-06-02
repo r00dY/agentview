@@ -26,10 +26,11 @@ export function getListParamsAndCheckForRedirect(request: Request) {
         throw new Error(`[session list] invalid space: ${spaceParam}. Allowed spaces are: ${spaceAllowedValues.join(", ")}`);
     }
 
+    const userId = url.searchParams.get('userId') ?? undefined;
     const page = url.searchParams.get('page') ?? undefined
     const limit = url.searchParams.get('limit') ?? undefined
 
-    const listParams = { space, page, limit };
+    const listParams = { space, userId, page, limit };
 
     return {
         listParams,

@@ -102,7 +102,7 @@ function SessionShell({
 }) {
     return <>
         <div className="flex-grow-1 border-r flex flex-col">
-            <Header className="py-1" trigger={false}>
+            <Header trigger={false}>
                 <HeaderTitle title={`${sessionBase.title ?? "Untitled"}`} />
                 {headerExtra}
             </Header>
@@ -815,10 +815,10 @@ function SessionDisplayProperties({ sessionBase, agentConfig }: { sessionBase: S
                     {(() => {
                         const user = sessionBase.user;
                         const displayName = user.name || user.email;
-                        if (!displayName) return <span className="text-muted-foreground">Anonymous</span>;
-                        return <a href="#" className="text-cyan-700 hover:underline">
-                            {displayName}{user.headline && <span className="text-muted-foreground"> · {user.headline}</span>}
-                        </a>;
+                        return <Link to={`/sessions?space=${user.space}&userId=${user.id}`} className="text-cyan-700 hover:underline">
+                            {displayName ?? <span className="text-muted-foreground">Anonymous</span>}
+                            {user.headline && <span className="text-muted-foreground"> · {user.headline}</span>}
+                        </Link>;
                     })()}
                 </PropertyListTextValue>
             </PropertyListItem>
