@@ -137,6 +137,16 @@ function Component() {
     return listStats[key]?.unseenCount ?? 0
   }
 
+  const getSessionMode = (params: URLSearchParams) => {
+    const space = params.get('space')
+    if (space === 'production') return 'production'
+    if (space === 'playground') {
+      if (params.get('shared') === 'true') return 'shared'
+      if (params.get('ownerId') === 'me') return 'private'
+    }
+    return null
+  }
+
   const isMenuLinkActive = (linkPath: string) => {
     const linkUrl = new URL(linkPath, window.location.origin)
     const pathMatches = matchPath({ path: linkUrl.pathname, end: false }, location.pathname)
@@ -144,13 +154,9 @@ function Component() {
     if (!pathMatches) return false
 
     if (linkPath.startsWith("/sessions")) {
-      const pathParams = new URLSearchParams(linkUrl.search)
-      const currentParams = new URLSearchParams(location.search)
-      const spaceMatch = pathParams.get('space') === currentParams.get('space')
-      const sharedMatch = pathParams.get('shared') === currentParams.get('shared')
-      const ownerIdMatch = pathParams.get('ownerId') === currentParams.get('ownerId')
-      const agentMatch = pathParams.get('agent') === currentParams.get('agent')
-      return spaceMatch && sharedMatch && ownerIdMatch && agentMatch
+      const linkMode = getSessionMode(new URLSearchParams(linkUrl.search))
+      const currentMode = getSessionMode(new URLSearchParams(location.search))
+      return linkMode !== null && linkMode === currentMode
     }
 
     return true
