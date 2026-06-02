@@ -334,13 +334,6 @@ export function getSessionListFilter(tx: TenantTransaction, params: z.infer<type
 
   if (principal.type === 'member' || principal.type === 'apiKey') {
 
-    if (!space && !userId) {
-      throw new AgentViewError("You must set either `space` or `userId` to make this request.", 422);
-    }
-    if (space && userId) {
-      throw new AgentViewError("You must set either `space` or `userId`, not both.", 422);
-    }
-
     if (space) {
       filters.push(eq(endUsers.space, space));
     }
