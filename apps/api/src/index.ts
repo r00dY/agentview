@@ -37,6 +37,7 @@ import {
   TokenWithSecretSchema,
   UserCreateSchema,
   UserSchema,
+  UserUpdateSchema,
   UserWithTokenSchema,
   type StandardSession
 } from 'agentview/apiTypes';
@@ -317,7 +318,7 @@ const apiUsersPATCHRoute = createRoute({
   summary: 'Update a user',
   tags: ['Users'],
   request: {
-    body: body(UserCreateSchema)
+    body: body(UserUpdateSchema)
   },
   responses: {
     200: response_data(UserSchema)

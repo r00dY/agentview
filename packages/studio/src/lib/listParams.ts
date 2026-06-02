@@ -5,32 +5,42 @@ import { config } from "../config";
 export function getListParamsAndCheckForRedirect(request: Request) {
     const url = new URL(request.url);
 
-    let spaceParam = url.searchParams.get('space')
-    let space: Space;
+    const spaceParam = url.searchParams.get('space')
+    const sharedParam = url.searchParams.get('shared')
+
+    let space: Space | undefined;
+    // let shared: boolean | undefined;
     let needsRedirect = false;
 
+    // if (sharedParam === "true") {
+    //     shared = true;
+    // } else if (sharedParam === "false") {
+    //     shared = false;
+    // }
+
+    // if (!spaceParam) {
+    //     spaceParam = "production";
+    //     needsRedirect = true;
+    // }
+
     if (!spaceParam) {
-        spaceParam = "production";
+        space = "production";
         needsRedirect = true;
     }
-    if (spaceParam === "production" || !spaceParam) {
+    if (spaceParam === "production") {
         space = "production";
-    }
-    else if (spaceParam === "shared-playground") {
-        space = "shared-playground";
-    }
-    else if (spaceParam === "playground") {
+    } else if (spaceParam === "playground") {
         space = "playground";
-    }
-    else {
+    } else if (spaceParam) {
         throw new Error(`[session list] invalid space: ${spaceParam}. Allowed spaces are: ${spaceAllowedValues.join(", ")}`);
     }
 
     const userId = url.searchParams.get('userId') ?? undefined;
     const page = url.searchParams.get('page') ?? undefined
     const limit = url.searchParams.get('limit') ?? undefined
+    const shared = url.searchParams.get('shared') ?? undefined
 
-    const listParams = { space, userId, page, limit };
+    const listParams = { space, userId, page, limit, shared };
 
     return {
         listParams,

@@ -1,5 +1,5 @@
 import { AgentViewError } from 'agentview'
-import type { Environment, Space, UserCreate } from 'agentview/apiTypes'
+import type { Environment, Space, UserCreate, UserUpdate } from 'agentview/apiTypes'
 import { randomBytes } from 'crypto'
 import { and, desc, eq, isNull } from 'drizzle-orm'
 import { authorize } from './authMiddleware'
@@ -116,11 +116,16 @@ async function getDefaultSpace(tx: TenantTransaction): Promise<{ space: Space, o
 export async function createUser(tx: TenantTransaction, body: UserCreate) {
   await tx.acquireLock({ type: "create_resource" });
 
-  if (body.space && body.space === 'playground' && body.ownerId !== null) {
+  if (body.space && body.space === 'playground' && body.ownerId === null) {
     throw new AgentViewError('Users in playground space must have "ownerId" set.', 400)
   }
 
+  if (body.space === 'production' && body.shared) {
+    throw new AgentViewError('Users in production space cannot be marked as "shared".', 400)
+  }
+
   const { space, ownerId } = body.space ? { space: body.space, ownerId: body.ownerId ?? null } : await getDefaultSpace(tx);
+  const shared = space === 'production' ? false : (body.shared ?? false);
 
   await authorize(tx.principal, { action: "end-user:create", space })
 
@@ -146,6 +151,7 @@ export async function createUser(tx: TenantTransaction, body: UserCreate) {
     details: body.details,
     ownerId,
     space,
+    shared,
   }).returning()
 
   const { token } = await issueToken(tx, newEndUser.id);
@@ -233,11 +239,15 @@ export async function ensureUserForEmail(tx: TenantTransaction, email: string) {
 }
 
 
-export async function updateUser(tx: TenantTransaction, id: string, body: UserCreate) {
+export async function updateUser(tx: TenantTransaction, id: string, body: UserUpdate) {
   await tx.acquireLock({ type: "create_resource" }); // this is actually "edit" but we treat 'create_resource' as general fallback lock
 
   const user = await requireUser(tx, { id })
   await authorize(tx.principal, { action: "end-user:update", user })
+
+  if (user.space === 'production' && body.shared) {
+    throw new AgentViewError('Users in production space cannot be marked as "shared".', 400)
+  }
 
   const [updatedUser] = await tx.update(endUsers).set(body).where(eq(endUsers.id, id)).returning();
   return updatedUser

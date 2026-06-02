@@ -26,14 +26,15 @@ export const endUsers = pgTable("end_users", {
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 
   ownerId: text('owner_id').references(() => users.id, { onDelete: 'set null' }),
-  space: varchar("space", { length: 24 }).notNull().$type<'production' | 'playground' | 'shared-playground'>(), // production, playground, shared-playground
+  space: varchar("space", { length: 24 }).notNull().$type<'production' | 'playground'>(),
+  shared: boolean("shared").notNull().default(false),
 
 }, (table) => [
   uniqueIndex('end_user_external_id_org_unique').on(table.externalId, table.organizationId),
   uniqueIndex('end_user_email_org_unique').on(table.email, table.organizationId),
   createTenantPolicy('end_users'),
-  // If space = 'production' then ownerId must be null, otherwise ownerId must be defined
-  check('end_users_owner_id_space_check', sql`(space = 'production' AND owner_id IS NULL) OR (space != 'production' AND owner_id IS NOT NULL)`),
+  // If space = 'production' then ownerId must be null and shared must be false; otherwise ownerId must be defined
+  check('end_users_owner_id_space_check', sql`(space = 'production' AND owner_id IS NULL AND shared = false) OR (space = 'playground' AND owner_id IS NOT NULL)`),
 ]);
 
 export const endUserTokens = pgTable("end_user_tokens", {

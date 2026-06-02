@@ -815,7 +815,7 @@ function SessionDisplayProperties({ sessionBase, agentConfig }: { sessionBase: S
                     {(() => {
                         const user = sessionBase.user;
                         const displayName = user.name || user.email;
-                        return <Link to={`/sessions?space=${user.space}&userId=${user.id}`} className="text-cyan-700 hover:underline">
+                        return <Link to={`/sessions?space=${user.space}${user.space === 'playground' ? `&shared=${user.shared}` : ''}&userId=${user.id}`} className="text-cyan-700 hover:underline">
                             {displayName ?? <span className="text-muted-foreground">Anonymous</span>}
                             {user.headline && <span className="text-muted-foreground"> · {user.headline}</span>}
                         </Link>;
@@ -858,10 +858,11 @@ function SessionHeaderActions({ session, isMine }: { session: Session, isMine: b
 function ShareForm({ session }: { session: SessionBase }) {
     const fetcher = useFetcher();
     const isProcessing = fetcher.state !== 'idle';
+    const isShared = session.user.shared;
     return <fetcher.Form method="put" action={`/users/${session.user.id}/update`}>
-        <input type="hidden" name="space" value={session.user.space === "shared-playground" ? "playground" : "shared-playground"} />
+        <input type="hidden" name="shared" value={isShared ? "false" : "true"} />
         <Button variant={"outline"} size="sm" type="submit" disabled={isProcessing}>
-            {isProcessing ? <Loader2 className="animate-spin" /> : <UsersIcon fill={session.user.space === "shared-playground" ? "black" : "none"} stroke={session.user.space === "shared-playground" ? "none" : "black"} />} {session.user.space === "shared-playground" ? "Shared" : "Share"}
+            {isProcessing ? <Loader2 className="animate-spin" /> : <UsersIcon fill={isShared ? "black" : "none"} stroke={isShared ? "none" : "black"} />} {isShared ? "Shared" : "Share"}
         </Button>
     </fetcher.Form>
 }

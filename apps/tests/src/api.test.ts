@@ -297,31 +297,24 @@ describe('API', () => {
         expect(user.ownerId).toBeNull()
       })
 
-      // test("[prod api-key] playground or shared-playground are not allowed with production api-key (you must be logged in as member to do it)", async () => {
-      //   await expect(org.prodStandardClient.users.create({ space: "playground" })).rejects.toThrowError(expect.objectContaining({
-      //     statusCode: 401,
-      //     message: expect.any(String),
-      //   }))
+      test("[local env] shared flag defaults to false", async () => {
+        const { user } = await av.users.create()
+        expect(user.space).toBe("playground")
+        expect(user.shared).toBe(false)
+      })
 
-      //   await expect(org.prodStandardClient.users.create({ space: "shared-playground" })).rejects.toThrowError(expect.objectContaining({
-      //     statusCode: 401,
-      //     message: expect.any(String),
-      //   }))
-      // })
+      test("[local env] shared flag can be set on creation", async () => {
+        const { user } = await av.users.create({ shared: true })
+        expect(user.space).toBe("playground")
+        expect(user.shared).toBe(true)
+      })
 
-
-      // test("[prod api-key] playground is possible only with explicit ", async () => {
-      //   const user = await av.users.create({ space: "shared-playground" })
-      //   expect(user.space).toBe("shared-playground")
-      //   expect(user.createdBy).toBeNull()
-      // })
-
-      // test("[dev api-key] production space is blocked", async () => {
-      //   await expect(av.users.create({ space: "production" })).rejects.toThrowError(expect.objectContaining({
-      //     statusCode: 401,
-      //     message: expect.any(String),
-      //   }))
-      // })
+      test("[prod env] production user cannot be shared", async () => {
+        await expect(org.prodStandardClient.users.create({ space: "production", shared: true })).rejects.toThrowError(expect.objectContaining({
+          statusCode: 400,
+          message: expect.any(String),
+        }))
+      })
     })
 
     describe("get me", () => {
@@ -607,12 +600,12 @@ describe('API', () => {
       // Bob can create sessions for his channel
       const { user: bobUser } = await avBob.users.create({ externalId: "bob-test-user" });
       const bobSession = await avBob.createSession({ agent: "bob-agent", userId: bobUser.id });
-      expect(bobSession.channel).toBeUndefined();
+      expect(bobSession.channel).toBeNull();
 
       // Alice can create sessions for her channel
       const { user: aliceUser } = await avAlice.users.create({ externalId: "alice-test-user" });
       const aliceSession = await avAlice.createSession({ agent: "alice-agent", userId: aliceUser.id });
-      expect(aliceSession.channel).toBeUndefined();
+      expect(aliceSession.channel).toBeNull();
 
       // Bob cannot create sessions for Alice's channel (not in his config)
       await expect(avBob.createSession({ agent: "alice-agent", userId: bobUser.id }))

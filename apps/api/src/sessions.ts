@@ -1,7 +1,7 @@
 import { AgentViewError } from "agentview";
 import type { ChannelThread, Environment, SessionBase, SessionsGetQueryParams, SessionsGetQueryParamsSchema, SessionsPaginatedResponse, SessionStatus, SessionUpdate, StandardSession, StandardSessionCreate } from "agentview/apiTypes";
 import { randomBytes } from "crypto";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import type z from "zod";
 import { resolveAgentRef } from "./agentRefs";
 import { authorize } from "./authMiddleware";
@@ -311,7 +311,7 @@ const DEFAULT_LIMIT = 50
 const DEFAULT_PAGE = 1
 
 export function getSessionListFilter(tx: TenantTransaction, params: z.infer<typeof SessionsGetQueryParamsSchema>) {
-  const { space, userId } = params;
+  const { space, userId, shared } = params;
   const principal = tx.principal;
 
   const filters: any[] = [
@@ -327,22 +327,33 @@ export function getSessionListFilter(tx: TenantTransaction, params: z.infer<type
       throw new AgentViewError("You must set either `space` or `userId`, not both.", 422);
     }
 
-    if (space) { // space
+    if (space) {
       filters.push(eq(endUsers.space, space));
     }
 
-    if (userId) { // explicit user
+    if (userId) {
       filters.push(eq(endUsers.id, userId));
     }
 
-    if (space === "playground") {
+    if (shared !== undefined) {
+      filters.push(eq(endUsers.shared, shared));
+    }
 
-      if (principal.type === 'member') {
-        filters.push(eq(endUsers.ownerId, principal.session.user.id));
-      }
-      // else if (principal.type === 'apiKey') {
-      //   filters.push(eq(endUsers.ownerId, principal.apiKey.userId));
-      // }
+    // Members can only see playground users they own or that are shared. Combined with
+    // an optional shared filter above, this gives the expected behavior:
+    //  - no shared filter → own + all shared
+    //  - shared=true → all shared
+    //  - shared=false → only own non-shared
+    // if (space === "playground" && principal.type === 'member') {
+    //   filters.push(or(eq(endUsers.ownerId, principal.session.user.id), eq(endUsers.shared, true))!);
+    // }
+
+    if (principal.type === 'member') {
+      filters.push(or(
+        eq(endUsers.space, 'production'),
+        and(eq(endUsers.space, 'playground'), eq(endUsers.ownerId, principal.session.user.id)),
+        and(eq(endUsers.space, 'playground'), eq(endUsers.shared, true)),
+      ))
     }
   }
   else if (principal.type === 'user') {

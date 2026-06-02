@@ -1,6 +1,7 @@
 import type {
   User,
   UserCreate,
+  UserUpdate,
   SessionUpdate,
   Environment,
   SessionsGetQueryParams,
@@ -230,7 +231,7 @@ class UsersResource {
     return await this.client._request<User>('GET', `/api/users/by-email/${encodeURIComponent(email)}`)
   }
 
-  async update(id: string, options: UserCreate): Promise<User> {
+  async update(id: string, options: UserUpdate): Promise<User> {
     return await this.client._request<User>('PATCH', `/api/users/${id}`, options)
   }
 }
@@ -282,6 +283,7 @@ class SessionsResource {
     if (options?.limit) params.append('limit', options.limit.toString());
     if (options?.userId) params.append('userId', options.userId);
     if (options?.space) params.append('space', options.space);
+    if (options?.shared !== undefined) params.append('shared', String(options.shared));
 
     const queryString = params.toString();
     if (queryString) {
@@ -296,6 +298,7 @@ class SessionsResource {
     const params = new URLSearchParams()
 
     if (options?.space) params.append('space', options.space)
+    if (options?.shared !== undefined) params.append('shared', String(options.shared))
     if (options?.page) params.append('page', options.page.toString())
     if (options?.limit) params.append('limit', options.limit.toString())
     if (options?.userId) params.append('userId', options.userId)

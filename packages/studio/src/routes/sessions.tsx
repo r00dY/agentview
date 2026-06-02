@@ -27,11 +27,12 @@ async function loader({ request }: LoaderFunctionArgs) {
     // userId and space are mutually exclusive at the API level
     const listOptions = listParams.userId
       ? { userId: listParams.userId, page: listParams.page }
-      : { space: listParams.space, page: listParams.page };
+      : { space: listParams.space, shared: listParams.shared, page: listParams.page };
 
     const currentParams = new URLSearchParams(window.location.search);
     const isSamePage =
       currentParams.get('space') === (listParams.space ?? null) &&
+      currentParams.get('shared') === (listParams.shared === undefined ? null : String(listParams.shared)) &&
       currentParams.get('userId') === (listParams.userId ?? null) &&
       currentParams.get('page') === (listParams.page?.toString() ?? null);
     const shouldLoadImmediately = !isSamePage;
@@ -73,7 +74,13 @@ function Component() {
   const { sessions, pagination, listParams, allStats, user, isLoading } = useLoaderData<typeof loader>();
   const location = useLocation();
 
-  const title = listParams.space === "production" ? "Sessions" : listParams.space === "playground" ? "Private Playground" : "Shared Playground";
+  const title = listParams.space === "production"
+    ? "Sessions"
+    : listParams.shared === true
+      ? "Shared Playground"
+      : listParams.shared === false
+        ? "Private Playground"
+        : "Playground";
 
   // For the chip: clicking the name drops /:id (and /runs/...) to show user props; X removes the user filter
   const userPageUrl = `/sessions${location.search}`;
@@ -193,7 +200,7 @@ export function SessionCard({ session, listParams, sessionStats }: { session: Se
   const itemsMentionsCount = allItemEvents.filter((event: any) => Array.isArray(event?.payload?.user_mentions) && (event.payload.user_mentions as any[]).includes(me.id)).length;
   const hasUnreads = hasSessionUnreads || hasUnreadItems;
 
-  const playgroundOwner = session.user.space !== 'production'
+  const playgroundOwner = session.user.space === 'playground'
     ? members.find((member) => member.userId === session.user.ownerId)
     : undefined;
 

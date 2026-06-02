@@ -9,7 +9,7 @@ export const InputTargetSchema = z.object({
 })
 export type InputTarget = z.infer<typeof InputTargetSchema>
 
-export const spaceAllowedValues = ['production', 'playground', 'shared-playground'] as const;
+export const spaceAllowedValues = ['production', 'playground'] as const;
 
 
 export const SpaceSchema = z.enum(spaceAllowedValues);
@@ -27,6 +27,7 @@ export const UserSchema = z.object({
   updatedAt: z.iso.date(),
   ownerId: z.string().nullable(),
   space: SpaceSchema,
+  shared: z.boolean(),
 })
 
 export type User = z.infer<typeof UserSchema>
@@ -40,9 +41,22 @@ export const UserCreateSchema = UserSchema.pick({
 
   space: true, // default based on env
   ownerId: true,
+  shared: true,
 }).partial();
 
 export type UserCreate = z.infer<typeof UserCreateSchema>
+
+// `space` and `ownerId` are immutable after creation.
+export const UserUpdateSchema = UserSchema.pick({
+  externalId: true,
+  email: true,
+  name: true,
+  headline: true,
+  details: true,
+  shared: true,
+}).partial();
+
+export type UserUpdate = z.infer<typeof UserUpdateSchema>
 
 export const UserWithTokenSchema = z.object({
   user: UserSchema,
@@ -340,6 +354,7 @@ export const PublicSessionsGetQueryParamsSchema = z.object({
 export const SessionsGetQueryParamsSchema = PublicSessionsGetQueryParamsSchema.extend({
   userId: z.string().optional(),
   space: SpaceSchema.optional(), // necessary if userId is not provided
+  shared: z.union([z.boolean(), z.enum(['true', 'false'])]).optional().transform(v => v === undefined ? undefined : (v === true || v === 'true')),
 })
 
 export type PublicSessionsGetQueryParams = z.infer<typeof PublicSessionsGetQueryParamsSchema>

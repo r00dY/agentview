@@ -68,17 +68,18 @@ export class StandardAgentViewClient extends AgentViewBase {
     async getSessions(options?: SessionsGetQueryParams) {
         let path = `/api/sessions`;
         const params = new URLSearchParams();
-    
+
         if (options?.page) params.append('page', options.page.toString());
         if (options?.limit) params.append('limit', options.limit.toString());
         if (options?.userId) params.append('userId', options.userId);
         if (options?.space) params.append('space', options.space);
-    
+        if (options?.shared !== undefined) params.append('shared', String(options.shared));
+
         const queryString = params.toString();
         if (queryString) {
           path += `?${queryString}`;
         }
-    
+
         return await this._request<SessionsPaginatedResponse>('GET', path, undefined)
       }
 
@@ -200,6 +201,7 @@ export class StandardAgentViewClient extends AgentViewBase {
         const params = new URLSearchParams()
 
         if (options?.space) params.append('space', options.space)
+        if (options?.shared !== undefined) params.append('shared', String(options.shared))
         if (options?.page) params.append('page', options.page.toString())
         if (options?.limit) params.append('limit', options.limit.toString())
         if (options?.userId) params.append('userId', options.userId)

@@ -21,9 +21,9 @@ function UserDisplayProperties({ user }: { user: User }) {
 
   const spaceLabel = user.space === 'production'
     ? 'Production'
-    : user.space === 'playground'
-      ? 'Private playground'
-      : 'Shared playground';
+    : user.shared
+      ? 'Shared playground'
+      : 'Private playground';
 
   return (
     <PropertyList>

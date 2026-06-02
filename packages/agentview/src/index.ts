@@ -9,6 +9,7 @@ export * from "./client.js";
 export type {
     User,
     UserCreate,
+    UserUpdate,
     SessionUpdate,
     EnvironmentBase,
     Environment,

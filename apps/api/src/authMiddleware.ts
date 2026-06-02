@@ -373,7 +373,10 @@ export function authorize(principal: Principal, action: Action) {
     else if (principal.type === 'member') {
       const memberId = principal.session.user.id
 
-      if (action.action === "end-user:read" && (action.user.space === 'production' || action.user.space === 'shared-playground' || (action.user.space === 'playground' && action.user.ownerId === memberId))) {
+      if (action.action === "end-user:read" && (
+        action.user.space === 'production' ||
+        (action.user.space === 'playground' && (action.user.ownerId === memberId || action.user.shared))
+      )) {
         return true;
       }
 
