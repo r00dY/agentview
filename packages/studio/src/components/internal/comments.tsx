@@ -1,7 +1,7 @@
 import { AlertCircleIcon } from "lucide-react";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useFetcher, useRevalidator } from "react-router";
-import type { CommentMessage, Score, InputTarget } from "agentview/apiTypes";
+import type { CommentMessage, Score, InputTarget, User } from "agentview/apiTypes";
 import { Button } from "../ui/button";
 import { useFetcherSuccess } from "../../hooks/useFetcherSuccess";
 import { timeAgoShort } from "../../lib/timeAgo";
@@ -21,6 +21,7 @@ import { type Member } from "../../lib/auth-client";
 
 export type CommentsThreadRawProps = {
     target: InputTarget,
+    sessionUser: User,
     comments: CommentMessage[],
     scoreConfigs?: ScoreConfig[],
     collapsed?: boolean,
@@ -85,7 +86,7 @@ function getStackedCommentMessages(messages: CommentMessage[]): StackedCommentMe
     return result;
 }
 
-export const CommentsThreadRaw = forwardRef<any, CommentsThreadRawProps>(({ target, scoreConfigs, collapsed = false, singleLineMessageHeader = false, small = false, comments }, ref) => {
+export const CommentsThreadRaw = forwardRef<any, CommentsThreadRawProps>(({ target, sessionUser, scoreConfigs, collapsed = false, singleLineMessageHeader = false, small = false, comments }, ref) => {
     const { organization: { members }, me } = useSessionContext();
     const fetcher = useFetcher();
 
@@ -93,8 +94,26 @@ export const CommentsThreadRaw = forwardRef<any, CommentsThreadRawProps>(({ targ
     const hasZeroVisisbleComments = stackedMessages.length === 0
 
     const [comment, setComment] = useState("");
+    const [isSharing, setIsSharing] = useState(false);
+    const [shareError, setShareError] = useState<string | null>(null);
 
-    const submit = () => {
+    const hasMention = /@\[user_id:[^\]]+\]/.test(comment);
+    const isPrivateSession = sessionUser.space === 'playground' && !sessionUser.shared;
+    const needsShare = isPrivateSession && hasMention;
+
+    const submit = async () => {
+        if (needsShare) {
+            setIsSharing(true);
+            setShareError(null);
+            try {
+                await agentview().users.update(sessionUser.id, { shared: true });
+            } catch (e: any) {
+                setIsSharing(false);
+                setShareError(e?.message ?? "Could not share the session.");
+                return;
+            }
+            setIsSharing(false);
+        }
         fetcher.submit({ ...target, content: comment }, { method: 'post', action: `/comments`, encType: 'application/json' })
     }
 
@@ -187,6 +206,20 @@ export const CommentsThreadRaw = forwardRef<any, CommentsThreadRawProps>(({ targ
                                 onChange={(value) => setComment(value ?? "")}
                             />
                         </div>
+
+                        {needsShare && (
+                            <div className="text-xs text-muted-foreground mt-2">
+                                You're tagging someone but this session is private. Sending will share it with your team.
+                            </div>
+                        )}
+
+                        {shareError && (
+                            <Alert variant="destructive" className="mt-2">
+                                <AlertCircleIcon className="h-4 w-4" />
+                                <AlertDescription>{shareError}</AlertDescription>
+                            </Alert>
+                        )}
+
                         <div className={`gap-2 justify-end mt-2 flex ${ comment.trim() === "" ? "hidden" : ""}`}>
                             <Button
                                 type="reset"
@@ -201,9 +234,13 @@ export const CommentsThreadRaw = forwardRef<any, CommentsThreadRawProps>(({ targ
                             <Button
                                 type="submit"
                                 size="sm"
-                                disabled={fetcher.state !== 'idle' || comment.trim() === ""}
+                                disabled={isSharing || fetcher.state !== 'idle' || comment.trim() === ""}
                             >
-                                {fetcher.state !== 'idle' ? 'Sending...' : 'Send'}
+                                {isSharing
+                                    ? 'Sharing...'
+                                    : fetcher.state !== 'idle'
+                                        ? 'Sending...'
+                                        : needsShare ? 'Share & Send' : 'Send'}
                             </Button>
                         </div>
 
@@ -219,7 +256,7 @@ export const CommentsThreadRaw = forwardRef<any, CommentsThreadRawProps>(({ targ
     );
 });
 
-export function CommentsThread({ target, scoreConfigs, selected = false, onSelect, unseenEvents, comments }: CommentsThreadProps) {
+export function CommentsThread({ target, sessionUser, scoreConfigs, selected = false, onSelect, unseenEvents, comments }: CommentsThreadProps) {
     const commentThreadRef = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const revalidator = useRevalidator();
@@ -285,6 +322,7 @@ export function CommentsThread({ target, scoreConfigs, selected = false, onSelec
             <CommentsThreadRaw
                 comments={comments}
                 target={target}
+                sessionUser={sessionUser}
                 scoreConfigs={scoreConfigs}
                 collapsed={!selected}
                 ref={commentThreadRef}

@@ -742,6 +742,7 @@ function SessionPage(props: { session: Session, comments: CommentMessage[], scor
                         commentsComponent: !styles.isSmallSize && (hasComments || (isSelected)) && commentsAndScores ?
                             <CommentsThread
                                 target={commentsAndScores.target}
+                                sessionUser={session.user}
                                 selected={isSelected}
                                 onSelect={(a) => {
                                     if (a) {
