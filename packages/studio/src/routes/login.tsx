@@ -6,6 +6,7 @@ import { authClient } from "../lib/auth-client";
 import { getWebAppUrl, getApiUrl } from "agentview/urls";
 import { config } from "../config";
 import { agentview, publicClient } from "../lib/agentview";
+import { stripBasename } from "../lib/basename";
 
 
 function getRedirectUrl(stringUrl: string) {
@@ -14,7 +15,10 @@ function getRedirectUrl(stringUrl: string) {
   // Otherwise use the redirect param or default to /
   const redirectTo = url.searchParams.get('redirect');
   if (redirectTo && redirectTo.startsWith('/')) {
-    return redirectTo;
+    // The path passed to react-router's redirect() is relative to the router's
+    // basename — strip the basename if it's already in the redirect param,
+    // otherwise the router would prepend it again.
+    return stripBasename(redirectTo);
   }
   return '/';
 }

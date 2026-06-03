@@ -13,7 +13,7 @@ export function Studio({ config, basename }: StudioProps) {
   const [router, setRouter] = useState<Router | null>(null);
 
   useEffect(() => {
-    (window as any).agentview = { config };
+    (window as any).agentview = { config, basename };
     let cancelled = false;
 
     import("./routes").then(({ routes }) => {

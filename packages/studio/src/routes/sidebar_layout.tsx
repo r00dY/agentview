@@ -11,6 +11,7 @@ import {
   type LoaderFunctionArgs,
   type RouteObject
 } from "react-router";
+import { stripBasename } from "../lib/basename";
 import { use, Suspense, useEffect } from "react";
 
 import { ArrowLeft, Box, Building2Icon, ChevronDown, ChevronUp, Database, LogOut, MessageCircle, PlusIcon, UserIcon, WrenchIcon } from "lucide-react";
@@ -53,7 +54,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const session = await getSessionCached();
 
   const url = new URL(request.url);
-  const relativeUrl = url.pathname + url.search + url.hash;
+  const relativeUrl = stripBasename(url.pathname) + url.search + url.hash;
 
   if (!session) {
     if (relativeUrl !== '/') {
