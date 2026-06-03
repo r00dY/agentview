@@ -2,7 +2,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { type OrgTransaction } from "./withOrg";
 import { type Target } from "./target";
 import { updateInboxes } from "./updateInboxes";
-import { commentMentions, events, commentMessageEdits, scores, commentMessages } from "./schemas/schema";
+import { commentMentions, endUsers, events, commentMessageEdits, scores, commentMessages, sessions } from "./schemas/schema";
 import { AgentViewError } from "agentview";
 
 export async function requireCommentMessage(tx: OrgTransaction, commentId: string) {
@@ -23,6 +23,33 @@ export async function requireCommentMessage(tx: OrgTransaction, commentId: strin
 export function requireCommentOwnership(comment: { userId: string }, memberId: string) {
   if (comment.userId !== memberId) {
     throw new AgentViewError("You can only edit your own comments.", 401);
+  }
+}
+
+/**
+ * Mentions are only allowed when the session's end user is either:
+ *  - in 'production' space, or
+ *  - in 'playground' space AND shared.
+ * A private playground session (space='playground' AND shared=false) cannot include @mentions.
+ */
+async function assertMentionsAllowed(tx: OrgTransaction, sessionId: string) {
+  const rows = await tx
+    .select({ space: endUsers.space, shared: endUsers.shared })
+    .from(sessions)
+    .innerJoin(endUsers, eq(sessions.userId, endUsers.id))
+    .where(eq(sessions.id, sessionId))
+    .limit(1);
+
+  if (rows.length === 0) {
+    throw new AgentViewError("Session not found", 404);
+  }
+
+  const { space, shared } = rows[0];
+  if (space === 'playground' && !shared) {
+    throw new AgentViewError(
+      "Mentions are not allowed in private playground sessions. Share the session or use a production session.",
+      422
+    );
   }
 }
 
@@ -49,6 +76,8 @@ export async function createComment(
     userMentions = mentions.user_id || [];
 
     if (userMentions.length > 0) {
+      await assertMentionsAllowed(tx, target.ids.sessionId);
+
       await tx.insert(commentMentions).values(
         userMentions.map((mentionedUserId: string) => ({
           organizationId: tx.organizationId,
@@ -133,6 +162,8 @@ export async function updateComment(
 
     // Add new mentions
     if (newMentionsToAdd.length > 0) {
+      await assertMentionsAllowed(tx, commentMessage.sessionId);
+
       await tx.insert(commentMentions).values(
         newMentionsToAdd.map((mentionedUserId: string) => ({
           organizationId: tx.organizationId,
@@ -209,7 +240,7 @@ function extractMentions(content: string): Record<string, string[]> {
     // Parse property:value format
     const colonIndex = inside.indexOf(':');
     if (colonIndex === -1) {
-      throw new Error(`Invalid mention format: @[${inside}]. Expected format: @[property:value]`);
+      throw new AgentViewError(`Invalid mention format: @[${inside}]. Expected format: @[property:value]`, 422);
     }
 
     const property = inside.substring(0, colonIndex).trim();
@@ -217,12 +248,12 @@ function extractMentions(content: string): Record<string, string[]> {
 
     // Validate property
     if (property !== 'user_id') {
-      throw new Error(`Unsupported mention property: ${property}. Only 'user_id' is currently supported.`);
+      throw new AgentViewError(`Unsupported mention property: ${property}. Only 'user_id' is currently supported.`, 422);
     }
 
     // Validate value is not empty
     if (!value) {
-      throw new Error(`Invalid mention value for property ${property}: empty value`);
+      throw new AgentViewError(`Invalid mention value for property ${property}: empty value`, 422);
     }
 
     // Add to mentions dictionary

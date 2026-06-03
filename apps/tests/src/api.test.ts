@@ -3002,6 +3002,105 @@ describe('API', () => {
       );
     });
 
+    describe("mention permissions", () => {
+      const mentionText = (memberId: string) => `Hey @[user_id:${memberId}], take a look`;
+
+      test("private playground session: rejects creating a comment with @mentions", async () => {
+        await updateConfig();
+
+        const { user: privateUser } = await av.users.create();
+        expect(privateUser.space).toBe("playground");
+        expect(privateUser.shared).toBe(false);
+
+        const session = await av.createSession({ agent: "test", userId: privateUser.id });
+
+        await expectToFail(
+          av.comments.create({ sessionId: session.id, content: mentionText(org.admin.user.id) }),
+          422,
+        );
+
+        const comments = await av.comments.list({ sessionId: session.id });
+        expect(comments.length).toBe(0);
+      });
+
+      test("private playground session: comment without mentions still works", async () => {
+        await updateConfig();
+
+        const { user: privateUser } = await av.users.create();
+        const session = await av.createSession({ agent: "test", userId: privateUser.id });
+
+        await av.comments.create({ sessionId: session.id, content: "Just a plain note, no mentions" });
+
+        const comments = await av.comments.list({ sessionId: session.id });
+        expect(comments.length).toBe(1);
+        expect(comments[0].content).toBe("Just a plain note, no mentions");
+      });
+
+      test("private playground session: rejects editing a comment to add @mentions", async () => {
+        await updateConfig();
+
+        const { user: privateUser } = await av.users.create();
+        const session = await av.createSession({ agent: "test", userId: privateUser.id });
+
+        await av.comments.create({ sessionId: session.id, content: "Original, no mentions" });
+        const [comment] = await av.comments.list({ sessionId: session.id });
+
+        await expectToFail(
+          av.comments.update(comment.id, { content: mentionText(org.admin.user.id) }),
+          422,
+        );
+
+        const after = await av.comments.list({ sessionId: session.id });
+        expect(after[0].content).toBe("Original, no mentions");
+      });
+
+      test("shared playground session: comment with @mentions is allowed", async () => {
+        await updateConfig();
+
+        const { user: sharedUser } = await av.users.create({ shared: true });
+        expect(sharedUser.space).toBe("playground");
+        expect(sharedUser.shared).toBe(true);
+
+        const session = await av.createSession({ agent: "test", userId: sharedUser.id });
+
+        await av.comments.create({ sessionId: session.id, content: mentionText(org.admin.user.id) });
+
+        const comments = await av.comments.list({ sessionId: session.id });
+        expect(comments.length).toBe(1);
+        expect(comments[0].content).toContain(`@[user_id:${org.admin.user.id}]`);
+      });
+
+      test("production session: comment with @mentions is allowed", async () => {
+        await updateConfig({ prod: true });
+
+        const { user: prodUser } = await org.prodStandardClient.users.create({ space: "production" });
+        expect(prodUser.space).toBe("production");
+
+        const session = await org.prodStandardClient.createSession({ agent: "test", userId: prodUser.id });
+
+        await org.prodStandardClient.comments.create({ sessionId: session.id, content: mentionText(org.admin.user.id) });
+
+        const comments = await org.prodStandardClient.comments.list({ sessionId: session.id });
+        expect(comments.length).toBe(1);
+        expect(comments[0].content).toContain(`@[user_id:${org.admin.user.id}]`);
+      });
+
+      test("shared playground session: editing comment to add mentions is allowed", async () => {
+        await updateConfig();
+
+        const { user: sharedUser } = await av.users.create({ shared: true });
+        const session = await av.createSession({ agent: "test", userId: sharedUser.id });
+
+        await av.comments.create({ sessionId: session.id, content: "no mentions yet" });
+        const [comment] = await av.comments.list({ sessionId: session.id });
+
+        await av.comments.update(comment.id, { content: mentionText(org.admin.user.id) });
+
+        const after = await av.comments.list({ sessionId: session.id });
+        expect(after[0].content).toContain(`@[user_id:${org.admin.user.id}]`);
+      });
+    });
+
     test("scores on session item", async () => {
       await updateConfig({
         itemScores: [{ name: "quality", schema: z.enum(["good", "bad"]) }],

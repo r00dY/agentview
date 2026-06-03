@@ -1500,11 +1500,7 @@ app.openapi(commentsPUTRoute, async (c) => {
     const commentMessage = await requireCommentMessage(tx, commentId);
     requireCommentOwnership(commentMessage, memberId);
 
-    try {
-      await updateComment(tx, commentMessage, body.content);
-    } catch (error) {
-      return c.json({ message: `Invalid mention format: ${(error as Error).message}` }, 422);
-    }
+    await updateComment(tx, commentMessage, body.content);
 
     return c.json({}, 200);
   })
