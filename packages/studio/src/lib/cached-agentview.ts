@@ -27,7 +27,7 @@ export class CachedAgentViewClient {
     updateRun: AgentViewClient['sessions']['updateRun']
     cancelRun: AgentViewClient['sessions']['cancelRun']
 
-    // sync options
+    // Cached
     getCached: Cached<AgentViewClient['sessions']['get']>
     listCached: Cached<AgentViewClient['sessions']['list']>
     getStatsCached: Cached<AgentViewClient['sessions']['getStats']>
@@ -64,9 +64,11 @@ export class CachedAgentViewClient {
     createAnon: AgentViewClient['users']['createAnon']
     me: AgentViewClient['users']['me']
     get: AgentViewClient['users']['get']
-    getCached: Cached<AgentViewClient['users']['get']>
     getByExternalId: AgentViewClient['users']['getByExternalId']
     update: AgentViewClient['users']['update']
+
+    // Cached
+    getCached: Cached<AgentViewClient['users']['get']>
   }
 
   constructor(client: AgentViewClient) {
