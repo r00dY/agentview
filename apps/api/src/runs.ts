@@ -991,14 +991,14 @@ export async function executeAutoRun(
   });
   session.messages = messages;
 
-  log.debug('establishing live connection');
-
   // Route through tunnel for local dev environments
   const targetUrl = isLocalEnv && tunnelUrl ? tunnelUrl : agentUrl;
   const extraHeaders: Record<string, string> = {};
   if (isLocalEnv && tunnelUrl) {
     extraHeaders['X-Target-Url'] = agentUrl;
   }
+
+  log.info({ agentUrl, tunneled: isLocalEnv && !!tunnelUrl }, 'connecting to agent endpoint');
 
   try {
     const response = await fetch('http://localhost:1999/streams', {
@@ -1035,7 +1035,7 @@ export async function executeAutoRun(
     });
 
     if (!response.ok) {
-      log.info({ statusCode: response.status }, 'error response from AI Endpoint');
+      log.info({ statusCode: response.status }, 'agent endpoint returned error, discarding run');
 
       await withTenant(principal, async (tx) => {
         await terminateRun(tx, sessionId, runId, {
@@ -1052,7 +1052,7 @@ export async function executeAutoRun(
       return { response: responseCopy, runId, success: false };
     }
 
-    log.info('stream established with agent endpoint');
+    log.info('run accepted by agent endpoint');
 
     await withTenant(principal, async (tx) => {
       await tx.acquireLock({ type: "edit_session", sessionId });
@@ -1071,7 +1071,7 @@ export async function executeAutoRun(
     return { response: responseCopy, runId, success: true }
 
   } catch (err) {
-    log.error({ err }, 'failed to establish connection to streaming server');
+    log.error({ err }, 'failed to reach streaming server, discarding run');
 
     const message = 'Failed to establish connection to the streaming server'
 
