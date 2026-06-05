@@ -9,114 +9,116 @@ import { log } from "../logger";
  */
 export function ping(conn: LiveConnectionStreaming): void {
   saveData(conn, { type: 'ping' }).catch((err) => {
-    log.debug({ runId: conn.run.id, err }, '[streaming] ping failed (ignored)');
+    log.warn({ err }, 'ping failed (ignored)');
   });
 }
 
 export async function saveData(
-    conn: LiveConnectionStreaming,
-    op: FastPatchOp,
-  ) {
-    log.info({ runId: conn.run.id }, '[streaming] saving data');
-    const resp = await fetch(`${process.env.HTTP_SERVER_URL}/internal/fast-patch`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        runId: conn.run.id,
-        metadata: conn.metadata,
-        op,
-      }),
-    });
-  
-    const body = await resp.json()
-  
-    if (resp.status === 409) {
-      throw new RunTerminationError(body.reason);
+  conn: LiveConnectionStreaming,
+  op: FastPatchOp,
+) {
+  if (op.type !== 'ping') {
+    log.info('calling fast-patch');
+  }
+
+  const resp = await fetch(`${process.env.HTTP_SERVER_URL}/internal/fast-patch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      runId: conn.run.id,
+      metadata: conn.metadata,
+      op,
+    }),
+  });
+
+  const body = await resp.json()
+
+  if (resp.status === 409) {
+    throw new RunTerminationError(body.reason);
+  }
+
+  if (!resp.ok) {
+    log.error({ body }, 'fast-patch failed');
+    throw new Error(`fast-patch failed: ${body.message}`);
+  }
+}
+
+
+export async function saveDataAll(
+  conn: LiveConnectionStreaming,
+  streamFinishReason: { type: 'error', message: string } | { type: 'abort' } | { type: 'complete' },
+) {
+  const parts = conn.state.message.parts;
+
+  let channelReply: { text: string } | undefined = undefined;
+
+  for (const part of parts) {
+    if (part.type === 'data-agentview-state') {
+      await saveData(conn, {
+        type: 'state',
+        content: part.data,
+      });
     }
-  
-    if (!resp.ok) {
-      log.error({ body }, '[streaming] fast-patch failed');
-      throw new Error(`[streaming] fast-patch failed: ${body.message}`);
+    else if (part.type === 'data-agentview-output') {
+      channelReply = { text: typeof part.data === 'string' ? part.data : JSON.stringify(part.data) };
+    }
+    else {
+      await saveData(conn, {
+        type: 'item',
+        content: part,
+      });
     }
   }
-  
 
-  export async function saveDataAll(
-    conn: LiveConnectionStreaming,
-    streamFinishReason: { type: 'error', message: string } | { type: 'abort' } | { type: 'complete' },
-  ) {
-    const parts = conn.state.message.parts;
+  await saveData(conn, {
+    type: 'metadata',
+    metadata: {
+      assistantMessage: {
+        id: conn.state.message.id,
+        metadata: conn.state.message.metadata,
+      }
+    },
+  });
 
-    let channelReply: { text: string } | undefined = undefined;
+  if (streamFinishReason.type === 'error') {
+    const { type, ...reason } = streamFinishReason;
 
-    for (const part of parts) {
-      if (part.type === 'data-agentview-state') {
-        await saveData(conn, {
-          type: 'state',
-          content: part.data,
-        });
+    await saveData(conn, {
+      type: 'fail',
+      reason,
+    });
+  }
+  else if (streamFinishReason.type === 'abort') {
+    await saveData(conn, {
+      type: 'cancel',
+    });
+  }
+  else {
+    let outputItemCount = 0;
+    if (!channelReply) {
+      const textParts: { type: 'text', text: string }[] = [];
+
+      // we take text parts from the end of message, we stop with reasoning / tool / step-start
+      for (const part of parts.reverse()) {
+        if (part.type === 'text') {
+          textParts.push(part);
+        }
+        else if (part.type === 'step-start' || part.type === 'reasoning' || part.type.startsWith('tool-')) {
+          break;
+        }
+        else {
+          // ignore other parts
+        }
+        outputItemCount++;
       }
-      else if (part.type === 'data-agentview-output') {
-        channelReply = { text: typeof part.data === 'string' ? part.data : JSON.stringify(part.data) };
-      }
-      else {
-        await saveData(conn, {
-          type: 'item',
-          content: part,
-        });
-      }
+
+      channelReply = { text: textParts.map(part => part.text).join('\n\n') };
     }
 
     await saveData(conn, {
-      type: 'metadata',
-      metadata: {
-        assistantMessage: {
-          id: conn.state.message.id,
-          metadata: conn.state.message.metadata,
-        }
-      },
+      type: 'complete',
+      outputItemCount,
+      channelReply,
     });
-
-    if (streamFinishReason.type === 'error') {
-      const { type, ...reason } = streamFinishReason;
-
-      await saveData(conn, {
-        type: 'fail',
-        reason,
-      });
-    }
-    else if (streamFinishReason.type === 'abort') {
-      await saveData(conn, {
-        type: 'cancel',
-      });
-    }
-    else {
-      let outputItemCount = 0;
-      if (!channelReply) {
-        const textParts : { type: 'text', text: string }[] = [];
-
-        // we take text parts from the end of message, we stop with reasoning / tool / step-start
-        for (const part of parts.reverse()) {
-          if (part.type === 'text') {
-            textParts.push(part);
-          }
-          else if (part.type === 'step-start' || part.type === 'reasoning' || part.type.startsWith('tool-')) {
-            break;
-          }
-          else {
-            // ignore other parts
-          }
-          outputItemCount++;
-        }
-
-        channelReply = { text: textParts.map(part => part.text).join('\n\n') };
-      }
-      
-      await saveData(conn, {
-        type: 'complete',
-        outputItemCount,
-        channelReply,
-      });
-    }
   }
-  
+}

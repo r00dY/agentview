@@ -1,6 +1,6 @@
 import http from 'node:http';
 import https from 'node:https';
-import { log } from '../logger';
+import { log, runWithContext, setContext } from '../logger';
 import { startMeasuring } from '../performance';
 import { startCpuProfiling, stopCpuProfiling } from './profiler';
 
@@ -110,8 +110,9 @@ async function handleProfileStop(res: http.ServerResponse) {
 async function handleCreateStream(req: http.IncomingMessage, res: http.ServerResponse) {
   const { run, url, body, metadata, headers: extraHeaders } = await readJsonBody(req);
   const runId = run.id;
+  setContext({ runId });
 
-  log.info(`LIVE CONNECTION run:${runId}`);
+  log.info('establishing stream connection');
 
   const requester = url.startsWith('https') ? https : http;
   const upstreamReq = requester.request(url, {
@@ -135,6 +136,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     if (statusCode >= 400) {
       upstreamRes.pipe(res);
       liveConnections.delete(runId); // never made it to streaming phase
+      log.error('upstream response error');
       return;
     }
     else {
@@ -170,7 +172,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
         const data = event.data;
 
         if (data === DONE_MSG) {
-          log.info({ runId }, `[streaming] ${DONE_MSG} received`);
+          log.info(`${DONE_MSG} received`);
 
           /**
            * IMPORTANT
@@ -224,7 +226,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
           }
           // unexpected errors fallback
           else {
-            log.error({ runId, error }, '[streaming] unexpected error while streaming');
+            log.error({ err: error }, 'unexpected error while streaming');
             streamFinishReason = { type: 'error', code: "STREAM_INTERNAL_ERROR", message: (error as Error).message ?? String(error) }
           }
 
@@ -249,7 +251,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
     upstreamRes.on('error', function onError(error) {
       if (error instanceof GracefulRunTerminationError) { // graceful termination (aka sigterm)
-        log.info({ runId, error }, '[streaming] graceful termination');
+        log.info({ err: error }, 'graceful termination');
 
         if (error.reason.status === 'cancelled') {
           streamFinishReason = { type: 'abort' };
@@ -259,17 +261,17 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
         }
       }
       else if (error instanceof RunTerminationError) { // run already killed
-        log.info({ runId, error }, '[streaming] run killed while streaming');
+        log.info({ err: error }, 'run killed while streaming');
         return;
       }
       // Network errors
-      else if (isNodeHttpConnectionError(error)) { // in node you gotta check for 'code' property to know whether it's network error 
-        log.info({ runId, error }, '[streaming] network error while streaming');
+      else if (isNodeHttpConnectionError(error)) { // in node you gotta check for 'code' property to know whether it's network error
+        log.info({ err: error }, 'network error while streaming');
         streamFinishReason = { type: 'error', code: "STREAM_NETWORK_ERROR", detailedCode: (error as any).code, message: error.message };
       }
       // Unexpected errors fallback
       else {
-        log.error({ runId, error }, '[streaming] unexpected error while streaming');
+        log.error({ err: error }, 'unexpected error while streaming');
         streamFinishReason = { type: 'error', code: "STREAM_INTERNAL_ERROR", message: error instanceof Error ? error.message : String(error) };
       }
     });
@@ -278,12 +280,12 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     upstreamRes.on('end', () => {
       if (streamFinishReason) { return } // prevents race conditions (maybe [done] was just set before end event)
 
-      log.info({ runId }, '[streaming] stream ended incomplete');
+      log.info('stream ended incomplete');
       streamFinishReason = { type: 'error', code: "STREAM_INCOMPLETE", message: "Stream ended incomplete" };
     });
 
     function cleanup(conn: LiveConnectionStreaming) {
-      log.info({ runId }, `[streaming] sending ${DONE_MSG}`);
+      log.info(`sending ${DONE_MSG}`);
 
       pushToBuffer(conn, DONE_MSG);
       markStreamDone(conn);
@@ -293,7 +295,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
         liveConnections.delete(runId);
       }, 60_000);
 
-      log.info({ runId }, '[streaming] connection cleaned up');
+      log.info('connection cleaned up');
     }
 
     /**
@@ -307,11 +309,11 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     upstreamRes.on('close', () => {
       upstreamRes.destroy();
 
-      log.info({ runId }, '[streaming] connection closed, closing');
+      log.info('connection closed, closing');
 
       // Can't happen.
       if (!streamFinishReason) {
-        log.error({ runId }, '[streaming] unknown finish reason, setting to error');
+        log.error('unknown finish reason, setting to error');
         streamFinishReason = { type: 'error', code: "STREAM_INTERNAL_ERROR", message: "Unknown finish reason. It's internal error, please report." };
       }
 
@@ -375,7 +377,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
           await cleanupStreamingUIMessageState(conn.state); // we need to clean up partial tool calls
           await saveDataAll(conn, streamFinishReason!);
         } catch (err) {
-          log.error({ runId, err }, '[streaming] error saving data');
+          log.error({ err }, 'error saving data');
         } finally {
           cleanup(conn);
         }
@@ -404,7 +406,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
     liveConnections.set(runId, conn);
 
-    log.info({ runId }, '[streaming] connection established');
+    log.info('connection established');
   });
 
   // Track the connection from the moment we kick off the upstream request, so
@@ -417,13 +419,13 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     const current = liveConnections.get(runId);
     if (current && current.phase === 'streaming') return; // already streaming (or gone) - do nothing.
 
-    log.info({ runId }, '[streaming] client disconnected before upstream responded, aborting upstream');
+    log.info('client disconnected before upstream responded, aborting upstream');
     upstreamReq.destroy(); // doesn't trigger 'error' event
     liveConnections.delete(runId);
   });
 
   upstreamReq.on('error', (err) => {
-    log.info({ err }, '[streaming] upstream request error');
+    log.info({ err }, 'upstream request error');
 
     // Destroying upstreamRes (e.g. on cancellation) kills the shared socket,
     // which also triggers this error — but res is already finished by then.
@@ -443,7 +445,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
       return;
     }
     else {
-      log.error({ err }, '[streaming] unexpected error while streaming');
+      log.error({ err }, 'unexpected error while streaming');
       sendJson(res, 500, { code: "CONNECTION_INTERNAL_ERROR", message: err.message });
     }
 
@@ -455,6 +457,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 }
 
 async function handleDeleteStream(req: http.IncomingMessage, res: http.ServerResponse, runId: string) {
+  setContext({ runId });
   const { reason, graceful }: { reason: RunTerminationReason; graceful: boolean } = await readJsonBody(req);
 
   if (!runId) {
@@ -491,7 +494,7 @@ async function handleDeleteStream(req: http.IncomingMessage, res: http.ServerRes
 
     while (!conn.streamDone) {
       if (time > TOTAL_WAIT_TIME) {
-        log.error({ runId }, '[streaming] run not closed after 5 seconds after cancellation');
+        log.error('run not closed after 5 seconds after cancellation');
         sendJson(res, 500, { message: 'Run not closed after 5 seconds after cancellation' });
         return;
       }
@@ -508,6 +511,7 @@ async function handleDeleteStream(req: http.IncomingMessage, res: http.ServerRes
 // --- SSE stream endpoint ---
 
 function handleGetStream(req: http.IncomingMessage, res: http.ServerResponse, runId: string) {
+  setContext({ runId });
   const conn = liveConnections.get(runId);
 
   if (!conn || conn.phase !== 'streaming') {
@@ -562,49 +566,51 @@ function handleGetStream(req: http.IncomingMessage, res: http.ServerResponse, ru
 // --- Request router ---
 
 const requestHandler: http.RequestListener = async (req, res) => {
-  const rawUrl = req.url ?? '/';
-  const qIdx = rawUrl.indexOf('?');
-  const path = qIdx === -1 ? rawUrl : rawUrl.slice(0, qIdx);
-  const method = req.method;
+  await runWithContext({}, async () => {
+    const rawUrl = req.url ?? '/';
+    const qIdx = rawUrl.indexOf('?');
+    const path = qIdx === -1 ? rawUrl : rawUrl.slice(0, qIdx);
+    const method = req.method;
 
-  try {
-    if (method === 'GET' && path === '/health') {
-      handleHealth(res);
-      return;
-    }
-    if (method === 'POST' && path === '/profile/start') {
-      await handleProfileStart(res);
-      return;
-    }
-    if (method === 'POST' && path === '/profile/stop') {
-      await handleProfileStop(res);
-      return;
-    }
-    if (method === 'POST' && path === '/streams') {
-      await handleCreateStream(req, res);
-      return;
-    }
-    if (path.startsWith('/streams/')) {
-      const runId = decodeURIComponent(path.slice('/streams/'.length));
-      if (method === 'GET') {
-        handleGetStream(req, res, runId);
+    try {
+      if (method === 'GET' && path === '/health') {
+        handleHealth(res);
         return;
       }
-      if (method === 'DELETE') {
-        await handleDeleteStream(req, res, runId);
+      if (method === 'POST' && path === '/profile/start') {
+        await handleProfileStart(res);
         return;
       }
-    }
+      if (method === 'POST' && path === '/profile/stop') {
+        await handleProfileStop(res);
+        return;
+      }
+      if (method === 'POST' && path === '/streams') {
+        await handleCreateStream(req, res);
+        return;
+      }
+      if (path.startsWith('/streams/')) {
+        const runId = decodeURIComponent(path.slice('/streams/'.length));
+        if (method === 'GET') {
+          handleGetStream(req, res, runId);
+          return;
+        }
+        if (method === 'DELETE') {
+          await handleDeleteStream(req, res, runId);
+          return;
+        }
+      }
 
-    sendJson(res, 404, { message: 'Not found' });
-  } catch (err) {
-    log.error({ err }, '[streaming-server] request handler error');
-    if (!res.headersSent) {
-      sendJson(res, 500, { message: 'Internal server error' });
-    } else {
-      try { res.end(); } catch { }
+      sendJson(res, 404, { message: 'Not found' });
+    } catch (err) {
+      log.error({ err }, '[streaming-server] request handler error');
+      if (!res.headersSent) {
+        sendJson(res, 500, { message: 'Internal server error' });
+      } else {
+        try { res.end(); } catch { }
+      }
     }
-  }
+  });
 };
 
 
