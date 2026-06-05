@@ -18,7 +18,7 @@ export async function saveData(
   op: FastPatchOp,
 ) {
   if (op.type !== 'ping') {
-    log.info('calling fast-patch');
+    log.debug({ op: op.type }, 'calling fast-patch');
   }
 
   const resp = await fetch(`${process.env.HTTP_SERVER_URL}/internal/fast-patch`, {

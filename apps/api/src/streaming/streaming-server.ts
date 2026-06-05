@@ -34,7 +34,7 @@ function isNodeHttpConnectionError(error: unknown): boolean {
 const DONE_MSG = '[DONE]';
 
 const perf = startMeasuring();
-perf.startPrinting('streaming-server');
+// perf.startPrinting('streaming-server');
 
 // --- Buffer helpers ---
 
@@ -108,11 +108,14 @@ async function handleProfileStop(res: http.ServerResponse) {
  * TODO: res.on('close')??? What happens when user closes the connection?
  */
 async function handleCreateStream(req: http.IncomingMessage, res: http.ServerResponse) {
+  const startedAt = Date.now();
+  let chunkCount = 0;
+
   const { run, url, body, metadata, headers: extraHeaders } = await readJsonBody(req);
   const runId = run.id;
   setContext({ runId });
 
-  log.info('establishing stream connection');
+  log.info({ url, bodySize: Buffer.byteLength(body) }, 'received');
 
   const requester = url.startsWith('https') ? https : http;
   const upstreamReq = requester.request(url, {
@@ -124,6 +127,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     }
   }, (upstreamRes) => {
     const statusCode = upstreamRes.statusCode!;
+    const upstreamDuration = Date.now() - startedAt;
 
     // If we have response, we just pipe headers and status
     res.writeHead(statusCode, {
@@ -136,12 +140,12 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     if (statusCode >= 400) {
       upstreamRes.pipe(res);
       liveConnections.delete(runId); // never made it to streaming phase
-      log.error('upstream response error');
+      log.warn({ status: statusCode, duration: upstreamDuration }, 'upstream returned error');
       return;
     }
-    else {
-      res.end();
-    }
+
+    res.end();
+    log.info({ status: statusCode, duration: upstreamDuration }, 'upstream connected, streaming');
 
     /**
      * Connection established
@@ -172,14 +176,12 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
         const data = event.data;
 
         if (data === DONE_MSG) {
-          log.info(`${DONE_MSG} received`);
-
           /**
            * IMPORTANT
-           * 
+           *
            * In case of successful finish, we must check whether there are any "pending" tool calls. THIS IS ERROR STATE FOR US.
            * Rationale: it's much better to explicitly show error than to make error states invisible.
-           * 
+           *
            * It's error state ONLY FOR 'completed' runs. In case of cancellation or error -> we expect that tools might be broken mid-way.
            */
           const pendingToolCalls: number[] = [];
@@ -206,6 +208,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
           const chunk = parseUIMessageChunk(data);
           processChunk({ state, chunk });
           pushToBuffer(conn, data);
+          chunkCount++;
 
           // add runId to message metadata
           if (chunk.type === 'start') {
@@ -216,17 +219,19 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
           // Can't process chunk -> error.
           if (error instanceof ChunkParseError || error instanceof UIMessageStreamError) {
+            log.warn({ err: error, data }, 'failed to parse chunk');
             streamFinishReason = { type: 'error', code: "STREAM_INVALID_CHUNK", message: error.message, data }; // just pass 'data' for debugging, it's enough
             upstreamRes.destroy(); // custom error handling
           }
           // Upstream error (sent by user) -> okay. No code.
           else if (error instanceof StreamUpstreamError) { // errors by user ('error' chunk in the upstream stream)
+            log.info({ err: error }, 'upstream sent error chunk');
             streamFinishReason = { type: 'error', code: "STREAM_UPSTREAM_ERROR", message: error.message }; // upstream error has no code, no source
             upstreamRes.destroy();
           }
           // unexpected errors fallback
           else {
-            log.error({ err: error }, 'unexpected error while streaming');
+            log.error({ err: error }, 'unexpected error processing chunk');
             streamFinishReason = { type: 'error', code: "STREAM_INTERNAL_ERROR", message: (error as Error).message ?? String(error) }
           }
 
@@ -251,7 +256,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 
     upstreamRes.on('error', function onError(error) {
       if (error instanceof GracefulRunTerminationError) { // graceful termination (aka sigterm)
-        log.info({ err: error }, 'graceful termination');
+        log.info({ status: error.reason.status }, 'graceful termination signal received');
 
         if (error.reason.status === 'cancelled') {
           streamFinishReason = { type: 'abort' };
@@ -261,12 +266,12 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
         }
       }
       else if (error instanceof RunTerminationError) { // run already killed
-        log.info({ err: error }, 'run killed while streaming');
+        log.info({ status: error.reason.status }, 'run already terminated, stream stopping');
         return;
       }
       // Network errors
       else if (isNodeHttpConnectionError(error)) { // in node you gotta check for 'code' property to know whether it's network error
-        log.info({ err: error }, 'network error while streaming');
+        log.warn({ err: error, code: (error as any).code }, 'network error while streaming');
         streamFinishReason = { type: 'error', code: "STREAM_NETWORK_ERROR", detailedCode: (error as any).code, message: error.message };
       }
       // Unexpected errors fallback
@@ -280,13 +285,10 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     upstreamRes.on('end', () => {
       if (streamFinishReason) { return } // prevents race conditions (maybe [done] was just set before end event)
 
-      log.info('stream ended incomplete');
       streamFinishReason = { type: 'error', code: "STREAM_INCOMPLETE", message: "Stream ended incomplete" };
     });
 
     function cleanup(conn: LiveConnectionStreaming) {
-      log.info(`sending ${DONE_MSG}`);
-
       pushToBuffer(conn, DONE_MSG);
       markStreamDone(conn);
 
@@ -294,8 +296,6 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
       setTimeout(() => {
         liveConnections.delete(runId);
       }, 60_000);
-
-      log.info('connection cleaned up');
     }
 
     /**
@@ -309,8 +309,6 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     upstreamRes.on('close', () => {
       upstreamRes.destroy();
 
-      log.info('connection closed, closing');
-
       // Can't happen.
       if (!streamFinishReason) {
         log.error('unknown finish reason, setting to error');
@@ -318,10 +316,10 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
       }
 
       /**
-       * Let's also send updated status in metadata 
-       * 
+       * Let's also send updated status in metadata
+       *
        * IMPORTANT: WE NEED TO ADD 'id' here!!!
-       * 
+       *
        * It's a cleanup phase which *always runs* (unless the machine goes down), but we can't assume 'start' was already sent.
        * It means that there is a scenario where the front-end doesn't have runId in the metadata. This prevents this scenario.
        */
@@ -371,13 +369,27 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
         pushToBuffer(conn, JSON.stringify({ type: 'error', errorText })); // this is a bit tricky but it's the only way we can send more error details so user can distinguish between them. no providerData on error :(
       }
 
+      // Summary log: one line that captures the whole stream lifecycle.
+      const duration = Date.now() - startedAt;
+      const status = streamFinishReason.type === 'complete' ? 'completed'
+        : streamFinishReason.type === 'abort' ? 'cancelled'
+        : 'failed';
+      const summary: Record<string, any> = { status, duration, chunks: chunkCount };
+      if (streamFinishReason.type === 'error') {
+        summary.code = streamFinishReason.code;
+      }
+      const summaryLevel = streamFinishReason.type === 'error' ? 'warn' : 'info';
+      log[summaryLevel](summary, 'stream ended');
+
       // here we write async fun for easiness, on('close') is not hot path, a single promise won't hurt
       async function close() {
+        const saveStart = Date.now();
         try {
           await cleanupStreamingUIMessageState(conn.state); // we need to clean up partial tool calls
           await saveDataAll(conn, streamFinishReason!);
+          log.info({ duration: Date.now() - saveStart }, 'stream data saved');
         } catch (err) {
-          log.error({ err }, 'error saving data');
+          log.error({ err, duration: Date.now() - saveStart }, 'failed to save stream data');
         } finally {
           cleanup(conn);
         }
@@ -405,8 +417,6 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
     };
 
     liveConnections.set(runId, conn);
-
-    log.info('connection established');
   });
 
   // Track the connection from the moment we kick off the upstream request, so
@@ -425,27 +435,26 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
   });
 
   upstreamReq.on('error', (err) => {
-    log.info({ err }, 'upstream request error');
-
     // Destroying upstreamRes (e.g. on cancellation) kills the shared socket,
     // which also triggers this error — but res is already finished by then.
     if (res.headersSent) return;
 
     const current = liveConnections.get(runId);
-
     if (!current) return; // nothing to do
-
     if (current.phase === 'streaming') return; // rather unreachable. belts and suspenders.
 
     if (err instanceof RunTerminationError) {
+      log.info({ status: err.reason.status }, 'connection terminated during connecting');
       // err.message comes from terminationReasonText, e.g. "cancelled" or "failed (Timeout)".
       sendJson(res, 409, { code: "CONNECTION_TERMINATED", message: err.message });
     } else if (isNodeHttpConnectionError(err)) {
+      log.warn({ err, code: (err as any).code }, 'failed to reach upstream');
       sendJson(res, 502, { code: "CONNECTION_NETWORK_ERROR", message: err.message, detailedCode: (err as any).code });
+      liveConnections.delete(runId);
       return;
     }
     else {
-      log.error({ err }, 'unexpected error while streaming');
+      log.error({ err }, 'unexpected error reaching upstream');
       sendJson(res, 500, { code: "CONNECTION_INTERNAL_ERROR", message: err.message });
     }
 
@@ -457,7 +466,7 @@ async function handleCreateStream(req: http.IncomingMessage, res: http.ServerRes
 }
 
 async function handleDeleteStream(req: http.IncomingMessage, res: http.ServerResponse, runId: string) {
-  setContext({ runId });
+  const startedAt = Date.now();
   const { reason, graceful }: { reason: RunTerminationReason; graceful: boolean } = await readJsonBody(req);
 
   if (!runId) {
@@ -465,15 +474,19 @@ async function handleDeleteStream(req: http.IncomingMessage, res: http.ServerRes
     return;
   }
 
+  log.info({ graceful, status: reason.status }, 'termination requested');
+
   const conn = liveConnections.get(runId);
 
   if (!conn) {
+    log.info('stream not found');
     sendJson(res, 404, { message: 'conn not found' });
     return;
   }
 
   if (conn.phase === 'connecting') {
     conn.upstreamReq.destroy(new RunTerminationError(reason));
+    log.info({ phase: 'connecting', duration: Date.now() - startedAt }, 'terminated');
     sendJson(res, 200, { ok: true });
     return;
   }
@@ -494,7 +507,7 @@ async function handleDeleteStream(req: http.IncomingMessage, res: http.ServerRes
 
     while (!conn.streamDone) {
       if (time > TOTAL_WAIT_TIME) {
-        log.error('run not closed after 5 seconds after cancellation');
+        log.error({ duration: Date.now() - startedAt }, 'termination timed out');
         sendJson(res, 500, { message: 'Run not closed after 5 seconds after cancellation' });
         return;
       }
@@ -504,6 +517,7 @@ async function handleDeleteStream(req: http.IncomingMessage, res: http.ServerRes
     }
   }
 
+  log.info({ phase: 'streaming', duration: Date.now() - startedAt }, 'terminated');
   sendJson(res, 200, { ok: true });
 }
 
@@ -511,10 +525,14 @@ async function handleDeleteStream(req: http.IncomingMessage, res: http.ServerRes
 // --- SSE stream endpoint ---
 
 function handleGetStream(req: http.IncomingMessage, res: http.ServerResponse, runId: string) {
-  setContext({ runId });
+  const startedAt = Date.now();
+  let chunksWritten = 0;
+  let cleanedUp = false;
+
   const conn = liveConnections.get(runId);
 
   if (!conn || conn.phase !== 'streaming') {
+    log.info('stream not found');
     sendJson(res, 404, { message: 'Stream not found' });
     return;
   }
@@ -526,24 +544,30 @@ function handleGetStream(req: http.IncomingMessage, res: http.ServerResponse, ru
   });
   res.flushHeaders();
 
-  function cleanup() {
+  log.info({ bufferSize: conn.streamBuffer.length, streamDone: conn.streamDone }, 'subscriber attached');
+
+  function cleanup(reason: 'streamDone' | 'clientClose') {
+    if (cleanedUp) return;
+    cleanedUp = true;
     conn!.streamListeners.delete(onChunk);
     conn!.streamDoneListeners.delete(onDone);
     try { res.end(); } catch { }
+    log.info({ duration: Date.now() - startedAt, chunksWritten, reason }, 'subscriber detached');
   }
 
   function writeChunk(data: string): boolean {
     res.write(`data: ${data}\n\n`);
 
     if (data === DONE_MSG) {
-      cleanup();
+      cleanup('streamDone');
       return false;
     }
+    chunksWritten++;
     return true;
   }
 
   const onChunk = (data: string) => writeChunk(data);
-  const onDone = () => cleanup();
+  const onDone = () => cleanup('streamDone');
 
   // Drain existing buffer
   for (const data of conn.streamBuffer) {
@@ -551,7 +575,7 @@ function handleGetStream(req: http.IncomingMessage, res: http.ServerResponse, ru
   }
 
   if (conn.streamDone) {
-    cleanup();
+    cleanup('streamDone');
     return;
   }
 
@@ -559,7 +583,7 @@ function handleGetStream(req: http.IncomingMessage, res: http.ServerResponse, ru
   conn.streamListeners.add(onChunk);
   conn.streamDoneListeners.add(onDone);
 
-  req.once('close', cleanup);
+  req.once('close', () => cleanup('clientClose'));
 }
 
 
@@ -586,16 +610,19 @@ const requestHandler: http.RequestListener = async (req, res) => {
         return;
       }
       if (method === 'POST' && path === '/streams') {
+        setContext({ method: 'POST', path: '/streams' });
         await handleCreateStream(req, res);
         return;
       }
       if (path.startsWith('/streams/')) {
         const runId = decodeURIComponent(path.slice('/streams/'.length));
         if (method === 'GET') {
+          setContext({ method: 'GET', path: '/streams', runId });
           handleGetStream(req, res, runId);
           return;
         }
         if (method === 'DELETE') {
+          setContext({ method: 'DELETE', path: '/streams', runId });
           await handleDeleteStream(req, res, runId);
           return;
         }

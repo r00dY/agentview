@@ -75,6 +75,15 @@ if (isDev) {
               }
               return `[${log.requestId}${idStr}] ${msg}`;
             }
+            else if (log.method && log.path) {
+              let tail = '';
+              if (log.status !== undefined && log.duration !== undefined) {
+                tail = ` → ${log.status} (${log.duration}ms)`;
+              } else if (log.duration !== undefined) {
+                tail = ` (${log.duration}ms)`;
+              }
+              return `[${log.method} ${log.path}${idStr}]${tail} ${msg}`;
+            }
             return idStr ? `[${idStr.trim()}] ${msg}` : msg;
           },
         })
