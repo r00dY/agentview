@@ -66,6 +66,16 @@ export type ServicePrincipal = {
 export type PrivatePrincipal = MemberPrincipal | ApiKeyPrincipal;
 export type Principal = MemberPrincipal | ApiKeyPrincipal | UserPrincipal | ApiKeyPublicPrincipal | ServicePrincipal;
 
+export function getPrincipalLogContext(p: Principal): { principalMemberId?: string; principalApiKeyId?: string; principalUserId?: string } {
+  switch (p.type) {
+    case 'member': return { principalMemberId: p.session.user.id };
+    case 'apiKey':
+    case 'apiKeyPublic': return { principalApiKeyId: p.apiKey.id };
+    case 'user': return { principalUserId: p.user.id };
+    case 'service': return {};
+  }
+}
+
 /** --------- INTERNAL HELPERS --------- */
 
 function extractBearerToken(headers: Headers) {

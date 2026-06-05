@@ -5,6 +5,7 @@ import { and, desc, eq, isNull } from 'drizzle-orm'
 import { authorize } from './authMiddleware'
 import { getEnvironment, requireEnvironment } from './environments'
 import { requireUUID } from './isUUID'
+import { log } from './logger'
 import { endUsers, endUserTokens } from './schemas/schema'
 import type { OrgTransaction, TenantTransaction } from './withOrg'
 
@@ -156,6 +157,13 @@ export async function createUser(tx: TenantTransaction, body: UserCreate) {
 
   const { token } = await issueToken(tx, newEndUser.id);
 
+  log.info({
+    userId: newEndUser.id,
+    space,
+    hasExternalId: !!body.externalId,
+    hasEmail: !!body.email,
+  }, 'user created');
+
   return { token, user: newEndUser }
 }
 
@@ -168,6 +176,7 @@ export async function issueToken(tx: OrgTransaction, userId: string) {
     userId,
     token: randomBytes(32).toString('hex'),
   }).returning()
+  log.info({ userId, tokenId: row.id }, 'user token issued');
   return row
 }
 
@@ -199,6 +208,7 @@ export async function revokeToken(tx: OrgTransaction, tokenId: string) {
     .set({ revokedAt: new Date().toISOString() })
     .where(eq(endUserTokens.id, tokenId))
     .returning();
+  log.info({ userId: existing.userId, tokenId }, 'user token revoked');
   return row;
 }
 
@@ -250,5 +260,6 @@ export async function updateUser(tx: TenantTransaction, id: string, body: UserUp
   }
 
   const [updatedUser] = await tx.update(endUsers).set(body).where(eq(endUsers.id, id)).returning();
+  log.info({ userId: id, updatedFields: Object.keys(body) }, 'user updated');
   return updatedUser
 }

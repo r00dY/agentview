@@ -1,7 +1,8 @@
 import { sql } from 'drizzle-orm';
 import { db__dangerous } from './db';
+import { setContext } from './logger';
 import type { Transaction } from './types';
-import type { Principal } from './authMiddleware';
+import { getPrincipalLogContext, type Principal } from './authMiddleware';
 
 export type AfterCommit = (fn: () => void | Promise<void>) => void;
 
@@ -36,8 +37,10 @@ export async function withOrg<T>(
   organizationId: string,
   fn: (tx: OrgTransaction) => Promise<T>
 ): Promise<T> {
+  setContext({ organizationId });
+
   const afterCommitCallbacks: (() => void | Promise<void>)[] = [];
-  
+
   let lockedSessionId : string | undefined = undefined;
 
   const result = await db__dangerous.transaction(async (tx) => {
@@ -86,6 +89,11 @@ export async function withTenant<T>(
   principal: Principal,
   fn: (tx: TenantTransaction) => Promise<T>
 ): Promise<T> {
+  setContext({
+    organizationId: principal.organizationId,
+    principalType: principal.type,
+    ...getPrincipalLogContext(principal),
+  });
   return withOrg(principal.organizationId, async (tx) => {
     return fn(Object.assign(tx, { principal }) as TenantTransaction);
   });

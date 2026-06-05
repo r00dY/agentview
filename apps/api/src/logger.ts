@@ -7,6 +7,9 @@ export interface LogContext {
   requestId?: string;
   organizationId?: string;
   principalType?: string;
+  principalMemberId?: string;
+  principalApiKeyId?: string;
+  principalUserId?: string;
   workerName?: string;
   runId?: string;
   sessionId?: string;
@@ -47,7 +50,7 @@ if (isDev) {
       m.default({
           colorize: true,
           translateTime: 'SYS:HH:MM:ss.l',
-          ignore: 'pid,hostname,service,requestId,method,path,status,duration,runId,workerName,sessionId,organizationId,fetchId',
+          ignore: 'pid,hostname,service,requestId,method,path,status,duration,runId,workerName,sessionId,organizationId,fetchId,principalType,principalMemberId,principalApiKeyId,principalUserId',
           customColors: 'message:white,info:green,warn:yellow,error:red,fatal:red,debug:blue,trace:gray,default:white',
           messageFormat(log: Record<string, unknown>, messageKey: string) {
             const msg = log[messageKey] as string;
