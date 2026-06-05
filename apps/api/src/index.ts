@@ -137,7 +137,9 @@ app.use('*', async (c, next) => {
   return runWithContext({ requestId }, async () => {
     await next();
     const duration = Date.now() - start;
-    log.info({ method: c.req.method, path: c.req.path, status: c.res.status, duration }, 'request completed');
+    const status = c.res.status;
+    const level = status >= 500 ? 'error' : 'info';
+    log[level]({ method: c.req.method, path: c.req.path, status, duration }, 'request completed');
   });
 });
 

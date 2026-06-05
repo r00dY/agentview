@@ -4,7 +4,7 @@ import type { BaseAgentConfig, BaseRunConfig } from 'agentview/baseConfigTypes';
 import { findItemConfig, requireAgentConfigBySession, requireRunConfig, serializeRunConfig } from 'agentview/baseConfigUtils';
 import { getLastRun } from 'agentview/sessionUtils';
 import { and, eq, inArray, not, sql } from 'drizzle-orm';
-import { log } from './logger';
+import { log, setContext } from './logger';
 import { resolveAgentRef } from './agentRefs';
 import { authorize, type Principal } from './authMiddleware';
 import { getConfigFromEnvironment, requireConfig, requireEnvironment } from './environments';
@@ -204,6 +204,8 @@ async function createRunCore(
 ): Promise<typeof runs.$inferSelect> {
   const { parsedInput, parsedNonInputItems, status, reason, expiresAt, finishedAt, metadata, agentRefId, manual, state, active, previousRun, id } = params;
 
+  setContext({ sessionId });
+
   const [insertedRun] = await tx.insert(runs).values({
     id,
     organizationId: tx.organizationId,
@@ -219,6 +221,15 @@ async function createRunCore(
     active,
     previousRunId: previousRun?.id ?? null,
   }).returning();
+
+  setContext({ runId: insertedRun.id });
+  log.info({
+    status,
+    manual,
+    active,
+    previousRunId: previousRun?.id ?? null,
+    nonInputItemCount: parsedNonInputItems.length,
+  }, 'run created');
 
   await tx.insert(sessionItems).values(
     {
@@ -484,6 +495,7 @@ export async function fastApplyRunPatch(
   runConfig: BaseRunConfig,
   op: FastPatchOp
 ) {
+  setContext({ sessionId, runId });
   await tx.acquireLock({ type: "edit_session", sessionId });
 
   const run = await requireRunBase(tx, runId);
@@ -570,6 +582,10 @@ export async function fastApplyRunPatch(
     );
   }
 
+  if (op.type === 'cancel' || op.type === 'complete' || op.type === 'fail') {
+    log.info({ status: updatedRun.status, reason: op.type === 'fail' ? op.reason : undefined }, 'run finished (fast patch)');
+  }
+
   dbOps.push(tx.update(runs).set(updatedRun).where(eq(runs.id, run.id)));
 
   if (updatedItem) {
@@ -620,6 +636,7 @@ export async function applyRunPatch(
   mustBeManual?: boolean
 ) {
   const runPreLock = await requireRunBase(tx, runId);
+  setContext({ runId, sessionId: runPreLock.sessionId });
 
   await tx.acquireLock({ type: "edit_session", sessionId: runPreLock.sessionId });
 
@@ -766,6 +783,18 @@ export async function applyRunPatch(
     await onRunFinished(tx, { runId: run.id, sessionId: run.sessionId, status, channelReply: body.channelReply, reason: body.reason });
   }
 
+  if (isFinished && !isRunFinished(run)) {
+    log.info({ status, reason: status === 'failed' ? body.reason : undefined }, 'run finished (manual patch)');
+  } else {
+    const changed: string[] = [];
+    if (parsedItems.length > 0) changed.push('items');
+    if (body.state !== undefined) changed.push('state');
+    if (body.metadata !== undefined) changed.push('metadata');
+    if (changed.length > 0) {
+      log.info({ changed, itemCount: parsedItems.length || undefined }, 'run patched');
+    }
+  }
+
   // Publish to Redis stream only after transaction finished successfully in DB
   const dataToStream = JSON.stringify({
     ...body,
@@ -807,13 +836,14 @@ export async function sendRunTerminationSignal(runId: string, reason: RunTermina
  * It unconditionally KILLS run. No grace period.
  */
 export async function terminateRun(tx: OrgTransaction, sessionId: string, runId: string, reason: RunTerminationReason) {
+  setContext({ sessionId, runId });
   await tx.acquireLock({ type: "edit_session", sessionId });
 
   try {
     const runBase = await getRunBase(tx, runId); // we must start with a lock for safety of concurrent writes!
 
     if (!runBase) {
-      log.warn({ runId }, 'terminateRun: run not found');
+      log.warn('terminateRun: run not found');
       return;
     }
 
@@ -821,10 +851,7 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
       return;
     }
 
-    // logs
-    const logText = terminationReasonText(reason);
-
-    log.info({ runId, reason: logText }, 'terminating run');
+    log.info({ reason: terminationReasonText(reason) }, 'terminating run');
 
     const nowIso = new Date().toISOString();
 
@@ -852,10 +879,10 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
       await publishRunStreamEvent(runId, null, '[DONE]');
     });
 
-    log.info({ runId }, 'termination successful');
+    log.info('termination successful');
 
   } catch (e) {
-    log.error({ runId, err: e }, `SEVERE: termination failed: ${e instanceof Error ? e.message : String(e)}`);
+    log.error({ err: e }, 'Termination failed. This should never happen.');
   }
 
 }
@@ -875,6 +902,7 @@ export async function createAutoRunInTx(
     previousRunId?: string | null,
   }
 ) {
+  setContext({ sessionId });
   const session = await requireSessionBase(tx, sessionId);
   authorize(tx.principal, { action: "end-user:update", user: session.user });
 
@@ -939,6 +967,7 @@ export async function executeAutoRun(
 ): Promise<{ runId: string, response: Response, success: boolean }> {
   const { runBase, standardSession, runConfig, agentUrl, tunnelUrl, isLocalEnv } = txResult;
   const runId = runBase.id;
+  setContext({ sessionId, runId });
 
   const session = standardToDefaultSession(standardSession);
 
@@ -962,7 +991,7 @@ export async function executeAutoRun(
   });
   session.messages = messages;
 
-  log.debug(`[${sessionId}] establishing live connection...`);
+  log.debug('establishing live connection');
 
   // Route through tunnel for local dev environments
   const targetUrl = isLocalEnv && tunnelUrl ? tunnelUrl : agentUrl;
@@ -1006,7 +1035,7 @@ export async function executeAutoRun(
     });
 
     if (!response.ok) {
-      log.debug(`[${sessionId}] error response from AI Endpoint`);
+      log.info({ statusCode: response.status }, 'error response from AI Endpoint');
 
       await withTenant(principal, async (tx) => {
         await terminateRun(tx, sessionId, runId, {
@@ -1023,7 +1052,7 @@ export async function executeAutoRun(
       return { response: responseCopy, runId, success: false };
     }
 
-    log.debug(`[${sessionId}] stream established`);
+    log.info('stream established with agent endpoint');
 
     await withTenant(principal, async (tx) => {
       await tx.acquireLock({ type: "edit_session", sessionId });
@@ -1042,7 +1071,7 @@ export async function executeAutoRun(
     return { response: responseCopy, runId, success: true }
 
   } catch (err) {
-    log.debug({ err }, `[${sessionId}] error`);
+    log.error({ err }, 'failed to establish connection to streaming server');
 
     const message = 'Failed to establish connection to the streaming server'
 
@@ -1068,8 +1097,7 @@ export async function createAutoRun2(
   previousRunId?: string | null,
   signal?: AbortSignal
 ): Promise<{ runId: string, response: Response, success: boolean }> {
-
-  log.debug(`[${sessionId}] [createAutoRun2] start`);
+  setContext({ sessionId });
 
   const txResult = await withTenant(principal, async (tx) => {
     await tx.acquireLock({ type: "edit_session", sessionId });
@@ -1093,6 +1121,7 @@ export async function createManualRun(
   sessionId: string,
   body: ManualRunCreate
 ): Promise<typeof runs.$inferSelect> {
+  setContext({ sessionId });
   await tx.acquireLock({ type: "edit_session", sessionId });
 
   const sessionBase = await fetchSessionBase(tx, sessionId); // todo: optimize
@@ -1154,6 +1183,7 @@ export async function createManualRun(
 
 
 export async function updateRun(tx: TenantTransaction, sessionId: string, runId: string, body: RunUpdate) {
+  setContext({ sessionId, runId });
   await tx.acquireLock({ type: "edit_session", sessionId });
 
   const session = await requireSessionBase(tx, sessionId);
@@ -1179,6 +1209,9 @@ export async function updateRun(tx: TenantTransaction, sessionId: string, runId:
     metadata,
     updatedAt: new Date().toISOString(),
   }).where(eq(runs.id, runId)).returning();
+
+  const changed = Object.keys(body).filter(k => body[k as keyof typeof body] !== undefined);
+  log.info({ changed }, 'run metadata updated');
 
   return updatedRun;
 }

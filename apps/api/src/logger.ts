@@ -56,21 +56,26 @@ if (isDev) {
           messageFormat(log: Record<string, unknown>, messageKey: string) {
             const msg = log[messageKey] as string;
 
+            const ids: string[] = [];
+            if (log.sessionId) ids.push(`s:${String(log.sessionId).slice(0, 8)}`);
+            if (log.runId) ids.push(`r:${String(log.runId).slice(0, 8)}`);
+            const idStr = ids.length ? ` ${ids.join(' ')}` : '';
+
             if (log.jobId) {
               const idShort = String(log.jobId).slice(0, 8);
               const tail = log.status ? ` → ${log.status} (${log.duration}ms)` : '';
-              return `[${log.workerName} ${idShort}]${tail} ${msg}`;
+              return `[${log.workerName} ${idShort}${idStr}]${tail} ${msg}`;
             }
             else if (log.workerName) {
-              return `[${log.workerName}] ${msg}`;
+              return `[${log.workerName}${idStr}] ${msg}`;
             }
             else if (log.requestId) {
               if (log.method && log.path && log.status && log.duration) {
-                return `[${log.requestId}] ${log.method} ${log.path} → ${log.status} (${log.duration}ms) ${msg}`;
+                return `[${log.requestId}${idStr}] ${log.method} ${log.path} → ${log.status} (${log.duration}ms) ${msg}`;
               }
-              return `[${log.requestId}] ${msg}`;
+              return `[${log.requestId}${idStr}] ${msg}`;
             }
-            return msg;
+            return idStr ? `[${idStr.trim()}] ${msg}` : msg;
           },
         })
     ),

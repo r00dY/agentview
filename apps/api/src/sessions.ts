@@ -7,6 +7,7 @@ import { resolveAgentRef } from "./agentRefs";
 import { authorize } from "./authMiddleware";
 import { getConfigFromEnvironment, requireConfig, requireEnvironment } from "./environments";
 import { isUUID, requireUUID } from "./isUUID";
+import { log, setContext } from "./logger";
 import { parseMetadata } from "./parseMetadata";
 import { agentRefs, channels, channelThreads, endUsers, events, runs, sessionItems, sessions } from "./schemas/schema";
 import type { Transaction } from "./types";
@@ -541,6 +542,9 @@ export async function createSession(tx: TenantTransaction, params: CreateSession
     active: false
   }).returning();
 
+  setContext({ sessionId: newSessionRow.id });
+  log.info({ userId: user.id, channelThreadId: params.channelThreadId ?? null }, 'session created');
+
   return newSessionRow;
 }
 
@@ -552,6 +556,7 @@ export type SetAgentForSessionBody = {
 }
 
 export async function setAgentForSession(tx: TenantTransaction, sessionId: string, body: SetAgentForSessionBody) {
+  setContext({ sessionId });
   await tx.acquireLock({ type: "edit_session", sessionId });
 
   const session = await requireSessionBase(tx, sessionId);
@@ -574,10 +579,13 @@ export async function setAgentForSession(tx: TenantTransaction, sessionId: strin
     initialState: body.initialState,
   }).where(eq(sessions.id, session.id)).returning();
 
+  log.info({ agent: body.agent, agentRefId: agentRefWithId.id }, 'agent assigned to session');
+
   return updatedSession;
 }
 
 export async function activateSession(tx: OrgTransaction, sessionId: string, authorId?: string) {
+  setContext({ sessionId });
   await tx.acquireLock({ type: "edit_session", sessionId });
 
   const session = await tx.query.sessions.findFirst({
@@ -592,7 +600,6 @@ export async function activateSession(tx: OrgTransaction, sessionId: string, aut
   }
 
   if (session.active) {
-    // log.info({ sessionId }, 'session already active');
     return;
   }
 
@@ -610,9 +617,12 @@ export async function activateSession(tx: OrgTransaction, sessionId: string, aut
   }).returning();
 
   await updateInboxes(tx, event);
+
+  log.info({ authorId: authorId ?? null }, 'session activated');
 }
 
 export async function updateSession(tx: TenantTransaction, session_id: string, body: SessionUpdate) {
+  setContext({ sessionId: session_id });
   await tx.acquireLock({ type: "edit_session", sessionId: session_id });
 
   const session = await requireSessionBase(tx, session_id);
@@ -629,6 +639,9 @@ export async function updateSession(tx: TenantTransaction, session_id: string, b
     title: body.title,
     updatedAt: new Date().toISOString(),
   }).where(eq(sessions.id, session_id)).returning();
+
+  const changed = Object.keys(body).filter(k => body[k as keyof typeof body] !== undefined);
+  log.info({ changed }, 'session updated');
 
   return updatedSession;
 }
