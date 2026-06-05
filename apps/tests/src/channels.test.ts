@@ -338,8 +338,23 @@ describe('Channels', () => {
     describe('Outgoing messages', () => {
 
       /**
+       * Reverses the frontmatter concatenation from
+       * createDefaultInputForChannelMessages in apps/api/src/adapters/ai-sdk.ts.
+       * Each batched channel message is `---\n<frontmatter>\n---\n\n<text>`,
+       * with messages joined by `\n\n\n`.
+       */
+      function extractChannelMessageTexts(text: string): string[] {
+        return text.split('\n\n\n').map(block => {
+          const closingMarker = '\n---\n\n'
+          const idx = block.indexOf(closingMarker)
+          return idx === -1 ? block : block.substring(idx + closingMarker.length)
+        })
+      }
+
+      /**
        * Parrot handler: echoes ALL user messages in the session.
-       * Each user message's text parts are joined by " ", messages separated by " | ".
+       * Each user message's channel-message texts are joined by " ", user
+       * messages separated by " | ".
        * e.g. session with user("A B") then user("C") → "A B | C"
        */
       function setParrotHandler(opts?: { delayMs?: number }) {
@@ -349,7 +364,7 @@ describe('Channels', () => {
           const reply = userMessages
             .map((m: any) => (m.parts ?? [])
               .filter((p: any) => p.type === 'text')
-              .map((p: any) => p.text)
+              .flatMap((p: any) => extractChannelMessageTexts(p.text))
               .join(' '))
             .join(' | ')
 
