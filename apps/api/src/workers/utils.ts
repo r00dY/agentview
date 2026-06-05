@@ -20,6 +20,7 @@ export function createWorker<T>(config: WorkerConfig<T>): WorkerHandle {
 
   let inFlight = 0;
   let isPolling = false;
+  let jobCounter = 0;
   let timer: ReturnType<typeof setInterval> | null = null;
 
   async function poll() {
@@ -32,18 +33,20 @@ export function createWorker<T>(config: WorkerConfig<T>): WorkerHandle {
       const items = await claim(available);
       for (const item of items) {
         inFlight++;
-        runWithContext({ workerName: name }, () =>
-          process(item)
-            .catch((error) => {
-              log.error({ err: error, workerName: name }, 'unhandled error');
-            })
-            .finally(() => {
-              inFlight--;
-            })
-        );
+        runWithContext({ workerName: name, jobId: `j${++jobCounter}` }, async () => {
+          const start = Date.now();
+          try {
+            await process(item);
+            log.info({ status: 'success', duration: Date.now() - start }, 'job completed');
+          } catch (err) {
+            log.warn({ err, status: 'failure', duration: Date.now() - start }, 'job completed');
+          } finally {
+            inFlight--;
+          }
+        });
       }
-    } catch (error) {
-      log.error({ err: error, workerName: name }, 'claim error');
+    } catch (err) {
+      log.error({ err, workerName: name }, 'claim error');
     } finally {
       isPolling = false;
     }
@@ -73,14 +76,19 @@ export interface PeriodicWorkerConfig {
 
 export function createPeriodicWorker(config: PeriodicWorkerConfig): WorkerHandle {
   const { name, intervalMs, run } = config;
+  let jobCounter = 0;
   let timer: ReturnType<typeof setInterval> | null = null;
 
   async function execute() {
-    try {
-      await run();
-    } catch (error) {
-      log.error({ err: error, workerName: name }, 'periodic worker error');
-    }
+    await runWithContext({ workerName: name, jobId: `j${++jobCounter}` }, async () => {
+      const start = Date.now();
+      try {
+        await run();
+        log.info({ status: 'success', duration: Date.now() - start }, 'job completed');
+      } catch (err) {
+        log.warn({ err, status: 'failure', duration: Date.now() - start }, 'job completed');
+      }
+    });
   }
 
   return {

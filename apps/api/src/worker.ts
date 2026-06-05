@@ -1,4 +1,5 @@
 import { initDb } from './initDb';
+import { log } from './logger';
 import { startBoss, startBossWorkers } from './queues/pgboss';
 import { expiredRunsWorker } from './workers/expiredRuns';
 import { channelApps } from './channels/registry';
@@ -21,3 +22,5 @@ for (const channel of channelApps) {
 }
 
 startBossWorkers();
+
+log.info('worker process started');

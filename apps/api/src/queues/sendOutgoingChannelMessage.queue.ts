@@ -1,6 +1,5 @@
 import type { Queue } from './types';
 import { sendOutgoingChannelMessage } from '../channels/channelSyncOps';
-import { setContext } from '../logger';
 
 type SendOutgoingChannelMessageJobData = {
   messageId: string;
@@ -19,7 +18,6 @@ export const sendOutgoingChannelMessageQueue : Queue<SendOutgoingChannelMessageJ
   },
   handler: async (jobs) => { // jobs should be array of 1 in all cases, loop for safety
     for (const job of jobs) {
-      setContext({ pgBossJobId: job.id, channelMessageId: job.data.messageId, organizationId: job.data.organizationId });
       await sendOutgoingChannelMessage(job.data.messageId, job.data.organizationId);
     }
   },

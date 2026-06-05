@@ -1,5 +1,4 @@
 import { eq } from 'drizzle-orm';
-import { log, setContext } from '../logger';
 import { environments } from '../schemas/schema';
 import { withOrg } from '../withOrg';
 import type { Queue } from './types';
@@ -25,7 +24,6 @@ export const webhookQueue: Queue<WebhookJobData> = {
   handler: async (jobs) => {
     for (const job of jobs) {
       const { organizationId, environmentId, eventType, payload } = job.data;
-      setContext({ pgBossJobId: job.id, organizationId });
 
       const environment = await withOrg(organizationId, async (tx) => {
         return tx.query.environments.findFirst({
@@ -57,8 +55,6 @@ export const webhookQueue: Queue<WebhookJobData> = {
       if (!response.ok) {
         throw new Error(`Webhook returned ${response.status}: ${await response.text()}`);
       }
-
-      log.info('webhook job completed successfully');
     }
   },
 };

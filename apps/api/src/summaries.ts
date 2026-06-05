@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import { zodTextFormat } from 'openai/helpers/zod';
 import { z } from 'zod';
 import { withOrg } from './withOrg';
-import { log } from './logger';
+import { log, setContext } from './logger';
 import { sessions, sessionItems } from './schemas/schema';
 import { eq, and, asc } from 'drizzle-orm';
 
@@ -13,6 +13,8 @@ import { eq, and, asc } from 'drizzle-orm';
  * Requires OPENAI_API_KEY environment variable to be set.
  */
 export async function generateSessionSummary(sessionId: string, organizationId: string): Promise<string | undefined> {
+  setContext({ sessionId });
+
   const client = new OpenAI();
 
   // Skip if session already has a title (e.g. set from email subject)

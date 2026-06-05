@@ -141,7 +141,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import type { ServicePrincipal } from 'src/authMiddleware';
 import { getAdapter } from '../adapters/adapters';
 import { getConfigFromEnvironment } from '../environments';
-import { log } from '../logger';
+import { log, setContext } from '../logger';
 import { bossSendTx } from '../queues/pgboss';
 import { createAutoRun2, terminateRun } from '../runs';
 import { channelMessages, channelThreads, sessions } from '../schemas/schema';
@@ -460,6 +460,8 @@ export async function channelOnRunFinishHandler(params: {
 
 
 export async function sendOutgoingChannelMessage(messageId: string, organizationId: string) {
+  setContext({ channelMessageId: messageId });
+
   const message = await withOrg(organizationId, async (tx) => {
     return tx.query.channelMessages.findFirst({
       where: eq(channelMessages.id, messageId)

@@ -11,6 +11,7 @@ export interface LogContext {
   principalApiKeyId?: string;
   principalUserId?: string;
   workerName?: string;
+  jobId?: string;
   runId?: string;
   sessionId?: string;
   channelType?: string;
@@ -50,13 +51,18 @@ if (isDev) {
       m.default({
           colorize: true,
           translateTime: 'SYS:HH:MM:ss.l',
-          ignore: 'pid,hostname,service,requestId,method,path,status,duration,runId,workerName,sessionId,organizationId,fetchId,principalType,principalMemberId,principalApiKeyId,principalUserId',
+          ignore: 'pid,hostname,service,requestId,method,path,status,duration,runId,workerName,jobId,sessionId,organizationId,principalType,principalMemberId,principalApiKeyId,principalUserId',
           customColors: 'message:white,info:green,warn:yellow,error:red,fatal:red,debug:blue,trace:gray,default:white',
           messageFormat(log: Record<string, unknown>, messageKey: string) {
             const msg = log[messageKey] as string;
 
-            if (log.workerName === 'agent-fetch') {
-              return `[${log.fetchId}] ${msg}`;
+            if (log.jobId) {
+              const idShort = String(log.jobId).slice(0, 8);
+              const tail = log.status ? ` → ${log.status} (${log.duration}ms)` : '';
+              return `[${log.workerName} ${idShort}]${tail} ${msg}`;
+            }
+            else if (log.workerName) {
+              return `[${log.workerName}] ${msg}`;
             }
             else if (log.requestId) {
               if (log.method && log.path && log.status && log.duration) {
