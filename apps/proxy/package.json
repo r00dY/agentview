@@ -1,0 +1,9 @@
+{
+  "name": "@agentview/proxy",
+  "version": "0.1.13",
+  "private": true,
+  "scripts": {
+    "dev": "go run ."
+  },
+  "license": "AGPL-3.0"
+}

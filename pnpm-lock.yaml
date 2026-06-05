@@ -490,6 +490,8 @@ importers:
         specifier: ^6.3.3
         version: 6.3.6(@types/node@20.19.17)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.1)
 
+  apps/proxy: {}
+
   apps/tests:
     dependencies:
       '@agentview/studio':

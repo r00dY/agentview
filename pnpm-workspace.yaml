@@ -1,6 +1,7 @@
 packages:
   - "apps/api"
   - "apps/docs"
+  - "apps/proxy"
   - "apps/tests"
   - "apps/webapp"
   - "apps/examples/*"
