@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll } from 'vitest'
 import { seedUsers } from './seedUsers'
 
-const API_URL = process.env.VITE_AGENTVIEW_API_URL!
+const API_URL = process.env.AGENTVIEW_API_URL!
 
 describe('Gmail', () => {
   let organization: { id: string }

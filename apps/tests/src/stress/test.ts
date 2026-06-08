@@ -10,8 +10,15 @@ const N = Number(process.argv[2]) || 100;
 const RAMP_UP_S = 10;
 const MEASURE_S = 25; // only collect samples for this long after first stream starts
 const AGENT_URL = `http://localhost:3500/agent`;
-const API_BASE = process.env.VITE_AGENTVIEW_API_URL ?? 'http://localhost:1990';
-const STREAMING_BASE = process.env.STREAMING_SERVER_URL ?? 'http://localhost:1999';
+const API_BASE = process.env.AGENTVIEW_API_URL
+const STREAMING_BASE = process.env.STREAMING_SERVER_URL
+
+if (!API_BASE) {
+  throw new Error('AGENTVIEW_API_URL is not set');
+}
+if (!STREAMING_BASE) {
+  throw new Error('STREAMING_SERVER_URL is not set');
+}
 
 // ---- Profiler control ----
 async function profilerPost(path: string): Promise<void> {

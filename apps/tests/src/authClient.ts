@@ -1,15 +1,15 @@
 import { createAuthClient } from "better-auth/client"
 import { apiKeyClient, organizationClient } from "better-auth/client/plugins"
 
-if (!process.env.VITE_AGENTVIEW_API_URL) {
-  throw new Error('VITE_AGENTVIEW_API_URL is not set')
+if (!process.env.AGENTVIEW_API_URL) {
+  throw new Error('AGENTVIEW_API_URL is not set')
 }
 
 export function createTestAuthClient() {
   const authHeaders = new Headers();
 
   const authClient = createAuthClient({
-    baseURL: process.env.VITE_AGENTVIEW_API_URL + "/api/auth",
+    baseURL: process.env.AGENTVIEW_API_URL + "/api/auth",
     plugins: [
         apiKeyClient(),
         organizationClient()

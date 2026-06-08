@@ -2,7 +2,7 @@ import { writeFileSync, existsSync, readFileSync, readdirSync, statSync } from '
 import path from "node:path";
 import { getMonorepoRootPath } from "./getMonorepoRootPath";
 
-function updateEnvFile(envFilePath: string, key: string, value: string) {
+export function updateEnvFile(envFilePath: string, key: string, value: string) {
   let envContents = '';
   if (existsSync(envFilePath)) {
     envContents = readFileSync(envFilePath, 'utf8');
@@ -26,12 +26,16 @@ function updateEnvFile(envFilePath: string, key: string, value: string) {
   writeFileSync(envFilePath, envContents, 'utf8');
 }
 
-export function updateEnv(key: string, value: string, options?: { includeExamples?: boolean, includeRoot?: boolean }) {
+export function updateEnv(relativePath: string, key: string, value: string) {
+  const envFilePath = path.join(getMonorepoRootPath(), relativePath);
+  updateEnvFile(envFilePath, key, value);
+}
+
+export function updateEnvAcrossExamples(key: string, value: string, options?: { includeExamples?: boolean, includeRoot?: boolean }) {
   const includeExamples = options?.includeExamples ?? true;
   const includeRoot = options?.includeRoot ?? true;
 
   const monorepoRoot = getMonorepoRootPath();
-  
 
   // Update root .env (required - exit if doesn't exist)
   if (includeRoot) {
@@ -54,5 +58,4 @@ export function updateEnv(key: string, value: string, options?: { includeExample
       }
     }
   }
-  
 }
