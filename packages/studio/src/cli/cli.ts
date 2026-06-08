@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import 'dotenv/config'
+import "./loadEnv.js";
 
 // Silence untun's consola output before any module that pulls it in is loaded.
 process.env.CONSOLA_LEVEL ??= "-999";
@@ -243,7 +243,9 @@ async function loadConfig(): Promise<AgentViewConfig> {
 function getAPIKey(): string {
   const apiKey = process.env.AGENTVIEW_API_KEY;
   if (!apiKey) {
-    throw new Error("You must set AGENTVIEW_API_KEY env var.");
+    throw new Error(
+      "AGENTVIEW_API_KEY is not set. Set it in your shell or in one of: .env, .env.local, .env.[NODE_ENV], .env.[NODE_ENV].local — or pass --api-key.",
+    );
   }
   return apiKey;
 }

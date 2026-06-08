@@ -101,6 +101,7 @@
     "cmdk": "^1.1.1",
     "commander": "^14.0.3",
     "dotenv": "^17.1.0",
+    "dotenv-expand": "^13.0.0",
     "esbuild": "^0.25.10",
     "isbot": "^5.1.27",
     "linkify-react": "^4.3.2",
