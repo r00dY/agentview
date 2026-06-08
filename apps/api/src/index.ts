@@ -59,7 +59,6 @@ import { startBoss } from './queues/pgboss';
 import { requireValidInvitation } from './invitations';
 import { requireUUID } from './isUUID';
 import { applyRunPatch, createAutoRun2, createManualRun, DEFAULT_IDLE_TIME, fastApplyRunPatch, getRunInput, getRunInputContent, isRunFinished, requireRunBase, RunTerminationError, sendRunTerminationSignal, terminateRun, updateRun } from './runs';
-import { createRunStreamConsumer } from './runStream';
 import { organizations, users } from './schemas/auth-schema';
 import { commentMessages, endUsers, environments, inboxItems, runs, scores, sessions } from './schemas/schema';
 import { activateSession, createSession, getCurrentlyStreamingOrConnectingRun, getSessionListFilter, getSessions, setAgentForSession, updateSession } from './sessions';
@@ -895,42 +894,6 @@ app.openapi(sessionsAISDKPOSTRoute, async (c) => {
 })
 
 
-// watches session and its last run changes
-function getSessionStreamResponse(c: any, session: StandardSession) {
-  const lastRun = getLastRun(session);
-
-  if (!lastRun || isRunFinished(lastRun)) {
-    return c.body(null, 204); // 204 when no stream in our internal protocol
-  }
-
-  return streamSSE(c, async (stream) => {
-    let streamConsumer: ReturnType<typeof createRunStreamConsumer> | undefined = undefined;
-
-    try {
-      streamConsumer = createRunStreamConsumer(lastRun.id, c.req.raw.signal);
-
-      // session snapshot first
-      await stream.writeSSE({
-        event: 'session.snapshot',
-        data: JSON.stringify(session),
-      });
-
-      // stream run events from last updatedAt
-      for await (const data of streamConsumer.entries()) {
-        await stream.writeSSE({
-          event: 'run.patch',
-          data
-        });
-      }
-    } finally {
-      streamConsumer?.close();
-    }
-
-  });
-}
-
-
-
 const sessionStreamRoute = createRoute({
   method: 'get',
   path: '/api/sessions/{session_id}/stream/standard',
@@ -969,8 +932,10 @@ const sessionStreamHandler = async (c: Parameters<RouteHandler<typeof sessionStr
 }
 
 app.openapi(sessionStreamRoute, async (c) => {
-  const session = await sessionStreamHandler(c);
-  return getSessionStreamResponse(c, session);
+  throw new AgentViewError('Temporarily disabled.', 400);
+  // const session = await sessionStreamHandler(c);
+
+  // return getSessionStreamResponse(c, session);
 });
 
 const sessionAISDKStreamRoute = createRoute({
@@ -1087,14 +1052,6 @@ const runsPOSTRoute = createRoute({
 
 app.openapi(runsPOSTRoute, async (_c) => {
   throw new AgentViewError('Temporarily disabled.', 400);
-  // const { run, session, stream } = await createRunHandler(c);
-
-  // if (stream) {
-  //   c.status(201);
-  //   return getSessionStreamResponse(c, session);
-  // }
-
-  // return c.json(run, 201);
 })
 
 const runsAISDKPOSTRoute = createRoute({

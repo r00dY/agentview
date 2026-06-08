@@ -10,8 +10,6 @@ import { authorize, type Principal } from './authMiddleware';
 import { getConfigFromEnvironment, requireConfig, requireEnvironment } from './environments';
 import { requireUUID } from './isUUID';
 import { parseMetadata } from './parseMetadata';
-import { publishEvent } from './redisPubSub';
-import { publishRunStreamEvent } from './runStream';
 import { agentRefs, runs, sessionItems } from './schemas/schema';
 import { activateSession, fetchSessionBase, requireSession, requireSessionBase } from './sessions';
 import type { Transaction } from './types';
@@ -288,11 +286,6 @@ async function createRunCore(
       });
     }
   }
-
-  // Notify event-driven workers immediately after commit for auto-fetch runs
-  tx.afterCommit(async () => {
-    await publishEvent({ type: 'run.created', runId: insertedRun.id });
-  });
 
   return insertedRun;
 }
@@ -599,24 +592,6 @@ export async function fastApplyRunPatch(
   }
 
   await Promise.all(dbOps);
-
-  // TEMPORARY ONLY FOR BACKWARD COMPAT
-  const streamEvent: any = {
-    ...updatedRun
-  }
-  if (op.type === 'item') {
-    streamEvent.items = [op.content];
-  } else if (op.type === 'state') {
-    streamEvent.state = op.content;
-  }
-
-  tx.afterCommit(async () => {
-    await publishRunStreamEvent(runId, nowIso, JSON.stringify(streamEvent));
-
-    if (op.type === 'complete' || op.type === 'cancel' || op.type === 'fail') {
-      await publishRunStreamEvent(runId, null, '[DONE]');
-    }
-  });
 }
 
 
@@ -795,21 +770,6 @@ export async function applyRunPatch(
     }
   }
 
-  // Publish to Redis stream only after transaction finished successfully in DB
-  const dataToStream = JSON.stringify({
-    ...body,
-    items: insertedItems,
-    updatedAt: nowIso
-  });
-
-  tx.afterCommit(async () => {
-    await publishRunStreamEvent(runId, nowIso, dataToStream);
-
-    if (isFinished) {
-      await publishRunStreamEvent(runId, null, '[DONE]');
-    }
-  });
-
   return updatedRun;
 }
 
@@ -871,12 +831,6 @@ export async function terminateRun(tx: OrgTransaction, sessionId: string, runId:
     // this is important, we must send the last run patch event to the stream
     tx.afterCommit(async () => {
       sendRunTerminationSignal(runId, reason, { graceful: false }) // super important
-
-      await publishRunStreamEvent(runId, nowIso, JSON.stringify({
-        ...reason,
-        updatedAt: nowIso,
-      }));
-      await publishRunStreamEvent(runId, null, '[DONE]');
     });
 
     log.info('termination successful');
