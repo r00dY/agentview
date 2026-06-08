@@ -1,6 +1,6 @@
 export function getWebAppUrl() {
-    if (!process.env.VITE_AGENTVIEW_WEBAPP_URL) {
-        throw new Error('VITE_AGENTVIEW_WEBAPP_URL is not set');
+    if (!process.env.AGENTVIEW_WEBAPP_URL) {
+        throw new Error('AGENTVIEW_WEBAPP_URL is not set');
     }
-    return process.env.VITE_AGENTVIEW_WEBAPP_URL;
+    return process.env.AGENTVIEW_WEBAPP_URL;
 }
