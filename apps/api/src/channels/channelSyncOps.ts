@@ -141,7 +141,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import type { ServicePrincipal } from 'src/authMiddleware';
 import { getAdapter } from '../adapters/adapters';
 import { getConfigFromEnvironment } from '../environments';
-import { log, setContext } from '../logger';
+import { log, runWithContext, setContext } from '../logger';
 import { bossSendTx } from '../queues/pgboss';
 import { createAutoRun2, terminateRun } from '../runs';
 import { channelMessages, channelThreads, sessions } from '../schemas/schema';
@@ -161,9 +161,18 @@ type ChannelThread = Awaited<ReturnType<typeof requireChannelThread>>;
 
 /**
  * onInboxUpdated
+ *
+ * Wrapped in runWithContext so it has its own ALS store. Callers fire this
+ * via `void checkInbox(...)` from `finally` blocks — without an isolated
+ * store, our setContext calls would leak into (and inherit from) the caller's
+ * pg-boss/HTTP context.
  */
 export async function checkInbox(organizationId: string, channelThreadId: string) {
-  log.debug(`[${channelThreadId}] [createRunForChannelThread] start`);
+  return runWithContext({ organizationId, channelThreadId }, () => checkInboxImpl(organizationId, channelThreadId));
+}
+
+async function checkInboxImpl(organizationId: string, channelThreadId: string) {
+  log.debug('checkInbox: start');
 
   // Minimal pre-step: we need the env handle to build the tenancy principal for withTenant.
   // The authoritative reads of session/environment happen under the edit_channel_thread lock
@@ -173,10 +182,13 @@ export async function checkInbox(organizationId: string, channelThreadId: string
       where: eq(channelThreads.id, channelThreadId),
       with: { channel: { with: { environment: true } } },
     });
+    if (ct) {
+      setContext({ channelType: ct.channel.type, channelAddress: ct.channel.address });
+    }
     return ct?.channel.environment?.handle;
   });
   if (!envHandle) {
-    log.debug(`[${channelThreadId}] checkInbox: thread missing or has no environment, skipping`);
+    log.debug('checkInbox: thread missing or has no environment, skipping');
     return;
   }
 
@@ -206,26 +218,28 @@ export async function checkInbox(organizationId: string, channelThreadId: string
 
       // if locked (side effects pending) -> skip, gonna be retried
       if (isSideEffectCallInProgress(channelThread)) {
-        log.debug(`[${channelThreadId}] skipping: channel thread is locked`);
+        log.debug('checkInbox: skipping — channel thread is locked (side effect in progress)');
         return;
       }
 
       const session = await requireSession(tx, channelThreadId);
+      setContext({ sessionId: session.id });
+
       const environment = channelThread.channel.environment;
       if (!environment) {
-        log.error(`[${channelThreadId}] skipping: channel thread has no environment`);
+        log.error('checkInbox: skipping — channel thread has no environment');
         return;
       }
 
       if (!isDirty(channelThread)) {
-        log.debug(`[${channelThreadId}] skipping: channel thread is not dirty, nothing to do`);
+        log.debug('checkInbox: skipping — channel thread is not dirty, nothing to do');
         return;
       }
 
       // If active run exists, terminate it ASAP.
       const activeRun = getActiveRun(channelThread);
       if (activeRun) {
-        log.info({ sessionId: session.id, runId: activeRun.id }, 'terminating active run before creating new channel run');
+        log.info({ runId: activeRun.id }, 'terminating active run before creating new channel run');
         await terminateRun(tx, session.id, activeRun.id as string, {
           status: 'discarded',
           reason: { message: 'New message ingested, discarding active run' },
@@ -257,7 +271,7 @@ export async function checkInbox(organizationId: string, channelThreadId: string
 
       if (stagedMessages.length === 0) {
         // Shouldn't happen (gates above passed). Belt and suspenders
-        log.error(`[${channelThreadId}] skipping: no incoming messages after conversation boundary`);
+        log.error('checkInbox: skipping — no incoming messages after conversation boundary');
         return;
       }
 
@@ -286,7 +300,7 @@ export async function checkInbox(organizationId: string, channelThreadId: string
         })
         .where(inArray(channelMessages.id, stagedMessages.map(m => m.id)));
 
-      log.info({ channelThreadId, count: stagedMessages.length }, 'incoming messages found');
+      log.info({ count: stagedMessages.length }, 'incoming messages staged for new run');
 
       return {
         stagedMessages,
@@ -296,7 +310,7 @@ export async function checkInbox(organizationId: string, channelThreadId: string
       };
     });
   } catch (error) {
-    log.error({ err: error, channelThreadId }, 'checkInbox: prep transaction failed');
+    log.error({ err: error }, 'checkInbox: prep transaction failed');
     return;
   }
 
@@ -328,6 +342,8 @@ export async function checkInbox(organizationId: string, channelThreadId: string
 
     // CreateRun API CALL finished
     if (result.success) {
+      setContext({ runId: result.runId });
+
       await withOrg(organizationId, async (tx) => {
         await tx.acquireLock({ type: "edit_channel_thread", channelThreadId });
 
@@ -358,7 +374,7 @@ export async function checkInbox(organizationId: string, channelThreadId: string
       });
     });
 
-    log.info({ err: error, channelThreadId }, 'checkInbox: create-run side effect failed');
+    log.info({ err: error }, 'checkInbox: create-run side effect failed');
 
   } finally {
     /**
@@ -379,8 +395,26 @@ export async function checkInbox(organizationId: string, channelThreadId: string
  *
  * Runs in its own transaction (deferred via afterCommit by the caller).
  * This should really be a queue job, but doing it inline-after-commit for now.
+ *
+ * Wrapped in runWithContext for the same reason as checkInbox: it's invoked
+ * fire-and-forget via afterCommit, so we want a fresh ALS store rather than
+ * leaking context to/from the run-engine transaction that scheduled us.
  */
 export async function channelOnRunFinishHandler(params: {
+  organizationId: string;
+  runId: string;
+  sessionId: string;
+  status: string;
+  channelReply?: { text: string };
+  reason?: any;
+}) {
+  return runWithContext(
+    { organizationId: params.organizationId, sessionId: params.sessionId, runId: params.runId },
+    () => channelOnRunFinishHandlerImpl(params),
+  );
+}
+
+async function channelOnRunFinishHandlerImpl(params: {
   organizationId: string;
   runId: string;
   sessionId: string;
@@ -395,24 +429,23 @@ export async function channelOnRunFinishHandler(params: {
   if (!channelThreadId) { // not a channel thread -> ignore
     return;
   }
+  setContext({ channelThreadId });
 
-  /**
-   * 
-   */
   await withOrg(params.organizationId, async (tx) => {
     await tx.acquireLock({ type: "edit_channel_thread", channelThreadId });
 
     const channelThread = await requireChannelThread(tx, channelThreadId);
+    setContext({ channelType: channelThread.channel.type, channelAddress: channelThread.channel.address });
 
     if (isSideEffectCallInProgress(channelThread)) {
-      log.debug(`[${params.sessionId}] skipping: channel thread is locked`);
+      log.debug('channelOnRunFinishHandler: skipping — channel thread is locked');
       return;
     }
 
     // skip if active run is already different -> it means it was overriden
     const activeRun = getActiveRun(channelThread);
     if (activeRun?.id !== params.runId) {
-      log.debug(`[${params.sessionId}] skipping: active run is not the one we're finishing`);
+      log.debug('channelOnRunFinishHandler: skipping — active run is not the one we are finishing');
       return;
     }
 
@@ -449,7 +482,7 @@ export async function channelOnRunFinishHandler(params: {
       // 'discarded' (set by terminateRun in checkInbox) is internal and does NOT emit a finish event.
       // 'cancelled' is never triggered today — terminateRun is the only cancellation path and it uses 'discarded'.
       // So this branch is a defensive guard for an "impossible" status; if it ever fires, the contract has drifted.
-      log.error({ runId: params.runId, status: params.status }, 'channelOnRunFinishHandler: unexpected run status');
+      log.error({ status: params.status }, 'channelOnRunFinishHandler: unexpected run status');
     }
   });
 }
@@ -460,8 +493,13 @@ export async function channelOnRunFinishHandler(params: {
 
 
 export async function sendOutgoingChannelMessage(messageId: string, organizationId: string) {
-  setContext({ channelMessageId: messageId });
+  return runWithContext(
+    { organizationId, channelMessageId: messageId },
+    () => sendOutgoingChannelMessageImpl(messageId, organizationId),
+  );
+}
 
+async function sendOutgoingChannelMessageImpl(messageId: string, organizationId: string) {
   const message = await withOrg(organizationId, async (tx) => {
     return tx.query.channelMessages.findFirst({
       where: eq(channelMessages.id, messageId)
@@ -469,33 +507,33 @@ export async function sendOutgoingChannelMessage(messageId: string, organization
   });
 
   if (!message) {
-    log.debug({ messageId }, 'sendOutgoingChannelMessage: message not found');
+    log.debug('sendOutgoingChannelMessage: message not found');
     return; // message could have been deleted
   }
 
   const channelThreadId = message.channelThreadId;
-
-
+  setContext({ channelThreadId });
 
   const result = await withOrg(organizationId, async (tx) => {
     await tx.acquireLock({ type: "edit_channel_thread", channelThreadId });
 
     const channelThread = await requireChannelThread(tx, channelThreadId);
+    setContext({ channelType: channelThread.channel.type, channelAddress: channelThread.channel.address });
 
     if (isSideEffectCallInProgress(channelThread)) {
-      log.debug({ messageId }, 'sendOutgoingChannelMessage: channel thread is locked');
+      log.debug('sendOutgoingChannelMessage: channel thread is locked');
       return;
     }
 
     const message = channelThread.messages.find(m => m.id === messageId);
     if (!message) {
-      log.debug({ messageId }, 'sendOutgoingChannelMessage: message not found');
+      log.debug('sendOutgoingChannelMessage: message not found');
       return; // message deleted -> not doing job -> marking as done
     }
 
     // Only 'pending' (first attempt) or 'error' (retry) are eligible to send.
     if (message.status !== 'pending' && message.status !== 'error') {
-      log.debug({ messageId, status: message.status }, 'sendOutgoingChannelMessage: message not in a sendable state');
+      log.debug({ status: message.status }, 'sendOutgoingChannelMessage: message not in a sendable state');
       return;
     }
 

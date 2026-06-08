@@ -1,7 +1,7 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { ServicePrincipal } from 'src/authMiddleware';
-import { log } from '../logger';
+import { log, runWithContext, setContext } from '../logger';
 import { db__dangerous } from '../db';
 import { checkInbox } from './channelSyncOps';
 import { channelMessages, channels, channelThreads, sessions } from '../schemas/schema';
@@ -121,7 +121,11 @@ export function channelProvider(type: string) {
    * Strict create — fails on conflict (unique constraint on type+address).
    */
   async function createChannel(orgId: string, address: string, config: any, environmentId: string | null = null): Promise<Channel> {
-    return await createChannelFn(orgId, type, address, config, environmentId);
+    return runWithContext({ organizationId: orgId, channelType: type, channelAddress: address }, async () => {
+      const channel = await createChannelFn(orgId, type, address, config, environmentId);
+      log.info({ environmentId }, 'channel created');
+      return channel;
+    });
   }
 
   /**
@@ -165,16 +169,20 @@ export function channelProvider(type: string) {
    * Find by (type, address) cross-org, then update config via withOrg.
    */
   async function updateChannel(address: string, config: any): Promise<Channel> {
-    const channel = await requireChannel(address);
-    return withOrg(channel.organizationId, async (tx) => {
-      const [updated] = await tx
-        .update(channels)
-        .set({
-          config,
-          updatedAt: new Date().toISOString(),
-        })
-        .where(eq(channels.id, channel.id))
-        .returning();
+    return runWithContext({ channelType: type, channelAddress: address }, async () => {
+      const channel = await requireChannel(address);
+      const updated = await withOrg(channel.organizationId, async (tx) => {
+        const [row] = await tx
+          .update(channels)
+          .set({
+            config,
+            updatedAt: new Date().toISOString(),
+          })
+          .where(eq(channels.id, channel.id))
+          .returning();
+        return row;
+      });
+      log.info('channel updated');
       return updated;
     });
   }
@@ -190,7 +198,11 @@ export function channelProvider(type: string) {
   }
 
   async function ingestMessage(address: string, params: IngestMessageParams): Promise<IngestMessageResult> {
-    log.info({ address, sourceId: params.sourceId, type, authorEmail: params.author.email }, 'ingesting message');
+    return runWithContext({ channelType: type, channelAddress: address }, () => ingestMessageInner(address, params));
+  }
+
+  async function ingestMessageInner(address: string, params: IngestMessageParams): Promise<IngestMessageResult> {
+    log.info({ sourceId: params.sourceId, authorEmail: params.author.email }, 'ingesting message');
 
     const channel = await requireChannel(address);
 
@@ -221,7 +233,10 @@ export function channelProvider(type: string) {
        * Create or get channel thread and channel message
        */
       const thread = await getOrCreateThread(tx, channel, params);
+      setContext({ channelThreadId: thread.id });
+
       const { message, isNew } = await getOrCreateMessage(tx, channel, thread, params);
+      setContext({ channelMessageId: message.id });
 
       if (!isNew) {
         return {
@@ -246,6 +261,7 @@ export function channelProvider(type: string) {
 
       // If session exists, let's just use it's userId
       if (session) {
+        setContext({ sessionId: session.id });
         userId = session.userId;
       }
       else {
@@ -259,7 +275,7 @@ export function channelProvider(type: string) {
           userId = (await createUser(tx, params.author)).user.id;
         }
 
-        log.info({ sourceId: params.sourceId, authorEmail: params.author.email, userId }, 'user resolved from email');
+        log.info({ authorEmail: params.author.email, userId }, 'user resolved from email');
       }
 
       if (!userId) {
@@ -270,7 +286,7 @@ export function channelProvider(type: string) {
        * Ensure session
        */
       if (!session) {
-        log.info({ sourceId: params.sourceId }, 'creating new session');
+        log.info('creating new session');
         session = await createSession(tx, {
           channelThreadId: thread.id,
           userId,
@@ -340,13 +356,13 @@ export function channelProvider(type: string) {
           agentWithChannelConfig = matches[0];
         }
 
-        await setAgentForSession(tx, session.id, { 
-          agent: agentWithChannelConfig.agent, 
+        await setAgentForSession(tx, session.id, {
+          agent: agentWithChannelConfig.agent,
           metadata: agentWithChannelConfig.channelConfig?.metadata,
-          initialState: agentWithChannelConfig.channelConfig?.initialState 
+          initialState: agentWithChannelConfig.channelConfig?.initialState
         });
 
-        log.info({ sourceId: params.sourceId, sessionId: session.id }, 'new session created');
+        log.info('new session created');
       }
 
       return { ingested: true as const, sessionId: session.id, thread, message };

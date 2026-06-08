@@ -15,6 +15,9 @@ export interface LogContext {
   runId?: string;
   sessionId?: string;
   channelType?: string;
+  channelAddress?: string;
+  channelThreadId?: string;
+  channelMessageId?: string;
   [key: string]: unknown;
 }
 
@@ -51,14 +54,16 @@ if (isDev) {
       m.default({
           colorize: true,
           translateTime: 'SYS:HH:MM:ss.l',
-          ignore: 'pid,hostname,service,requestId,method,path,status,duration,runId,workerName,jobId,sessionId,organizationId,principalType,principalMemberId,principalApiKeyId,principalUserId',
+          ignore: 'pid,hostname,service,requestId,method,path,status,duration,runId,workerName,jobId,sessionId,organizationId,principalType,principalMemberId,principalApiKeyId,principalUserId,channelThreadId,channelMessageId',
           customColors: 'message:white,info:green,warn:yellow,error:red,fatal:red,debug:blue,trace:gray,default:white',
           messageFormat(log: Record<string, unknown>, messageKey: string) {
             const msg = log[messageKey] as string;
 
             const ids: string[] = [];
+            if (log.channelThreadId) ids.push(`ct:${String(log.channelThreadId).slice(0, 8)}`);
             if (log.sessionId) ids.push(`s:${String(log.sessionId).slice(0, 8)}`);
             if (log.runId) ids.push(`r:${String(log.runId).slice(0, 8)}`);
+            if (log.channelMessageId) ids.push(`cm:${String(log.channelMessageId).slice(0, 8)}`);
             const idStr = ids.length ? ` ${ids.join(' ')}` : '';
 
             if (log.jobId) {

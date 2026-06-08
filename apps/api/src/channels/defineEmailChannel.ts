@@ -1,6 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { db__dangerous } from '../db';
-import { log } from '../logger';
+import { log, runWithContext } from '../logger';
 import { channelMessages, channelThreads } from '../schemas/schema';
 import {
   channelProvider,
@@ -12,7 +12,6 @@ import {
 } from './defineChannel';
 import { withOrg } from 'src/withOrg';
 import { emailToMarkdown } from './emailToMarkdown';
-import { formatChannelErrorBody } from './formatChannelErrorBody';
 import { buildReplyEmail } from './buildReplyEmail';
 
 const presence = (s?: string) => s?.trim() || undefined;
@@ -72,6 +71,10 @@ export function defineEmailChannelApp(
   const provider = channelProvider(type);
   
   const ingestEmail = async (address: string, params: IngestEmailParams) => {
+    return runWithContext({ channelType: type, channelAddress: address }, () => ingestEmailInner(address, params));
+  };
+
+  const ingestEmailInner = async (address: string, params: IngestEmailParams) => {
     if (!params.email.messageId) {
       throw new Error('[defineEmailChannelApp] Email has no Message-ID — this should never happen');
     }
