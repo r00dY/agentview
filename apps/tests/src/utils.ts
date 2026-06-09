@@ -18,7 +18,7 @@ export function expectToFail(promise: Promise<any>, statusCode: number) {
 }
 
 export async function setupTestOrg() {
-    const orgSlug = "--test--" + Math.random().toString(36).slice(2);
+    const orgSlug = "test-agentview-" + Math.random().toString(36).slice(2);
     console.log("Seeding users for org: ", orgSlug);
 
     const result = await seedUsers(orgSlug);
