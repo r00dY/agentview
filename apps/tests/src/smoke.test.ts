@@ -13,6 +13,12 @@ import {
   writeAISDKSuccessHeaders,
   type MockServer,
 } from './mockServer';
+import {
+  createGmailClient,
+  sendEmail,
+  waitForEmail,
+  type GmailClient,
+} from './gmailTestClient';
 
 const { spawn } = require('child_process');
 
@@ -21,6 +27,44 @@ const TEST_TIMEOUT = PROXY_TIMEOUT + 30_000;
 
 const SMOKE_AGENT_PORT = 3461;
 const SMOKE_AGENT_URL = `http://localhost:${SMOKE_AGENT_PORT}/agent`;
+const SMOKE_AGENT_EMAIL_DOMAIN = process.env.SMOKE_AGENT_EMAIL_DOMAIN ?? 'agent.agentview.app';
+
+const EMAIL_TURN_TIMEOUT_MS = 60_000;
+const EMAIL_TEST_TIMEOUT_MS = EMAIL_TURN_TIMEOUT_MS * 2 + 30_000;
+
+/**
+ * Mock parrot handler: streams reasoning + token-by-token text echoing the
+ * last user message. Shared by both the transport and email tests.
+ */
+function setParrotHandler(mockServer: MockServer) {
+  mockServer.setHandler((body, res) => {
+    const messages: any[] = body?.messages ?? [];
+    const userTurn = messages.filter((m) => m.role === 'user').length;
+    const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+    const lastUserText = lastUser?.parts?.find((p: any) => p.type === 'text')?.text ?? '';
+
+    const historySummary = messages
+      .map((m) => `${m.role}:${m.parts?.find((p: any) => p.type === 'text')?.text ?? ''}`)
+      .join('|');
+
+    const reply = `Parrot turn ${userTurn}: ${lastUserText}`;
+    const tokens = reply.split(/(\s+)/).filter(Boolean);
+
+    writeAISDKSuccessHeaders(res);
+    writeAISDKChunks(res, [
+      { type: 'start' },
+      { type: 'reasoning-start', id: 'r1' },
+      { type: 'reasoning-delta', id: 'r1', delta: `history=${historySummary}` },
+      { type: 'reasoning-end', id: 'r1' },
+      { type: 'text-start', id: 't1' },
+      ...tokens.map((t) => ({ type: 'text-delta' as const, id: 't1', delta: t })),
+      { type: 'text-end', id: 't1' },
+      { type: 'finish', finishReason: 'stop' },
+    ]);
+    writeAISDKDone(res);
+    res.end();
+  });
+}
 
 /**
  * Verifies Gmail credentials before any expensive setup runs. Throws an
@@ -161,36 +205,7 @@ describe('smoke', () => {
       },
     });
 
-    // Parrot handler: echoes user message back, streamed as "tokens", plus a
-    // reasoning block that dumps the conversation history so we can verify
-    // history flows through.
-    mockServer!.setHandler((body, res) => {
-      const messages: any[] = body?.messages ?? [];
-      const userTurn = messages.filter((m) => m.role === 'user').length;
-      const lastUser = [...messages].reverse().find((m) => m.role === 'user');
-      const lastUserText = lastUser?.parts?.find((p: any) => p.type === 'text')?.text ?? '';
-
-      const historySummary = messages
-        .map((m) => `${m.role}:${m.parts?.find((p: any) => p.type === 'text')?.text ?? ''}`)
-        .join('|');
-
-      const reply = `Parrot turn ${userTurn}: ${lastUserText}`;
-      const tokens = reply.split(/(\s+)/).filter(Boolean);
-
-      writeAISDKSuccessHeaders(res);
-      writeAISDKChunks(res, [
-        { type: 'start' },
-        { type: 'reasoning-start', id: 'r1' },
-        { type: 'reasoning-delta', id: 'r1', delta: `history=${historySummary}` },
-        { type: 'reasoning-end', id: 'r1' },
-        { type: 'text-start', id: 't1' },
-        ...tokens.map((t) => ({ type: 'text-delta' as const, id: 't1', delta: t })),
-        { type: 'text-end', id: 't1' },
-        { type: 'finish', finishReason: 'stop' },
-      ]);
-      writeAISDKDone(res);
-      res.end();
-    });
+    setParrotHandler(mockServer!);
 
     const { user } = await client.users.create();
     const session = await client.sessions.create({ agent: 'smoke-agent', userId: user.id });
@@ -232,6 +247,99 @@ describe('smoke', () => {
     expect(finalSession.messages.length).toBe(4);
     expect(finalSession.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user', 'assistant']);
   }, TEST_TIMEOUT);
+
+  test('two turns via email channel', async () => {
+    const client = org.admin.localClient;
+    const gmail: GmailClient = createGmailClient();
+
+    const agentAddress = `${org.organization.slug}.local-admin.smoke-agent@${SMOKE_AGENT_EMAIL_DOMAIN}`;
+
+    const inputSchema = z.looseObject({ role: z.literal('user'), parts: z.array(z.any()) });
+    await updateEnvironment(client, {
+      config: {
+        agents: [{
+          name: 'smoke-agent',
+          version: '1.0.0',
+          url: SMOKE_AGENT_URL,
+          adapter: 'ai-sdk',
+          runs: [{
+            input: { schema: inputSchema },
+            output: [],
+            validateOutput: false,
+          }],
+          // address is unused for agentview-email (derived from incoming email),
+          // but the base config schema still requires it.
+          channels: [{ type: 'agentview-email', address: '' }],
+        }],
+      },
+    });
+
+    setParrotHandler(mockServer!);
+
+    // Unique markers per turn — we look for them in the reply body to confirm
+    // the parrot saw and echoed the message we sent.
+    const marker1 = `MARKER-${crypto.randomUUID()}`;
+    const marker2 = `MARKER-${crypto.randomUUID()}`;
+    const subject = `Smoke test ${crypto.randomUUID()}`;
+
+    const body1 = [
+      'Hi there,',
+      '',
+      `I have a question. Reference: ${marker1}`,
+      '',
+      'Best regards,',
+      'Andrzej Testovich',
+      'Senior Engineer at AgentView Inc.',
+      '+1-555-0123',
+      '',
+      '--',
+      'This message is confidential. If received in error, please delete.',
+    ].join('\n');
+
+    const beforeTurn1 = new Date();
+    const sent1 = await sendEmail(gmail, {
+      to: agentAddress,
+      subject,
+      body: body1,
+    });
+
+    const reply1 = await waitForEmail(gmail, {
+      query: `from:${agentAddress} in:inbox`,
+      newerThan: beforeTurn1,
+      timeoutMs: EMAIL_TURN_TIMEOUT_MS,
+    });
+
+    expect(reply1.subject.toLowerCase()).toContain(subject.toLowerCase());
+    expect(reply1.body).toContain('Parrot turn 1');
+    expect(reply1.body).toContain(marker1);
+
+    // Turn 2 — reply in-thread.
+    const body2 = `One more question. Reference: ${marker2}\n\n— Andrzej`;
+    const beforeTurn2 = new Date();
+    await sendEmail(gmail, {
+      to: agentAddress,
+      subject: `Re: ${subject}`,
+      body: body2,
+      threadId: sent1.threadId,
+      inReplyTo: reply1.messageId,
+      references: [sent1.messageId, reply1.messageId],
+    });
+
+    const reply2 = await waitForEmail(gmail, {
+      query: `from:${agentAddress} in:inbox`,
+      newerThan: beforeTurn2,
+      excludeGmailId: reply1.gmailId,
+      timeoutMs: EMAIL_TURN_TIMEOUT_MS,
+    });
+
+    expect(reply2.body).toContain('Parrot turn 2');
+    expect(reply2.body).toContain(marker2);
+
+    // The system should have auto-created a user keyed by the sender email.
+    const createdUser = await client.users.getByEmail(gmail.user);
+    expect(createdUser).toBeDefined();
+    expect(createdUser.email?.toLowerCase()).toBe(gmail.user.toLowerCase());
+  }, EMAIL_TEST_TIMEOUT_MS);
 });
 
 async function consumeChunks(stream: ReadableStream<UIMessageChunk<unknown, UIDataTypes>>) {
