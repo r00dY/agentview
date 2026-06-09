@@ -13,7 +13,7 @@ import { type UIDataTypes, type UIMessage, type UIMessageChunk } from 'ai';
 import { setupTestOrg, expectToFail, UUID_REGEX } from './utils';
 import { updateEnvironment } from 'agentview/updateEnvironment';
 
-const PROXY_TIMEOUT = 10_000;
+const PROXY_TIMEOUT = 15_000;
 const TEST_TIMEOUT = PROXY_TIMEOUT + 10_000;
 
 describe('ai-sdk', () => {
@@ -107,8 +107,8 @@ describe('ai-sdk', () => {
     //     proxy server from @agentview/studio (same code as `npx agentview dev`)
     // ---------------------------------------------------------------
     describe.each([
-      { envName: "production (direct)", envType: "production" },
-      // { envName: "local (via tunnel proxy)", envType: "local" },
+      // { envName: "production (direct)", envType: "production" },
+      { envName: "local (via tunnel proxy)", envType: "local" },
     ])("$envName", ({ envType }) => {
       let client: typeof org.prodClient;
       // let standardClient: typeof org.prodStandardClient;
@@ -122,7 +122,7 @@ describe('ai-sdk', () => {
           // standardClient = org.admin.localStandardClient;
 
           // start real proxy with real tunnel
-          proxyProcess = spawn('npx', ['agentview', 'dev', '--api-key', org.apiKeySecret.key, '--env', 'local-admin', '--no-studio'], {
+          proxyProcess = spawn('npx', ['agentview', 'proxy', 'start', '--api-key', org.apiKeySecret.key, '--env', 'local-admin'], {
             detached: true,
             stdio: 'inherit',
             shell: process.platform === 'win32' // needed on Windows for .cmd shims
