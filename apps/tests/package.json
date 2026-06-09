@@ -3,13 +3,15 @@
     "type": "module",
     "scripts": {
         "test": "vitest",
-        "seed-users": "tsx src/seedUsersCli.ts"
+        "seed-users": "tsx src/seedUsersCli.ts",
+        "mint-gmail-token": "tsx scripts/mint-gmail-token.ts"
     },
     "dependencies": {
         "agentview": "workspace:*",
         "vitest": "^4.0.7",
         "zod": "^4.1.12",
         "better-auth": "^1.2.12",
+        "googleapis": "^171.4.0",
         "@agentview/utils": "workspace:*",
         "@agentview/studio": "workspace:*"
     },

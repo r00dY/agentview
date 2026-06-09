@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import type { UIDataTypes, UIMessage, UIMessageChunk } from 'ai';
 import { z } from 'zod';
+import { google } from 'googleapis';
 
 import { updateEnvironment } from 'agentview/updateEnvironment';
 
@@ -22,6 +23,75 @@ const SMOKE_AGENT_PORT = 3461;
 const SMOKE_AGENT_URL = `http://localhost:${SMOKE_AGENT_PORT}/agent`;
 
 /**
+ * Verifies Gmail credentials before any expensive setup runs. Throws an
+ * actionable error if the env vars are missing or the refresh token has
+ * expired (Google rotates these every 7 days for OAuth apps in Testing mode).
+ */
+async function assertGmailCredentialsOrThrow() {
+  const clientId = process.env.SMOKE_GMAIL_CLIENT_ID;
+  const clientSecret = process.env.SMOKE_GMAIL_CLIENT_SECRET;
+  const refreshToken = process.env.SMOKE_GMAIL_REFRESH_TOKEN;
+  const user = process.env.SMOKE_GMAIL_USER;
+
+  const missing: string[] = [];
+  if (!clientId) missing.push('SMOKE_GMAIL_CLIENT_ID');
+  if (!clientSecret) missing.push('SMOKE_GMAIL_CLIENT_SECRET');
+  if (!refreshToken) missing.push('SMOKE_GMAIL_REFRESH_TOKEN');
+  if (!user) missing.push('SMOKE_GMAIL_USER');
+
+  if (missing.length > 0) {
+    throw new Error(
+      [
+        '',
+        'Smoke test cannot run — Gmail credentials are missing.',
+        `Missing env vars: ${missing.join(', ')}`,
+        '',
+        'To mint a refresh token, run:',
+        '  pnpm --filter ./apps/tests mint-gmail-token',
+        '',
+        'Then add the printed values to .env.local.',
+        '',
+      ].join('\n')
+    );
+  }
+
+  const oauth2 = new google.auth.OAuth2(clientId, clientSecret);
+  oauth2.setCredentials({ refresh_token: refreshToken });
+  const gmail = google.gmail({ version: 'v1', auth: oauth2 });
+
+  let profile;
+  try {
+    profile = await gmail.users.getProfile({ userId: 'me' });
+  } catch (err: any) {
+    const code = err?.response?.data?.error ?? err?.code ?? '';
+    const msg = String(err?.message ?? '');
+    if (code === 'invalid_grant' || msg.includes('invalid_grant')) {
+      throw new Error(
+        [
+          '',
+          'Gmail refresh token is invalid or expired (invalid_grant).',
+          '',
+          'OAuth apps in "Testing" mode expire refresh tokens after 7 days.',
+          'Re-mint with:',
+          '  pnpm --filter ./apps/tests mint-gmail-token',
+          '',
+          'Then update SMOKE_GMAIL_REFRESH_TOKEN in .env.local.',
+          '',
+          `Original error: ${msg}`,
+        ].join('\n')
+      );
+    }
+    throw err;
+  }
+
+  if (profile.data.emailAddress?.toLowerCase() !== user!.toLowerCase()) {
+    throw new Error(
+      `SMOKE_GMAIL_USER (${user}) does not match the account this refresh token belongs to (${profile.data.emailAddress}).`
+    );
+  }
+}
+
+/**
  * Smoke test: end-to-end wiring check.
  *
  * Used both locally and against production deployments to verify the
@@ -38,6 +108,10 @@ describe('smoke', () => {
   let proxyProcess: any;
 
   beforeAll(async () => {
+    // Verify Gmail creds FIRST — fail fast before paying for org seeding,
+    // mock server boot, or the 15s tunnel wait.
+    await assertGmailCredentialsOrThrow();
+
     org = await setupTestOrg();
 
     mockServer = await createMockServer(SMOKE_AGENT_PORT);
