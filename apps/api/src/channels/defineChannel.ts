@@ -13,6 +13,7 @@ import type { WorkerHandle } from '../workers/utils';
 import { requireConfig, requireEnvironment } from '../environments';
 import type { ExternalChannelConfig } from 'agentview/baseConfigTypes';
 import { createChannel as createChannelFn } from './channels';
+import { getAgentViewEmailDomain } from './getAgentViewEmailDomain';
 
 export type Channel = typeof channels.$inferSelect;
 type ChannelThread = typeof channelThreads.$inferSelect;
@@ -109,7 +110,7 @@ export function parseAgentViewEmailAddress(address: string) {
     parsed = { orgSlug: parts[0], envSlug: parts[1], agentName: parts[2] };
   }
   else {
-    throw new Error(`Invalid email format. Expected {orgSlug}.{envSlug}.{agentName}@agent.agentview.app. Got: ${address}`);
+    throw new Error(`Invalid email format. Expected {orgSlug}.{envSlug}.{agentName}@${getAgentViewEmailDomain()}. Got: ${address}`);
   }
 
   return parsed;

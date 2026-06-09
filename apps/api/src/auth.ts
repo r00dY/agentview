@@ -170,6 +170,42 @@ The AgentView Team`,
                     headers
                 })
 
+                // Send welcome email
+                const welcomeSubject = `Welcome to AgentView`;
+                const appUrl = getWebAppUrl();
+                const greetingName = ctx.body.name || 'there';
+
+                if (process.env.RESEND_DISABLED === 'true') {
+                    log.info({ email: ctx.body.email, subject: welcomeSubject }, 'resend mock mail');
+                } else {
+                    const { error: welcomeError } = await resend.emails.send({
+                        from: 'AgentView <noreply@agentview.app>',
+                        to: [ctx.body.email],
+                        subject: welcomeSubject,
+                        html: `<p>Hi ${greetingName},</p>
+<p>Welcome to <strong>AgentView</strong>! We're excited to have you on board.</p>
+<p>You can get started by visiting your dashboard:</p>
+<p><a href="${appUrl}">Open AgentView</a></p>
+<p>If you have any questions or feedback, just reply to this email — we'd love to hear from you.</p>
+<p>Best regards,<br/>The AgentView Team</p>`,
+                        text: `Hi ${greetingName},
+
+Welcome to AgentView! We're excited to have you on board.
+
+You can get started by visiting your dashboard:
+${appUrl}
+
+If you have any questions or feedback, just reply to this email — we'd love to hear from you.
+
+Best regards,
+The AgentView Team`,
+                    });
+
+                    if (welcomeError) {
+                        log.error({ err: welcomeError }, 'error sending welcome email');
+                    }
+                }
+
 
                 // await db__dangerous.update(users).set({
                 //     image: image

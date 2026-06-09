@@ -9,6 +9,7 @@ import { buildReplyEmail } from '../buildReplyEmail';
 import { parseAgentViewEmailAddress } from '../defineChannel';
 import type { EmailChannelProvider, EmailMessageData } from '../defineEmailChannel';
 import { formatChannelErrorBody } from '../formatChannelErrorBody';
+import { getAgentViewEmailDomain } from '../getAgentViewEmailDomain';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -20,7 +21,7 @@ function extractEmailAddress(from: string): string {
 
 /**
  * Bootstrap an agentview-email channel on demand from its wildcarded address
- * ({orgSlug}.{envSlug}.{agentName}@agent.agentview.app). Throws if the address
+ * ({orgSlug}.{envSlug}.{agentName}@{AGENTVIEW_EMAIL_DOMAIN}). Throws if the address
  * format is invalid, or the referenced org/environment doesn't exist.
  */
 async function ensureAgentViewEmailChannel(provider: EmailChannelProvider, address: string) {
@@ -103,12 +104,12 @@ export function createResendRoutes(provider: EmailChannelProvider): OpenAPIHono 
 
     // Ingest for each recipient address (each may map to a different channel)
 
-    // We take first address that has 'agent.agentview.app' domain
+    // We take first address that has agentview email domain
     let address: string | undefined = undefined;
 
     for (const toAddress of toAddresses) {
       const emailAddress = extractEmailAddress(toAddress);
-      if (emailAddress.split('@')[1] === 'agent.agentview.app') {
+      if (emailAddress.split('@')[1] === getAgentViewEmailDomain()) {
         address = emailAddress;
         break;
       }

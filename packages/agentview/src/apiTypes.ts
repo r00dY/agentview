@@ -361,7 +361,6 @@ export const SessionsGetQueryParamsSchema = PublicSessionsGetQueryParamsSchema.e
 export type PublicSessionsGetQueryParams = z.infer<typeof PublicSessionsGetQueryParamsSchema>
 export type SessionsGetQueryParams = z.infer<typeof SessionsGetQueryParamsSchema>
 
-
 export const OrganizationBaseSchema = z.object({
   id: z.string(),
   name: z.string(),

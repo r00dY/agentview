@@ -8,6 +8,7 @@ import { requireEnvironment } from "../lib/environment";
 // import { useSessionContext } from "../lib/SessionContext";
 import { PropertyList, PropertyListTextValue, PropertyListItem, PropertyListTitle } from "../components/PropertyList";
 import { agentview } from "../lib/agentview";
+import { getEmailDomain } from "agentview";
 
 async function loader() {
   const environment = await requireEnvironment();
@@ -46,7 +47,7 @@ function Component() {
           <PropertyListItem>
             <PropertyListTitle>E-mail</PropertyListTitle>
             <PropertyListTextValue>
-              {organization.slug}.{environment.handle}.[agent-name]@agent.agentview.app
+              {organization.slug}.{environment.handle}.[agent-name]@${getEmailDomain()}
             </PropertyListTextValue>
           </PropertyListItem>
 

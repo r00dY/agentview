@@ -12,7 +12,7 @@ import { Command } from "commander";
 import { type AgentViewConfig } from "../types";
 import { createStandardClient, StandardAgentViewClient } from "agentview/clientStandard";
 import { updateEnvironment } from "agentview/updateEnvironment";
-import { AgentViewError } from "agentview";
+import { AgentViewError, getEmailDomain } from "agentview";
 import { startProxyServer, HEALTH_PATH, type ProxyServer } from "./proxyServer.js";
 import { startCloudflareTunnel, type CloudflareTunnel } from "./tunnel.js";
 import { toBaseConfig } from '../toBaseConfig.js';
@@ -182,7 +182,7 @@ export async function runCli() {
       printBanner([
         ["Organization", currentOrg!.name],
         ["Environment", currentEnv!],
-        ["E-mail", `${slug}.${environment.handle}.[agent-name]@agent.agentview.app`],
+        ["E-mail", `${slug}.${environment.handle}.[agent-name]@${getEmailDomain()}`],
         ["Tunnel URL", environment.tunnelUrl ?? `${ansi.dim}(not set)${ansi.reset}`],
       ]);
     });
