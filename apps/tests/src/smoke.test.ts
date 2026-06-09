@@ -335,10 +335,25 @@ describe('smoke', () => {
     expect(reply2.body).toContain('Parrot turn 2');
     expect(reply2.body).toContain(marker2);
 
-    // The system should have auto-created a user keyed by the sender email.
+    // Gmail-side: both outgoing replies should land in the same thread as
+    // the user's first message — proves Resend's References chain threaded
+    // properly back to Gmail.
+    expect(reply1.threadId).toBe(sent1.threadId);
+    expect(reply2.threadId).toBe(sent1.threadId);
+
+    // AgentView-side: there should be exactly one session for this user with
+    // 4 alternating messages (2 turns × user+assistant) — proves the channel
+    // thread resolver linked both incoming emails into a single conversation.
     const createdUser = await client.users.getByEmail(gmail.user);
     expect(createdUser).toBeDefined();
     expect(createdUser.email?.toLowerCase()).toBe(gmail.user.toLowerCase());
+
+    const sessionsList = await client.sessions.list({ userId: createdUser.id });
+    expect(sessionsList.sessions.length).toBe(1);
+
+    const session = await client.sessions.get(sessionsList.sessions[0].id);
+    expect(session.messages.length).toBe(4);
+    expect(session.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user', 'assistant']);
   }, EMAIL_TEST_TIMEOUT_MS);
 });
 
