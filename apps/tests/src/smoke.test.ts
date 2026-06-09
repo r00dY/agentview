@@ -25,13 +25,13 @@ const { spawn } = require('child_process');
 const PROXY_TIMEOUT = 15_000;
 const TEST_TIMEOUT = PROXY_TIMEOUT + 30_000;
 
-if (!process.env.AGENTVIEW_EMAIL_DOMAIN) {
-  throw new Error('AGENTVIEW_EMAIL_DOMAIN is not set');
+if (!process.env.AGENTVIEW_EMAIL_ROOT_DOMAIN) {
+  throw new Error('AGENTVIEW_EMAIL_ROOT_DOMAIN is not set');
 }
 
 const SMOKE_AGENT_PORT = 3461;
 const SMOKE_AGENT_URL = `http://localhost:${SMOKE_AGENT_PORT}/agent`;
-const SMOKE_AGENT_EMAIL_DOMAIN = process.env.AGENTVIEW_EMAIL_DOMAIN;
+const SMOKE_AGENT_EMAIL_DOMAIN = "agent." + process.env.AGENTVIEW_EMAIL_ROOT_DOMAIN;
 
 const EMAIL_TURN_TIMEOUT_MS = 60_000;
 const EMAIL_TEST_TIMEOUT_MS = EMAIL_TURN_TIMEOUT_MS * 2 + 30_000;

@@ -9,7 +9,7 @@ import { buildReplyEmail } from '../buildReplyEmail';
 import { parseAgentViewEmailAddress } from '../defineChannel';
 import type { EmailChannelProvider, EmailMessageData } from '../defineEmailChannel';
 import { formatChannelErrorBody } from '../formatChannelErrorBody';
-import { getAgentViewEmailDomain } from '../getAgentViewEmailDomain';
+import { getEmailRootDomain } from '../getEmailRootDomain';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -109,7 +109,7 @@ export function createResendRoutes(provider: EmailChannelProvider): OpenAPIHono 
 
     for (const toAddress of toAddresses) {
       const emailAddress = extractEmailAddress(toAddress);
-      if (emailAddress.split('@')[1] === getAgentViewEmailDomain()) {
+      if (emailAddress.split('@')[1] === "agent." + getEmailRootDomain()) {
         address = emailAddress;
         break;
       }

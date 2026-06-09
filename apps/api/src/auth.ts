@@ -14,6 +14,14 @@ import { log } from "./logger";
 import { requireValidInvitation } from "./invitations";
 import { invitations, members } from "./schemas/auth-schema";
 
+if (!process.env.RESEND_API_KEY) {
+    throw new Error('RESEND_API_KEY is not set');
+}
+
+if (!process.env.AGENTVIEW_EMAIL_ROOT_DOMAIN) {
+    throw new Error('AGENTVIEW_EMAIL_ROOT_DOMAIN is not set');
+}
+
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export const auth = betterAuth({
@@ -62,7 +70,7 @@ export const auth = betterAuth({
                 }
 
                 const { error } = await resend.emails.send({
-                    from: 'AgentView <noreply@agentview.app>',
+                    from: `AgentView <noreply@${process.env.AGENTVIEW_EMAIL_ROOT_DOMAIN}>`,
                     to: [invitation.email],
                     subject,
                     html: `<p>Hello,</p>
@@ -179,7 +187,7 @@ The AgentView Team`,
                     log.info({ email: ctx.body.email, subject: welcomeSubject }, 'resend mock mail');
                 } else {
                     const { error: welcomeError } = await resend.emails.send({
-                        from: 'AgentView <noreply@agentview.app>',
+                        from: `AgentView <noreply@${process.env.AGENTVIEW_EMAIL_ROOT_DOMAIN}>`,
                         to: [ctx.body.email],
                         subject: welcomeSubject,
                         html: `<p>Hi ${greetingName},</p>
