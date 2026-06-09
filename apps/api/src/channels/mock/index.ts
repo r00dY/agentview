@@ -4,8 +4,6 @@ import { createMockRoutes } from './routes';
 import { type MockOutboxEntry } from './mockOutbox';
 
 
-const apiPort = process.env.AGENTVIEW_API_PORT ?? '80';
-
 export const mockChannel = defineChannelApp(
   'mock',
   (provider) => ({
@@ -27,7 +25,11 @@ export const mockChannel = defineChannelApp(
       // 
       // POST to the HTTP server so the outbox is readable via GET /outbox
       // (sendMessage runs in the worker process, separate from the HTTP server)
-      await fetch(`http://localhost:${apiPort}/api/channels/mock/outbox`, {
+      if (!process.env.HTTP_SERVER_URL) {
+        throw new Error('HTTP_SERVER_URL is not set');
+      }
+
+      await fetch(`${process.env.HTTP_SERVER_URL}/api/channels/mock/outbox`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(entry),

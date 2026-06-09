@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---------- Base ----------
-FROM node:20-slim AS base
+FROM node:24-slim AS base
 WORKDIR /app
 
 # Install tini for proper signal handling and pnpm

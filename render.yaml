@@ -1,0 +1,111 @@
+# AgentView — Render deployment
+#
+# Topology:
+#   gateway (public, Go)
+#     ├─→ api      (private, Node)  // all HTTP routes
+#     └─→ streaming (private, Node) // SSE stream bodies, picked up via X-Run-Stream-Id
+#   worker  (background, Node)      // pg-boss + periodic scans, no inbound network
+
+databases:
+  - name: agentview-db
+    plan: pro-4gb
+    databaseName: agentview
+    user: agentview
+    region: virginia
+
+services:
+  # ────────────────────────────────────────────────────────────────────────
+  # Public gateway (Go reverse proxy)
+  # ────────────────────────────────────────────────────────────────────────
+  - type: web
+    name: agentview-gateway
+    runtime: docker
+    dockerfilePath: ./apps/proxy/Dockerfile
+    dockerContext: ./apps/proxy
+    region: virginia
+    plan: starter
+    healthCheckPath: /__gateway/health
+    domains:
+      - api.agentview.app
+    buildFilter:
+      paths:
+        - apps/proxy/**
+        - render.yaml
+    envVars:
+      - key: AGENTVIEW_API_PORT
+        value: "10000"
+
+      - key: HTTP_SERVER_URL
+        value: "http://agentview-api:10000"
+      - key: STREAMING_SERVER_URL
+        value: "http://agentview-streaming:10000"
+
+  # ────────────────────────────────────────────────────────────────────────
+  # HTTP API server (private)
+  # ────────────────────────────────────────────────────────────────────────
+  - type: pserv
+    name: agentview-api
+    runtime: docker
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    dockerCommand: pnpm run http
+    region: virginia
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      - fromGroup: AgentView
+      - key: HTTP_SERVER_PORT
+        value: "10000"
+
+      - key: DATABASE_URL
+        fromDatabase:
+          name: agentview-db
+          property: connectionString
+          
+      - key: STREAMING_SERVER_URL # must know where streaming server lives
+        value: "http://agentview-streaming:10000"
+
+  # ────────────────────────────────────────────────────────────────────────
+  # STREAMING SERVER (private)
+  # ────────────────────────────────────────────────────────────────────────
+  - type: pserv
+    name: agentview-streaming
+    runtime: docker
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    dockerCommand: pnpm run streaming
+    region: virginia
+    plan: standard
+    healthCheckPath: /health
+    buildFilter:
+      paths:
+        - apps/api/src/streaming/** # only changes in this directory trigger a rebuild
+    envVars:
+      - fromGroup: AgentView
+      - key: STREAMING_SERVER_PORT
+        value: "10000"
+
+      - key: HTTP_SERVER_URL # must know where http server lives
+        value: "http://agentview-api:10000"
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Background worker
+  # ────────────────────────────────────────────────────────────────────────
+  - type: worker
+    name: agentview-worker
+    runtime: docker
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    dockerCommand: pnpm run worker
+    region: virginia
+    plan: starter
+    envVars:
+      - fromGroup: AgentView
+      - key: DATABASE_URL
+        fromDatabase:
+          name: agentview-db
+          property: connectionString
+
+      - key: HTTP_SERVER_URL # Ony for the purpose of mock channel!!!
+        value: "http://agentview-api:10000"
+

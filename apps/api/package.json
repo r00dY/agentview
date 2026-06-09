@@ -13,6 +13,7 @@
     "dev": "concurrently \"npm run dev:http\" \"npm run dev:worker\" \"npm run dev:streaming\"",
     "http": "tsx src/index.ts",
     "worker": "tsx src/worker.ts",
+    "streaming": "tsx src/streaming/streaming-server.ts",
     "build": "tsc --noEmit && tsc",
     "db:clear": "tsx scripts/db-clear.ts",
     "db:test": "tsx scripts/db-test.ts",

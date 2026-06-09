@@ -12,6 +12,14 @@ import (
 	"strings"
 )
 
+func requireBackendURL(envKey string) (*url.URL, error) {
+	raw := os.Getenv(envKey)
+	if raw == "" {
+		return nil, fmt.Errorf("%s is not set", envKey)
+	}
+	return url.Parse(raw)
+}
+
 func main() {
 	runtime.GOMAXPROCS(1)
 
@@ -20,20 +28,16 @@ func main() {
 		log.Fatal("AGENTVIEW_API_PORT is not set")
 	}
 
-	targetPort := os.Getenv("HTTP_SERVER_PORT")
-	if targetPort == "" {
-		targetPort = "1995"
-	}
-
-	streamingPort := os.Getenv("STREAMING_SERVER_PORT")
-	if streamingPort == "" {
-		streamingPort = "1999"
-	}
-
-	target, err := url.Parse("http://127.0.0.1:" + targetPort)
+	target, err := requireBackendURL("HTTP_SERVER_URL")
 	if err != nil {
-		log.Fatalf("invalid target URL: %v", err)
+		log.Fatal(err)
 	}
+
+	streamingURL, err := requireBackendURL("STREAMING_SERVER_URL")
+	if err != nil {
+		log.Fatal(err)
+	}
+	streamingBase := strings.TrimRight(streamingURL.String(), "/")
 
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	proxy.FlushInterval = -1 // flush immediately for SSE
@@ -48,8 +52,7 @@ func main() {
 		resp.Body.Close()
 		resp.Header.Del("X-Run-Stream-Id")
 
-		// Connect to streaming server
-		streamURL := fmt.Sprintf("http://127.0.0.1:%s/streams/%s", streamingPort, streamId)
+		streamURL := fmt.Sprintf("%s/streams/%s", streamingBase, streamId)
 		req, err := http.NewRequestWithContext(resp.Request.Context(), "GET", streamURL, nil)
 		if err != nil {
 			resp.StatusCode = 502
@@ -82,8 +85,18 @@ func main() {
 		return nil
 	}
 
-	log.Printf("proxy listening on :%s -> :%s (streaming: :%s)", listenPort, targetPort, streamingPort)
-	if err := http.ListenAndServe(":"+listenPort, proxy); err != nil {
+	mux := http.NewServeMux()
+	// Local health — must not proxy upstream so render's healthcheck stays
+	// independent of the http server (which we don't want to redeploy often).
+	mux.HandleFunc("/__gateway/health", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"ok":true}`))
+	})
+	mux.Handle("/", proxy)
+
+	log.Printf("proxy listening on :%s -> %s (streaming: %s)", listenPort, target, streamingBase)
+	if err := http.ListenAndServe(":"+listenPort, mux); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
 }

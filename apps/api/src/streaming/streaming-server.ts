@@ -13,12 +13,12 @@ import { ChunkParseError, parseUIMessageChunk, type ExtendedUIMessageChunk } fro
 import { UIMessageStreamError, isToolUIPart } from 'ai';
 import { cleanupStreamingUIMessageState } from './processUIMessageStream';
 
-if (!process.env.HTTP_SERVER_PORT) {
-  throw new Error('HTTP_SERVER_PORT is not set');
-}
-
 if (!process.env.STREAMING_SERVER_PORT) {
   throw new Error('STREAMING_SERVER_PORT is not set');
+}
+
+if (!process.env.HTTP_SERVER_URL) {
+  throw new Error('HTTP_SERVER_URL is not set');
 }
 
 const NETWORK_ERROR_CODES = [

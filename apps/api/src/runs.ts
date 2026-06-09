@@ -23,6 +23,10 @@ import { isToolUIPart } from 'ai';
 
 export const DEFAULT_IDLE_TIME = 1000 * 60; // 60 seconds
 
+if (!process.env.STREAMING_SERVER_URL) {
+  throw new Error('STREAMING_SERVER_URL is not set');
+}
+
 /**
  * Run lifecycle event — fired whenever a run reaches a terminal state.
  * Delegates to domain-specific handlers (channels, etc).
@@ -775,7 +779,7 @@ export async function applyRunPatch(
 
 export async function sendRunTerminationSignal(runId: string, reason: RunTerminationReason, options: { graceful: boolean }) {
   try {
-    await fetch(`http://localhost:1999/streams/${runId}`, {
+    await fetch(`${process.env.STREAMING_SERVER_URL}/streams/${runId}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -955,7 +959,7 @@ export async function executeAutoRun(
   log.info({ agentUrl, tunneled: isLocalEnv && !!tunnelUrl }, 'connecting to agent endpoint');
 
   try {
-    const response = await fetch('http://localhost:1999/streams', {
+    const response = await fetch(`${process.env.STREAMING_SERVER_URL}/streams`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
