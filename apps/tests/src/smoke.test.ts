@@ -200,7 +200,7 @@ describe('smoke', () => {
     }
   }, 30_000);
 
-  test.only('two turns via local client + tunnel proxy', async () => {
+  test('two turns via local client + tunnel proxy', async () => {
     const client = org.admin.localClient;
 
     const inputSchema = z.looseObject({ role: z.literal('user'), parts: z.array(z.any()) });
