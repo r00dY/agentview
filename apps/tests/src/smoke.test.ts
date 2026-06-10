@@ -25,13 +25,25 @@ const { spawn } = require('child_process');
 const PROXY_TIMEOUT = 15_000;
 const TEST_TIMEOUT = PROXY_TIMEOUT + 30_000;
 
-if (!process.env.AGENTVIEW_EMAIL_ROOT_DOMAIN) {
-  throw new Error('AGENTVIEW_EMAIL_ROOT_DOMAIN is not set');
+const SMOKE_ENV = process.env.SMOKE_ENV ?? 'dev';
+if (!['dev', 'prod'].includes(SMOKE_ENV)) {
+  throw new Error('SMOKE_ENV must be either dev or prod');
 }
 
 const SMOKE_AGENT_PORT = 3461;
 const SMOKE_AGENT_URL = `http://localhost:${SMOKE_AGENT_PORT}/agent`;
-const SMOKE_AGENT_EMAIL_DOMAIN = "agent." + process.env.AGENTVIEW_EMAIL_ROOT_DOMAIN;
+
+const SMOKE_AGENT_EMAIL_DOMAIN = SMOKE_ENV === 'dev' ? "agent.dev.agentview.app" : "agent.agentview.app";
+
+if (SMOKE_ENV === 'prod') {
+  process.env.AGENTVIEW_API_URL = 'https://api.agentview.app';
+}
+
+console.log("------- smoke test -------")
+console.log("env: ", SMOKE_ENV);
+console.log("agent email domain: ", SMOKE_AGENT_EMAIL_DOMAIN);
+console.log("api url: ", process.env.AGENTVIEW_API_URL);
+console.log("");
 
 const EMAIL_TURN_TIMEOUT_MS = 60_000;
 const EMAIL_TEST_TIMEOUT_MS = EMAIL_TURN_TIMEOUT_MS * 2 + 30_000;
@@ -188,7 +200,7 @@ describe('smoke', () => {
     }
   }, 30_000);
 
-  test('two turns via local client + tunnel proxy', async () => {
+  test.only('two turns via local client + tunnel proxy', async () => {
     const client = org.admin.localClient;
 
     const inputSchema = z.looseObject({ role: z.literal('user'), parts: z.array(z.any()) });
