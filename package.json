@@ -22,16 +22,6 @@
     "sync-openapi": "./scripts/sync-openapi.sh",
     "kill-ports": "./scripts/kill-ports.sh"
   },
-  "pnpm": {
-    "overrides": {
-      "zod": "^4.1.12",
-      "react": "^19.1",
-      "react-dom": "^19.1"
-    },
-    "patchedDependencies": {
-      "ai@6.0.158": "patches/ai@6.0.158.patch"
-    }
-  },
   "devDependencies": {
     "concurrently": "^9.2.1"
   }
