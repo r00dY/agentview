@@ -281,6 +281,13 @@
       "when": 1780407215142,
       "tag": "0039_fast_captain_stacy",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1781079671311,
+      "tag": "0040_regular_shaman",
+      "breakpoints": true
     }
   ]
 }

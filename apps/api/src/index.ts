@@ -71,6 +71,7 @@ import { createComment, deleteComment, requireCommentMessage, requireCommentOwne
 import { requireSession, requireSessionBase } from './sessions';
 
 import { standardToDefaultSession } from './standardToDefaultSession';
+import { HEARTBEAT_STALE_MS } from './workerHeartbeat';
 
 
 await initDb();
@@ -1785,21 +1786,74 @@ app.openapi(environmentPATCHRoute, async (c) => {
 
 /* --------- IS ACTIVE --------- */
 
+const CheckSchema = z.object({
+  ok: z.boolean(),
+  durationMs: z.number(),
+  error: z.string().optional(),
+  details: z.record(z.string(), z.any()).optional(),
+})
+
+const HealthResponseSchema = z.object({
+  status: z.enum(['ok', 'degraded']),
+  checks: z.object({
+    postgres: CheckSchema,
+    streamingServer: CheckSchema,
+    workers: CheckSchema,
+  }),
+})
+
 const healthRoute = createRoute({
   method: 'get',
   path: '/api/health',
   summary: 'Health check',
   tags: ['System'],
   responses: {
-    200: response_data(z.object({
-      status: z.literal("ok"),
-      // is_active: z.boolean(),
-    })),
+    200: response_data(HealthResponseSchema),
+    503: response_data(HealthResponseSchema),
   },
 })
 
+async function timed<T extends Record<string, any>>(fn: () => Promise<T>): Promise<{ ok: boolean; durationMs: number; error?: string; details?: Record<string, any> }> {
+  const start = Date.now();
+  try {
+    const details = await fn();
+    return { ok: true, durationMs: Date.now() - start, details };
+  } catch (err) {
+    return { ok: false, durationMs: Date.now() - start, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 app.openapi(healthRoute, async (c) => {
-  return c.json({ status: "ok" }, 200);
+  const [postgres, streamingServer, workers] = await Promise.all([
+    timed(async () => {
+      await db__dangerous.execute(sql`select 1`);
+      return {};
+    }),
+    timed(async () => {
+      const url = process.env.STREAMING_SERVER_URL;
+      if (!url) throw new Error('STREAMING_SERVER_URL is not set');
+      const res = await fetch(`${url}/health`, { signal: AbortSignal.timeout(2_000) });
+      if (!res.ok) throw new Error(`streaming server returned ${res.status}`);
+      const body = await res.json().catch(() => ({}));
+      return { upstream: body };
+    }),
+    timed(async () => {
+      const rows = await db__dangerous.execute(
+        sql`select count(*)::int as live from worker_heartbeats where last_beat_at > now() - interval '${sql.raw(String(HEARTBEAT_STALE_MS))} milliseconds'`
+      );
+      const live = Number((rows as any).rows?.[0]?.live ?? (rows as any)[0]?.live ?? 0);
+      if (live < 1) throw new Error('no live workers');
+      return { live };
+    }),
+  ]);
+
+  const allOk = postgres.ok && streamingServer.ok && workers.ok;
+  const body = {
+    status: allOk ? 'ok' as const : 'degraded' as const,
+    checks: { postgres, streamingServer, workers },
+  };
+
+  return c.json(body, allOk ? 200 : 503);
 })
 
 

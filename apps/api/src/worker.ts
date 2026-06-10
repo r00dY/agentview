@@ -3,9 +3,11 @@ import { log } from './logger';
 import { getBoss, startBoss, startBossWorkers } from './queues/pgboss';
 import { expiredRunsWorker } from './workers/expiredRuns';
 import { channelApps } from './channels/registry';
+import { startWorkerHeartbeat, stopWorkerHeartbeat } from './workerHeartbeat';
 
 await initDb();
 await startBoss();
+await startWorkerHeartbeat();
 
 /**
  * Periodic scan — not a queue pattern (expiresAt changes on every event).
@@ -39,6 +41,8 @@ async function shutdown(signal: string) {
       worker.stop();
     }
   }
+
+  await stopWorkerHeartbeat();
 
   try {
     // graceful: stop fetching new jobs, let in-flight ones finish, then close pool

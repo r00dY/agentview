@@ -305,6 +305,11 @@ export const webhookJobs = pgTable('webhook_jobs', {
   createTenantPolicy('webhook_jobs'),
 ]);
 
+export const workerHeartbeats = pgTable('worker_heartbeats', {
+  workerId: text('worker_id').primaryKey(),
+  lastBeatAt: timestamp('last_beat_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+});
+
 export const sessionRelations = relations(sessions, ({ many, one }) => ({
   sessionItems: many(sessionItems),
   runs: many(runs),
@@ -662,6 +667,7 @@ export const schema = {
   environments,
   starredSessions,
   webhookJobs,
+  workerHeartbeats,
   channels,
   channelThreads,
   channelMessages,

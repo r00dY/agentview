@@ -9,6 +9,7 @@
 databases:
   - name: agentview-db
     plan: pro-4gb
+    diskSizeGB: 10
     databaseName: agentview
     user: agentview
     region: virginia
