@@ -47,9 +47,15 @@ export async function initDb() {
         await db__dangerous.execute(sql`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${sql.raw(`"${appUserRole}"`)}`);
         await db__dangerous.execute(sql`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${sql.raw(`"${appUserRole}"`)}`);
 
-        // pg-boss schema — app_user needs to enqueue jobs within RLS transactions
+        // pg-boss schema — app_user needs to enqueue jobs within RLS transactions.
+        // pg-boss creates this schema/tables lazily in startBoss(), which runs AFTER
+        // initDb(). On a fresh DB the schema doesn't exist yet, so create it here;
+        // and use ALTER DEFAULT PRIVILEGES so tables created later by pg-boss
+        // automatically grant access to app_user.
+        await db__dangerous.execute(sql`CREATE SCHEMA IF NOT EXISTS pgboss`);
         await db__dangerous.execute(sql.raw(`GRANT USAGE ON SCHEMA pgboss TO "${appUserRole}"`));
         await db__dangerous.execute(sql.raw(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA pgboss TO "${appUserRole}"`));
+        await db__dangerous.execute(sql.raw(`ALTER DEFAULT PRIVILEGES IN SCHEMA pgboss GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO "${appUserRole}"`));
 
         log.info({ appUserRole }, 'created and granted privileges to app user');
       }
