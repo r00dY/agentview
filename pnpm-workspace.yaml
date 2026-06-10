@@ -14,3 +14,7 @@ overrides:
 
 patchedDependencies:
   ai@6.0.158: patches/ai@6.0.158.patch
+
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
