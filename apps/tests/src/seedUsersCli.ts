@@ -2,7 +2,7 @@ import { updateEnv, updateEnvFile } from '@agentview/utils/updateEnv'
 import { seedUsers } from './seedUsers';
 
 async function main() {
-  const { apiKeySecret, apiKeyPublic, admin } = await seedUsers("acme");
+  const { apiKeySecret, apiKeyPublic, admin } = await seedUsers("0");
 
   // console.log('Organization id: ' + organization.id)
 

@@ -8,7 +8,7 @@ describe('Gmail', () => {
   let adminAuthHeaders: Headers
 
   beforeAll(async () => {
-    const orgSlug = 'gmail-test-' + Math.random().toString(36).slice(2)
+    const orgSlug = 'gmail-' + Math.random().toString(36).slice(2)
     const result = await seedUsers(orgSlug)
     organization = result.organization
 

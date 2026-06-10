@@ -1,6 +1,8 @@
 import { createTestAuthClient } from './authClient'
 
-export async function seedUsers(slug: string) {
+export async function seedUsers(slug_: string) {
+  const slug = "test-agentview-" + slug_;
+
   const authClient = createTestAuthClient();
 
   // First sign up - admin user

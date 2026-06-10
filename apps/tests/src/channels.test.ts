@@ -20,7 +20,7 @@ describe('Channels', () => {
   let channel: Channel
   let env: Environment
   let mockServer: MockServer | null = null
-  const orgSlug = 'channels-test-' + Math.random().toString(36).slice(2)
+  const orgSlug = 'channels-' + Math.random().toString(36).slice(2)
   const ADDRESS = `inbox@${orgSlug}.com`
 
   beforeAll(async () => {
