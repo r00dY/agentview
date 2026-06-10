@@ -24,6 +24,11 @@ if (!process.env.AGENTVIEW_EMAIL_ROOT_DOMAIN) {
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+function isTestEmail(email: string): boolean {
+    const domain = email.split('@')[1];
+    return !!domain && domain.startsWith('test-agentview-');
+}
+
 export const auth = betterAuth({
     // trustedOrigins: [getStudioURL()],
     trustedOrigins: async (request) => {
@@ -64,8 +69,9 @@ export const auth = betterAuth({
 
                 const subject = `You're invited to join ${organization.name}`;
 
-                if (process.env.RESEND_DISABLED === 'true') {
-                    log.info({ email: invitation.email, subject }, 'resend mock mail');
+                
+                if (isTestEmail(invitation.email)) {
+                    log.info({ email: invitation.email, subject }, 'email skipped for test email');
                     return;
                 }
 
@@ -183,8 +189,8 @@ The AgentView Team`,
                 const appUrl = getWebAppUrl();
                 const greetingName = ctx.body.name || 'there';
 
-                if (process.env.RESEND_DISABLED === 'true') {
-                    log.info({ email: ctx.body.email, subject: welcomeSubject }, 'resend mock mail');
+                if (isTestEmail(ctx.body.email)) {
+                    log.info({ email: ctx.body.email, subject: welcomeSubject }, 'email skipped for test email');
                 } else {
                     const { error: welcomeError } = await resend.emails.send({
                         from: `AgentView <noreply@${process.env.AGENTVIEW_EMAIL_ROOT_DOMAIN}>`,
