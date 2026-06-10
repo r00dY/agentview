@@ -16,5 +16,13 @@ patchedDependencies:
   ai@6.0.158: patches/ai@6.0.158.patch
 
 onlyBuiltDependencies:
+  - "@tailwindcss/oxide"
   - esbuild
+  - protobufjs
   - sharp
+
+allowBuilds:
+  '@tailwindcss/oxide': true
+  esbuild: true
+  protobufjs: true
+  sharp: true
