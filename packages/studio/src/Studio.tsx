@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { createBrowserRouter, RouterProvider } from "react-router";
+import { getWebAppUrl } from "agentview/urls";
 import type { AgentViewConfig } from "./types";
 
 type Router = ReturnType<typeof createBrowserRouter>;
@@ -11,6 +12,12 @@ export interface StudioProps {
 
 export function Studio({ config, basename }: StudioProps) {
   const [router, setRouter] = useState<Router | null>(null);
+
+  if (window.location.hostname === new URL(getWebAppUrl()).hostname) { // sanity check for local dev
+    throw new Error(
+      `Studio cannot run on the AgentView webapp domain (${window.location.hostname}). Host Studio on your own domain.`,
+    );
+  }
 
   useEffect(() => {
     (window as any).agentview = { config, basename };
