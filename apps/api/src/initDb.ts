@@ -26,6 +26,25 @@ export async function initDb() {
         throw new Error(`Invalid POSTGRES_APP_USER: '${appUserRole}'. Must be a valid PostgreSQL identifier.`);
       }
 
+      // Why this flag exists:
+      //
+      // `withOrg` runs every org-scoped transaction with `SET LOCAL ROLE
+      // "$POSTGRES_APP_USER"` so that RLS policies actually apply — Postgres
+      // superusers (and BYPASSRLS roles) silently skip RLS, which would defeat
+      // the whole tenancy model.
+      //
+      // In local dev we connect to Docker Postgres as a superuser, so we need
+      // a *separate* non-privileged role to switch into. This block bootstraps
+      // that role and gives it the data-plane grants it needs. Set
+      // POSTGRES_SHOULD_CREATE_APP_USER=true and POSTGRES_APP_USER=agentview_app
+      // (or similar) locally.
+      //
+      // On managed Postgres (e.g. Render) we already connect as a non-superuser
+      // that owns the database — that user is itself a valid RLS subject, so
+      // there's no second role to create. Set POSTGRES_APP_USER to the
+      // connection user (e.g. `agentview`) and leave this flag unset/false:
+      // `SET LOCAL ROLE "agentview"` is then a trivial self-switch, and RLS
+      // applies because the connection user is not a superuser.
       if (process.env.POSTGRES_SHOULD_CREATE_APP_USER === 'true') {
         log.info({ appUserRole }, 'creating app user');
 
