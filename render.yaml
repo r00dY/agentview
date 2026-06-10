@@ -51,7 +51,6 @@ services:
     dockerCommand: pnpm run http
     region: virginia
     plan: starter
-    healthCheckPath: /api/health
     envVars:
       - fromGroup: AgentView
       - key: HTTP_SERVER_PORT
@@ -76,7 +75,6 @@ services:
     dockerCommand: pnpm run streaming
     region: virginia
     plan: standard
-    healthCheckPath: /health
     buildFilter:
       paths:
         - apps/api/src/streaming/** # only changes in this directory trigger a rebuild
