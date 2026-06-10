@@ -7,7 +7,7 @@ WORKDIR /app
 # Install tini for proper signal handling and pnpm
 RUN apt-get update && apt-get install -y --no-install-recommends tini \
     && rm -rf /var/lib/apt/lists/* \
-    && npm install -g pnpm
+    && npm install -g pnpm@11.5.2
 
 # ---------- Builder ----------
 FROM base AS build
