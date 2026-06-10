@@ -8,7 +8,7 @@
 
 databases:
   - name: agentview-db
-    plan: pro-4gb
+    plan: basic-1gb
     diskSizeGB: 10
     databaseName: agentview
     user: agentview
