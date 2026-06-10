@@ -58,7 +58,9 @@ import { initDb } from './initDb';
 import { startBoss } from './queues/pgboss';
 import { requireValidInvitation } from './invitations';
 import { requireUUID } from './isUUID';
-import { applyRunPatch, createAutoRun2, createManualRun, DEFAULT_IDLE_TIME, fastApplyRunPatch, getRunInput, getRunInputContent, isRunFinished, requireRunBase, RunTerminationError, sendRunTerminationSignal, terminateRun, updateRun } from './runs';
+import { applyRunPatch, createAutoRun2, createManualRun, DEFAULT_IDLE_TIME, fastApplyRunPatch, getRunInput, getRunInputContent, isRunFinished, requireRunBase, sendRunTerminationSignal, terminateRun, updateRun } from './runs';
+import { RunTerminationError, type RunTerminationReason, terminationReasonText } from './runsTermination';
+
 import { organizations, users } from './schemas/auth-schema';
 import { commentMessages, endUsers, environments, inboxItems, runs, scores, sessions } from './schemas/schema';
 import { activateSession, createSession, getCurrentlyStreamingOrConnectingRun, getSessionListFilter, getSessions, setAgentForSession, updateSession } from './sessions';

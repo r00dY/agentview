@@ -2,7 +2,9 @@ import { db__dangerous } from '../db';
 import { runs } from '../schemas/schema';
 import { inArray, sql } from 'drizzle-orm';
 import { createWorker } from './utils';
-import { sendRunTerminationSignal, terminateRun, type RunTerminationReason } from '../runs';
+import { sendRunTerminationSignal, terminateRun } from '../runs';
+import { type RunTerminationReason } from '../runsTermination';
+
 import { withOrg } from '../withOrg';
 
 type Run = typeof runs.$inferSelect;

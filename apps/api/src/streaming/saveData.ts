@@ -1,4 +1,6 @@
-import { RunTerminationError, type FastPatchOp } from "../runs";
+import { RunTerminationError } from "../runsTermination";
+import type { FastPatchOp } from "../runs";
+
 import { type LiveConnectionStreaming } from "./types";
 import { log } from "../logger";
 

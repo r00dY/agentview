@@ -20,6 +20,7 @@ import { generateTitleQueue } from './queues/generateTitle.queue';
 import { channelOnRunFinishHandler } from './channels/channelSyncOps';
 import { standardToDefaultSession } from './standardToDefaultSession';
 import { isToolUIPart } from 'ai';
+import { RunTerminationError, type RunTerminationReason, terminationReasonText } from './runsTermination';
 
 export const DEFAULT_IDLE_TIME = 1000 * 60; // 60 seconds
 
@@ -353,29 +354,6 @@ async function processInput(agentConfig: BaseAgentConfig, input: any) {
 
   return { runConfig, parsedInput, idleTimeout };
 }
-
-
-
-export type RunTerminationReason = { status: 'cancelled' } | { status: 'failed', reason: any } | { status: 'discarded', reason: any };
-
-export function terminationReasonText(body: RunTerminationReason) {
-  switch (body.status) {
-    case 'cancelled':
-      return 'cancelled';
-    case 'failed':
-      return `failed${body.reason ? ` (${body.reason.message})` : ''}`;
-    case 'discarded':
-      return `discarded${body.reason ? ` (${body.reason.message})` : ''}`;
-  }
-}
-
-export class RunTerminationError extends Error {
-  constructor(public reason: RunTerminationReason) {
-    super(terminationReasonText(reason));
-    this.name = 'RunTerminationError';
-  }
-}
-
 
 
 /**

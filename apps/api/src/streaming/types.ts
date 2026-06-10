@@ -1,5 +1,5 @@
 import type { ClientRequest, IncomingMessage } from "node:http";
-import { RunTerminationError } from "../runs";
+import { RunTerminationError } from "../runsTermination";
 import type { StreamingUIMessageState } from "./processUIMessageStream";
 import type { UIMessage } from "ai";
 

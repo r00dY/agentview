@@ -4,7 +4,7 @@ import { log, runWithContext, setContext } from '../logger';
 import { startMeasuring } from '../performance';
 import { startCpuProfiling, stopCpuProfiling } from './profiler';
 
-import { RunTerminationError, type RunTerminationReason } from '../runs';
+import { RunTerminationError, type RunTerminationReason } from '../runsTermination';
 import { createState, processChunk, StreamUpstreamError } from './processEvent';
 import { GracefulRunTerminationError, type LiveConnection, type LiveConnectionStreaming } from './types';
 import { ping, saveDataAll } from './saveData';
