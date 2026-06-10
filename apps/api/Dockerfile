@@ -14,11 +14,12 @@ FROM base AS build
 
 # Copy workspace config for pnpm
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY patches ./patches
 
 # Copy package.json files for dependency resolution
 COPY apps/api/package.json ./apps/api/
 COPY packages/agentview/package.json ./packages/agentview/
-COPY packages/utils/package.json ./packages/utils/  
+COPY packages/utils/package.json ./packages/utils/
 COPY packages/zod-from-json-schema/package.json ./packages/zod-from-json-schema/
 
 # Install all deps
@@ -41,6 +42,7 @@ WORKDIR /app
 
 # Copy workspace config
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY patches ./patches
 COPY apps/api/package.json ./apps/api/
 COPY packages/agentview/package.json ./packages/agentview/
 COPY packages/utils/package.json ./packages/utils/
