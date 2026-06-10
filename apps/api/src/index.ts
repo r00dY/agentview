@@ -130,6 +130,7 @@ app.use('*', cors({
 /** --------- REQUEST LOGGING --------- */
 
 let reqCounter = 0;
+const MAX_ERROR_BODY_LOG = 2000;
 app.use('*', async (c, next) => {
   const requestId = "r" + (++reqCounter).toString(10);
   const start = Date.now();
@@ -139,7 +140,23 @@ app.use('*', async (c, next) => {
     const duration = Date.now() - start;
     const status = c.res.status;
     const level = status >= 500 ? 'error' : 'info';
-    log[level]({ method: c.req.method, path: c.req.path, status, duration }, 'request completed');
+
+    let errorBody: string | undefined;
+    if (status >= 500) {
+      try {
+        const contentType = c.res.headers.get('content-type') ?? '';
+        if (contentType.includes('json') || contentType.startsWith('text/')) {
+          const text = await c.res.clone().text();
+          errorBody = text.length > MAX_ERROR_BODY_LOG
+            ? `${text.slice(0, MAX_ERROR_BODY_LOG)}…[truncated, ${text.length} bytes total]`
+            : text;
+        }
+      } catch {
+        // ignore body read errors (e.g. streaming responses)
+      }
+    }
+
+    log[level]({ method: c.req.method, path: c.req.path, status, duration, ...(errorBody !== undefined && { errorBody }) }, 'request completed');
   });
 });
 
