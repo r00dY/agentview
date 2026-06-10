@@ -288,6 +288,13 @@
       "when": 1781079671311,
       "tag": "0040_regular_shaman",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1781102988086,
+      "tag": "0041_charming_luke_cage",
+      "breakpoints": true
     }
   ]
 }

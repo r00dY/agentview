@@ -14,7 +14,7 @@ function createTenantPolicy(tableName: string) {
 
 export const endUsers = pgTable("end_users", {
   id: uuid("id").primaryKey().defaultRandom(),
-  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   externalId: varchar("external_id", { length: 255 }),
 
   name: text("name"),
@@ -39,7 +39,7 @@ export const endUsers = pgTable("end_users", {
 
 export const endUserTokens = pgTable("end_user_tokens", {
   id: uuid("id").primaryKey().defaultRandom(),
-  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   userId: uuid("end_user_id").notNull().references(() => endUsers.id, { onDelete: 'cascade' }),
   token: text("token").notNull().unique(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
@@ -52,7 +52,7 @@ export const endUserTokens = pgTable("end_user_tokens", {
 
 export const sessions = pgTable("sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
-  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   metadata: jsonb("metadata"),
@@ -70,7 +70,7 @@ export const sessions = pgTable("sessions", {
 
 export const runs = pgTable("runs", {
   id: uuid("id").primaryKey().defaultRandom(),
-  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   expiresAt: timestamp("expires_at", { withTimezone: true, mode: "string" }),
@@ -96,13 +96,13 @@ export const runs = pgTable("runs", {
 
 export const sessionItems = pgTable("session_items", {
   id: uuid("id").primaryKey().defaultRandom(),
-  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   sortOrder: serial("sort_order").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   content: jsonb("content"),
   sessionId: uuid("session_id").notNull().references(() => sessions.id, { onDelete: 'cascade' }),
-  runId: uuid("run_id").notNull().references(() => runs.id, { onDelete: 'set null' }),
+  runId: uuid("run_id").notNull().references(() => runs.id, { onDelete: 'cascade' }),
   isState: boolean("is_state").notNull().default(false),
   type: varchar("type", { length: 24 }).$type<'input' | 'output' | 'step'>(),
   metadata: jsonb("metadata")
@@ -114,7 +114,7 @@ export const sessionItems = pgTable("session_items", {
 
 export const agentRefs = pgTable("agent_refs", {
   id: uuid("id").primaryKey().defaultRandom(),
-  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   version: varchar("version", { length: 255 }).notNull(),
   agent: varchar("agent", { length: 255 }).notNull(),
   adapter: varchar("adapter", { length: 24 }).notNull().$type<'agentview' | 'ai-sdk'>(),
@@ -127,7 +127,7 @@ export const agentRefs = pgTable("agent_refs", {
 // Comment messages within sessions
 export const commentMessages = pgTable('comment_messages', {
   id: uuid('id').primaryKey().defaultRandom(),
-  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
 
   // target fields
@@ -156,7 +156,7 @@ export const commentMessages = pgTable('comment_messages', {
 // User mentions within comment messages
 export const commentMentions = pgTable('comment_mentions', {
   id: uuid('id').primaryKey().defaultRandom(),
-  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   commentMessageId: uuid('comment_message_id').notNull().references(() => commentMessages.id, { onDelete: 'cascade' }),
   mentionedUserId: text('mentioned_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp('created_at', { withTimezone: true, mode: "string" }).notNull().defaultNow()
@@ -165,7 +165,7 @@ export const commentMentions = pgTable('comment_mentions', {
 // Edit history for comment messages
 export const commentMessageEdits = pgTable('comment_message_edits', {
   id: uuid('id').primaryKey().defaultRandom(),
-  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   commentMessageId: uuid('comment_message_id').notNull().references(() => commentMessages.id, { onDelete: 'cascade' }),
   previousContent: text('previous_content'),
   editedAt: timestamp('edited_at', { withTimezone: true, mode: "string" }).notNull().defaultNow(),
@@ -173,7 +173,7 @@ export const commentMessageEdits = pgTable('comment_message_edits', {
 
 export const scores = pgTable('scores', {
   id: uuid('id').primaryKey().defaultRandom(),
-  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: 'cascade' }),
 
   // target fields
   sessionId: uuid('session_id').notNull().references(() => sessions.id, { onDelete: 'cascade' }),
@@ -211,7 +211,7 @@ export const scores = pgTable('scores', {
 
 export const events = pgTable('events', {
   id: bigserial({ mode: 'number' }).primaryKey(),
-  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   createdAt: timestamp('created_at', { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   authorId: text('author_id').references(() => users.id),
   type: varchar('type', { length: 256 }).notNull(),  // "comment_created", "comment_edited", "comment_deleted", etc...
@@ -224,7 +224,7 @@ export const events = pgTable('events', {
 
 export const inboxItems = pgTable('inbox_items', {
   id: uuid('id').primaryKey().defaultRandom(),
-  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   createdAt: timestamp('created_at', { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 
@@ -258,7 +258,7 @@ export const inboxItems = pgTable('inbox_items', {
 export const environments = pgTable('environments', {
   id: uuid('id').primaryKey().defaultRandom(),
   handle: varchar('handle', { length: 255 }).notNull(),
-  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   userId: text("user_id").references(() => users.id, { onDelete: 'cascade' }), // NULL = production, non-NULL = user's dev environment
   config: jsonb('value'),
   tunnelUrl: text('tunnel_url'),
@@ -272,7 +272,7 @@ export const environments = pgTable('environments', {
 
 export const starredSessions = pgTable('starred_sessions', {
   id: uuid('id').primaryKey().defaultRandom(),
-  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   sessionId: uuid('session_id').notNull().references(() => sessions.id, { onDelete: 'cascade' }),
   createdAt: timestamp('created_at', { withTimezone: true, mode: "string" }).notNull().defaultNow(),
@@ -283,7 +283,7 @@ export const starredSessions = pgTable('starred_sessions', {
 
 export const webhookJobs = pgTable('webhook_jobs', {
   id: uuid('id').primaryKey().defaultRandom(),
-  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   environmentId: uuid('environment_id').notNull().references(() => environments.id, { onDelete: 'cascade' }),
   createdAt: timestamp('created_at', { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: "string" }).notNull().defaultNow(),
@@ -519,7 +519,7 @@ export const starredSessionsRelations = relations(starredSessions, ({ one }) => 
 
 export const channels = pgTable('channels', {
   id: uuid('id').primaryKey().defaultRandom(),
-  organizationId: text('organization_id').notNull().references(() => organizations.id),
+  organizationId: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   type: varchar('type', { length: 64 }).notNull(), // 'gmail', 'mock-email', etc.
   address: varchar('address', { length: 255 }).notNull(),
   config: jsonb('config').notNull(),
@@ -536,7 +536,7 @@ export const channels = pgTable('channels', {
 
 export const channelThreads = pgTable('channel_threads', {
   id: uuid('id').primaryKey().defaultRandom(),
-  organizationId: text('organization_id').notNull().references(() => organizations.id),
+  organizationId: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   channelId: uuid('channel_id').notNull().references(() => channels.id, { onDelete: 'cascade' }),
   sourceThreadId: varchar('source_thread_id', { length: 255 }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
@@ -571,7 +571,7 @@ export const channelThreads = pgTable('channel_threads', {
 
 export const channelMessages = pgTable('channel_messages', {
   id: uuid('id').primaryKey().defaultRandom(),
-  organizationId: text('organization_id').notNull().references(() => organizations.id),
+  organizationId: text('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   channelThreadId: uuid('channel_thread_id').notNull().references(() => channelThreads.id, { onDelete: 'cascade' }),
 
   direction: varchar('direction', { length: 16 }).notNull().$type<'incoming' | 'outgoing'>(), // 'incoming' | 'outgoing'
