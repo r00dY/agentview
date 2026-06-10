@@ -37,25 +37,12 @@ RUN pnpm --filter zod-from-json-schema build
 # ---------- Runtime ----------
 FROM base AS runtime
 ENV NODE_ENV=production
-
 WORKDIR /app
 
-# Copy workspace config
-COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
-COPY patches ./patches
-COPY apps/api/package.json ./apps/api/
-COPY packages/agentview/package.json ./packages/agentview/
-COPY packages/utils/package.json ./packages/utils/
-COPY packages/zod-from-json-schema/package.json ./packages/zod-from-json-schema/
-
-# Install production deps only
-RUN pnpm install --frozen-lockfile --prod
-
-# Copy built artifacts from builder
-COPY --from=build /app/apps/api ./apps/api
-COPY --from=build /app/packages/agentview ./packages/agentview
-COPY --from=build /app/packages/utils ./packages/utils
-COPY --from=build /app/packages/zod-from-json-schema ./packages/zod-from-json-schema
+# Copy the entire built workspace (node_modules + source) from the build stage.
+# Avoids a second `pnpm install` at this layer that would stomp on symlinks
+# and force a third reinstall at container startup.
+COPY --from=build /app /app
 
 # Use non-root user
 RUN useradd -m nodeuser && chown -R nodeuser:nodeuser /app

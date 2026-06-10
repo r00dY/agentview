@@ -108,3 +108,6 @@ services:
       - key: HTTP_SERVER_URL # Ony for the purpose of mock channel!!!
         value: "http://agentview-api:10000"
 
+      - key: STREAMING_SERVER_URL # must know where streaming server lives (creating runs)
+        value: "http://agentview-streaming:10000"
+
