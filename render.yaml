@@ -51,7 +51,7 @@ services:
     dockerContext: .
     dockerCommand: pnpm run http
     region: virginia
-    plan: starter
+    plan: standard
     envVars:
       - fromGroup: AgentView
       - key: HTTP_SERVER_PORT
