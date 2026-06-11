@@ -514,7 +514,7 @@ export type CreateSessionWithoutAgentBody = {
 }
 
 export async function createSession(tx: TenantTransaction, params: CreateSessionWithoutAgentBody) {
-  await tx.acquireLock({ type: "create_resource" });
+  // await tx.acquireLock({ type: "create_resource" });
 
   // find user or create new one if not found
   const user = await (async () => {
@@ -616,7 +616,7 @@ export async function activateSession(tx: OrgTransaction, sessionId: string, aut
     }
   }).returning();
 
-  await updateInboxes(tx, event);
+  // await updateInboxes(tx, event); // TODO: re-enable
 
   log.info({ authorId: authorId ?? null }, 'session activated');
 }

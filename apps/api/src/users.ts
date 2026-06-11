@@ -115,7 +115,7 @@ async function getDefaultSpace(tx: TenantTransaction): Promise<{ space: Space, o
  */
   
 export async function createUser(tx: TenantTransaction, body: UserCreate) {
-  await tx.acquireLock({ type: "create_resource" });
+  // await tx.acquireLock({ type: "create_resource" });
 
   if (body.space && body.space === 'playground' && body.ownerId === null) {
     throw new AgentViewError('Users in playground space must have "ownerId" set.', 400)
@@ -225,32 +225,32 @@ export async function requireTokenOwner(tx: OrgTransaction, tokenId: string) {
 }
 
 
-/**
- * Serialized "ensureUser" for specific email.
- * - if called by 2+ concurrent requests, one will create the user, the other will return the existing user.
- * - it's "check-lock-check" pattern (fast path without lock, slow path with lock)
- * 
- * The space is automatically determined based on the environment.
- */
-export async function ensureUserForEmail(tx: TenantTransaction, email: string) {
-  const user = await findUser(tx, { email }) // check (no lock)
-  if (user) {
-    return user
-  }
+// /**
+//  * Serialized "ensureUser" for specific email.
+//  * - if called by 2+ concurrent requests, one will create the user, the other will return the existing user.
+//  * - it's "check-lock-check" pattern (fast path without lock, slow path with lock)
+//  * 
+//  * The space is automatically determined based on the environment.
+//  */
+// export async function ensureUserForEmail(tx: TenantTransaction, email: string) {
+//   const user = await findUser(tx, { email }) // check (no lock)
+//   if (user) {
+//     return user
+//   }
 
-  await tx.acquireLock({ type: "create_resource" });
-  const user2 = await findUser(tx, { email }) // check
-  if (user2) {
-    return user2
-  }
+//   await tx.acquireLock({ type: "create_resource" });
+//   const user2 = await findUser(tx, { email }) // check
+//   if (user2) {
+//     return user2
+//   }
 
-  const result = await createUser(tx, { email })
-  return result.user;
-}
+//   const result = await createUser(tx, { email })
+//   return result.user;
+// }
 
 
 export async function updateUser(tx: TenantTransaction, id: string, body: UserUpdate) {
-  await tx.acquireLock({ type: "create_resource" }); // this is actually "edit" but we treat 'create_resource' as general fallback lock
+  // await tx.acquireLock({ type: "create_resource" }); // this is actually "edit" but we treat 'create_resource' as general fallback lock
 
   const user = await requireUser(tx, { id })
   await authorize(tx.principal, { action: "end-user:update", user })
