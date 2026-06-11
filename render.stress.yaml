@@ -54,14 +54,7 @@ services:
         - apps/tests/**
         - packages/agentview/**
     envVars:
-      - key: STRESS_ENV
-        value: prod
-      - key: AGENTVIEW_API_URL
-        value: https://api.agentview.app
-      # Public URL of the agent web service — copied from the
-      # RENDER_EXTERNAL_URL env var Render injects into every web service.
-      # No /agent path needed: the agent treats any non-/health path as a
-      # run request.
+      - fromGroup: AgentView
       - key: STRESS2_AGENT_URL
         fromService:
           name: agentview-stress2-agent

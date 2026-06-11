@@ -38,7 +38,7 @@ import { setupTestOrg } from '../utils';
 import { startCpuTracker, formatCpuSummary, summarize } from './cpuTracker';
 
 // ---- Config ----
-const N = Number(process.argv[2]) || 250;
+const N = process.env.STRESS2_N ? Number(process.env.STRESS2_N) : 100;
 const RAMP_UP_S = N / 20 // 50ms per stream creation
 const MEASURE_S = RAMP_UP_S + 15 // measurement time is: last stream start + 15s; (15s under full load)
 
@@ -52,15 +52,6 @@ const STREAM_SPEC = {
   intervalMs: 1000 / TOKENS_PER_SECOND,
   jitterMs: JITTER_MS,
 };
-
-const STRESS_ENV = process.env.STRESS_ENV ?? 'dev';
-if (!['dev', 'prod'].includes(STRESS_ENV)) {
-  throw new Error('STRESS_ENV must be either dev or prod');
-}
-
-if (STRESS_ENV === 'prod') {
-  process.env.AGENTVIEW_API_URL = 'https://api.agentview.app';
-}
 
 if (!process.env.STRESS2_AGENT_URL) {
   throw new Error('STRESS2_AGENT_URL is not set');
@@ -76,7 +67,6 @@ if (!API_BASE) {
 }
 
 console.log('------- stress-2 -------');
-console.log('env:           ', STRESS_ENV);
 console.log('api url:       ', API_BASE);
 console.log('agent url:     ', AGENT_URL);
 console.log('streams:       ', N);
