@@ -17,6 +17,7 @@
     "dev:webapp": "pnpm --filter ./apps/webapp dev",
     "dev:docs": "pnpm --filter ./apps/docs dev --no-open",
     "dev:drizzle-studio": "(cd apps/api && npx drizzle-kit studio)",
+    "prod:drizzle-studio": "(cd apps/api && DATABASE_URL=\"$PRODUCTION_DATABASE_URL?sslmode=require\" npx drizzle-kit studio --port 4984)",
     "dev": "concurrently --colors -n api-http,api-worker,api-streaming,proxy,webapp,drizzle -c blue,green,yellow,gray,magenta,cyan \"pnpm run dev:api:http\" \"pnpm run dev:api:worker\" \"pnpm run dev:api:streaming\" \"pnpm run dev:proxy\" \"pnpm run dev:webapp\" \"pnpm run dev:drizzle-studio\"",
     "seed-users": "pnpm --filter ./apps/tests seed-users",
     "sync-openapi": "./scripts/sync-openapi.sh",
