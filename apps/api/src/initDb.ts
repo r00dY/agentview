@@ -53,6 +53,20 @@ export async function initDb() {
           $$
         `));
 
+      // Grant the connection role membership in app_user so withOrg's
+      // `SET LOCAL ROLE "${appUserRole}"` is allowed. Without this, on managed
+      // Postgres (Render) the connection role is the table owner but NOT a
+      // member of the role it just created — Postgres rejects SET ROLE with
+      // "permission denied to set role". Locally we connect as superuser, so
+      // this is a no-op there.
+      await db__dangerous.execute(sql.raw(`
+          DO $$
+          BEGIN
+            EXECUTE 'GRANT "${appUserRole}" TO ' || quote_ident(current_user);
+          END
+          $$
+        `));
+
       // Re-grant on every boot so new migrations are covered without manual ops.
       await db__dangerous.execute(sql`GRANT USAGE ON SCHEMA public TO ${sql.raw(`"${appUserRole}"`)}`);
       await db__dangerous.execute(sql`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${sql.raw(`"${appUserRole}"`)}`);
