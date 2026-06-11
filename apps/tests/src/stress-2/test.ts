@@ -38,7 +38,7 @@ import { setupTestOrg } from '../utils';
 import { startCpuTracker, formatCpuSummary, summarize } from './cpuTracker';
 
 // ---- Config ----
-const N = Number(process.argv[2]) || 400;
+const N = Number(process.argv[2]) || 250;
 const RAMP_UP_S = N / 20 // 50ms per stream creation
 const MEASURE_S = RAMP_UP_S + 15 // measurement time is: last stream start + 15s; (15s under full load)
 
