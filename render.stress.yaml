@@ -28,7 +28,7 @@ services:
     region: virginia
     plan: standard
     healthCheckPath: /health
-    autoDeploy: false
+    autoDeployTrigger: "off"
     buildFilter:
       paths:
         - apps/tests/**
@@ -48,7 +48,7 @@ services:
     dockerCommand: sleep infinity
     region: virginia
     plan: standard
-    autoDeploy: false
+    autoDeployTrigger: "off"
     buildFilter:
       paths:
         - apps/tests/**
@@ -58,8 +58,12 @@ services:
         value: prod
       - key: AGENTVIEW_API_URL
         value: https://api.agentview.app
-      # Public URL of the agent service above. Render derives it from the
-      # service name — verify in the dashboard after the first deploy (Render
-      # appends a random suffix if the name is taken).
+      # Public URL of the agent web service — copied from the
+      # RENDER_EXTERNAL_URL env var Render injects into every web service.
+      # No /agent path needed: the agent treats any non-/health path as a
+      # run request.
       - key: STRESS2_AGENT_URL
-        value: https://agentview-stress2-agent.onrender.com/agent
+        fromService:
+          name: agentview-stress2-agent
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
