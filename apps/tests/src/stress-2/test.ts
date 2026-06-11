@@ -38,12 +38,13 @@ import { setupTestOrg } from '../utils';
 import { startCpuTracker, formatCpuSummary, summarize } from './cpuTracker';
 
 // ---- Config ----
-const N = Number(process.argv[2]) || 50;
-const RAMP_UP_S = Number(process.env.STRESS2_RAMP_UP_S) || 10;
-const MEASURE_S = Number(process.env.STRESS2_MEASURE_S) || 25; // only collect samples for this long after first stream starts
-const TOKENS_PER_SECOND = Number(process.env.STRESS2_TOKENS_PER_SECOND) || 100;
-const STREAM_DURATION_S = Number(process.env.STRESS2_STREAM_DURATION_S) || 30;
-const JITTER_MS = Number(process.env.STRESS2_JITTER_MS ?? 3);
+const N = Number(process.argv[2]) || 400;
+const RAMP_UP_S = N / 20 // 50ms per stream creation
+const MEASURE_S = RAMP_UP_S + 15 // measurement time is: last stream start + 15s; (15s under full load)
+
+const STREAM_DURATION_S = MEASURE_S + 5 // stream duration: 5s longer than full measurement time. It makes sure first stream keeps going until measurement is finished.
+const TOKENS_PER_SECOND = 100;
+const JITTER_MS = 3;
 
 // The spec each run carries in its input — the agent endpoint streams exactly this.
 const STREAM_SPEC = {
