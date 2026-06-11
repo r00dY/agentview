@@ -5,6 +5,7 @@ import { startMeasuring } from '../performance';
 import { startCpuProfiling, stopCpuProfiling } from './profiler';
 
 import { RunTerminationError, type RunTerminationReason } from '../runsTermination';
+import { startUtilizationSampler } from './utilizationSampler';
 import { createState, processChunk, StreamUpstreamError } from './processEvent';
 import { GracefulRunTerminationError, type LiveConnection, type LiveConnectionStreaming } from './types';
 import { ping, saveDataAll } from './saveData';
@@ -51,6 +52,10 @@ function markStreamDone(conn: LiveConnectionStreaming) {
 
 const liveConnections = new Map<string, LiveConnection>();
 
+const utilizationSampler = startUtilizationSampler({
+  getConnections: () => liveConnections.size,
+});
+
 // --- HTTP helpers ---
 
 function readJsonBody(req: http.IncomingMessage): Promise<any> {
@@ -91,6 +96,24 @@ function handleHealth(res: http.ServerResponse) {
       rss: snap.memory.rss,
       heapUsed: snap.memory.heapUsed,
     },
+  });
+}
+
+/**
+ * Returns per-second utilization samples (ELU, CPU, connections, memory)
+ * collected continuously into a ring buffer. `?since=<ms-epoch>` returns only
+ * samples newer than the given timestamp, so a poller never sees duplicates.
+ */
+function handleUtilization(res: http.ServerResponse, searchParams: URLSearchParams) {
+  const sinceRaw = searchParams.get('since');
+  const since = sinceRaw ? Number(sinceRaw) : undefined;
+  if (sinceRaw && !Number.isFinite(since)) {
+    sendJson(res, 400, { message: '`since` must be a ms-epoch number' });
+    return;
+  }
+  sendJson(res, 200, {
+    now: Date.now(),
+    samples: utilizationSampler.getSamples(since),
   });
 }
 
@@ -599,6 +622,11 @@ const requestHandler: http.RequestListener = async (req, res) => {
     try {
       if (method === 'GET' && path === '/health') {
         handleHealth(res);
+        return;
+      }
+      if (method === 'GET' && path === '/utilization') {
+        const searchParams = new URLSearchParams(qIdx === -1 ? '' : rawUrl.slice(qIdx + 1));
+        handleUtilization(res, searchParams);
         return;
       }
       if (method === 'POST' && path === '/profile/start') {

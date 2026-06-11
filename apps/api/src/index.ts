@@ -1871,6 +1871,24 @@ app.openapi(healthRoute, async (c) => {
   return c.json(body, allOk ? 200 : 503);
 })
 
+// Proxy to the streaming server's utilization sampler. The streaming server
+// is private in production (only reachable from inside the deployment), so
+// external observers (e.g. stress tests) sample it through this route.
+app.get('/api/streaming/utilization', async (c) => {
+  const url = process.env.STREAMING_SERVER_URL;
+  if (!url) {
+    return c.json({ source: 'agentview', message: 'STREAMING_SERVER_URL is not set' }, 500);
+  }
+  const since = c.req.query('since');
+  const qs = since ? `?since=${encodeURIComponent(since)}` : '';
+  try {
+    const res = await fetch(`${url}/utilization${qs}`, { signal: AbortSignal.timeout(5_000) });
+    return c.json(await res.json(), res.status as any);
+  } catch (err) {
+    return c.json({ source: 'agentview', message: `streaming server unreachable: ${err instanceof Error ? err.message : String(err)}` }, 502);
+  }
+})
+
 
 /* --------- CHANNELS --------- */
 

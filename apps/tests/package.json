@@ -3,6 +3,7 @@
     "type": "module",
     "scripts": {
         "test": "vitest",
+        "stress2": "tsx src/stress-2/test.ts",
         "seed-users": "tsx src/seedUsersCli.ts",
         "mint-gmail-token": "tsx scripts/mint-gmail-token.ts"
     },
