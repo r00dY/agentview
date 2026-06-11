@@ -4,6 +4,7 @@
     "scripts": {
         "test": "vitest",
         "stress2": "tsx src/stress-2/test.ts",
+        "stress2:agent": "tsx src/stress-2/agentServer.ts",
         "seed-users": "tsx src/seedUsersCli.ts",
         "mint-gmail-token": "tsx scripts/mint-gmail-token.ts"
     },
