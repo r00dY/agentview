@@ -1,12 +1,11 @@
 import { initDb } from './initDb';
 import { log } from './logger';
-import { getBoss, startBoss, startBossWorkers } from './queues/pgboss';
+import { getBoss, startBossWorkers } from './queues/pgboss';
 import { expiredRunsWorker } from './workers/expiredRuns';
 import { channelApps } from './channels/registry';
 import { startWorkerHeartbeat, stopWorkerHeartbeat } from './workerHeartbeat';
 
 await initDb();
-await startBoss();
 await startWorkerHeartbeat();
 
 /**

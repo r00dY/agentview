@@ -264,6 +264,49 @@ describe('smoke', () => {
     expect(finalSession.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user', 'assistant']);
   }, TEST_TIMEOUT);
 
+  test('cross-org isolation', async () => {
+    // Smoke-level RLS check: a fresh org must not see anything from `org`.
+    // This is the canary for the table-owner-bypasses-RLS class of bugs —
+    // on managed Postgres the connection role owns the tables and would
+    // skip RLS unless we switch into a separate, non-owning role.
+    const other = await setupTestOrg();
+
+    const minimalConfig = {
+      agents: [{
+        name: 'smoke-agent',
+        version: '1.0.0',
+        url: SMOKE_AGENT_URL,
+        adapter: 'ai-sdk' as const,
+        runs: [{
+          input: { schema: z.looseObject({ role: z.literal('user'), parts: z.array(z.any()) }) },
+          output: [],
+          validateOutput: false,
+        }],
+      }],
+      channels: [{ type: 'api' as const, name: 'smoke-channel', agent: 'smoke-agent' }],
+    };
+    await updateEnvironment(org.admin.localClient, { config: minimalConfig });
+    await updateEnvironment(other.admin.localClient, { config: minimalConfig });
+
+    const { user: userA } = await org.admin.localClient.users.create();
+    const sessionA = await org.admin.localClient.sessions.create({
+      agent: 'smoke-agent',
+      userId: userA.id,
+    });
+
+    // Direct gets across orgs must 404, not leak.
+    await expect(other.admin.localClient.users.get(userA.id)).rejects.toThrow();
+    await expect(other.admin.localClient.sessions.get(sessionA.id)).rejects.toThrow();
+
+    // Listing in the other org must not surface org A's data.
+    const { user: userB } = await other.admin.localClient.users.create();
+    const sessionsForUserA_fromOrgB = await other.admin.localClient.sessions.list({ userId: userA.id });
+    expect(sessionsForUserA_fromOrgB.sessions.some((s) => s.id === sessionA.id)).toBe(false);
+
+    const sessionsForUserB = await other.admin.localClient.sessions.list({ userId: userB.id });
+    expect(sessionsForUserB.sessions.some((s) => s.id === sessionA.id)).toBe(false);
+  }, 60_000);
+
   test('two turns via email channel', async () => {
     const client = org.admin.localClient;
     const gmail: GmailClient = createGmailClient();
