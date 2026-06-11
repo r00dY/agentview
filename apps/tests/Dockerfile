@@ -25,6 +25,15 @@ FROM base AS build
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY patches ./patches
 
+# Disable pnpm's verify-deps-before-run check (default "install" since pnpm 11).
+# On cached rebuilds the COPY'd source layers have fresher mtimes than the
+# cached `pnpm install` layer, so any `pnpm <script>` triggers an implicit
+# NON-frozen install. That install fails with ERR_PNPM_UNUSED_PATCH: the
+# ai@6.0.158 patch only applies via apps/api, which is excluded from this
+# image. Deps are baked at build time, so the check is useless here anyway.
+# (Must be .npmrc — the npm_config_* env var is ignored for this setting.)
+RUN echo "verify-deps-before-run=false" >> .npmrc
+
 # Copy package.json files for dependency resolution (apps/tests + its
 # workspace dependency closure)
 COPY apps/tests/package.json ./apps/tests/
