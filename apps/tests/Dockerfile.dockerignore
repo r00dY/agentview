@@ -1,0 +1,44 @@
+# Ignore file for apps/tests/Dockerfile (BuildKit uses <Dockerfile>.dockerignore
+# instead of the root .dockerignore when present).
+#
+# Unlike the root .dockerignore, this must NOT exclude apps/tests or
+# packages/studio — the stress-2 image needs them.
+
+# Node
+**/node_modules
+npm-debug.log
+pnpm-debug.log
+
+# Git
+.git
+.gitignore
+
+# Docker
+**/Dockerfile
+**/.dockerignore
+
+# IDE
+**/.vscode
+**/.idea
+
+# OS
+**/.DS_Store
+**/*.swp
+
+# Cache
+**/.tmp
+**/.cache
+
+# Env files
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Not needed by the stress-2 image
+apps/api
+apps/docs
+apps/proxy
+apps/webapp
+apps/examples
+packages/create-agentview

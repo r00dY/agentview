@@ -1,0 +1,65 @@
+# Stress-2 — Render deployment
+#
+# SEPARATE blueprint from the root render.yaml — this one is only for stress
+# testing. Deploy it as its own Blueprint instance and SUSPEND both services
+# when not testing (they have no scale-to-zero).
+#
+# Topology:
+#   agent  (web, public)  — the token-emitting agent endpoint. Must be public
+#                           so the production AgentView API can reach it.
+#   runner (worker)       — an idle box to SSH into and run the test:
+#                             render ssh agentview-stress2-runner
+#                             pnpm stress2 [N]
+#
+# Note: this file is intentionally NOT named render.yaml — when creating the
+# Blueprint instance, point it at `render.stress.yaml` explicitly so it never
+# gets picked up as the default blueprint.
+
+services:
+  # ────────────────────────────────────────────────────────────────────────
+  # Agent endpoint (public web service)
+  # ────────────────────────────────────────────────────────────────────────
+  - type: web
+    name: agentview-stress2-agent
+    runtime: docker
+    dockerfilePath: ./apps/tests/Dockerfile
+    dockerContext: .
+    dockerCommand: pnpm stress2:agent
+    region: virginia
+    plan: standard
+    healthCheckPath: /health
+    autoDeploy: false
+    buildFilter:
+      paths:
+        - apps/tests/**
+        - packages/agentview/**
+    envVars:
+      - key: STRESS2_AGENT_PORT
+        value: "10000"
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Test runner (idle worker — SSH in and run `pnpm stress2 [N]`)
+  # ────────────────────────────────────────────────────────────────────────
+  - type: worker
+    name: agentview-stress2-runner
+    runtime: docker
+    dockerfilePath: ./apps/tests/Dockerfile
+    dockerContext: .
+    dockerCommand: sleep infinity
+    region: virginia
+    plan: standard
+    autoDeploy: false
+    buildFilter:
+      paths:
+        - apps/tests/**
+        - packages/agentview/**
+    envVars:
+      - key: STRESS_ENV
+        value: prod
+      - key: AGENTVIEW_API_URL
+        value: https://api.agentview.app
+      # Public URL of the agent service above. Render derives it from the
+      # service name — verify in the dashboard after the first deploy (Render
+      # appends a random suffix if the name is taken).
+      - key: STRESS2_AGENT_URL
+        value: https://agentview-stress2-agent.onrender.com/agent

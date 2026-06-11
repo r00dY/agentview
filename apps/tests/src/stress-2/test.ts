@@ -48,7 +48,7 @@ const JITTER_MS = 3;
 
 // The spec each run carries in its input — the agent endpoint streams exactly this.
 const STREAM_SPEC = {
-  tokens: TOKENS_PER_SECOND * STREAM_DURATION_S,
+  tokens: Math.round(TOKENS_PER_SECOND * STREAM_DURATION_S),
   intervalMs: 1000 / TOKENS_PER_SECOND,
   jitterMs: JITTER_MS,
 };
