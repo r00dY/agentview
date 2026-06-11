@@ -49,6 +49,15 @@ const EMAIL_TURN_TIMEOUT_MS = 120_000;
 const EMAIL_TEST_TIMEOUT_MS = EMAIL_TURN_TIMEOUT_MS * 2 + 30_000;
 
 /**
+ * Strip leading YAML frontmatter (`---\n...\n---\n`) that the email channel
+ * prepends to incoming user messages. The parrot echoes its input back into
+ * the reply, and `---` lines render as Setext h2 headings in Gmail.
+ */
+function stripFrontmatter(text: string): string {
+  return text.replace(/^---\n[\s\S]*?\n---\n+/, '');
+}
+
+/**
  * Mock parrot handler: streams reasoning + token-by-token text echoing the
  * last user message. Shared by both the transport and email tests.
  */
@@ -57,10 +66,10 @@ function setParrotHandler(mockServer: MockServer) {
     const messages: any[] = body?.messages ?? [];
     const userTurn = messages.filter((m) => m.role === 'user').length;
     const lastUser = [...messages].reverse().find((m) => m.role === 'user');
-    const lastUserText = lastUser?.parts?.find((p: any) => p.type === 'text')?.text ?? '';
+    const lastUserText = stripFrontmatter(lastUser?.parts?.find((p: any) => p.type === 'text')?.text ?? '');
 
     const historySummary = messages
-      .map((m) => `${m.role}:${m.parts?.find((p: any) => p.type === 'text')?.text ?? ''}`)
+      .map((m) => `${m.role}:${stripFrontmatter(m.parts?.find((p: any) => p.type === 'text')?.text ?? '')}`)
       .join('|');
 
     const reply = `Parrot turn ${userTurn}: ${lastUserText}`;
