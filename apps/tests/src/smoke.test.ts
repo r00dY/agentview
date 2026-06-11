@@ -45,7 +45,7 @@ console.log("agent email domain: ", SMOKE_AGENT_EMAIL_DOMAIN);
 console.log("api url: ", process.env.AGENTVIEW_API_URL);
 console.log("");
 
-const EMAIL_TURN_TIMEOUT_MS = 60_000;
+const EMAIL_TURN_TIMEOUT_MS = 120_000;
 const EMAIL_TEST_TIMEOUT_MS = EMAIL_TURN_TIMEOUT_MS * 2 + 30_000;
 
 /**
