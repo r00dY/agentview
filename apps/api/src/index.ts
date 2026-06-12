@@ -1404,7 +1404,7 @@ function getMemberIdBasedOnPrincipal(principal: Principal) { // we use it only f
     return principal.session.user.id;
   }
   else if (principal.type === 'apiKey') {
-    return principal.apiKey.userId;
+    return principal.apiKey.referenceId;
   }
   else {
     throw new AgentViewError("Unauthorized", 401);

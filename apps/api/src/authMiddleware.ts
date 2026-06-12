@@ -283,7 +283,7 @@ async function resolveBearerPrincipal(headers: Headers, bearer: string, env: str
     })
 
     if (error || !valid || !key) {
-      throw new AgentViewError(error?.message ?? "Invalid API Key", 401);
+      throw new AgentViewError(error ? String(error.message) : "Unknown error verifying API Key", 401);
     }
 
     // Let's extract and verify organization
@@ -292,7 +292,7 @@ async function resolveBearerPrincipal(headers: Headers, bearer: string, env: str
       throw new AgentViewError("The API Key is not associated with any organization.", 400);
     }
 
-    await verifyOrgAccess(organizationId, key.userId);
+    await verifyOrgAccess(organizationId, key.referenceId);
 
     if (key.prefix === 'pk_') {
       bearerPrincipal = { type: 'apiKeyPublic', apiKey: key, organizationId: organizationId, env }
