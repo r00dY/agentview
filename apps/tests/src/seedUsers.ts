@@ -59,6 +59,7 @@ export async function seedUsers(slug_: string) {
     email: `bob@${slug}.com`,
     password: "blablabla",
     name: "Bob",
+    // @ts-ignore
     invitationId: bobInvitation.id
   });
 
@@ -73,6 +74,7 @@ export async function seedUsers(slug_: string) {
     email: `alice@${slug}.com`,
     password: "blablabla",
     name: "Alice",
+    // @ts-ignore
     invitationId: aliceInvitation.id
   });
 
