@@ -74,24 +74,9 @@ export async function clientAction({ request }: Route.ActionArgs): Promise<Actio
     return redirect('/accept-invitation?invitationId=' + encodeURIComponent(invitationId));
   }
 
-  // For open signup, create a private organization for the user
-  const orgName = `${name.trim()}'s Organization`;
-  const orgSlug = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '-') + '-' + Date.now();
-
-  const orgResponse = await authClient.organization.create({
-    name: orgName,
-    slug: orgSlug
-  });
-
-  if (orgResponse.error) {
-    // User is created but org creation failed - still redirect to home
-    // They can create an org later or be invited to one
-    console.error('Failed to create organization:', orgResponse.error);
-    return redirect('/');
-  }
-
-  // Redirect to the new organization
-  return redirect(`/orgs/${orgResponse.data.id}`);
+  // For open signup, the personal organization is created automatically by the backend.
+  // The dashboard route redirects to the user's organization.
+  return redirect('/');
 }
 
 export default function Signup() {

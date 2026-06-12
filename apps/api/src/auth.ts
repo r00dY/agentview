@@ -11,7 +11,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { Resend } from 'resend';
 import { db__dangerous } from "./db";
 import { createEnvironment } from "./environments";
-import { emailToEnvSlug } from "agentview/slugs";
+import { emailToEnvSlug, toSlug } from "agentview/slugs";
 import { getAllowedOrigin } from "./getAllowedOrigin";
 import { getWebAppUrl } from "./getWebAppUrl";
 import { log } from "./logger";
@@ -28,9 +28,11 @@ if (!process.env.AGENTVIEW_EMAIL_ROOT_DOMAIN) {
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+const TEST_PREFIX = 'test-agentview-';
+
 function isTestEmail(email: string): boolean {
     const domain = email.split('@')[1];
-    return !!domain && domain.startsWith('test-agentview-');
+    return !!domain && domain.startsWith(TEST_PREFIX);
 }
 
 export const auth = betterAuth({
@@ -191,6 +193,28 @@ The AgentView Team`,
                     },
                     headers
                 })
+
+                // For open signups (no invitation), automatically create the user's personal organization.
+                if (!ctx.body.invitationId) {
+                    const userName = (ctx.body.name || '').trim();
+                    const baseSlug = toSlug(ctx.body.email.split('@')[0]) || 'user';
+                    // Test users (test email domain) must get a test org slug so it can be recognized as a test org.
+                    const prefix = isTestEmail(ctx.body.email) ? TEST_PREFIX : '';
+                    const orgSlug = `${prefix}${baseSlug}-${Date.now()}`;
+
+                    try {
+                        await auth.api.createOrganization({
+                            body: {
+                                name: userName ? `${userName}'s Organization` : 'Personal Organization',
+                                slug: orgSlug
+                            },
+                            headers
+                        });
+                    } catch (err) {
+                        // Don't fail the signup — the user can create or join an organization later.
+                        log.error({ err, email: ctx.body.email }, 'error creating personal organization on signup');
+                    }
+                }
 
                 // Send welcome email
                 const welcomeSubject = `Welcome to AgentView`;

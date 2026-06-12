@@ -12,11 +12,13 @@ export async function seedUsers(slug_: string) {
     name: "Admin"
   });
 
-  // Create organization (for now this way)
-  const organization = await authClient.organization.create({
-    name: slug,
-    slug
-  })
+  // Admin's personal organization is created automatically on signup, reuse it.
+  const organizations = await authClient.organization.list();
+  const organization = organizations[0];
+
+  if (!organization) {
+    throw new Error("Expected admin's personal organization to be auto-created on signup");
+  }
   
   // Create API keys for admin user
   const apiKeySecret = await authClient.apiKey.create({
@@ -56,7 +58,8 @@ export async function seedUsers(slug_: string) {
   await authClient.signUp.email({
     email: `bob@${slug}.com`,
     password: "blablabla",
-    name: "Bob"
+    name: "Bob",
+    invitationId: bobInvitation.id
   });
 
   await authClient.organization.acceptInvitation({
@@ -69,7 +72,8 @@ export async function seedUsers(slug_: string) {
   await authClient.signUp.email({
     email: `alice@${slug}.com`,
     password: "blablabla",
-    name: "Alice"
+    name: "Alice",
+    invitationId: aliceInvitation.id
   });
 
   await authClient.organization.acceptInvitation({
