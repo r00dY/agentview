@@ -185,6 +185,47 @@ async function verifyOrgAccess(organizationId: string, userId: string) {
   }
 }
 
+/** --------- BEARER PRINCIPAL CACHE --------- */
+
+// better-auth's verifyApiKey UPDATEs the apikey row on every call, so all requests
+// sharing one key serialize on a single row lock (and each waiter holds a pool
+// connection). Caching the resolved bearer principal keeps verification down to
+// one DB round trip per key per TTL. Tradeoff: key/session revocation and org
+// membership changes take up to TTL to propagate.
+const BEARER_CACHE_TTL_MS = 60_000;
+const BEARER_CACHE_MAX_ENTRIES = 10_000;
+
+type BearerPrincipal = MemberPrincipal | ApiKeyPrincipal | ApiKeyPublicPrincipal;
+
+const bearerPrincipalCache = new Map<string, { principal: Promise<BearerPrincipal>, expiresAt: number }>();
+
+function getCachedBearerPrincipal(cacheKey: string, resolve: () => Promise<BearerPrincipal>): Promise<BearerPrincipal> {
+  const now = Date.now();
+
+  const cached = bearerPrincipalCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    return cached.principal;
+  }
+
+  if (bearerPrincipalCache.size >= BEARER_CACHE_MAX_ENTRIES) {
+    bearerPrincipalCache.clear();
+  }
+
+  // Cache the promise (not the result) so concurrent requests with the same
+  // bearer trigger a single verification instead of a thundering herd.
+  const principal = resolve();
+  bearerPrincipalCache.set(cacheKey, { principal, expiresAt: now + BEARER_CACHE_TTL_MS });
+
+  // Never cache failures (invalid key, transient DB error) — next request retries.
+  principal.catch(() => {
+    if (bearerPrincipalCache.get(cacheKey)?.principal === principal) {
+      bearerPrincipalCache.delete(cacheKey);
+    }
+  });
+
+  return principal;
+}
+
 export async function authnAllowAnon(headers: Headers): Promise<Principal> {
   const env = headers.get('x-env') ?? undefined;
 
@@ -195,7 +236,22 @@ export async function authnAllowAnon(headers: Headers): Promise<Principal> {
     throw new AgentViewError("Missing API Key", 401);
   }
 
-  let bearerPrincipal: MemberPrincipal | ApiKeyPrincipal | ApiKeyPublicPrincipal
+  // x-organization-id and cookies participate in member-session resolution, so they're part of the key
+  const cacheKey = `${bearer}|${headers.get('x-organization-id') ?? ''}|${env ?? ''}|${headers.get('cookie') ?? ''}`;
+  const bearerPrincipal = await getCachedBearerPrincipal(cacheKey, () => resolveBearerPrincipal(headers, bearer, env));
+
+  // Potential user principal
+  const allowOnlyForUserToken = bearerPrincipal.type === 'apiKeyPublic';
+  const userPrincipal = await getUserPrincipal(headers, bearerPrincipal.organizationId, allowOnlyForUserToken, env)
+  if (userPrincipal) {
+    return userPrincipal;
+  }
+
+  return bearerPrincipal;
+}
+
+async function resolveBearerPrincipal(headers: Headers, bearer: string, env: string | undefined): Promise<BearerPrincipal> {
+  let bearerPrincipal: BearerPrincipal
 
   // Check for member session
   const memberSession = await auth.api.getSession({ headers })
@@ -247,13 +303,6 @@ export async function authnAllowAnon(headers: Headers): Promise<Principal> {
     else {
       throw new AgentViewError("Invalid API Key. The API Key must have pk_ or sk_ prefix.", 401);
     }
-  }
-
-  // Potential user principal
-  const allowOnlyForUserToken = bearerPrincipal.type === 'apiKeyPublic';
-  const userPrincipal = await getUserPrincipal(headers, bearerPrincipal.organizationId, allowOnlyForUserToken, env)
-  if (userPrincipal) {
-    return userPrincipal;
   }
 
   return bearerPrincipal;
