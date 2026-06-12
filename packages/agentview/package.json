@@ -37,7 +37,7 @@
     "ai": "^6.0.0"
   },
   "devDependencies": {
-    "zod": "^4.1.11",
+    "zod": "^4.4.3",
     "@agentview/zod-from-json-schema": "workspace:*",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3",

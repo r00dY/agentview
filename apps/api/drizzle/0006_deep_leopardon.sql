@@ -1,1 +1,0 @@
-ALTER TABLE "session_items" ADD COLUMN "type" varchar(24);

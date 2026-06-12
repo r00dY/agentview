@@ -1,1 +1,0 @@
-ALTER TABLE "agent_refs" RENAME COLUMN "format" TO "adapter";

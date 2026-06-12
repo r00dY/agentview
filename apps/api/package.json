@@ -22,6 +22,8 @@
   "dependencies": {
     "@agentview/utils": "workspace:*",
     "@ai-sdk/openai": "^3.0.26",
+    "@better-auth/api-key": "^1.6.16",
+    "@better-auth/drizzle-adapter": "^1.6.17",
     "@hono/node-server": "^1.19.0",
     "@hono/swagger-ui": "^0.5.2",
     "@hono/zod-openapi": "^1.1.5",
@@ -29,7 +31,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "agentview": "workspace:*",
     "ai": "6.0.158",
-    "better-auth": "^1.2.12",
+    "better-auth": "^1.6.17",
     "cheerio": "^1.2.0",
     "dotenv": "^17.1.0",
     "drizzle-kit": "^0.31.4",
@@ -48,7 +50,7 @@
     "planer": "^1.2.0",
     "resend": "^6.6.0",
     "tsx": "^4.7.1",
-    "zod": "^4.1.3"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/jsdom": "^28.0.1",

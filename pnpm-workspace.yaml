@@ -8,7 +8,7 @@ packages:
   - "packages/*"
 
 overrides:
-  zod: ^4.1.12
+  zod: ^4.4.3
   react: ^19.1
   react-dom: ^19.1
 
@@ -26,3 +26,13 @@ allowBuilds:
   esbuild: true
   protobufjs: true
   sharp: true
+
+minimumReleaseAgeExclude:
+  - '@better-auth/core@1.6.17'
+  - '@better-auth/drizzle-adapter@1.6.17'
+  - '@better-auth/kysely-adapter@1.6.17'
+  - '@better-auth/memory-adapter@1.6.17'
+  - '@better-auth/mongo-adapter@1.6.17'
+  - '@better-auth/prisma-adapter@1.6.17'
+  - '@better-auth/telemetry@1.6.17'
+  - better-auth@1.6.17

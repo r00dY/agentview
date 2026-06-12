@@ -24,7 +24,7 @@
     "next": "^15.0",
     "react": "^19.0",
     "react-dom": "^19.0",
-    "zod": "^4.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.13",

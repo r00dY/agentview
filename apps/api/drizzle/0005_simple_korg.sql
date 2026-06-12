@@ -1,2 +1,0 @@
-ALTER TABLE "runs" ADD COLUMN "environment_id" uuid;--> statement-breakpoint
-ALTER TABLE "runs" ADD CONSTRAINT "runs_environment_id_environments_id_fk" FOREIGN KEY ("environment_id") REFERENCES "public"."environments"("id") ON DELETE no action ON UPDATE no action;

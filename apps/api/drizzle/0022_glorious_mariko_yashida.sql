@@ -1,1 +1,0 @@
-CREATE UNIQUE INDEX "end_user_email_org_unique" ON "end_users" USING btree ("email","organization_id");

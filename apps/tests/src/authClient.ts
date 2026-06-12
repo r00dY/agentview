@@ -1,5 +1,6 @@
 import { createAuthClient } from "better-auth/client"
-import { apiKeyClient, organizationClient } from "better-auth/client/plugins"
+import { organizationClient } from "better-auth/client/plugins"
+import { apiKeyClient } from "@better-auth/api-key/client"
 
 if (!process.env.AGENTVIEW_API_URL) {
   throw new Error('AGENTVIEW_API_URL is not set')
@@ -7,6 +8,10 @@ if (!process.env.AGENTVIEW_API_URL) {
 
 export function createTestAuthClient() {
   const authHeaders = new Headers();
+
+  // better-auth 1.6+ rejects requests with `sec-fetch-mode: cors` (always set by
+  // Node's fetch) but no Origin header, so we must send one explicitly.
+  authHeaders.set("Origin", process.env.AGENTVIEW_API_URL!);
 
   const authClient = createAuthClient({
     baseURL: process.env.AGENTVIEW_API_URL + "/api/auth",

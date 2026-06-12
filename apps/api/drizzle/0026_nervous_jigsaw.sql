@@ -1,1 +1,0 @@
-ALTER TABLE "sessions" RENAME COLUMN "summary" TO "title";

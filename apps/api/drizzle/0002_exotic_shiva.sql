@@ -1,1 +1,0 @@
-CREATE INDEX "runs_session_id_created_at_idx" ON "runs" USING btree ("session_id","created_at");

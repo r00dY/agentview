@@ -1,8 +1,12 @@
 import { colorValues } from "agentview/colors";
-import { betterAuth } from "better-auth";
+
+import { betterAuth, APIError } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { APIError, createAuthMiddleware } from "better-auth/api";
-import { apiKey, bearer, organization } from "better-auth/plugins";
+import { createAuthMiddleware } from "better-auth/api";
+import { bearer, organization } from "better-auth/plugins";
+import { apiKey } from "@better-auth/api-key"
+
+
 import { and, eq, sql } from "drizzle-orm";
 import { Resend } from 'resend';
 import { db__dangerous } from "./db";
@@ -32,6 +36,10 @@ function isTestEmail(email: string): boolean {
 export const auth = betterAuth({
     // trustedOrigins: [getStudioURL()],
     trustedOrigins: async (request) => {
+        if (!request) {
+            return [];
+        }
+
         const allowedOrigin = getAllowedOrigin(request.headers);
         if (allowedOrigin) {
             return [allowedOrigin];

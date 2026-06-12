@@ -1,1 +1,0 @@
-ALTER TABLE "inbox_items" ADD COLUMN "has_important" boolean DEFAULT false NOT NULL;

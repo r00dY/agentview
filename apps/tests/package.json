@@ -9,18 +9,19 @@
         "mint-gmail-token": "tsx scripts/mint-gmail-token.ts"
     },
     "dependencies": {
-        "agentview": "workspace:*",
-        "vitest": "^4.0.7",
-        "zod": "^4.1.12",
-        "better-auth": "^1.2.12",
-        "googleapis": "^171.4.0",
+        "@agentview/studio": "workspace:*",
         "@agentview/utils": "workspace:*",
-        "@agentview/studio": "workspace:*"
+        "@better-auth/api-key": "^1.6.16",
+        "agentview": "workspace:*",
+        "better-auth": "^1.6.17",
+        "googleapis": "^171.4.0",
+        "vitest": "^4.0.7",
+        "zod": "^4.4.3"
     },
     "devDependencies": {
+        "@types/node": "^20.11.17",
         "ai": "^6.0.0",
         "dotenv": "^17.1.0",
-        "@types/node": "^20.11.17",
         "tsx": "^4.7.1",
         "typescript": "^5.8.3"
     },

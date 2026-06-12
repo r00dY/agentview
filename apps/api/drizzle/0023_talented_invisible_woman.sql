@@ -1,2 +1,0 @@
-ALTER TABLE "environments" ADD COLUMN "tunnel_url" text;--> statement-breakpoint
-ALTER TABLE "environments" ADD CONSTRAINT "environments_tunnel_url_user_check" CHECK (tunnel_url IS NULL OR user_id IS NOT NULL);
