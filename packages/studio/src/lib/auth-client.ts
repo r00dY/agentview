@@ -1,5 +1,6 @@
 import { createAuthClient } from "better-auth/react"
-import { adminClient, apiKeyClient, organizationClient } from "better-auth/client/plugins"
+import { adminClient, organizationClient } from "better-auth/client/plugins"
+import { apiKeyClient } from "@better-auth/api-key/client"
 import { config } from "../config"
 import { data, redirect } from "react-router"
 import { getApiUrl } from "agentview/urls"
