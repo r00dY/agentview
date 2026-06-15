@@ -11,6 +11,7 @@ import { authClient } from "~/authClient";
 import { useNavigation } from "react-router";
 import { fetchInvitation } from "~/fetchInvitation";
 import { CardPageLayout } from "@agentview/studio/components/CardPageLayout";
+import { isCliConnectRedirect } from "~/cliConnect";
 
 // Honor an internal ?redirect= target after signup (e.g. the CLI connect page).
 function getSafeRedirect(request: Request): string {
@@ -104,7 +105,7 @@ export default function Signup() {
   if (invitationId) loginParams.set('invitationId', invitationId);
   if (organizationId) loginParams.set('organizationId', organizationId);
   const loginUrl = loginParams.toString() ? `/login?${loginParams.toString()}` : '/login';
-  const isCliConnect = (redirectParam ?? '').startsWith('/cli');
+  const isCliConnect = isCliConnectRedirect(redirectParam);
 
   return (
     <CardPageLayout>

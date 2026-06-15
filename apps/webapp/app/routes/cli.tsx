@@ -5,7 +5,7 @@ import { Alert, AlertDescription } from "@agentview/studio/components/ui/alert";
 import { CardPageLayout } from "@agentview/studio/components/CardPageLayout";
 import { AlertCircleIcon, Loader2 } from "lucide-react";
 import { authClient } from "~/authClient";
-import { isLoopbackOrigin } from "~/cliConnect";
+import { parseCliCallback } from "~/cliConnect";
 
 // Entry point the CLI opens (`/cli?origin=…&state=…`). It doesn't know the org
 // yet, so this route stays a thin resolver: validate the callback, send
@@ -16,15 +16,8 @@ type LoaderError = { ok: false; error: string };
 
 export async function clientLoader({ request }: Route.LoaderArgs): Promise<LoaderError | Response> {
   const url = new URL(request.url);
-  const origin = url.searchParams.get("origin");
-  const state = url.searchParams.get("state");
-
-  if (!origin || !state) {
-    return { ok: false, error: "This link is missing required parameters. Re-run the AgentView CLI to get a fresh link." };
-  }
-  if (!isLoopbackOrigin(origin)) {
-    return { ok: false, error: "Invalid callback target. The AgentView CLI must run on your local machine." };
-  }
+  const parsed = parseCliCallback(request);
+  if (!parsed.ok) return parsed;
 
   const sessionResponse = await authClient.getSession();
   if (!sessionResponse.data) {
@@ -42,7 +35,7 @@ export async function clientLoader({ request }: Route.LoaderArgs): Promise<Loade
   // Resolve the active org the same way the dashboard does.
   const activeId = window.localStorage.getItem("activeOrganizationId");
   const active = orgs.find((o) => o.id === activeId) ?? orgs[0];
-  const query = `?origin=${encodeURIComponent(origin)}&state=${encodeURIComponent(state)}`;
+  const query = `?origin=${encodeURIComponent(parsed.origin)}&state=${encodeURIComponent(parsed.state)}`;
   return redirect(`/orgs/${active.id}/cli${query}`);
 }
 

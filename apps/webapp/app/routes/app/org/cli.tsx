@@ -9,29 +9,15 @@ import { Label } from "@agentview/studio/components/ui/label";
 import { AlertCircleIcon, CheckCircle2, Loader2, Terminal } from "lucide-react";
 import { createApiKeyPair } from "~/apiKeyPairs";
 import { apiRequest } from "~/apiClient";
-import { isLoopbackOrigin } from "~/cliConnect";
+import { parseCliCallback } from "~/cliConnect";
 import type { clientLoader as orgLayoutLoader } from "./layout";
 
 // The logged-in user's local (dev) environment is the one whose `user` is them
 // (production environments have a null user) — same rule as the API Keys page.
 type EnvironmentRecord = { id: string; handle: string; user: { id: string } | null };
 
-type LoaderResult =
-  | { ok: true; origin: string; state: string }
-  | { ok: false; error: string };
-
-export async function clientLoader({ request }: Route.LoaderArgs): Promise<LoaderResult> {
-  const url = new URL(request.url);
-  const origin = url.searchParams.get("origin");
-  const state = url.searchParams.get("state");
-
-  if (!origin || !state) {
-    return { ok: false, error: "This link is missing required parameters. Re-run the AgentView CLI to get a fresh link." };
-  }
-  if (!isLoopbackOrigin(origin)) {
-    return { ok: false, error: "Invalid callback target. The AgentView CLI must run on your local machine." };
-  }
-  return { ok: true, origin, state };
+export async function clientLoader({ request }: Route.LoaderArgs) {
+  return parseCliCallback(request);
 }
 
 export default function OrgCliConnect() {

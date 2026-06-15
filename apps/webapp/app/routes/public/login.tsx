@@ -9,6 +9,7 @@ import { AlertCircleIcon, Loader2 } from "lucide-react";
 import { betterAuthErrorToBaseError, type ActionResponse } from "@agentview/studio/lib/errors";
 import { authClient } from "~/authClient";
 import { CardPageLayout } from "@agentview/studio/components/CardPageLayout";
+import { isCliConnectRedirect } from "~/cliConnect";
 
 function getRedirectUrl(request: Request) {
   const url = new URL(request.url);
@@ -68,7 +69,7 @@ export default function LoginPage() {
   if (invitationId) signupParams.set('invitationId', invitationId);
   if (organizationId) signupParams.set('organizationId', organizationId);
   const signupUrl = signupParams.toString() ? `/signup?${signupParams.toString()}` : '/signup';
-  const isCliConnect = (redirectParam ?? '').startsWith('/cli');
+  const isCliConnect = isCliConnectRedirect(redirectParam);
 
   return (
     <CardPageLayout>
