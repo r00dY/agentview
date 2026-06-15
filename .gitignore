@@ -18,3 +18,5 @@ dist/
 .agents/
 
 .pnpm-store/
+
+.playwright-mcp/
