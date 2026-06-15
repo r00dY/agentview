@@ -179,6 +179,16 @@ The AgentView Team`,
 
             if (ctx.path === "/sign-up/email") {
 
+                // Only run post-signup side effects when the sign-up actually
+                // succeeded. On failure (e.g. password too short, email already
+                // in use) there is no new session — bail out. Otherwise the
+                // `auth.api.updateUser` call below would run with no auth and
+                // throw UNAUTHORIZED, masking better-auth's real validation
+                // error with a useless "Unauthorized" response.
+                if (!ctx.context.newSession) {
+                    return;
+                }
+
                 // extract headers
                 const headers = new Headers();
                 const setCookie = ctx.context.responseHeaders?.get("set-cookie");

@@ -28,6 +28,6 @@ type BetterAuthError = {
 export function betterAuthErrorToBaseError(error: BetterAuthError): BaseError {
     return {
         ...error,
-        message: error.message ?? "Undefined error from better-auth",
+        message: error.message ?? "Something went wrong. Please try again.",
     }
 }
