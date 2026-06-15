@@ -12,6 +12,14 @@ import { useNavigation } from "react-router";
 import { fetchInvitation } from "~/fetchInvitation";
 import { CardPageLayout } from "@agentview/studio/components/CardPageLayout";
 
+// Honor an internal ?redirect= target after signup (e.g. the CLI connect page).
+function getSafeRedirect(request: Request): string {
+  const url = new URL(request.url);
+  const redirectTo = url.searchParams.get('redirect');
+  if (redirectTo && redirectTo.startsWith('/')) return redirectTo;
+  return '/dashboard';
+}
+
 export async function clientLoader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const invitationId = url.searchParams.get('invitationId');
@@ -74,16 +82,29 @@ export async function clientAction({ request }: Route.ActionArgs): Promise<Actio
     return redirect('/accept-invitation?invitationId=' + encodeURIComponent(invitationId));
   }
 
-  // For open signup, the personal organization is created automatically by the backend.
-  // The dashboard route redirects to the user's organization.
-  return redirect('/dashboard');
+  // For open signup, the personal organization is created automatically by the
+  // backend. Honor an internal ?redirect= target, otherwise the dashboard route
+  // redirects to the user's organization.
+  return redirect(getSafeRedirect(request));
 }
 
 export default function Signup() {
   const { invitation } = useLoaderData<typeof clientLoader>();
   const actionData = useActionData<typeof clientAction>();
   const navigation = useNavigation();
+  const [searchParams] = useSearchParams();
   const isSubmitting = navigation.state === "submitting";
+
+  // Preserve flow params (redirect/invitation/org) when linking to login.
+  const loginParams = new URLSearchParams();
+  const redirectParam = searchParams.get('redirect');
+  const invitationId = searchParams.get('invitationId');
+  const organizationId = searchParams.get('organizationId');
+  if (redirectParam) loginParams.set('redirect', redirectParam);
+  if (invitationId) loginParams.set('invitationId', invitationId);
+  if (organizationId) loginParams.set('organizationId', organizationId);
+  const loginUrl = loginParams.toString() ? `/login?${loginParams.toString()}` : '/login';
+  const isCliConnect = (redirectParam ?? '').startsWith('/cli');
 
   return (
     <CardPageLayout>
@@ -93,6 +114,11 @@ export default function Signup() {
           {invitation && (
             <CardDescription className="text-center">
               Complete your signup to join the organization <span className="font-semibold">{invitation.organization.name}</span>
+            </CardDescription>
+          )}
+          {isCliConnect && !invitation && (
+            <CardDescription className="text-center">
+              Create an account to connect the AgentView CLI.
             </CardDescription>
           )}
         </CardHeader>
@@ -203,7 +229,7 @@ export default function Signup() {
         <CardFooter className="justify-center">
           <p className="text-sm text-muted-foreground">
             Already have an account?{" "}
-            <Link to="/login" className="text-primary hover:underline">
+            <Link to={loginUrl} className="text-primary hover:underline">
               Sign in
             </Link>
           </p>

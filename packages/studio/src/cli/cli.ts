@@ -16,6 +16,7 @@ import { AgentViewError, getEmailRootDomain } from "agentview";
 import { startProxyServer, HEALTH_PATH, type ProxyServer } from "./proxyServer.js";
 import { startCloudflareTunnel, type CloudflareTunnel } from "./tunnel.js";
 import { toBaseConfig } from '../toBaseConfig.js';
+import { runOnboarding } from "./onboard.js";
 
 const DEFAULT_CONFIG_FILES = [
   "agentview.config.ts",
@@ -115,13 +116,22 @@ export async function runCli() {
     .option("-v, --verbose", "Show implementation details (proxy URL, tunnel URL)")
     .hook('preAction', async (thisCommand, actionCommand) => {
       const opts = thisCommand.opts();
-      const apiKey = opts.apiKey ?? getAPIKey();
-      const env = opts.env ?? (await loadConfig()).env;
-      currentEnv = env;
       verbose = !!opts.verbose;
 
       // For now, no custom config paths.
       // configPathFromArg = opts.config; // required to resolve path later
+
+      // Onboard the user through the browser when no API key is available yet.
+      let apiKey = opts.apiKey ?? process.env.AGENTVIEW_API_KEY;
+      let onboardedEnv: string | undefined;
+      if (!apiKey) {
+        const result = await runOnboarding();
+        apiKey = result.secretKey;
+        onboardedEnv = result.env;
+      }
+
+      const env = opts.env ?? onboardedEnv ?? (await loadConfig()).env;
+      currentEnv = env;
 
       client = createStandardClient({ apiKey, env });
       currentOrg = await client.organization.get();
@@ -238,16 +248,6 @@ async function loadConfig(): Promise<AgentViewConfig> {
   }
 
   return config as AgentViewConfig;
-}
-
-function getAPIKey(): string {
-  const apiKey = process.env.AGENTVIEW_API_KEY;
-  if (!apiKey) {
-    throw new Error(
-      "AGENTVIEW_API_KEY is not set. Set it in your shell or in one of: .env, .env.local, .env.[NODE_ENV], .env.[NODE_ENV].local — or pass --api-key.",
-    );
-  }
-  return apiKey;
 }
 
 const TUNNEL_HEALTH_CHECK_INTERVAL_MS = 30_000;

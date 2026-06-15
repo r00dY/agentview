@@ -6,6 +6,7 @@ export default [
 
     route("accept-invitation", "routes/accept-invitation.tsx"),
     route("auth", "routes/auth.tsx"),
+    route("cli", "routes/cli.tsx"),
 
     // Authenticated routes
     layout("routes/app/layout.tsx", [
@@ -14,6 +15,7 @@ export default [
 
         route("orgs/:orgId", "routes/app/org/layout.tsx", [
             index("routes/app/org/home.tsx"),
+            route("cli", "routes/app/org/cli.tsx"),
             route("profile", "routes/app/org/profile.tsx"),
             route("password", "routes/app/org/password.tsx"),
             route("details", "routes/app/org/details.tsx"),

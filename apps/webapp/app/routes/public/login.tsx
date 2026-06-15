@@ -1,7 +1,7 @@
 import { redirect, Form, useActionData, Link, useSearchParams, useNavigation } from "react-router";
 import type { Route } from "./+types/login";
 import { Button } from "@agentview/studio/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@agentview/studio/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@agentview/studio/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@agentview/studio/components/ui/alert";
 import { Input } from "@agentview/studio/components/ui/input";
 import { Label } from "@agentview/studio/components/ui/label";
@@ -59,19 +59,27 @@ export default function LoginPage() {
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
 
-  // Build signup link with same params (for invitation flow)
+  // Build signup link with same params (for invitation + CLI connect flows)
   const signupParams = new URLSearchParams();
+  const redirectParam = searchParams.get('redirect');
   const invitationId = searchParams.get('invitationId');
   const organizationId = searchParams.get('organizationId');
+  if (redirectParam) signupParams.set('redirect', redirectParam);
   if (invitationId) signupParams.set('invitationId', invitationId);
   if (organizationId) signupParams.set('organizationId', organizationId);
   const signupUrl = signupParams.toString() ? `/signup?${signupParams.toString()}` : '/signup';
+  const isCliConnect = (redirectParam ?? '').startsWith('/cli');
 
   return (
     <CardPageLayout>
       <Card>
         <CardHeader>
           <CardTitle className="text-center">Sign in</CardTitle>
+          {isCliConnect && (
+            <CardDescription className="text-center">
+              Sign in to connect the AgentView CLI.
+            </CardDescription>
+          )}
         </CardHeader>
         <CardContent>
           <Form className="flex flex-col gap-4" method="post">
