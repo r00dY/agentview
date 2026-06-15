@@ -43,12 +43,22 @@ export async function setupTestOrg() {
         env: "production"
     })
 
+    // Member-principal client: authenticates as the admin user via their session token
+    // (Bearer) + organization id, rather than via an API key. Needed for endpoints that
+    // require a real member identity (e.g. authoring comments and scores).
+    const memberStandardClient = createStandardClient({
+        apiKey: result.adminSessionToken,
+        organizationId: result.organization.id,
+        env: "local-admin",
+    })
+
     return {
         ...result,
         admin: {
             ...result.admin,
             localStandardClient,
             localClient,
+            member: memberStandardClient,
         },
         prodClient,
         prodStandardClient,

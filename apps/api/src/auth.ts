@@ -64,12 +64,16 @@ export const auth = betterAuth({
         bearer(),
         // admin(),
         apiKey({
+            // API keys are owned by the organization, not the user who created them.
+            // With this, `key.referenceId` is the organizationId (see authMiddleware.ts).
+            references: "organization",
             keyExpiration: {
                 defaultExpiresIn: 60 * 60 * 24 * 365
             },
             rateLimit: {
                 enabled: false // for now
             },
+            // Metadata is used to link a secret/public key pair (see webapp api-keys UI).
             enableMetadata: true
         }),
         organization({

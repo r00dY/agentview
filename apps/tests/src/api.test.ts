@@ -2763,6 +2763,38 @@ describe('API', () => {
 
   describe("comments and scores (flat API)", () => {
 
+    // Comments and scores are authored by a real organization member, so they require a
+    // member principal. We shadow `av` (an API key client) with the admin's member client
+    // (session token + org id) for this whole block. Session/run/user setup behaves the
+    // same: in the local-admin env, an API key and the admin member both own playground
+    // resources via the admin user. `updateConfig` still uses the outer API key client.
+    // Assigned in beforeAll because `org` is only set up in the parent beforeAll.
+    let av: StandardAgentViewClient;
+    beforeAll(() => { av = org.admin.member; });
+
+    test("api keys cannot author comments or scores", async () => {
+      await updateConfig({
+        itemScores: [{ name: "quality", schema: z.enum(["good", "bad"]) }],
+      });
+
+      const session = await createSession();
+      const run = await org.admin.localStandardClient.createManualRun({ sessionId: session.id, items: [baseInput] });
+      await org.admin.localStandardClient.updateManualRun({ id: run.id, items: [baseOutput], status: "completed" });
+
+      const updatedSession = await org.admin.localStandardClient.getSession({ id: session.id });
+      const outputItem = updatedSession.runs[0].sessionItems.find(i => i.type === "output")!;
+
+      // API key client (org.admin.localStandardClient) must be rejected for comments/scores
+      await expectToFail(org.admin.localStandardClient.comments.create({ sessionItemId: outputItem.id, content: "nope" }), 401);
+      await expectToFail(org.admin.localStandardClient.comments.create({ runId: run.id, content: "nope" }), 401);
+      await expectToFail(org.admin.localStandardClient.scores.update({ sessionItemId: outputItem.id, scores: [{ name: "quality", value: "good" }] }), 401);
+
+      // ...but the member client succeeds
+      await av.comments.create({ sessionItemId: outputItem.id, content: "yep" });
+      const comments = await av.comments.list({ sessionId: session.id });
+      expect(comments.length).toBe(1);
+    });
+
     test("create, edit, delete comment on session item", async () => {
       await updateConfig({
         itemScores: [{ name: "quality", schema: z.enum(["good", "bad"]) }],
@@ -2923,7 +2955,8 @@ describe('API', () => {
 
         const session = await org.prodStandardClient.createSession({ agent: "test", userId: prodUser.id });
 
-        await org.prodStandardClient.comments.create({ sessionId: session.id, content: mentionText(org.admin.user.id) });
+        // comments require a member principal; member client is org-scoped (env-agnostic)
+        await org.admin.member.comments.create({ sessionId: session.id, content: mentionText(org.admin.user.id) });
 
         const comments = await org.prodStandardClient.comments.list({ sessionId: session.id });
         expect(comments.length).toBe(1);

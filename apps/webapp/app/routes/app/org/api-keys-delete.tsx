@@ -11,36 +11,32 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@agentview/studio/components/ui/alert";
 import { AlertCircleIcon } from "lucide-react";
 import { Button } from "@agentview/studio/components/ui/button";
-import { authClient } from "~/authClient";
 import { queryClient } from "~/queryClient";
 import { queryKeys } from "~/queryKeys";
 import { betterAuthErrorToBaseError, type ActionResponse } from "@agentview/studio/lib/errors";
+import { deleteApiKeyPair, listApiKeyPairs } from "~/apiKeyPairs";
 
 export async function clientLoader({ params }: Route.LoaderArgs) {
-  const response = await authClient.apiKey.list();
+  const { data: pairs, error } = await listApiKeyPairs(params.orgId);
 
-  if (response.error) {
-    throw data(betterAuthErrorToBaseError(response.error));
+  if (error) {
+    throw data(betterAuthErrorToBaseError(error));
   }
 
-  const apiKey = response.data.find(
-    (key) => key.id === params.keyId && key.metadata?.organizationId === params.orgId
-  );
+  const pair = (pairs ?? []).find((p) => p.pairId === params.pairId);
 
-  if (!apiKey) {
-    throw data({ message: "API key not found" });
+  if (!pair) {
+    throw data({ message: "API key pair not found" });
   }
 
-  return { apiKey };
+  return { pair };
 }
 
 export async function clientAction({ params }: Route.ActionArgs): Promise<ActionResponse | Response> {
-  const response = await authClient.apiKey.delete({
-    keyId: params.keyId!,
-  });
+  const { error } = await deleteApiKeyPair(params.orgId!, params.pairId!);
 
-  if (response.error) {
-    return { ok: false, error: betterAuthErrorToBaseError(response.error) };
+  if (error) {
+    return { ok: false, error: betterAuthErrorToBaseError(error) };
   }
 
   await queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys() });
@@ -52,7 +48,7 @@ export default function ApiKeysDelete() {
   const fetcher = useFetcher<ActionResponse>();
   const navigate = useNavigate();
   const { orgId } = useParams();
-  const { apiKey } = useLoaderData<typeof clientLoader>();
+  const { pair } = useLoaderData<typeof clientLoader>();
 
   const handleClose = () => {
     navigate(`/orgs/${orgId}/api-keys`);
@@ -63,22 +59,23 @@ export default function ApiKeysDelete() {
       <DialogContent>
         <fetcher.Form method="post">
           <DialogHeader>
-            <DialogTitle>Delete API Key</DialogTitle>
+            <DialogTitle>Delete API Key Pair</DialogTitle>
           </DialogHeader>
 
           <DialogBody>
             {fetcher.data?.ok === false && fetcher.state === "idle" && (
               <Alert variant="destructive" className="mb-4">
                 <AlertCircleIcon className="h-4 w-4" />
-                <AlertTitle>Failed to delete API key</AlertTitle>
+                <AlertTitle>Failed to delete API key pair</AlertTitle>
                 <AlertDescription>{fetcher.data.error.message}</AlertDescription>
               </Alert>
             )}
 
             <p className="text-sm">
-              Are you sure you want to delete the API key{" "}
-              <strong className="font-medium">{apiKey.name || "Unnamed"}</strong>?
-              This action cannot be undone and any applications using this key will stop working.
+              Are you sure you want to delete the API key pair{" "}
+              <strong className="font-medium">{pair.name || "Unnamed"}</strong>?
+              Both the public and secret keys will be deleted. This action cannot be undone and any
+              applications using these keys will stop working.
             </p>
           </DialogBody>
 
@@ -91,7 +88,7 @@ export default function ApiKeysDelete() {
               variant="destructive"
               disabled={fetcher.state !== "idle"}
             >
-              {fetcher.state === "submitting" ? "Deleting..." : "Delete API Key"}
+              {fetcher.state === "submitting" ? "Deleting..." : "Delete API Key Pair"}
             </Button>
           </DialogFooter>
         </fetcher.Form>

@@ -1399,16 +1399,14 @@ app.openapi(runManualPATCHRoute, async (c) => {
 
 /* --------- FLAT COMMENTS API --------- */
 
-function getMemberIdBasedOnPrincipal(principal: Principal) { // we use it only for comments, and mostly for testing for now
+// Comments and scores are authored by a real organization member, so they require
+// a member principal (logged-in user session). API keys are organization-owned and
+// have no member identity, so they cannot author comments or scores.
+function getMemberIdBasedOnPrincipal(principal: Principal) {
   if (principal.type === 'member') {
     return principal.session.user.id;
   }
-  else if (principal.type === 'apiKey') {
-    return principal.apiKey.referenceId; // ONLY FOR TESTING. To be removed
-  }
-  else {
-    throw new AgentViewError("Unauthorized", 401);
-  }
+  throw new AgentViewError("This endpoint requires a logged-in member. API keys cannot be used to author comments or scores.", 401);
 }
 
 

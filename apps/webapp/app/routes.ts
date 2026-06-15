@@ -19,7 +19,7 @@ export default [
             route("details", "routes/app/org/details.tsx"),
             route("api-keys", "routes/app/org/api-keys.tsx", [
                 route("new", "routes/app/org/api-keys-new.tsx"),
-                route(":keyId/delete", "routes/app/org/api-keys-delete.tsx"),
+                route(":pairId/delete", "routes/app/org/api-keys-delete.tsx"),
             ]),
             route("members", "routes/app/org/members.tsx", [
                 route("invitations/new", "routes/app/org/members-invite.tsx"),

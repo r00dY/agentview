@@ -15,29 +15,34 @@ import {
 import { Badge } from "@agentview/studio/components/ui/badge";
 import { queryClient } from "~/queryClient";
 import { queryKeys } from "~/queryKeys";
-import { authClient } from "~/authClient";
+import { listApiKeyPairs, type ApiKeyPair } from "~/apiKeyPairs";
 import type { clientLoader as orgLayoutLoader } from "./layout";
 
 export async function clientLoader({ params }: Route.LoaderArgs) {
-  const response = await queryClient.fetchQuery({
+  const pairs = await queryClient.fetchQuery({
     queryKey: queryKeys.apiKeys(),
-    queryFn: () => authClient.apiKey.list(),
+    queryFn: () => listApiKeyPairs(params.orgId),
   });
 
-  if (response.error) {
-    return { apiKeys: [] };
+  if (pairs.error) {
+    return { pairs: [] as ApiKeyPair[] };
   }
 
-  const apiKeys = response.data.filter(
-    (apiKey) => apiKey.metadata?.organizationId === params.orgId
-  );
+  return { pairs: pairs.data ?? [] };
+}
 
-  return { apiKeys };
+function KeyCell({ keyRecord }: { keyRecord: ApiKeyPair["secret"] }) {
+  if (!keyRecord) {
+    return <span className="text-sm text-muted-foreground">—</span>;
+  }
+  return (
+    <code className="text-sm text-muted-foreground">{keyRecord.start}...</code>
+  );
 }
 
 export default function ApiKeys() {
   const layoutData = useRouteLoaderData<typeof orgLayoutLoader>("routes/app/org/layout");
-  const { apiKeys } = useLoaderData<typeof clientLoader>();
+  const { pairs } = useLoaderData<typeof clientLoader>();
   const { orgId } = useParams();
 
   const me = layoutData?.me;
@@ -74,7 +79,7 @@ AGENTVIEW_API_KEY=sk_...`}
           <Button asChild size="sm">
             <Link to={`/orgs/${orgId}/api-keys/new`}>
               <Plus className="w-4 h-4" />
-              Create API Key
+              Create API Key Pair
             </Link>
           </Button>
         </div>
@@ -84,45 +89,43 @@ AGENTVIEW_API_KEY=sk_...`}
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Key</TableHead>
+                <TableHead>
+                Public Key
+                </TableHead>
+                <TableHead>
+                  Secret Key
+                </TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {apiKeys.length === 0 ? (
+              {pairs.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                    No API keys yet. Create one to get started.
+                    No API key pairs yet. Create one to get started.
                   </TableCell>
                 </TableRow>
               ) : (
-                apiKeys.map((apiKey) => (
-                  <TableRow key={apiKey.id}>
+                pairs.map((pair) => (
+                  <TableRow key={pair.pairId}>
                     <TableCell>
-                      <div className="font-medium">{apiKey.name || "Unnamed"}</div>
+                      <div className="font-medium">{pair.name || "Unnamed"}</div>
                     </TableCell>
                     <TableCell>
-                      {apiKey.start?.startsWith("sk_") ? (
-                        <Badge>Secret</Badge>
-                      ) : (
-                        <Badge variant="secondary">Public</Badge>
-                      )}
+                      <KeyCell keyRecord={pair.publicKey} />
                     </TableCell>
                     <TableCell>
-                      <code className="text-sm text-muted-foreground">
-                        {apiKey.start}...
-                      </code>
+                      <KeyCell keyRecord={pair.secret} />
                     </TableCell>
                     <TableCell>
                       <span className="text-sm text-muted-foreground">
-                        {new Date(apiKey.createdAt).toLocaleDateString()}
+                        {new Date(pair.createdAt).toLocaleDateString()}
                       </span>
                     </TableCell>
                     <TableCell>
                       <Button asChild variant="outline" size="xs">
-                        <Link to={`/orgs/${orgId}/api-keys/${apiKey.id}/delete`}>
+                        <Link to={`/orgs/${orgId}/api-keys/${pair.pairId}/delete`}>
                           Delete
                         </Link>
                       </Button>

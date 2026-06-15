@@ -173,15 +173,19 @@ async function getUserPrincipal(headers: Headers, organizationId: string, allowO
 }
 
 
-async function verifyOrgAccess(organizationId: string, userId: string) {
+async function requireOrgExists(organizationId: string) {
   const organization = await db__dangerous.query.organizations.findFirst({ where: eq(organizations.id, organizationId) })
   if (!organization) {
-    throw new AgentViewError("The API Key is associated with organization that doesn't exist.", 404);
+    throw new AgentViewError("The API Key is associated with an organization that doesn't exist.", 404);
   }
+}
+
+async function verifyOrgAccess(organizationId: string, userId: string) {
+  await requireOrgExists(organizationId);
 
   const member = await db__dangerous.query.members.findFirst({ where: and(eq(members.userId, userId), eq(members.organizationId, organizationId)) })
   if (!member) {
-    throw new AgentViewError("The owner of the API Key is not a member of the organization.", 401);
+    throw new AgentViewError("The user is not a member of the organization.", 401);
   }
 }
 
@@ -286,13 +290,14 @@ async function resolveBearerPrincipal(headers: Headers, bearer: string, env: str
       throw new AgentViewError(error ? String(error.message) : "Unknown error verifying API Key", 401);
     }
 
-    // Let's extract and verify organization
-    const organizationId = key.metadata?.organizationId;
+    // API keys are organization-owned (apiKey plugin is configured with
+    // `references: "organization"`), so the key's referenceId IS the organizationId.
+    const organizationId = key.referenceId;
     if (!organizationId) {
       throw new AgentViewError("The API Key is not associated with any organization.", 400);
     }
 
-    await verifyOrgAccess(organizationId, key.referenceId);
+    await requireOrgExists(organizationId);
 
     if (key.prefix === 'pk_') {
       bearerPrincipal = { type: 'apiKeyPublic', apiKey: key, organizationId: organizationId, env }

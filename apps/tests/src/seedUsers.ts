@@ -19,24 +19,24 @@ export async function seedUsers(slug_: string) {
   if (!organization) {
     throw new Error("Expected admin's personal organization to be auto-created on signup");
   }
-  
-  // Create API keys for admin user
+
+  // Create an org-level API key pair (secret + public). Keys are owned by the
+  // organization (apiKey plugin `references: "organization"`), so we pass organizationId.
+  // The two keys are linked into a pair via a shared metadata.pairId.
+  const pairId = crypto.randomUUID();
+
   const apiKeySecret = await authClient.apiKey.create({
-    name: "Test secret key",
+    name: "Test key pair",
     prefix: 'sk_',
-    metadata: {
-      organizationId: organization.id,
-      type: 'secret'
-    }
+    organizationId: organization.id,
+    metadata: { pairId, type: 'secret' }
   })
 
   const apiKeyPublic = await authClient.apiKey.create({
-    name: "Test public key",
+    name: "Test key pair",
     prefix: 'pk_',
-    metadata: {
-      organizationId: organization.id,
-      type: 'public'
-    }
+    organizationId: organization.id,
+    metadata: { pairId, type: 'public' }
   })
 
   // Invite Bob and Alice
@@ -84,12 +84,24 @@ export async function seedUsers(slug_: string) {
 
   await authClient.signOut();
 
+  // Sign back in as admin to obtain a fresh, valid session token. The token returned
+  // at signup was invalidated by the signOut above. This token works as a Bearer token
+  // (bearer plugin) and is used to build a member-principal client in tests.
+  const adminSignIn = await authClient.signIn.email({
+    email: `admin@${slug}.com`,
+    password: "blablabla",
+  });
+  const adminSessionToken = adminSignIn.token;
+
   return {
     organization,
 
-    // keys are created by users but are org-level for now
-    apiKeySecret, 
+    // org-level API key pair
+    apiKeySecret,
     apiKeyPublic,
+
+    // admin's session token, for building a member-principal client
+    adminSessionToken,
 
     admin: {
       ...admin

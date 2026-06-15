@@ -14,50 +14,65 @@ import { Alert, AlertDescription, AlertTitle } from "@agentview/studio/component
 import { AlertCircleIcon, CopyIcon } from "lucide-react";
 import { Label } from "@agentview/studio/components/ui/label";
 import { Input } from "@agentview/studio/components/ui/input";
-import { Switch } from "@agentview/studio/components/ui/switch";
 import { Button } from "@agentview/studio/components/ui/button";
-import { authClient } from "~/authClient";
 import { queryClient } from "~/queryClient";
 import { queryKeys } from "~/queryKeys";
 import { betterAuthErrorToBaseError, type ActionResponse } from "@agentview/studio/lib/errors";
 import { useFetcherSuccess } from "@agentview/studio/hooks/useFetcherSuccess";
 import { toast } from "sonner";
+import { createApiKeyPair } from "~/apiKeyPairs";
+
+type CreatedPair = { secretKey: string; publicKey: string };
 
 export async function clientAction({
   request,
   params,
-}: Route.ActionArgs): Promise<ActionResponse<{ apiKey: any }>> {
+}: Route.ActionArgs): Promise<ActionResponse<CreatedPair>> {
   const formData = await request.formData();
   const name = formData.get("name") as string;
-  const isSecret = formData.get("isSecret") === "true";
 
-  const response = await authClient.apiKey.create({
-    name,
-    prefix: isSecret ? 'sk_' : 'pk_',
-    metadata: {
-      organizationId: params.orgId
-    },
-  });
+  const { data, error } = await createApiKeyPair(params.orgId!, name);
 
-  if (response.error) {
-    return { ok: false, error: betterAuthErrorToBaseError(response.error) };
+  if (error || !data) {
+    return { ok: false, error: betterAuthErrorToBaseError(error!) };
   }
 
   await queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys() });
 
-  return { ok: true, data: { apiKey: response.data } };
+  return { ok: true, data: { secretKey: data.secret.key, publicKey: data.publicKey.key } };
+}
+
+function KeyField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <div className="flex items-center gap-2">
+        <Input value={value} readOnly className="font-mono" />
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={() => {
+            navigator.clipboard.writeText(value);
+            toast.success(`${label} copied to clipboard`);
+          }}
+        >
+          <CopyIcon className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 export default function ApiKeysNew() {
-  const fetcher = useFetcher<ActionResponse<{ apiKey: any }>>();
+  const fetcher = useFetcher<ActionResponse<CreatedPair>>();
   const navigate = useNavigate();
   const { orgId } = useParams();
-  const [isSecret, setIsSecret] = useState(true);
-  const [newApiKey, setNewApiKey] = useState<string | null>(null);
+  const [createdPair, setCreatedPair] = useState<CreatedPair | null>(null);
 
   useFetcherSuccess(fetcher, (data) => {
-    if (data?.apiKey?.key) {
-      setNewApiKey(data.apiKey.key);
+    if (data?.secretKey && data?.publicKey) {
+      setCreatedPair({ secretKey: data.secretKey, publicKey: data.publicKey });
     }
   });
 
@@ -65,41 +80,26 @@ export default function ApiKeysNew() {
     navigate(`/orgs/${orgId}/api-keys`);
   };
 
-  // Show the key display dialog after creation
-  if (newApiKey) {
+  // Show the key pair display dialog after creation
+  if (createdPair) {
     return (
       <Dialog open={true} onOpenChange={handleClose}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>API Key Created</DialogTitle>
+            <DialogTitle>API Key Pair Created</DialogTitle>
             <DialogDescription>
               Please save your secret key in a safe place since you won't be able to view it again.
-              Keep it secure, as anyone with your API key can make requests on your behalf.
+              Keep it secure, as anyone with your secret key can make requests on your behalf.
             </DialogDescription>
           </DialogHeader>
 
-          <DialogBody>
-            <div className="space-y-2">
-              <Label>Your API Key</Label>
-              <div className="flex items-center gap-2">
-                <Input value={newApiKey} readOnly className="font-mono" />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => {
-                    navigator.clipboard.writeText(newApiKey);
-                    toast.success("API key copied to clipboard");
-                  }}
-                >
-                  <CopyIcon className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+          <DialogBody className="space-y-4">
+            <KeyField label="Public Key" value={createdPair.publicKey} />
+            <KeyField label="Secret Key" value={createdPair.secretKey} />
           </DialogBody>
 
           <DialogFooter>
-            <Button onClick={handleClose}>I've copied the key</Button>
+            <Button onClick={handleClose}>I've copied the keys</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -111,14 +111,17 @@ export default function ApiKeysNew() {
       <DialogContent>
         <fetcher.Form method="post" className="space-y-4">
           <DialogHeader>
-            <DialogTitle>Create API Key</DialogTitle>
+            <DialogTitle>Create API Key Pair</DialogTitle>
+            <DialogDescription>
+              This creates a matching secret (sk_) and public (pk_) key. They are managed together.
+            </DialogDescription>
           </DialogHeader>
 
           <DialogBody className="space-y-4">
             {fetcher.data?.ok === false && (
               <Alert variant="destructive">
                 <AlertCircleIcon className="h-4 w-4" />
-                <AlertTitle>Failed to create API key</AlertTitle>
+                <AlertTitle>Failed to create API key pair</AlertTitle>
                 <AlertDescription>{fetcher.data.error.message}</AlertDescription>
               </Alert>
             )}
@@ -134,21 +137,6 @@ export default function ApiKeysNew() {
                 required
               />
             </div>
-
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="apiKeyType">Secret Key</Label>
-                <p className="text-sm text-muted-foreground">
-                  Secret keys should only be used server-side
-                </p>
-              </div>
-              <Switch
-                id="apiKeyType"
-                checked={isSecret}
-                onCheckedChange={setIsSecret}
-              />
-              <input type="hidden" name="isSecret" value={isSecret.toString()} />
-            </div>
           </DialogBody>
 
           <DialogFooter>
@@ -156,7 +144,7 @@ export default function ApiKeysNew() {
               Cancel
             </Button>
             <Button type="submit" disabled={fetcher.state !== "idle"}>
-              {fetcher.state === "submitting" ? "Creating..." : "Create API Key"}
+              {fetcher.state === "submitting" ? "Creating..." : "Create API Key Pair"}
             </Button>
           </DialogFooter>
         </fetcher.Form>
