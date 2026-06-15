@@ -19,7 +19,7 @@ All the AgentView configuration lives in code, in `agentview.config.tsx` file. L
 import { defineConfig } from "@agentview/studio";
 
 export default defineConfig({
-  publicApiKey: process.env.NEXT_PUBLIC_AGENTVIEW_API_KEY!,
+  publicApiKey: process.env.NEXT_PUBLIC_AGENTVIEW_PUBLIC_API_KEY!,
   env: process.env.NEXT_PUBLIC_AGENTVIEW_ENV!,
   agents: [
     {

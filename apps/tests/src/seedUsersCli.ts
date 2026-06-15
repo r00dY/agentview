@@ -15,11 +15,11 @@ async function main() {
 
   const demoAiSDKPath = "apps/examples/ai-sdk-demo/.env.local";
   updateEnv(demoAiSDKPath, "AGENTVIEW_API_KEY", apiKeySecret.key);
-  updateEnv(demoAiSDKPath, "NEXT_PUBLIC_AGENTVIEW_API_KEY", apiKeyPublic.key);
+  updateEnv(demoAiSDKPath, "NEXT_PUBLIC_AGENTVIEW_PUBLIC_API_KEY", apiKeyPublic.key);
   updateEnv(demoAiSDKPath, "NEXT_PUBLIC_AGENTVIEW_ENV", "local-admin");
 
   // updateEnv("AGENTVIEW_API_KEY", apiKeySecret.key, { includeRoot: false });
-  // updateEnv("NEXT_PUBLIC_AGENTVIEW_API_KEY", apiKeyPublic.key, { includeRoot: false });
+  // updateEnv("NEXT_PUBLIC_AGENTVIEW_PUBLIC_API_KEY", apiKeyPublic.key, { includeRoot: false });
   // updateEnv("NEXT_PUBLIC_AGENTVIEW_ENV", "local-admin", { includeRoot: false });
 }
 

@@ -248,15 +248,29 @@ export function upsertEnvFile(filePath: string, vars: Record<string, string>): v
 
 /** Print the env vars + guidance for the user to set manually and re-run. */
 function printManualInstructions(creds: RawCredentials, project: DetectedProject | null): void {
-  const prefix = project?.publicPrefix ?? "NEXT_PUBLIC_";
-  const note = project ? "" : `   ${ansi.dim}# or VITE_… for Vite${ansi.reset}`;
   console.log(`   ${ansi.dim}Add these to your environment, then re-run this command:${ansi.reset}`);
   console.log();
+
+  // AGENTVIEW_API_KEY is read server-side only, so its name never changes.
   console.log(`     AGENTVIEW_API_KEY=${creds.secretKey}`);
-  console.log(`     ${prefix}AGENTVIEW_API_KEY=${creds.publicKey}${note}`);
-  console.log(`     ${prefix}AGENTVIEW_ENV=${creds.env}${note}`);
   console.log();
-  console.log(`   ${ansi.dim}Make sure the public key and env are exposed to the browser (NEXT_PUBLIC_ in Next.js, VITE_ in Vite).${ansi.reset}`);
+
+  if (project) {
+    // Framework known — emit the exact public-prefixed names.
+    const prefix = project.publicPrefix;
+    console.log(`     ${prefix}AGENTVIEW_PUBLIC_API_KEY=${creds.publicKey}`);
+    console.log(`     ${prefix}AGENTVIEW_ENV=${creds.env}`);
+    console.log();
+    console.log(`   ${ansi.dim}The ${prefix} prefix exposes these two to the browser.${ansi.reset}`);
+  } else {
+    // Framework unknown — the public key and env still have to reach the
+    // browser, but the prefix that does that is framework-specific.
+    console.log(`   ${ansi.dim}The public key and env are read in the browser, so they need your${ansi.reset}`);
+    console.log(`   ${ansi.dim}framework's public-env prefix (NEXT_PUBLIC_ for Next.js, VITE_ for Vite, …):${ansi.reset}`);
+    console.log();
+    console.log(`     <prefix>AGENTVIEW_PUBLIC_API_KEY=${creds.publicKey}`);
+    console.log(`     <prefix>AGENTVIEW_ENV=${creds.env}`);
+  }
 }
 
 /**
@@ -305,7 +319,7 @@ export async function runOnboarding(): Promise<boolean> {
     const prefix = project.publicPrefix;
     const vars: Record<string, string> = {
       AGENTVIEW_API_KEY: creds.secretKey,
-      [`${prefix}AGENTVIEW_API_KEY`]: creds.publicKey,
+      [`${prefix}AGENTVIEW_PUBLIC_API_KEY`]: creds.publicKey,
       [`${prefix}AGENTVIEW_ENV`]: creds.env,
     };
     const write = await promptYesNo(

@@ -4,7 +4,7 @@ import { createClient } from "agentview";
 import { getCookie, setCookie } from 'cookies-next/client';
 
 export const client = createClient({
-    apiKey: process.env.NEXT_PUBLIC_AGENTVIEW_API_KEY!,
+    apiKey: process.env.NEXT_PUBLIC_AGENTVIEW_PUBLIC_API_KEY!,
     env: process.env.NEXT_PUBLIC_AGENTVIEW_ENV!,
 });
 
