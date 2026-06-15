@@ -7,7 +7,6 @@ import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 
 import { getWebAppUrl } from "agentview/urls";
-import { reloadEnv } from "./loadEnv.js";
 
 // ---------------------------------------------------------------------------
 // Browser-based onboarding for a missing AGENTVIEW_API_KEY.
@@ -17,10 +16,14 @@ import { reloadEnv } from "./loadEnv.js";
 //   2. open the browser to the webapp's /cli page, passing the loopback URL
 //   3. the user signs in / signs up, generates an API key pair, and the page
 //      POSTs the credentials back to our loopback server
-//   4. we verify the `state`, capture the credentials, and continue
+//   4. we verify the `state` and either persist the credentials to .env.local
+//      (when we can) or print them for the user to add manually
 //
 // The credentials travel over loopback only (127.0.0.1), never over the
 // network. The `state` nonce is the shared secret that authorizes the POST.
+//
+// This module never mutates process.env — the caller reloads env after a
+// successful .env.local write (see the CLI `preAction` hook).
 // ---------------------------------------------------------------------------
 
 const useColor =
@@ -35,13 +38,6 @@ const ansi = {
 };
 
 const ONBOARDING_TIMEOUT_MS = 5 * 60 * 1000;
-
-export interface OnboardingResult {
-  secretKey: string;
-  publicKey: string;
-  env: string;
-  orgName: string;
-}
 
 interface RawCredentials {
   publicKey: string;
@@ -250,12 +246,29 @@ export function upsertEnvFile(filePath: string, vars: Record<string, string>): v
   fs.writeFileSync(filePath, lines.join("\n") + "\n", "utf-8");
 }
 
+/** Print the env vars + guidance for the user to set manually and re-run. */
+function printManualInstructions(creds: RawCredentials, project: DetectedProject | null): void {
+  const prefix = project?.publicPrefix ?? "NEXT_PUBLIC_";
+  const note = project ? "" : `   ${ansi.dim}# or VITE_… for Vite${ansi.reset}`;
+  console.log(`   ${ansi.dim}Add these to your environment, then re-run this command:${ansi.reset}`);
+  console.log();
+  console.log(`     AGENTVIEW_API_KEY=${creds.secretKey}`);
+  console.log(`     ${prefix}AGENTVIEW_API_KEY=${creds.publicKey}${note}`);
+  console.log(`     ${prefix}AGENTVIEW_ENV=${creds.env}${note}`);
+  console.log();
+  console.log(`   ${ansi.dim}Make sure the public key and env are exposed to the browser (NEXT_PUBLIC_ in Next.js, VITE_ in Vite).${ansi.reset}`);
+}
+
 /**
- * Run the full browser onboarding flow when AGENTVIEW_API_KEY is missing.
- * Returns the obtained credentials, sets AGENTVIEW_API_KEY on process.env
- * in-memory, and (with consent) writes them to .env.local.
+ * Run the browser onboarding flow when AGENTVIEW_API_KEY is missing.
+ *
+ * Returns `true` when credentials were written to .env.local (the caller can
+ * reload env and continue), or `false` when the user must add them manually and
+ * re-run — in which case the values and instructions have already been printed.
+ *
+ * Never mutates process.env; persistence happens only via the .env.local write.
  */
-export async function runOnboarding(): Promise<OnboardingResult> {
+export async function runOnboarding(): Promise<boolean> {
   const webAppUrl = getWebAppUrl();
   const state = crypto.randomBytes(32).toString("hex");
 
@@ -284,10 +297,7 @@ export async function runOnboarding(): Promise<OnboardingResult> {
   }
 
   console.log();
-  console.log(`   ${ansi.green}✓${ansi.reset} Connected to ${ansi.bold}${creds.orgName}${ansi.reset}`);
-  console.log(`   ${ansi.dim}- Environment:${ansi.reset} ${creds.env}`);
-  console.log(`   ${ansi.dim}- Public key: ${ansi.reset} ${creds.publicKey}`);
-  console.log(`   ${ansi.dim}- Secret key: ${ansi.reset} ${creds.secretKey}`);
+  console.log(`   ${ansi.green}✓${ansi.reset} Connected to ${ansi.bold}${creds.orgName}${ansi.reset} ${ansi.dim}(${creds.env})${ansi.reset}`);
   console.log();
 
   const project = detectProjectType(process.cwd());
@@ -299,37 +309,20 @@ export async function runOnboarding(): Promise<OnboardingResult> {
       [`${prefix}AGENTVIEW_ENV`]: creds.env,
     };
     const write = await promptYesNo(
-      `Detected a ${ansi.bold}${project.type}${ansi.reset} project. Write these to .env.local?`,
+      `Detected a ${ansi.bold}${project.type}${ansi.reset} project. Save credentials to .env.local?`,
     );
     if (write) {
-      const envPath = path.join(process.cwd(), ".env.local");
-      upsertEnvFile(envPath, vars);
-      console.log(`   ${ansi.green}✓${ansi.reset} Saved to .env.local`);
-    } else {
-      console.log(`   ${ansi.dim}Skipped. Add the variables above to .env.local to reuse them next time.${ansi.reset}`);
+      upsertEnvFile(path.join(process.cwd(), ".env.local"), vars);
+      console.log(`   ${ansi.green}✓${ansi.reset} Saved to .env.local ${ansi.dim}(${Object.keys(vars).join(", ")})${ansi.reset}`);
+      console.log();
+      return true;
     }
-  } else {
-    console.log(`   ${ansi.dim}Couldn't detect Next.js or Vite. Add these to your environment:${ansi.reset}`);
-    console.log();
-    console.log(`     AGENTVIEW_API_KEY=${creds.secretKey}`);
-    console.log(`     NEXT_PUBLIC_AGENTVIEW_API_KEY=${creds.publicKey}   ${ansi.dim}# or VITE_… for Vite${ansi.reset}`);
-    console.log(`     NEXT_PUBLIC_AGENTVIEW_ENV=${creds.env}             ${ansi.dim}# or VITE_… for Vite${ansi.reset}`);
-    console.log();
-    console.log(`   ${ansi.dim}Make sure the public key and env are exposed to the browser${ansi.reset}`);
-    console.log(`   ${ansi.dim}(NEXT_PUBLIC_ in Next.js, VITE_ in Vite).${ansi.reset}`);
   }
+
+  // Not persisted (declined, or unrecognized project): print the values and
+  // instructions so the user can set them and re-run.
   console.log();
-
-  // Make the secret available to the current process immediately, regardless
-  // of whether the user chose to persist it, then reload so any freshly
-  // written .env.local vars (public key, env) are picked up too.
-  process.env.AGENTVIEW_API_KEY = creds.secretKey;
-  reloadEnv();
-
-  return {
-    secretKey: creds.secretKey,
-    publicKey: creds.publicKey,
-    env: creds.env,
-    orgName: creds.orgName,
-  };
+  printManualInstructions(creds, project);
+  console.log();
+  return false;
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import "./loadEnv.js";
+import { reloadEnv } from "./loadEnv.js";
 
 // Silence untun's consola output before any module that pulls it in is loaded.
 process.env.CONSOLA_LEVEL ??= "-999";
@@ -123,14 +123,22 @@ export async function runCli() {
 
       // Onboard the user through the browser when no API key is available yet.
       let apiKey = opts.apiKey ?? process.env.AGENTVIEW_API_KEY;
-      let onboardedEnv: string | undefined;
       if (!apiKey) {
-        const result = await runOnboarding();
-        apiKey = result.secretKey;
-        onboardedEnv = result.env;
+        const saved = await runOnboarding();
+        if (!saved) {
+          // Credentials weren't written automatically — the user has been shown
+          // the values and told to set them. Stop so they can set them and re-run.
+          process.exit(0);
+        }
+        // Pick up the freshly written .env.local (API key + public vars).
+        reloadEnv();
+        apiKey = opts.apiKey ?? process.env.AGENTVIEW_API_KEY;
+        if (!apiKey) {
+          throw new Error("Credentials were saved but could not be loaded. Please re-run the command.");
+        }
       }
 
-      const env = opts.env ?? onboardedEnv ?? (await loadConfig()).env;
+      const env = opts.env ?? (await loadConfig()).env;
       currentEnv = env;
 
       client = createStandardClient({ apiKey, env });
