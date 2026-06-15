@@ -76,7 +76,7 @@ export async function clientAction({ request }: Route.ActionArgs): Promise<Actio
 
   // For open signup, the personal organization is created automatically by the backend.
   // The dashboard route redirects to the user's organization.
-  return redirect('/');
+  return redirect('/dashboard');
 }
 
 export default function Signup() {

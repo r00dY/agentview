@@ -236,9 +236,9 @@ export async function authnAllowAnon(headers: Headers): Promise<Principal> {
   // API Key is always required, let's verify
   const bearer = extractBearerToken(headers)
 
-  if (!bearer) {
-    throw new AgentViewError("Missing API Key", 401);
-  }
+  // if (!bearer) {
+  //   throw new AgentViewError("Missing API Key", 401);
+  // }
 
   // x-organization-id and cookies participate in member-session resolution, so they're part of the key
   const cacheKey = `${bearer}|${headers.get('x-organization-id') ?? ''}|${env ?? ''}|${headers.get('cookie') ?? ''}`;
@@ -254,7 +254,7 @@ export async function authnAllowAnon(headers: Headers): Promise<Principal> {
   return bearerPrincipal;
 }
 
-async function resolveBearerPrincipal(headers: Headers, bearer: string, env: string | undefined): Promise<BearerPrincipal> {
+async function resolveBearerPrincipal(headers: Headers, bearer: string | null, env: string | undefined): Promise<BearerPrincipal> {
   let bearerPrincipal: BearerPrincipal
 
   // Check for member session
@@ -280,6 +280,10 @@ async function resolveBearerPrincipal(headers: Headers, bearer: string, env: str
   }
   // API Key auth
   else {
+    if (!bearer) {
+      throw new AgentViewError("Missing API Key", 401);
+    }
+
     const { valid, error, key } = await auth.api.verifyApiKey({
       body: {
         key: bearer,

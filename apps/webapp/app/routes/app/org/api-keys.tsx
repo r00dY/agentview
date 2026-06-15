@@ -16,19 +16,29 @@ import { Badge } from "@agentview/studio/components/ui/badge";
 import { queryClient } from "~/queryClient";
 import { queryKeys } from "~/queryKeys";
 import { listApiKeyPairs, type ApiKeyPair } from "~/apiKeyPairs";
+import { apiRequest } from "~/apiClient";
 import type { clientLoader as orgLayoutLoader } from "./layout";
 
+// The logged-in user's local (dev) environment is the one whose `user` is them
+// (production environments have a null user).
+type EnvironmentRecord = { id: string; handle: string; user: { id: string } | null };
+
 export async function clientLoader({ params }: Route.LoaderArgs) {
-  const pairs = await queryClient.fetchQuery({
-    queryKey: queryKeys.apiKeys(),
-    queryFn: () => listApiKeyPairs(params.orgId),
-  });
+  const [pairs, environments] = await Promise.all([
+    queryClient.fetchQuery({
+      queryKey: queryKeys.apiKeys(),
+      queryFn: () => listApiKeyPairs(params.orgId),
+    }),
+    queryClient.fetchQuery({
+      queryKey: queryKeys.environments(params.orgId),
+      queryFn: () => apiRequest<EnvironmentRecord[]>(params.orgId, "GET", "/api/environments"),
+    }),
+  ]);
 
-  if (pairs.error) {
-    return { pairs: [] as ApiKeyPair[] };
-  }
-
-  return { pairs: pairs.data ?? [] };
+  return {
+    pairs: pairs.error ? [] : (pairs.data ?? []),
+    environments,
+  };
 }
 
 function KeyCell({ keyRecord }: { keyRecord: ApiKeyPair["secret"] }) {
@@ -42,10 +52,12 @@ function KeyCell({ keyRecord }: { keyRecord: ApiKeyPair["secret"] }) {
 
 export default function ApiKeys() {
   const layoutData = useRouteLoaderData<typeof orgLayoutLoader>("routes/app/org/layout");
-  const { pairs } = useLoaderData<typeof clientLoader>();
+  const { pairs, environments } = useLoaderData<typeof clientLoader>();
   const { orgId } = useParams();
 
   const me = layoutData?.me;
+  const userEnv = environments.find((e) => e.user?.id === me?.id);
+  const envHandle = userEnv?.handle ?? "local-...";
 
   // Only admin/owner can access this page
   if (me && me.role !== "admin" && me.role !== "owner") {
@@ -70,8 +82,10 @@ export default function ApiKeys() {
         <h3 className="text-sm font-medium mb-2">.env</h3>
         <div className="mb-6 p-4 border rounded-md bg-muted/50">
           <pre className="text-sm text-foreground font-mono">
-{`VITE_AGENTVIEW_ORGANIZATION_ID=${orgId}
-AGENTVIEW_API_KEY=sk_...`}
+{`# Example for Next.js + local environment
+AGENTVIEW_API_KEY=sk_...
+NEXT_PUBLIC_AGENTVIEW_API_KEY=pk_...
+NEXT_PUBLIC_AGENTVIEW_ENV=${envHandle}`}
           </pre>
         </div>
 
