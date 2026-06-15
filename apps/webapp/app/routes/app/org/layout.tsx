@@ -217,14 +217,6 @@ export default function OrgLayout() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={isMenuLinkActive("/api-keys")}>
-                    <Link to={`${basePath}/api-keys`}>
-                      <KeyRound className="h-4 w-4" />
-                      <span>API Keys</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={isMenuLinkActive("/members")}>
                     <Link to={`${basePath}/members`}>
                       <UsersIcon className="h-4 w-4" />
@@ -233,13 +225,21 @@ export default function OrgLayout() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={isMenuLinkActive("/api-keys")}>
+                    <Link to={`${basePath}/api-keys`}>
+                      <KeyRound className="h-4 w-4" />
+                      <span>API Keys</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                {/* <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={isMenuLinkActive("/channels")}>
                     <Link to={`${basePath}/channels`}>
                       <MessageSquare className="h-4 w-4" />
                       <span>Channels</span>
                     </Link>
                   </SidebarMenuButton>
-                </SidebarMenuItem>
+                </SidebarMenuItem> */}
               </SidebarMenu>
             </SidebarGroup>}
 
