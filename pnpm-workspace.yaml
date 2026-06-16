@@ -11,6 +11,9 @@ overrides:
   zod: ^4.4.3
   react: ^19.1
   react-dom: ^19.1
+  "@types/react": 19.2.7
+  "@types/react-dom": 19.2.3
+  csstype: 3.2.3
 
 patchedDependencies:
   ai@6.0.158: patches/ai@6.0.158.patch

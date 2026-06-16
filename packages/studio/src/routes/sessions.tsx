@@ -25,9 +25,11 @@ async function loader({ request }: LoaderFunctionArgs) {
 
   try {
     // userId and space are mutually exclusive at the API level
+    const page = listParams.page === undefined ? undefined : Number(listParams.page);
+    const shared = listParams.shared === undefined ? undefined : listParams.shared === "true";
     const listOptions = listParams.userId
-      ? { userId: listParams.userId, page: listParams.page }
-      : { space: listParams.space, shared: listParams.shared, ownerId: listParams.ownerId, page: listParams.page };
+      ? { userId: listParams.userId, page }
+      : { space: listParams.space, shared, ownerId: listParams.ownerId, page };
 
     const currentParams = new URLSearchParams(window.location.search);
     const isSamePage =
