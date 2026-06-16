@@ -137,7 +137,7 @@ describe('ai-sdk timeouts', () => {
     // The run never entered the streaming phase, so it never became active.
     // Session view filters out inactive runs → session looks idle.
     const finalSession = await client.sessions.get(session.id);
-    expect(finalSession.status).toBe('idle');
+    expect(finalSession.isRunning).toBe(false);
     expect(finalSession.messages.length).toBe(0);
   }, TEST_TIMEOUT);
 
@@ -222,8 +222,9 @@ describe('ai-sdk timeouts', () => {
     // { code: 'STREAM_TERMINATED', message: 'failed (Timeout)' }, not the
     // raw { message: 'Timeout' } from the worker.
     const finalSession = await client.sessions.get(session.id);
-    expect(finalSession.status).toBe('failed');
-    expect(finalSession.reason?.code).toBe('STREAM_TERMINATED');
-    expect(finalSession.reason?.message).toContain('Timeout');
+    const lastMessageMeta = finalSession.messages[finalSession.messages.length - 1].metadata?._agentview;
+    expect(lastMessageMeta?.status).toBe('failed');
+    expect(lastMessageMeta?.reason?.code).toBe('STREAM_TERMINATED');
+    expect(lastMessageMeta?.reason?.message).toContain('Timeout');
   }, TEST_TIMEOUT);
 });
