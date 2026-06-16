@@ -13,7 +13,7 @@ import { agentview } from "../../lib/agentview";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Form } from "../ui/form";
+import { FormProvider } from "../ui/form";
 import React from "react";
 import type { ScoreConfig } from "../../types";
 import { UserAvatar } from "./UserAvatar";
@@ -433,7 +433,7 @@ export function CommentMessageItem({ message, target, scoreConfigs, compressionL
                         </Alert>
                     )}
 
-                    <Form {...form}>
+                    <FormProvider {...form}>
                         <form onSubmit={form.handleSubmit(submit)} className="space-y-2">
                             <AVFormField
                                 key={"comment"}
@@ -467,7 +467,7 @@ export function CommentMessageItem({ message, target, scoreConfigs, compressionL
                                 </Button>
                             </div>
                         </form>
-                    </Form>
+                    </FormProvider>
 
                 </div>) : <div className="space-y-2">
 

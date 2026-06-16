@@ -23,7 +23,7 @@ import { PropertyList, PropertyListItem, PropertyListTextValue, PropertyListTitl
 import { AssistantMessage, Step, StepContent, StepTitle, UserMessage, UserMessageInput } from "../components/session-item";
 import { Alert, AlertDescription } from "../components/ui/alert";
 import { Button } from "../components/ui/button";
-import { Form as HookForm } from "../components/ui/form";
+import { FormProvider } from "../components/ui/form";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
 import { config } from "../config";
@@ -32,7 +32,6 @@ import { useRerender } from "../hooks/useRerender";
 import { agentview, AgentViewError } from "../lib/agentview";
 import { getListParams, toQueryParams } from "../lib/listParams";
 import { useSessionContext } from "../lib/SessionContext";
-import { useSession } from "../lib/useSession";
 import React from "react";
 import { LoadingIndicator } from "../components/internal/LoadingIndicator";
 import { useChat } from '@ai-sdk/react'
@@ -1246,7 +1245,7 @@ function ScoresDialog({ target, open, onOpenChange, scoreConfigs, scores }: { ta
                         </Alert>
                     )}
 
-                    <HookForm {...form}>
+                    <FormProvider {...form}>
                         <form onSubmit={form.handleSubmit(submit)} className="space-y-4">
                             <div className="space-y-2">
                                 {scoreConfigs.map((scoreConfig) => (
@@ -1277,7 +1276,7 @@ function ScoresDialog({ target, open, onOpenChange, scoreConfigs, scores }: { ta
                                 </Button>
                             </div>
                         </form>
-                    </HookForm>
+                    </FormProvider>
 
                 </div>
             </PopoverContent>
