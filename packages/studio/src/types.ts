@@ -1,6 +1,7 @@
 import type { BaseScoreConfig, BaseAgentViewConfig, SharedAgentConfig } from "agentview/baseConfigTypes";
 import type { AgentViewClient, Session, SessionBase } from "agentview";
 import type { UIMessage } from "ai";
+import type { CachedAgentViewClient } from "./lib/cached-agentview";
 
 export type CustomRoute = {
   title: React.ReactNode;
@@ -43,7 +44,7 @@ export type AgentInputComponentProps = {
 export type AgentInputComponent = React.ComponentType<AgentInputComponentProps>
 
 export type NewSessionComponentProps = {
-  client: AgentViewClient,
+  client: CachedAgentViewClient,
   agent: string,
   redirectToSession: (sessionId: string) => void,
 }
