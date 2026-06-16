@@ -346,13 +346,16 @@ importers:
 
   packages/agentview:
     dependencies:
-      ai:
-        specifier: ^6.0.0
-        version: 6.0.79(zod@4.4.3)
-    devDependencies:
       '@agentview/zod-from-json-schema':
         specifier: workspace:*
         version: link:../zod-from-json-schema
+      ai:
+        specifier: ^6.0.0
+        version: 6.0.79(zod@4.4.3)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
       '@types/node':
         specifier: ^20
         version: 20.19.17
@@ -374,9 +377,6 @@ importers:
       vitest:
         specifier: ^4.0.7
         version: 4.0.12(@opentelemetry/api@1.9.0)(@types/debug@4.1.12)(@types/node@20.19.17)(jiti@2.6.1)(jsdom@29.1.1(@noble/hashes@2.0.1))(lightningcss@1.32.0)(tsx@4.20.5)(yaml@2.8.1)
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
 
   packages/agentview-python:
     devDependencies:

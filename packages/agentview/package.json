@@ -34,11 +34,11 @@
     }
   },
   "dependencies": {
-    "ai": "^6.0.0"
+    "ai": "^6.0.0",
+    "zod": "^4.4.3",
+    "@agentview/zod-from-json-schema": "workspace:*"
   },
   "devDependencies": {
-    "zod": "^4.4.3",
-    "@agentview/zod-from-json-schema": "workspace:*",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3",
     "@types/node": "^20",
