@@ -9,7 +9,6 @@ export type CustomRoute = {
   Component: React.ComponentType;
 }
 
-
 export type DisplayProperty<TInputArgs = any> = {
   title: string;
   value: (args: TInputArgs) => React.ReactNode;

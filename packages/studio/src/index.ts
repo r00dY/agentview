@@ -20,3 +20,5 @@ export * from "./components/PropertyList";
 export * from "./colors";
 
 export * from "./defineConfig";
+
+export * from "./types";
