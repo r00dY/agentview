@@ -15,7 +15,7 @@ export default async function SessionPage({
     throw new Error("No user token found");
   }
 
-  const session = await serverClient.as(userToken).getSession({ id });
+  const session = await serverClient.asUser({ token: userToken }).sessions.get(id);
 
   return (
     <div

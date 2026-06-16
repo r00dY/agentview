@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { cp, mkdir, readdir, stat } from 'node:fs/promises';
+import { cp, mkdir, readdir, rename, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -57,12 +57,21 @@ async function main() {
     },
   });
 
+  // npm strips `.gitignore` from published tarballs, so the template ships it as
+  // `gitignore`; restore the dotfile name in the scaffolded project.
+  await rename(path.join(targetDir, 'gitignore'), path.join(targetDir, '.gitignore')).catch(
+    (err) => {
+      if (err && err.code !== 'ENOENT') throw err;
+    },
+  );
+
   console.log(`\nSuccess! Created project at: ${targetDir}`);
   console.log('Next steps:');
   console.log(`  cd ${path.relative(cwd, targetDir) || '.'}`);
-  console.log('  (add environment variables to .env file)');
   console.log('  npm install');
-  console.log('  npm run dev');
+  console.log('  cp .env.example .env.local   # then add your OPENAI_API_KEY');
+  console.log('  npm run dev:agentview        # connects your project to AgentView');
+  console.log('  npm run dev                  # starts the app');
 }
 
 main().catch((err) => {

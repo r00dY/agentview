@@ -209,7 +209,7 @@ export function ChatUI(props: {
           }}
           onClick={() => {
             // stop()
-            client.as(userToken).cancelRun({ sessionId: session.id });
+            client.asUser({ token: userToken }).sessions.cancelRun(session.id);
           }}
         >
           Cancel

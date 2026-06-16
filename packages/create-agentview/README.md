@@ -12,13 +12,16 @@ This will copy the bundled `template/` into `my_dir`.
 
 ## Publishing (for maintainers)
 
-The `publish` script will:
-- Build the `template/` from `apps/studio` (excluding node_modules, .react-router, and common build artifacts)
-- Set the template `package.json` name to `my-agentview-app` and version to `0.0.1`
-- Publish the package to npm
+`npm run build` bundles `dist/template/` from `apps/examples/ai-sdk-demo`:
+- excludes `node_modules`, build artifacts, and any `.env*` files (secrets stay out)
+- adds a `.env.example` and `.gitignore`
+- rewrites `package.json` (name `my-agentview-app`, version `0.0.1`, `workspace:*`
+  deps pinned to the current release version)
+
+This package is published as part of the monorepo release flow (run from the repo
+root), which builds and publishes all packages together:
 
 ```bash
-cd packages/create-agentview
-npm run publish
+pnpm release patch   # or minor / major / prerelease <preid>
 ```
 

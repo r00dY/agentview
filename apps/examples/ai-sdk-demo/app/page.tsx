@@ -21,13 +21,13 @@ export default function Home() {
 
     let userToken = await getUserToken();
     if (!userToken) {
-      const user = await client.createUser();
-      userToken = user.token;
-      setUserToken(user.token);
+      const { token } = await client.users.createAnon();
+      userToken = token;
+      setUserToken(token);
     }
 
     try {
-      const session = await client.as(userToken).createSession({
+      const session = await client.asUser({ token: userToken }).sessions.create({
         agent: "weather-chat",
         input: {
           role: "user",

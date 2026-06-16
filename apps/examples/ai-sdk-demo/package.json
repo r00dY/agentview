@@ -4,9 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev:agentview": "npx agentview dev --verbose",
     "dev": "next dev",
-    "dev:both": "concurrently \"npm run dev:agentview\" \"npm run dev\"",
     "build": "next build",
     "start": "next start"
   },
@@ -14,8 +12,6 @@
     "@agentview/studio": "workspace:*",
     "@ai-sdk/openai": "^3.0.26",
     "@ai-sdk/react": "^3.0.81",
-    "@braintrust/otel": "^0.2.0",
-    "@vercel/otel": "^2.1.1",
     "agentview": "workspace:*",
     "ai": "^6.0.79",
     "braintrust": "^3.4.0",
