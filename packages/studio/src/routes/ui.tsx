@@ -33,11 +33,11 @@ const jsonExample : any = {
 };
 
 const shapeOptions = [
-  { value: "circle", label: "Circle", color: "#fecaca", icon: CircleIcon },
-  { value: "square", label: "Square", color: "#bbf7d0", icon: SquareIcon },
-  { value: "triangle", label: "Triangle", color: "#bfdbfe", icon: TriangleIcon },
-  { value: "hexagon", label: "Hexagon", color: "#fef08a", icon: HexagonIcon },
-  { value: "star", label: "Star", color: "#e9d5ff", icon: StarIcon },
+  { value: "circle", label: "Circle", color: "#fecaca", icon: <CircleIcon className="size-4" /> },
+  { value: "square", label: "Square", color: "#bbf7d0", icon: <SquareIcon className="size-4" /> },
+  { value: "triangle", label: "Triangle", color: "#bfdbfe", icon: <TriangleIcon className="size-4" /> },
+  { value: "hexagon", label: "Hexagon", color: "#fef08a", icon: <HexagonIcon className="size-4" /> },
+  { value: "star", label: "Star", color: "#e9d5ff", icon: <StarIcon className="size-4" /> },
 ];
 
 function Component() {

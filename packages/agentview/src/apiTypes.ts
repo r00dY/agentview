@@ -347,14 +347,14 @@ export const SessionUpdateSchema = z.object({
 export type SessionUpdate = z.infer<typeof SessionUpdateSchema>
 
 export const PublicSessionsGetQueryParamsSchema = z.object({
-  page: z.coerce.number().int().positive().optional(),
-  limit: z.coerce.number().int().positive().max(100).optional(),
+  page: z.union([z.number(), z.string()]).optional(),
+  limit: z.union([z.number(), z.string()]).optional()
 });
 
 export const SessionsGetQueryParamsSchema = PublicSessionsGetQueryParamsSchema.extend({
   userId: z.string().optional(),
   space: SpaceSchema.optional(), // necessary if userId is not provided
-  shared: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
+  shared: z.union([z.boolean(), z.enum(['true', 'false'])]).optional().transform(v => v === undefined ? undefined : (v === true || v === 'true')),
   ownerId: z.string().optional(), // only valid when space='playground'; "me" expands to current member
 })
 

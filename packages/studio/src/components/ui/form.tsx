@@ -16,6 +16,8 @@ import {
 import { cn } from "../../lib/utils"
 import { Label } from "./label"
 
+const Form = FormProvider
+
 type FormFieldContextValue<
   TFieldValues extends FieldValues = FieldValues,
   TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>,
@@ -156,7 +158,7 @@ function FormMessage({ className, ...props }: React.ComponentProps<"p">) {
 
 export {
   useFormField,
-  FormProvider,
+  Form,
   FormItem,
   FormLabel,
   FormControl,
