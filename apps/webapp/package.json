@@ -38,5 +38,5 @@
     "vite": "^7.1.7",
     "vite-tsconfig-paths": "^5.1.4"
   },
-  "version": "0.1.13"
+  "version": "0.2.0"
 }

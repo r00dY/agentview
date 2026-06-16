@@ -2,7 +2,7 @@
     "__name": "zod-from-json-schema - the original name from which this package was forked",
     "__version": "0.5.2 // the original version from which this package was forked",
     "name": "@agentview/zod-from-json-schema",
-    "version": "0.1.13",
+    "version": "0.2.0",
     "description": "Creates Zod types from JSON Schema at runtime",
     "main": "dist/index.js",
     "module": "dist/index.mjs",

@@ -1,6 +1,6 @@
 {
   "name": "@agentview/studio",
-  "version": "0.1.13",
+  "version": "0.2.0",
   "type": "module",
   "files": [
     "dist"
@@ -93,7 +93,7 @@
     "@vitejs/plugin-react": "^5.1.2",
     "agentview": "workspace:*",
     "ai": "^6.0.168",
-    "better-auth": "^1.6.17",    
+    "better-auth": "^1.6.17",
     "@better-auth/api-key": "^1.6.16",
     "chokidar": "^5.0.0",
     "chokidar-cli": "^3.0.0",
