@@ -8,15 +8,13 @@ async function action({ request, params }: ActionFunctionArgs): Promise<ActionRe
     if (request.method === 'DELETE') {
         const body = await request.json();
         return await withErrorHandling(() =>
-            // agentview().deleteComment({ id: commentId, sessionId: body.sessionId })
-            agentview().comments.delete(commentId)
+            agentview().comments.delete(commentId, { sessionId: body.sessionId })
         );
     }
     else if (request.method === 'PUT') {
         const body = await request.json();
         return await withErrorHandling(() =>
-            // agentview().updateComment({ id: commentId, content: body.comment, sessionId: body.sessionId })
-            agentview().comments.update(commentId, { content: body.comment })
+            agentview().comments.update(commentId, { content: body.comment }, { sessionId: body.sessionId })
         );
     }
 
