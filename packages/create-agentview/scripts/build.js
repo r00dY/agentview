@@ -15,8 +15,8 @@ function isExcluded(relativePath) {
   if (segs.includes('.react-router')) return true;
   if (segs.includes('.next')) return true;
   if (segs.includes('build') || segs.includes('dist') || segs.includes('coverage')) return true;
-  // Never ship secrets: any .env / .env.* file (the template provides .env.example instead).
-  if (base === '.env' || base.startsWith('.env.')) return true;
+  // Never ship secrets: any .env / .env.* file — except the committed .env.example.
+  if ((base === '.env' || base.startsWith('.env.')) && base !== '.env.example') return true;
   if (base === '.DS_Store') return true;
   if (base === 'package-lock.json') return true;
   if (base === 'tsconfig.tsbuildinfo') return true;
@@ -40,23 +40,6 @@ function updateWorkspaceDependencies(packageJson, repoVersion) {
   }
   return updatedPkg;
 }
-
-// Placeholder env file so users know what to set. Real AgentView credentials are
-// written to .env.local by `agentview` onboarding on first `npm run dev`.
-const ENV_EXAMPLE = `# OpenAI (used by the example agent endpoints)
-OPENAI_API_KEY=
-
-# Optional: Braintrust tracing (see instrumentation.ts)
-PROJECT_NAME=My Project
-BRAINTRUST_API_KEY=
-
-# AgentView credentials are added to .env.local automatically the first time
-# you run \`npm run dev:agentview\` (browser onboarding). You can also set them
-# manually here:
-#   AGENTVIEW_API_KEY=
-#   NEXT_PUBLIC_AGENTVIEW_PUBLIC_API_KEY=
-#   NEXT_PUBLIC_AGENTVIEW_ENV=
-`;
 
 const GITIGNORE = `# dependencies
 node_modules
@@ -118,10 +101,9 @@ async function buildTemplate() {
   if (updatedPkg.private) delete updatedPkg.private;
   await writeFile(pkgJsonPath, JSON.stringify(updatedPkg, null, 2) + '\n', 'utf8');
 
-  // provide env + gitignore for the scaffolded app.
+  // The example ships its own .env.example (copied above). Provide a .gitignore:
   // npm strips files named `.gitignore` from published tarballs, so ship it as
   // `gitignore` and let the scaffolder (bin/index.js) rename it on copy.
-  await writeFile(path.join(templateDir, '.env.example'), ENV_EXAMPLE, 'utf8');
   await writeFile(path.join(templateDir, 'gitignore'), GITIGNORE, 'utf8');
 
   console.log(`Template built from apps/examples/${EXAMPLE} (v${version}).`);

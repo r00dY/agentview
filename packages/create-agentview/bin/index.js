@@ -69,9 +69,8 @@ async function main() {
   console.log('Next steps:');
   console.log(`  cd ${path.relative(cwd, targetDir) || '.'}`);
   console.log('  npm install');
-  console.log('  cp .env.example .env.local   # then add your OPENAI_API_KEY');
-  console.log('  npm run dev:agentview        # connects your project to AgentView');
-  console.log('  npm run dev                  # starts the app');
+  console.log('  npx agentview dev   # connects your project to AgentView');
+  console.log('  npm run dev         # starts the app');
 }
 
 main().catch((err) => {

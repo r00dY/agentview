@@ -13,8 +13,8 @@ This will copy the bundled `template/` into `my_dir`.
 ## Publishing (for maintainers)
 
 `npm run build` bundles `dist/template/` from `apps/examples/ai-sdk-demo`:
-- excludes `node_modules`, build artifacts, and any `.env*` files (secrets stay out)
-- adds a `.env.example` and `.gitignore`
+- excludes `node_modules`, build artifacts, and any `.env*` files except `.env.example`
+- adds a `.gitignore`
 - rewrites `package.json` (name `my-agentview-app`, version `0.0.1`, `workspace:*`
   deps pinned to the current release version)
 
