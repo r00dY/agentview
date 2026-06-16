@@ -375,26 +375,6 @@ export function getSessionListFilter(tx: TenantTransaction, params: z.infer<type
   return and(...filters);
 }
 
-function normalizeNumberParam(value: number | string | undefined, defaultValue: number) {
-  let numValue: number;
-
-  if (!value) {
-    numValue = defaultValue;
-  }
-  else if (typeof value === 'string') {
-    numValue = parseInt(value);
-  }
-  else {
-    numValue = value;
-  }
-
-  if (isNaN(numValue)) {
-    return 1;
-  }
-
-  return Math.max(numValue, 1);
-}
-
 function buildPaginationMetadata(totalCount: number, page: number, limit: number, offset: number) {
   const totalPages = Math.ceil(totalCount / limit);
   return {
