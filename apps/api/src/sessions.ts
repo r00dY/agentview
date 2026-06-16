@@ -439,8 +439,8 @@ function mapSessionRow(row: {
 }
 
 export async function getSessions(tx: TenantTransaction, params: SessionsGetQueryParams): Promise<SessionsPaginatedResponse> {
-  const limit = normalizeNumberParam(params.limit, DEFAULT_LIMIT);
-  const page = normalizeNumberParam(params.page, DEFAULT_PAGE);
+  const limit = params.limit ?? 50;
+  const page = params.page ?? 1;
 
   const MAX_LIMIT = 1000;
   if (limit > MAX_LIMIT) {
