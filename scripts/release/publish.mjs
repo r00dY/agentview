@@ -1,16 +1,9 @@
 #!/usr/bin/env node
 import path from 'node:path';
-import { REPO_ROOT, PACKAGES, run, getRootVersion, getDistTagFromVersion, tagExists } from './utils.mjs';
+import { REPO_ROOT, PACKAGES, run, getRootVersion, getDistTagFromVersion } from './utils.mjs';
 
 export async function publishPackages() {
   const version = await getRootVersion();
-
-  // Verify git tag exists
-  if (!tagExists(version)) {
-    console.error(`Error: Git tag v${version} does not exist.`);
-    console.error('Run "pnpm release:version" first to create a tagged version.');
-    process.exit(1);
-  }
 
   const tag = getDistTagFromVersion(version);
   console.log(`Publishing v${version} with dist-tag "${tag}"...\n`);

@@ -33,15 +33,6 @@ export function isRepoClean() {
   }
 }
 
-export function tagExists(version) {
-  try {
-    runQuiet(`git rev-parse v${version}`, { cwd: REPO_ROOT });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export async function readJSON(filePath) {
   const raw = await readFile(filePath, 'utf8');
   return JSON.parse(raw);
