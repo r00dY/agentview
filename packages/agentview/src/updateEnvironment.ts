@@ -1,7 +1,7 @@
 import type { Environment, EnvironmentCreate } from "./apiTypes.js";
 import type { InternalConfig } from "./baseConfigTypes.js";
 import { serializeConfig } from "./baseConfigUtils.js";
-import type { AgentViewBase, AgentViewClient } from "./client.js";
+import type { AgentViewBase } from "./client.js";
 
 export const configDefaults: {
     __internal?: InternalConfig
