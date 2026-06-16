@@ -97,7 +97,7 @@ export default defineConfig({
         displayProperties: [
           {
             title: "Random",
-            value: ({ assistantMessage }) => assistantMessage?.metadata?.random ?? "unknown"
+            value: ({ assistantMessage }) => (assistantMessage?.metadata as any)?.random ?? "unknown"
           }
         ]
       },
