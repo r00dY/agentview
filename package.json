@@ -8,7 +8,6 @@
     "release:version": "node ./scripts/release/version.mjs",
     "release:publish": "node ./scripts/release/publish.mjs",
     "release:publish:verdaccio": "node ./scripts/release/publish-verdaccio.mjs",
-    "release:unpublish:verdaccio": "node ./scripts/release/unpublish-verdaccio.mjs",
     "db:clear": "pnpm --filter ./apps/api db:clear",
     "db:generate": "pnpm --filter ./apps/api drizzle-kit generate",
     "dev:api": "pnpm --filter ./apps/api dev",

@@ -57,6 +57,35 @@ export async function getRootVersion() {
   return pkg.version;
 }
 
+// Resolve the verdaccio (local) registry from the environment. Exits if it is
+// unset or points anywhere other than a local registry, so publish/unpublish
+// can never touch a real registry.
+export function getVerdaccioRegistry() {
+  const registry = process.env.VERDACCIO_REGISTRY;
+  if (!registry) {
+    console.error('Error: VERDACCIO_REGISTRY is not set.');
+    console.error('Set it to your local registry, e.g.: export VERDACCIO_REGISTRY=http://localhost:4873');
+    process.exit(1);
+  }
+  if (!/localhost|127\.0\.0\.1/.test(registry)) {
+    console.error(`Refusing to continue: VERDACCIO_REGISTRY is "${registry}".`);
+    console.error('This only runs against a local registry (e.g. verdaccio).');
+    process.exit(1);
+  }
+  return registry;
+}
+
+// Whether a given package version already exists on the registry.
+export function isVersionPublished(pkgName, version, registry) {
+  try {
+    const out = runQuiet(`npm view ${pkgName}@${version} version --registry ${registry}`, { cwd: REPO_ROOT });
+    return out.length > 0;
+  } catch {
+    // npm view exits non-zero when the package/version is unknown.
+    return false;
+  }
+}
+
 export function parseArgs(args) {
   const result = {
     bumpType: null,
