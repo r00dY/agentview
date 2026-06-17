@@ -9,7 +9,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { Command } from "commander";
 
-import { type AgentViewConfig } from "../types";
+import type { AgentViewConfig } from "../types.js";
 import { createStandardClient, StandardAgentViewClient } from "agentview/clientStandard";
 import { updateEnvironment } from "agentview/updateEnvironment";
 import { AgentViewError, getEmailRootDomain } from "agentview";
