@@ -1,25 +1,24 @@
 #!/usr/bin/env node
 import path from 'node:path';
-import { REPO_ROOT, PACKAGES, run, runQuiet, getRootVersion, readJSON } from './utils.mjs';
-
-function getRegistry() {
-  try {
-    return runQuiet('npm config get registry', { cwd: REPO_ROOT });
-  } catch {
-    return '';
-  }
-}
+import { REPO_ROOT, PACKAGES, run, getRootVersion, readJSON } from './utils.mjs';
 
 export async function unpublishPackages() {
   const version = await getRootVersion();
-  const registry = getRegistry();
+  const registry = process.env.VERDACCIO_REGISTRY;
 
-  // Unpublishing is destructive. Only allow it against a local registry
-  // (verdaccio) so a stray run can never yank a real published release.
+  // Unpublishing is destructive, so it only runs against an explicitly
+  // provided local registry (verdaccio) — never the ambient npm config.
+  if (!registry) {
+    console.error('Error: VERDACCIO_REGISTRY is not set.');
+    console.error('Set it to your local registry, e.g.: export VERDACCIO_REGISTRY=http://localhost:4873');
+    process.exit(1);
+  }
+
+  // Double-guard: even if set, refuse anything that isn't a local registry so
+  // a stray value can never yank a real published release.
   if (!/localhost|127\.0\.0\.1/.test(registry)) {
-    console.error(`Refusing to unpublish: registry is "${registry}".`);
+    console.error(`Refusing to unpublish: VERDACCIO_REGISTRY is "${registry}".`);
     console.error('This only runs against a local registry (e.g. verdaccio).');
-    console.error('Point npm at it first, e.g.: export npm_config_registry=http://localhost:4873');
     process.exit(1);
   }
 
