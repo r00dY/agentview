@@ -1,0 +1,29 @@
+{
+  "eventType": "attr_set",
+  "specVersion": 5,
+  "eventData": {
+    "changes": [
+      {
+        "key": "$eve.type",
+        "value": "session"
+      },
+      {
+        "key": "$eve.trigger",
+        "value": "http"
+      },
+      {
+        "key": "$eve.title",
+        "value": "What is the weather in Brooklyn?"
+      }
+    ],
+    "writer": {
+      "type": "step",
+      "stepId": "step_01KVQMCMSQ1Y6BREMBT60BTVC2",
+      "attempt": 1
+    },
+    "allowReservedAttributes": true
+  },
+  "runId": "wrun_01KVQMCMSE3ZE0F2VBP6WGJHTN",
+  "eventId": "evnt_01KVQMCMTNPYFRDXMJ6TNKACE1",
+  "createdAt": "2026-06-22T12:20:24.021Z"
+}

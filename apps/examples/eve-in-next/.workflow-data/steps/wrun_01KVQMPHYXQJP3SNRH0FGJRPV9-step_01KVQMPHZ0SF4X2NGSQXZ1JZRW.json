@@ -1,0 +1,20 @@
+{
+  "runId": "wrun_01KVQMPHYXQJP3SNRH0FGJRPV9",
+  "stepId": "step_01KVQMPHZ0SF4X2NGSQXZ1JZRW",
+  "stepName": "step//eve@0.11.10//notifyDriverStep",
+  "status": "completed",
+  "input": {
+    "__type": "Uint8Array",
+    "data": "enN0ZCi1L/1gyggdKgCqUvQOK9CwVA+MZzRauL1oVelRIa0kBdnLmczCVbN33uE3dT3fznPUOV88wBcPhQPkAOwA4AAzi/Vi917zIH+tEDCsKche2axej5VODuRpJ/jtAxdVQ+ZsB3KMiBz5ckpIY10ZsPVbvqTScSC/WK/G6YzKp1V6kJ/6ldm/NAJ6kKdT2lblJsg+I80gi0f8wk786ga9QdpqfdbsKAeyf38EWuW9EuTX8Kf1IfoGOVtav+wcG24iRZAjlRfsIshV84bjBirUZg8hEFx4kKDea+BgkBQ8OKgEFiAkGDygoOA1D5rZDHYTCHLsOiWNsXsgU7+oEmiV7xO7asUbToOTwU1mU7jSenZPgXxtU3Cb3Tordg/yrbDNGxlmxGOM/VvsJo532UWPr8ViXcH6UpTotjKzqfWnkqnsZf7KaZKi44kgERU7oqaHwpGgqaGmyTFVEPSqR9VuH9JCOYvk4LZWBKZDGuLwoBZncTyHR7NIi+MgX1o8Hs8CLZBDrBsek/SWfocozdIskoPsR/OW95bG4cIotjD3wRdXRnZM9PhIEkUzTRJEmaCIUiCQAylvaiqFmpr3pPgoVARjOjCMi7lfrYs1vYxf8mlmlYhHxiO+MK/hVKFS8YgztzWcuRiW4TLy1CuauV+5RbUSjIVvsJE2c63fCQy7yWNAo0Ii7cvOeS1hPXZdgDUDD998VlB5mwE6Qav8rHINb7NWCcvT/ivv7TYzCmy61bq57ZbVC3SCTkg+RrQAdGKAFNAuu8n0QL78r+Q+0YsoiHogS2z9Ky3pgex4IPudTeGYXeOemzyPzZ6d80DW8EgjMH/qGYa/jR7I7N4DoQfyhSDRqFbitsWueeTVNA/8Wy2GgeyZfTdxOJA/w2jEX88w3EY8KrOrOicQJpEwG5MVlRZjBzmQK/nUn88g0v73tR6htWLHDvVQEkV1dCpSpKaAKJU7IMWhKkjp96iGihzoEWePOGQ3oR7k/o79frGb3oYLGvhndt0qz3PcPD6r0l/aCs4T2yG4VXXFLoqaB3IEecJyr1Pb1pwZdRMngswb7nlN5CYvqw9e0fc6g8euaiVcE0G+NKNSBX97FpB0rB/RaFcto0I0AG4lBDvMgfUoI3WC2EnQO9hNIsj6zdixtNhNHKhadg96+kCugTI4Xq6+za1vVFq3vtJutDbJdNu+0na9xhZpXymZ1EFbLmzNaNPnbNtYu92s6hvSvq1v99vtN494c35pxa5bKtu91DGPVDafmPyZXVmVNIqItrTmtLbb7dLMtjm7apDsNlsDgJ2oAR0zTpmZGRERGUmSdBAUZZQr8xJAlU0pGTNlClJSqs/eAce8xC8XUYfmqc1ZCGwRFEmxYH1tdtft/IIKYh7xm3/cC7KjO5gKMXsctV5vp3kuItU99wpIbYVY7kYSHOpF50Fpnfkc29X4Qkpele5sF6WYgvnt2M2PKMtFryf4MTkUOqqRnK1AnVwCA5o2vrIyVWUUsFSbkcY51OhsFeXC1xDUwb6J1MRtaEwa/MeZ+d8sPI4+6eH1bRMY56AgxqKL/f+K7xxPeZDcYa1jBxpmgjfDxoREEBv1E24gPxATgNbdLNYYIxCwsMheCCU7w7goScITDjI7N+yNmZhHpMwgHk+Nbj1gTN4GTNwsPHjmhOCru360WLOBJxi/FQbjwcs2wGqB6rC3gEepwv0qmHDDamRElGgdL3Ku3j6NLUBKe3+KoFkWMnvWU63PSaP1e2/z4UAwQdFGI4/Qxd8NJd51IpzikCuyKqmCpILtm+CYqk6K/iwwHWQV6zhJVoBs+QM="
+  },
+  "attempt": 1,
+  "startedAt": "2026-06-22T12:25:52.638Z",
+  "createdAt": "2026-06-22T12:25:52.636Z",
+  "updatedAt": "2026-06-22T12:25:52.644Z",
+  "specVersion": 5,
+  "output": {
+    "__type": "Uint8Array",
+    "data": "ZGV2bC0x"
+  },
+  "completedAt": "2026-06-22T12:25:52.644Z"
+}

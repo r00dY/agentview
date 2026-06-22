@@ -39,3 +39,4 @@ minimumReleaseAgeExclude:
   - '@better-auth/prisma-adapter@1.6.17'
   - '@better-auth/telemetry@1.6.17'
   - better-auth@1.6.17
+  - eve@0.12.0

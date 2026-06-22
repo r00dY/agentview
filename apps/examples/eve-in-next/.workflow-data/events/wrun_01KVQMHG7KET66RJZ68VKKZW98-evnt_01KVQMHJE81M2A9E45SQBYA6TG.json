@@ -1,0 +1,15 @@
+{
+  "eventType": "step_completed",
+  "specVersion": 5,
+  "correlationId": "step_01KVQMHG7MGA70ZTRP5RE1J8J7",
+  "eventData": {
+    "stepName": "step//eve@0.11.10//turnStep",
+    "result": {
+      "__type": "Uint8Array",
+      "data": "enN0ZCi1L/1gUwh9KAB6T3gOLMCuqB7480YL9xetKu0s0mbhww1ueuMkfjbSA0n2G9D1/Rt+Gs51FUVRFOcC1ADhAOEAzv3KJ6p1cCYcw0bazrV+ITjsLo/IRZ1E2pcd1Q7WY1cFWC/wmcV6sZsgRyop2Dkgf60PGNYNyF7ZrF6PlXKGu0gQ5Gkh+G0DFFVP5mwIcmx4kHw55aSxriK2fsuXVFIP8vQge6yXwykqREbl0xo9yE/9yuxf2vA8yNMpbatyEmSfkWaTxivOGc7vbIpjCtsYu0sDguzf/4BWea9fdhHkv/Cn9UB0DDlbWr9W9W3gM4w2QJAjElRG6g63LXaPgXz9agaNIW21Pmt2DzKt8qvmDAuz4jFPmrzHMUXoFWevOHyQ+zv2+8VOumQ4xv4tdhfoXXbvZTi+E81ksL4YJrqtzmxq/al0Knudv5KipuiIGpPGI3bjQUUUaJKo50FRDqqSpFdJqnYrmZoH1EwQt7UiMH3SE4jk0UCN40EkTzM1EES+nJBIokZqJEisGBJqek2/T5ineZoJIlvyvOa95oFcGMUa50qY4srIzokeo2miPBQ1TRhKajyYiQRJzKOeinlQz3tTjJhHpWI6sIrLuV+tizW9jl/yaWaZikfHK944f+GUoZLxijvXJ3b1hTsXwyxcVp66RAezqzbJbrP1m08JKm+L0Aha5WeVX3ibtUI0T/uvvLfbzCjYdKt1c9stqxRoBI2wfGxoAWjEACmgXXaXKIJ8+V/LpSSHJEnYVSspgmyx9a+0oAjyiyAzu8c9d3nY7NlREOQLj7QB86eeVfjbCDK7CYL3wXJRrUNez/NE8G+1HAeyg+FhwjMhAUSFSIRBJCJVgBwIGBY4iJDgPRKaWQt2ntl3FwiC/NezCrcVj8zsqs7Lg1kgZmOyotJi7B4IciWf+uN9NpH2v6/1Cq0VO5YepfFi9FAg6GEk6XkwlIkiMQ2qikwXouf4kVCbNT6r0l9aCbH9wa2qK3ZPwwFBdg8JMoTmXqe2rTkz6i6TBJkzXPSehrtMNKsHXKLv9QWPXdU6uIYE+VKLShP87VnA0rF+Q6NdNYvK0AC4lQzsLlgD61FWaiSxg6R/kgXH7C6P5B7Wb8aOpcXuMkXVsnNcoCLXiCw4bq6+za1vVFq3vtJutDbLdNu+0na9xhZpX2mZtEFrKGy1aNPnbNtYu90m7dv6dr/dfvOKN+eXVuy6pbLdSx3zSGXzicmf2ZVVS6M0tKY1p7Xdbpdmts2AlKgBmUJOGTNDEozIKGiSDiBCohCyMg8SQJVNC5FClgpKpf3vKRdVxdyZUEmMNN+QcFq69beXoOqB8XGOIswvYwThtx1zg1QIp3L742n+3urZxLmg3nbf8i8prRHT35xSGclYM6eq+65kwWxnK1WvE048OnZB7xAuvHLwBxXdnN2gRhYsgGhsRW9sZf2q5lDAR7VBMoOaRWfrlYuvIeiB/UYR5KoFkwy2NJgzoqlmGmUkkEyXnXcwsdGneJPh/Z5+3vNrSjp5hfzaTcDYIOPChvKorE7H58hwdhjrf2xuVDcWBLTusYQmTdoBO+vLUYEwwf0tRLxZNoJkQAjtgSHy02lKWCkSbxjtYsUDL9czVTW6wSLJBlUTauTBwmjeuRLbCq2sdeauwCOqcAMVHDCDFyKOS6Q2Ipi6qr2hbkJ2MOVFU7VUQdd/MtVD2RMcrc7DQpeaqRuEN5UdGSppiiU1qJC+uKK/FlEEukrODw=="
+    }
+  },
+  "runId": "wrun_01KVQMHG7KET66RJZ68VKKZW98",
+  "eventId": "evnt_01KVQMHJE81M2A9E45SQBYA6TG",
+  "createdAt": "2026-06-22T12:23:05.416Z"
+}

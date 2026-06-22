@@ -1,0 +1,20 @@
+{
+  "runId": "wrun_01KVQMGXE3FJAS9W4YTSA0266K",
+  "stepId": "step_01KVQMGXE5MH41JQPW6C6616RX",
+  "stepName": "step//eve@0.11.10//notifyDriverStep",
+  "status": "completed",
+  "input": {
+    "__type": "Uint8Array",
+    "data": "enN0ZCi1L/1g/gj9KwCKVcgPOmBrmgMwDMMwDMOmAkZ4w2p/azuJ/C1y5b/s/ylk0gAICMPj8XgLHlKlKhGkNzURERERmrcnKYdhSgnuAPQA6QAT1mPXB1pH+Nxizfg9j/NA/lopNK0jkP2yW70eK60gyNNO8NsINq625mwIcoSYIPlySqu1vg7Y+i1fUglBkJ9YMwfqjcqnlXogP/Vss38phPRAnk5pY9erIPuMdLMYn/iGrXjWEp1B2or91vwiEGT/fgm0ynspyO/hT2uC6BnkbGn98oN8vAo1QY5UbvCbIF/NH48duFC7PZQsVAokKpwIDCwYVCygiCARkaACg4gIFg4eR0I328GvIkGOXSelNX4RZOobtYJW+T61rF788TBAF15ltsWV2PN7FsjXtoXb7dZ58Xsg3wzb/HFhTjwGkF8l8kDu79jvGb/q+Xis/WP8KpDn8psevhqM9UXrbFmi29rMptafyuayt/krq4qKkGiypkjsKVJFGBAlVU6kqiDVJUnPJbnarYRiIhBDPbitV4HpVlsPkggDMZDnQeIwFAM9yJcaEknESIz0EGsGSUU9TL9bi8M4DPUgW+I8zPMwzkOmUY1proQ3roz8mugxoigMp6ooa6mkKbJYEiQtT+VcS6RynoeK0RKZcEyIxpE19yt2taa38Uw+3ewy8dj4xJnmPZwuVC4+8ea2hzdX0zpcTp56Rjf3L9eodqLR8Aw20m6u9Tuh4VeJDnhUK9K+/KCnA1ulOAwIxzjntLrb7tLNujn7ctZ2na3vfGZQed0BekGr/O1yD3ez1grmaf+V97abG4Y2HXPt3LbbqgV6QS8oHyFcAHpBQA5wl1+liiBn/pdyo+mZIlIkgkyx9a/EqAgyJILsdzbGY37Oe14liuz2/KAIsodHCqH5U984/O0UQeb3RFCKIF8Kike1E7cxfk4kM8eJ4N+KNQ1k3+y/CgSC/JtGIf76xuF24nGZfdVZcY1SMVuTF5VW4ydBkC/51KPfLGn/+1qf0HrxY2iiHopyJn/8WioMp1ocq6VFoiBroTCuiEU9E/SJs088GPjndt0ujx3Jb1X6S0sBimI7hWNXX/ymyYkgT5AnMPc6tY3NudFXgSbI/PEgjzO9yrPVBJ7R93rEa1m1E8+ZIF/aUamDvz0NUDrWtxXD1eggHO2LgtOwgUMHB6C+o8R26yJ1zP3dNNzDri1zXyUcAIo34KdBsB7lpFYSP0p6CL/KJFm/Gz/WNncFfGMdTmL8KpBULb9HehpJz5EuPGayvs6xd1Rax77SdrQ6ynTrvlJ3vUYXaV9JmRSCYzZs7XDT52zbmrvtsOvbct/Yu/vt9p1P3D2/tGrXLZXuXuqaRyqdT03+3LKAn6jBnDJQGYPMzIjISJqkAxAUhZSVeRJglUkpGTNlClJSqs/eAQeghJD3k41OVP0/szMJi1wDBZplYHmXI/Dh964X4p/PtWPxGMKDeiQiQjc8ZfFOefP8i3TEnXvRIbRKRd3O68FdfqRl3YSqyGiEwNMNH+BqXwN2zvMOCpqUBAiqE2Up0AsOftkdBImKMmcsYUC1y4Cm5pOsX/UwinqUWqTWHGokewXZfY1FHSBl2JrIgMbGwjVxJpLf+hMHZXob9UkHjHNcEEPRp/3zWnze5z3t7LqssQO2ZyowA+6EFhBt/zNvKHvoKkDBdYPWCDqADrAUuhAAnFlEVEuCLQVkFG34NJB2Gd0KEcbUtfVSTSY0tnWz66HCibpXT3K0AmazJhiSFgbbwa82rmqB1+E+AB5ShZur4LwNmhELXCKVuci8elfDtIBUK/Sk7Vlfc93sR8nECUv03155oXCYONEqo4ikG0wa4PkHg1DHkfXIQ6jXpYxVmjIwEUqC0+SNHHhl2TiJV4Bp+QM="
+  },
+  "attempt": 1,
+  "startedAt": "2026-06-22T12:22:45.816Z",
+  "createdAt": "2026-06-22T12:22:45.814Z",
+  "updatedAt": "2026-06-22T12:22:45.823Z",
+  "specVersion": 5,
+  "output": {
+    "__type": "Uint8Array",
+    "data": "ZGV2bC0x"
+  },
+  "completedAt": "2026-06-22T12:22:45.823Z"
+}

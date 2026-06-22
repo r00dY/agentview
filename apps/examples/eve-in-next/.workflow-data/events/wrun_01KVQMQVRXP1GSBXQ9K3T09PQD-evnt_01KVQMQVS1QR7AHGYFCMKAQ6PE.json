@@ -1,0 +1,22 @@
+{
+  "eventType": "run_created",
+  "specVersion": 5,
+  "eventData": {
+    "deploymentId": "dpl_local@bundled",
+    "workflowName": "workflow//eve//turnWorkflow",
+    "input": {
+      "__type": "Uint8Array",
+      "data": "enN0ZCi1L/1gXwcVJADKRwwNK/CMiB4sY4sWLsmmW2MwZL8QwYuYxMeA52JTdYtqgH77336wXsQNi8Pi8BfFAMYAygB022SxS1Bbi5t+wz60hZRtF4hxy1ZTqoa/5l9yG8RAEVxrWw/00JZ2BcZ+2y4Pt/WxjBbK7XM4MUlu+/kbqgNy+xb9Lg28rgAjQ9p1WwS57Sjhh1TCe1Oe2xxwL9qy7+MYp9c7B4YJDgwJDQccFERUAYnhOdAgQgOGBhEQQE/EL1qxrS/67SJ97Yui6V60y0Ny6xJW2pVtDbd/TV+Y/XUbw20/aW2b3HpPyAcu4Xeclqy2RW5rw4cRSnhytReNAvTwECv9Ao1TIztR4dvmUJPJq6j3nuSoGIckYoYRURPDoBoMJmo8noOCJEwEhVTRmBSWU19S6mSvTlvw/aJMpZ/TlW6ct2hnHDJdaaeyRTt1zoqGlfeOYKd+1RKSMnAkugJ9zk6lXSE42y4SAQspec4RM6D9WCaYzNDxgqL2RG5fSgdzckUvWftJZxCg8hk+dAhJbil/8SPx5fBdOiJ30a++MEVuY7szpWoU5LbpSr+Ozy8JJHIlYyTOt23rFbHopfHelkXGyYDcvgW/AtsaktvqwGIhKYPKlG0MaFX6MXvpaXkQecLKIZ3bJMltBd97WyT9JYH0nynGQ5ImkmmiJhMzPSbMdKOamJ4qinlU0aOa23WltyvtIrf8/Pjb2kZFF23nPyVy28/RVomGNjPZYpjXVDqRnfY7dCpana+QohyvITEkjMdjxoOSJpFjop4HRTWoapqgKlJx04ijeUSNA9JUVgNiS1gCiTyaqGlAkMjTOJoIAh9KRCJSMzUT5MkKEcoBNfwtYZ7maRwQyJEHaiCoeSDW9BkUKDy0bSyurCnPHNKmvHRmLpklNmUvndWWjz3nCi3RF7BmgsoKFjtGpjxZZUapniXsmfKsPutKs9bV5axNHbJavWc/h6zjhB8v65IWNllgDTPWLlllVv2iLEaumOSqjMpnHSMcVkbAIVzCv6q2aBalfNC881dYK7N4TWZsCmPWlNklHRzCISz/FhgAhxAAA7BabbtIk1urv1rqNLm1UPkVUia30OQWarvtaV0jT9qFkiz6OSTvi+L102dyG3+owSBDThllREZEZKQgTQ4QFGWYKzsSICdByJSiOSkoKqnU2M8H96BazxwRSpADIJA0UGZNp1hHqgKU3VE+FzTn1i5/lJEP0hh3bMJ4eZnKyOGGiqxxdM9wiJpKGbPWzyGo59jV9xRO/qAxpTWUhszLEph0ercAz8vFKwDIad9uVX4NUAyNc2mHTcr9YepqdVMBgSdWGtyV6lJX3xOKcfL3RAAGcrgwYrF/2KSxAbJVGFvWyrV9DXJdx5oAPF6FGz+o4MZytIslWsVVpqoqNqMF6FqhCRAO0liFD+yCN9lDDd8k2rHDMIbQjj81rAcrqO25CxYcgcuthAckPAQCuUCZS7QObcIVQlb0yS10zKAMc+2m4sQFyZmZ4MmyGeuFLBTzJmO44HgaiuClPnQLCjwoiEBFnJvTbuhVFQ=="
+    },
+    "executionContext": {
+      "traceCarrier": {},
+      "workflowCoreVersion": "5.0.0-beta.19",
+      "features": {
+        "encryption": false
+      }
+    }
+  },
+  "runId": "wrun_01KVQMQVRXP1GSBXQ9K3T09PQD",
+  "eventId": "evnt_01KVQMQVS1QR7AHGYFCMKAQ6PE",
+  "createdAt": "2026-06-22T12:26:31.585Z"
+}

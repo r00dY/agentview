@@ -1,0 +1,26 @@
+{
+  "runId": "wrun_01KVQMCMSE3ZE0F2VBP6WGJHTN",
+  "status": "running",
+  "deploymentId": "dpl_local@bundled",
+  "workflowName": "workflow//eve//workflowEntry",
+  "specVersion": 5,
+  "executionContext": {
+    "traceCarrier": {},
+    "workflowCoreVersion": "5.0.0-beta.19",
+    "features": {
+      "encryption": false
+    }
+  },
+  "input": {
+    "__type": "Uint8Array",
+    "data": "enN0ZCi1L/1gdAOdFADGbYYkEG/1DPb/sEAK1xC4aMt53z+ycwPst4Zv5XYeP00gFQAAAIALegB4AIUAb3XkHnukFeQTdMGa8id93ONJ5fdPryz7dxY495jyOVsCmeOxU3Fak+KXcwbjgHlBTVBqBxpTNqxLvr2i4ZJvXNn4ljQwm7j2uCuXQIW36luUmWuQmfPYI/perziDTZ7Hb+E/KUF0DEm1tH6ZNY/fqlNyBntwDg7U5THzLl7Jn5Ztl8fFL1eWt/DZpmx++XKdqlVb+HJrrXB5/fSIXu5Dl6AWYZFwDBtnL9f6ZViYTRgnYEGnOPsykx5LvhGsx6YGtQ+csiKtmEWP45QTzKDHT2lCrf147NBa9DKLBR7pbJrH1+VLSk5dGwpY+i1fTim5x5IyiqD4cByTQ4rtkCIHooGeiJGi6BHB53EwAtttBFKkRoEgbikEoHzqCRKRlEZ5OEiEUSClgciXEpGIozzKA4kUIxJBTun3qTEKo0AQ2RHGKc4pDKSqsyrLjfDElZHZEj06EATBRBE0tehxSG16mqe5iIFNihjnoOg06aKgHpWiWu5Tya0dD27ZZxOn4K9bFG4vj41qSKmJ14sFqquEU9rKzDWPofzpzJi3Jmn/mzMYX+sXexRN7TgSdLSjOYRSiw/0NEmCeFpDxBgfxnl+Ofvlj9nk4R73d+z3ipljksG4/kuYTRz32L/fXQmFarWr1qJbulA9rf+UC7R3+RstICBCApVc+Vyk5Nt2jfS1VqIOaFhUko5nULh7O3qTlv07ebAgjkugfA5J187Fio0GAjoAhRE0niOKzdFXIFaHC4CHxYR73sGu1QjyUCxbIpGJYega95zUhTYzpvaA8gVAeXpkcGYGM8yLnLrlOAv0zURwozYRoA=="
+  },
+  "attributes": {
+    "$eve.type": "session",
+    "$eve.trigger": "http",
+    "$eve.title": "What is the weather in Brooklyn?"
+  },
+  "startedAt": "2026-06-22T12:20:23.991Z",
+  "createdAt": "2026-06-22T12:20:23.991Z",
+  "updatedAt": "2026-06-22T12:20:24.021Z"
+}

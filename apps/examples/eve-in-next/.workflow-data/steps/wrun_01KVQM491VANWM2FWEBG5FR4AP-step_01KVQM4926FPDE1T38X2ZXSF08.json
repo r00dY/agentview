@@ -1,0 +1,20 @@
+{
+  "runId": "wrun_01KVQM491VANWM2FWEBG5FR4AP",
+  "stepId": "step_01KVQM4926FPDE1T38X2ZXSF08",
+  "stepName": "step//eve@0.11.10//createSessionStep",
+  "status": "completed",
+  "input": {
+    "__type": "Uint8Array",
+    "data": "enN0ZCi1L/1gAATdFgAm8ZElAHH1dIlpZDtK6o7Yh4vI+Rz++AfTz6IQ6KZWFu2SYP///39YAYIAiQCLAO0csGelF+0i2G9tw72xKa4SPbmd82D/xL9agekbNIsUe66W5uwOby2Omkekw2/3N9tuGvi0tV0F2ytizp7w2620HQW7+oV9qJZ+3Cr9amU7CLZLvFmH/DJi9DFkekavZmVTHMUz4SpZjMg08u3eAjvjGOF4yzaT7R7sXIFjUyYyic/M9KDRch7zHuM8tFsv02SrLzKd7XJTRdgVPUi6sCguz/SqJcKqaIGeyZfrcuzJ6S0TilLpYmhNfhvJN9bcuEa/bniR+Gxc4kzzE69LpYtLvMmeXS1OvMn3ZjiVfPWK2OSXbmHxQmPhG3jW2GTsGaJpV5kgE3vNGnM7CXbk4wL2GS3CjQmebdNqAcx7sD2bdbsYimsaadcXhjmFOaQIm9Ly5LwWDJKixXnuWBzQ4xF6F3SJt+tswWTLjdqyTMc28ltsslixf6WNxLn5TClqmhLkuBzVjI6KgrBniiinoiiJklH0pCWjY2tiqoeZHo6tBMj8itfDqpiHkd7DcpiJeR70qYVlQUzERI9pNyxqekx8vxaHcQIUvQCJGggcBQEDEgRPgoQCJOJVUQJDxMFzrLrhjHa+4XcV6IFt8Nk3DMcSn0sWpc0qfjUesniprBTfdu+BLelXb+f8dlH8HzN2yYMdP874rrWTKK7vf6RdJfr4uR30IPjAzk6fZvSKN0oIth/p00qrB5uaVnM82F9d2/DnavA82JnXGiMyNyAgAkIUQ2ceayT4RnGe7lotog7wv6hJ4k0djsMLmGELdEqQFS4BJAXYMwGgWEVqPsDAO5lwdAHVKIvD5cAlEzDUrbrTs0MNPwDmcotpBaCTD0aTkFSLaC4hnifGVr61CwNoOC+KNszocBnwiJxwwzvotRlBFsSyJQqy0StipjUneyObhI3RyVwajTCGAQRTDw=="
+  },
+  "attempt": 1,
+  "startedAt": "2026-06-22T12:15:49.843Z",
+  "createdAt": "2026-06-22T12:15:49.841Z",
+  "updatedAt": "2026-06-22T12:15:49.848Z",
+  "specVersion": 5,
+  "output": {
+    "__type": "Uint8Array",
+    "data": "ZGV2bFt7InN0YXRlIjoxfSx7ImNvbnRpbnVhdGlvblRva2VuIjoyLCJlbWlzc2lvblN0YXRlIjozLCJoYXNQcm94eUlucHV0UmVxdWVzdHMiOjQsInNlc3Npb25JZCI6NywidmVyc2lvbiI6OCwic25hcHNob3QiOjl9LCJldmU6ZXZlOmIxM2FlMjM1LTVlMTAtNDYzZi1iZGMxLTZkZjQ2NWY4ZWZmYiIseyJzZXNzaW9uU3RhcnRlZCI6NCwic2VxdWVuY2UiOjUsInN0ZXBJbmRleCI6NSwidHVybklkIjo2fSxmYWxzZSwwLCIiLCJ3cnVuXzAxS1ZRTTQ5MVZBTldNMkZXRUJHNUZSNEFQIiwxLHsic2Vzc2lvbiI6MTAsInZlcnNpb24iOjh9LHsiYWdlbnQiOjExLCJjb250aW51YXRpb25Ub2tlbiI6MiwiaGlzdG9yeSI6MTMsInNlc3Npb25JZCI6N30seyJzeXN0ZW0iOjEyfSwiSW5zdHJ1Y3Rpb25zIChpbnN0cnVjdGlvbnMpXG4jIElkZW50aXR5XG5cbllvdSBhcmUgYSBoZWxwZnVsIGFzc2lzdGFudC5cblxuVG9vbCBleGVjdXRpb25cbkEgc2luZ2xlIHRvb2wgb3Igc3ViYWdlbnQgY2FsbCBydW5zIGFzIG9uZSBzZXJpYWwgYWN0aW9uLiBJZiB5b3UgY2FsbCBtdWx0aXBsZSBpbmRlcGVuZGVudCB0b29scyBvciBzdWJhZ2VudHMgaW4gb25lIHJlc3BvbnNlLCBldmUgdHJlYXRzIHRoYXQgYmF0Y2ggYXMgcGFyYWxsZWwgd29yay4gT25seSBiYXRjaCB3b3JrIHRoYXQgaXMgaW5kZXBlbmRlbnQgYW5kIGRvZXMgbm90IHJlbHkgb24gYW5vdGhlciBjYWxsIGluIHRoZSBzYW1lIHJlc3BvbnNlLiIsW11d"
+  },
+  "completedAt": "2026-06-22T12:15:49.848Z"
+}

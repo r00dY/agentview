@@ -1,0 +1,41 @@
+{
+  "eventType": "attr_set",
+  "specVersion": 5,
+  "eventData": {
+    "changes": [
+      {
+        "key": "$eve.model",
+        "value": "anthropic/claude-haiku-4.5"
+      },
+      {
+        "key": "$eve.input_tokens",
+        "value": "5012"
+      },
+      {
+        "key": "$eve.output_tokens",
+        "value": "16"
+      },
+      {
+        "key": "$eve.cache_read_tokens",
+        "value": "0"
+      },
+      {
+        "key": "$eve.cache_write_tokens",
+        "value": "4688"
+      },
+      {
+        "key": "$eve.tool_count",
+        "value": "11"
+      }
+    ],
+    "writer": {
+      "type": "step",
+      "stepId": "step_01KVQMQVS177780MWXY04H6H78",
+      "attempt": 1
+    },
+    "allowReservedAttributes": true
+  },
+  "runId": "wrun_01KVQMQVRXP1GSBXQ9K3T09PQD",
+  "eventId": "evnt_01KVQMQXCYT4WH54AGGYD92FBT",
+  "createdAt": "2026-06-22T12:26:33.246Z"
+}

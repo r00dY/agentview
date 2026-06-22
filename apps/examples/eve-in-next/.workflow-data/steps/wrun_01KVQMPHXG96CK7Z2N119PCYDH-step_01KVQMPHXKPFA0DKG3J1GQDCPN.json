@@ -1,0 +1,20 @@
+{
+  "runId": "wrun_01KVQMPHXG96CK7Z2N119PCYDH",
+  "stepId": "step_01KVQMPHXKPFA0DKG3J1GQDCPN",
+  "stepName": "step//eve@0.11.10//dispatchTurnStep",
+  "status": "completed",
+  "input": {
+    "__type": "Uint8Array",
+    "data": "enN0ZCi1L/1gPgeFIwDqRxANKuCQ1g3MYSCbCWz7OyMYmrUzBu0/JP0P7B45Crp9Ytu2uVOwmRjGGGNscMcAxwDIABd3fQgL4Za9dmQjZPlqiAXhM+wz2kywe18UhNvJ9NYhUymR3sIZK/bCbfOUWbN/CAxYKPBAOQ6D54KUoECDOlABwcMCBxMSOM1jZlXDus7qu0n09jNsOrx3lqHrXrgJBL3t54cwaXRnOG/fon/SArA3RMmxtq97ZMUfK4WfXRlb5zhvG9JrXeOtpHYkyobrGG9nV9AIk8ZviV3UWge99Y4fZawYY2svHIYHwk0kT/AI+XWO8tYrT+iaOZXWOuetT1TeCwgZaRiPxlkcZ2kcFzaxhfHHVniE6xjYEJIkiWaapEqZIgalVNETKc7UWAo1NY4jQUihIhlkA8twMf4U4hhPZ/qKP7OqRBoyHemFeYueyoxKR5pxtmjGMUxDx8jPnmDG32oKWh8Yit5Q4WTGa7sEZt3EeQhY0ApO9nUNP9SGTBVgvKBlRjluovQBhrFk1Yx6Qzof6C10IFDpc/w4I/W8hXzG08PZjD8p43k/+8rq+3R4nrey52SI5RpwZtXSka7t2eOq7+sm0cUTctwGlYLerpugdQ/01h9ILGh9cIasi+K1kYaKZIvKnTQmiSAZi9aMFXprxZ+9rvmsivWfHwqiJIpi2BRDkViiUqxuRMpDWZHCjkM1FON5HentSL91E+l5y8+QvycXbrF/yLpJ9LztZ+hxiqW2gvGlKLArZSTP2j8jY1Vn3uM0SbABMSoGBZlBTZDEI0VTQ01TY7KiyLEeFnd9SAv1LJKjK7UGyK64cjyo5VkajuPRLNLyOOJHiscDWqIlckC64TFJzsLfldIszSI5IgcYMEC4XS721pBvM9aGPJ3cJm0S2bU9nc2bwgYne5TI2aAtFZVqaLKl5MpYc24Q67lqz5Bv/q0j3Vz7pJh3nbG5z8YazthaYvFldmVU0iQc2sKt9aTNufnMapOSrVZl3ir91nJiRm8EZsSk8TOrLbpJSiMsP/k9unOTmQQmG9K4deWWUQszYkZIHjo0ADNCQAzQ3Fo3eaK3V79LHIroe4Q4J3rbRG8dt+sa1y5Zwk2kmr1Fw+mAdQOanWWA/QF4qNEUQ5IZRMGMyEhK0uQgQsJQmfUSYCdBqAiaOSkou1Jn7wf5oMrP3BJ2msMI0kfJsnFRlvHKAYpTVMlFzgl36T+8ZYE00MPmakgulhIHhYeBYRSgJQCcbWx/a6N5c37q0zUnfgJnz0E9LH0sjDSxfzBbSLklrCPwWPQExbya+MsmciOH9vMEaBJSqq0gjQIryxNf2eGuX0JM6svArEtSn8hEMgYEWumD5Je8MJJobbMdOAigztgFPFINN/7g7g3lKNaVaMVX2SoHP2nuwaRjceQ8486UYei5dLTv5yRCfe4q3krPWAdYpsU0jF2pVHvdxqrikc8i/MiGybYjREOcg0cwO5v9cJOJ0CiiRWodvEc2dpYWCj748/y5YIyTuooSFJ2pAEyhAg=="
+  },
+  "attempt": 1,
+  "startedAt": "2026-06-22T12:25:48.763Z",
+  "createdAt": "2026-06-22T12:25:48.760Z",
+  "updatedAt": "2026-06-22T12:25:48.774Z",
+  "specVersion": 5,
+  "output": {
+    "__type": "Uint8Array",
+    "data": "ZGV2bFt7InJ1bklkIjoxfSwid3J1bl8wMUtWUU1QSFlYUUpQM1NOUkgwRkdKUlBWOSJd"
+  },
+  "completedAt": "2026-06-22T12:25:48.774Z"
+}

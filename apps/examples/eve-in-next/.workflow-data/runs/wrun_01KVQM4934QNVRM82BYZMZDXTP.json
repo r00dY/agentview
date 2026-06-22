@@ -1,0 +1,37 @@
+{
+  "runId": "wrun_01KVQM4934QNVRM82BYZMZDXTP",
+  "deploymentId": "dpl_local@bundled",
+  "workflowName": "workflow//eve//turnWorkflow",
+  "specVersion": 5,
+  "executionContext": {
+    "traceCarrier": {},
+    "workflowCoreVersion": "5.0.0-beta.19",
+    "features": {
+      "encryption": false
+    }
+  },
+  "input": {
+    "__type": "Uint8Array",
+    "data": "enN0ZCi1L/1gXwcNJADKRwgNK/BuiB4MAmkLW42xJacH2T+F54CjChYMsJsCgsAIQL/db//Eujxn4Bl46gXFAMQAywB0m1SxR65txU3/wUa0jZNtF8e85aon1IO/rL/mNsc4C1xrV4+LaEubEmXDbZfH2wp5SovjLfRIIUVv+/kf1IZ7+5V+nwVgZ4iSI+26DXJvW078kU54b8rWtkbcirbs+zzG6fUPokFycGCBgICBCQeghwkLGiS4h/TQQEIC90T8ohi29UW/XaKvfV1ouhXt8oje+oyVNmUb4+1fljtY/XXb4m3DWW2T3npTTAg+47e0qkltg97Wjh9lnNhiaitaBRcRISkNA41TI0tRI9zmPCTJJLmIMUkkZqCGezCS5CExEdRoZppa4qiGYyqOGBnWhcqpPyfVYq9OV/H9ogylodOUbpyvtDMemaa0U7nSTrUsDB0p722BnfpUT0wK4Ux0BgqdnUq7RnC2XaKGypygM8QQtCFPBRY/tLwc1B7o7c/pwLKYotesDacvGuh8jh89uujt5C9+Ir48vs8G9C761R0k6K1sd55QzeHeNk1p2BL6NUEkU1NGpAW3bb0iFb0w3ruyTGkt3Fvo4FfbGNHb6sBSmRSi8mTbIlaUhsxe2rJAkGxFyiO1tkXRWyq+9zYo+muK9J8niaQdkgVDkkAG4yg4MZKIITGP6wWziKDmyE2vKb1N6Qe95WfI39U2B1TR1vqfQG/7Gdo60dBmLK4YBjadjmSn/R4dilbna3Q4GpARLabFA/Li4YgkUENyPA+Hg+GgJMlREYqbRhrNA2oakKaTGiB74gkSeTRQw3CQyNM0GggSP05EIlEjNRIEzgwRR8M1/D0xT/M0DUjkyOMa55oHUlluBRUqRLRtKq6sJ8880p78dGY+mUU2ZT+d1Z6QQecaLdIZsIaCTgxMtpRM2WKV2YR6ntjz5Fl91pRmratPqzb1yGr1thp6ZC2t+PKqrmlhEgfWMGPtk1Vm1S/KpGSKTVdldD5racFjZQ0u4TP+RXWlmZwTQvPOX2OtzOQlsWRPGLOmzK5JwSVcwvLQgQFwCQExAKvUtkskva36q6VK0lsLnV/jRHrrpLeu7bandZUsaRdHVGnYiLyvC7CfPtLbf6jBIENOGWVERkRkpCBNDhAUZZgrOxIgJ0HIlKI5KSgqqdTYzwf3oFrPHBFKkAMgkDRQZk2nWEeqApTdUT4XNOfWLn+UkQ/SGHdswnh5mcrI4YaKrHF0z3CImkoZs9bPIajn2NX3FE7+oDGlNZSGzMsSmHR6twDPy8UrAMhp325Vfg1QDI1zaYdNyv1h6mp1UwGBJ1Ya3JXqUlffE4px8vdEAAZyuDBisX/YpLEBslUYW9bKtX0Ncl3HmgA8XoUbP6jgxnK0iyVaxVWmqio2owXoWqEJEA7SWIUP7II32UMN3yTascMwhtCOPzWsByuo7bkLFhyBy62EByQ8BAK5QJlLtA5twhVCVvTJLXTMoAxz7abixAXJmZngybIZ64UsFPMmY7jgeBqK4KU+dAsKPCiIQEWcm9Nu6FUV"
+  },
+  "createdAt": "2026-06-22T12:15:49.862Z",
+  "startedAt": "2026-06-22T12:15:49.862Z",
+  "status": "completed",
+  "output": {
+    "__type": "Uint8Array",
+    "data": "ZGV2bC0x"
+  },
+  "completedAt": "2026-06-22T12:15:52.353Z",
+  "updatedAt": "2026-06-22T12:15:52.353Z",
+  "attributes": {
+    "$eve.type": "turn",
+    "$eve.parent": "wrun_01KVQM491VANWM2FWEBG5FR4AP",
+    "$eve.root": "wrun_01KVQM491VANWM2FWEBG5FR4AP",
+    "$eve.model": "anthropic/claude-sonnet-4.6",
+    "$eve.input_tokens": "5013",
+    "$eve.output_tokens": "13",
+    "$eve.cache_read_tokens": "0",
+    "$eve.cache_write_tokens": "4689",
+    "$eve.tool_count": "11"
+  }
+}

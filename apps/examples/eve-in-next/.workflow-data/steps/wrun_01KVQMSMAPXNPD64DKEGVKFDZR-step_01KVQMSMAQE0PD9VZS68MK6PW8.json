@@ -1,0 +1,20 @@
+{
+  "runId": "wrun_01KVQMSMAPXNPD64DKEGVKFDZR",
+  "stepId": "step_01KVQMSMAQE0PD9VZS68MK6PW8",
+  "stepName": "step//eve@0.11.10//notifyDriverStep",
+  "status": "completed",
+  "input": {
+    "__type": "Uint8Array",
+    "data": "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"
+  },
+  "attempt": 1,
+  "startedAt": "2026-06-22T12:27:31.180Z",
+  "createdAt": "2026-06-22T12:27:31.178Z",
+  "updatedAt": "2026-06-22T12:27:31.189Z",
+  "specVersion": 5,
+  "output": {
+    "__type": "Uint8Array",
+    "data": "ZGV2bC0x"
+  },
+  "completedAt": "2026-06-22T12:27:31.189Z"
+}

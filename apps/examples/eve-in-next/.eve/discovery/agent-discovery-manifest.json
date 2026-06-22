@@ -1,0 +1,42 @@
+{
+  "agentId": "eve-in-next",
+  "agentRoot": "/Users/andrzej/Projects/agentview/agentview/apps/examples/eve-in-next/agent",
+  "appRoot": "/Users/andrzej/Projects/agentview/agentview/apps/examples/eve-in-next",
+  "channels": [
+    {
+      "sourceKind": "module",
+      "logicalPath": "channels/eve.ts",
+      "sourceId": "channels/eve.ts"
+    }
+  ],
+  "connections": [],
+  "diagnosticsSummary": {
+    "errors": 0,
+    "warnings": 0
+  },
+  "hooks": [],
+  "instructions": [
+    {
+      "definition": {
+        "markdown": "# Identity\n\nYou are a helpful assistant.\n"
+      },
+      "sourceKind": "markdown",
+      "logicalPath": "instructions.md",
+      "sourceId": "instructions.md"
+    }
+  ],
+  "lib": [],
+  "kind": "eve-agent-discovery-manifest",
+  "sandbox": null,
+  "sandboxWorkspaces": [],
+  "schedules": [],
+  "skills": [],
+  "tools": [],
+  "version": 12,
+  "subagents": [],
+  "configModule": {
+    "sourceKind": "module",
+    "logicalPath": "agent.ts",
+    "sourceId": "agent.ts"
+  }
+}
