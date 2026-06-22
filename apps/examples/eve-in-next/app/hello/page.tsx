@@ -4,37 +4,30 @@ import { useEffect, useRef, useState } from "react";
 import { useEveAgent } from "eve/react";
 import type { EveMessageData, UseEveAgentOptions } from "eve/react";
 
-const STORAGE_KEY = "eve-hello-conversation";
-
 type EveOptions = UseEveAgentOptions<EveMessageData>;
-type Persisted = {
-  session?: EveOptions["initialSession"];
-  events?: EveOptions["initialEvents"];
-};
+type StoredSession = NonNullable<EveOptions["initialSession"]>;
+type StoredEvents = NonNullable<EveOptions["initialEvents"]>;
 
-function loadPersisted(): Persisted | null {
-  if (typeof window === "undefined") return null;
+const SESSION_KEY = "eve-hello-session";
+const EVENTS_KEY = "eve-hello-events";
+
+function read<T>(key: string): T | undefined {
+  if (typeof window === "undefined") return undefined;
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Persisted) : null;
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : undefined;
   } catch {
-    return null;
+    return undefined;
   }
 }
 
 export default function ChatPage() {
-  // localStorage is only available on the client, and reading it during the
-  // initial render would diverge from the server-rendered HTML. Defer mounting
-  // the chat (which reads persisted state in the hook's init) until after mount.
-  const [ready, setReady] = useState(false);
-  const initialRef = useRef<Persisted | null>(null);
+  // localStorage is client-only; mounting the chat after the first effect keeps
+  // the server-rendered HTML (no history) and the first client render in sync.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
-  useEffect(() => {
-    initialRef.current = loadPersisted();
-    setReady(true);
-  }, []);
-
-  if (!ready) {
+  if (!mounted) {
     return (
       <main className="mx-auto flex h-full w-full max-w-2xl flex-1 items-center justify-center px-4">
         <p className="text-sm text-neutral-400">Loading…</p>
@@ -42,32 +35,41 @@ export default function ChatPage() {
     );
   }
 
-  return <Chat initial={initialRef.current} />;
+  return <Chat />;
 }
 
-function Chat({ initial }: { initial: Persisted | null }) {
+function Chat() {
+  // Resumable sessions: seed the durable session cursor from localStorage so a
+  // reload picks the conversation back up where it left off, and persist the
+  // cursor on every change. (https://eve.dev/docs/guides/frontend/overview)
+  const [initialSession] = useState<StoredSession | undefined>(() => read(SESSION_KEY));
+  const [initialEvents] = useState<StoredEvents | undefined>(() => read(EVENTS_KEY));
+
   const agent = useEveAgent({
-    initialSession: initial?.session,
-    initialEvents: initial?.events,
+    initialSession,
+    initialEvents,
+    onSessionChange(session) {
+      try {
+        window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      } catch {
+        // ignore quota / serialization errors
+      }
+    },
+    onFinish(snapshot) {
+      // Persist the authoritative event stream so the rendered history survives
+      // a reload (the session cursor alone carries no messages).
+      try {
+        window.localStorage.setItem(EVENTS_KEY, JSON.stringify(snapshot.events));
+      } catch {
+        // ignore
+      }
+    },
   });
   const isBusy = agent.status === "submitted" || agent.status === "streaming";
 
   const messages = agent.data.messages;
   const scrollRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
-
-  // Persist the conversation whenever the authoritative stream or session
-  // cursor changes, so a refresh resumes exactly where we left off.
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ session: agent.session, events: agent.events }),
-      );
-    } catch {
-      // ignore quota / serialization errors
-    }
-  }, [agent.events, agent.session]);
 
   // Keep the latest message in view as the conversation grows.
   useEffect(() => {
@@ -77,7 +79,8 @@ function Chat({ initial }: { initial: Persisted | null }) {
   function handleClear() {
     agent.reset();
     try {
-      window.localStorage.removeItem(STORAGE_KEY);
+      window.localStorage.removeItem(SESSION_KEY);
+      window.localStorage.removeItem(EVENTS_KEY);
     } catch {
       // ignore
     }
@@ -88,7 +91,7 @@ function Chat({ initial }: { initial: Persisted | null }) {
       <header className="flex items-center justify-between gap-4 border-b border-neutral-200 py-4 dark:border-neutral-800">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Hello, Eve</h1>
-          <p className="text-xs text-neutral-500">Your conversation is saved locally.</p>
+          <p className="text-xs text-neutral-500">Your conversation resumes after a refresh.</p>
         </div>
         <span
           className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
