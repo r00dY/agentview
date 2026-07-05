@@ -1,7 +1,0 @@
-{
-  "appRoot": "/Users/andrzej/Projects/agentview/agentview/apps/examples/eve-in-next",
-  "kind": "eve-dev-runtime-artifacts-pointer",
-  "runtimeAppRoot": "/Users/andrzej/Projects/agentview/agentview/apps/examples/eve-in-next/.eve/dev-runtime/snapshots/mqp6w3qg-b187d962-5685-4825-a2b7-c73ddd8cdff8/source",
-  "snapshotRoot": "/Users/andrzej/Projects/agentview/agentview/apps/examples/eve-in-next/.eve/dev-runtime/snapshots/mqp6w3qg-b187d962-5685-4825-a2b7-c73ddd8cdff8",
-  "version": 2
-}
